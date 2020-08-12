@@ -9,3 +9,10 @@ We are a financial machine learning library that will _always_ be open source.
 4. **backtester** - assesses profitibility of a given strategy under various scenarios
 5. **deployment team** - integrate strategy code into production line
 
+## Here are some of our values:
+
+1. 
+2. 
+3. 
+4. 
+5. 
