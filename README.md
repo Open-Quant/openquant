@@ -1,7 +1,7 @@
 # Welcome to OpenQuant
 We are a financial machine learning library that will _always_ be open source.
 
-## Roles that are involved in the financial machine learning process:
+## The different roles within the financial machine learning production chain:
 
 1. **data curators** - collect/clean/index/store/adjust data to be delivered to production chain
 2. **feature analysts** - transform raw data into informative signals 
