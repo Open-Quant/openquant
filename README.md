@@ -11,7 +11,7 @@ We are a financial machine learning library that will _always_ be open source.
 
 ## Here are some of our values:
 
-1. 
+1. Financial Machine Learning tools should be availalbe for free
 2. 
 3. 
 4. 
