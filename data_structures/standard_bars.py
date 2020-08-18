@@ -1,0 +1,2 @@
+# The purpose of this file is to serve as the storage location for the functions that help to generate the standard bars.
+# Standard bars are a way of recreating the chonological time bars so as to better reflect the inflow and outflow of (dollars, volume etc)
