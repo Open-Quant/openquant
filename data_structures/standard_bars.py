@@ -5,14 +5,14 @@
 import pandas as pd
 
 
-# TODO write a really good desc/documentation 
+# TODO write docs
 def dollar_bars():
     print('dollar bars')
 
-# TODO write a really good desc/documentation 
+# TODO write docs
 def tick_bars():
     print('tick bars')
 
-# TODO write a really good desc/documentation 
+# TODO write docs
 def volume_vars():
     print('volume bars')
