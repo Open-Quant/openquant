@@ -1,1 +1,1 @@
-import src.financial_data_structures as financial_data_structures
+from src.financial_data_structures import standard_bars
