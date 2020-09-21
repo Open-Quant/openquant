@@ -9,10 +9,6 @@ We are a financial machine learning library that will _always_ be open source.
 4. **backtester** - assesses profitibility of a given strategy under various scenarios
 5. **deployment team** - integrate strategy code into production line
 
-## Here is what we believe:
+## Here is what we believe (in-progress):
 
 1. Financial Machine Learning tools should be available for free
-2.   
-3. 
-4. 
-5. 
