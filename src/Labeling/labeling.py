@@ -34,7 +34,7 @@ def triple_barrier_method(close, events, pt_sl, molecule):
     else:
         sl = pd.Series(index=events.index) # NaNs
 
-    for loc.t1 in events_['t1'].fillna(close.index[-1]).iteritems():
+    for loc, t1 in events_['t1'].fillna(close.index[-1]).iteritems():
         df0 = close[loc:t1] # path prices
         df0 = (df0 / close[loc] - 1) * events_.at[loc, 'side'] # path returns
 
