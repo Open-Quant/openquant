@@ -62,6 +62,3 @@ Project Organization
 
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
 =======
-## Here is what we believe (in-progress):
-
-1. Financial Machine Learning tools should be available for free
