@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
-from utils import mp_pandas
+from openquant.utils.utils.py import mp_pandas
+import sys
+sys.path.append('../openquant/src/utils/utils.py')
+from utils.utils.py import mp_pandas
 
 
 def triple_barrier_method(close, events, pt_sl, molecule):

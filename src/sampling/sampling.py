@@ -1,7 +1,6 @@
 import pandas as pd
 
 def number_of_concurrent_events(close_index, t1, molecule):
-
     """
     Advances in Financial Machine Learning, Snippet 4.1, page 60.
 
@@ -16,7 +15,6 @@ def number_of_concurrent_events(close_index, t1, molecule):
 
     :return: (pd.Series) Number concurrent labels for each datetime index
     """
-
     # find events that span the period [molocule[0],molocule[-1]]
     t1 = t1.fillna(close_index[-1]) # unclosed events still impact other weights
     t1 = t1[t1>molecule[0]] # events that end at or after molocule[0]
@@ -31,7 +29,6 @@ def number_of_concurrent_events(close_index, t1, molecule):
     return count.loc[molecule[0]:t1[molecule].max()]
 
 def sample_average_uniqueness(t1, num_co_events, molecule):
-
     """
     Advances in Financial Machine Learning, Snippet 4.2, page 62.
 
@@ -45,7 +42,6 @@ def sample_average_uniqueness(t1, num_co_events, molecule):
     :param molecule: (an array) A set of datetime index values for processing.
     :return: (pd.Series) Average uniqueness over event's lifespan.
     """
-
     # derive average uniqueness over the events lifespan
     weight = pd.Series(index = molecule)
 
