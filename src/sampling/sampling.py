@@ -22,7 +22,7 @@ def number_of_concurrent_events(close_index, t1, molecule):
 
     # count events spanning a bar
     iloc = close_index.searchsorted(np.array([t1.index[0], t1.max()]))
-    count = pd.Series(0, index = close_index[iloc[0]:iloc[1] + 1])
+    count = pd.Series(0, index=close_index[iloc[0]:iloc[1] + 1])
     for t_in, t_out in t1.iteritems():
         count.loc[t_in:t_out] += 1
 
@@ -38,12 +38,13 @@ def sample_average_uniqueness(t1, num_co_events, molecule):
     of concurrent events per bar.
 
     :param t1: (pd.Series) Label endtime series (t1 for triple barrier events)
-    :param num_co_events: (pd.Series) Number of concurrent labels (output from num_concurrent_events function).
-    :param molecule: (an array) A set of datetime index values for processing.
-    :return: (pd.Series) Average uniqueness over event's lifespan.
+    :param num_co_events: (pd.Series) Number of concurrent labels (output from num_concurrent_events function)
+    :param molecule: (an array) A set of datetime index values for processing
+
+    :return: (pd.Series) Average uniqueness over event's lifespan
     """
     # derive average uniqueness over the events lifespan
-    weight = pd.Series(index = molecule)
+    weight = pd.Series(index=molecule)
 
     for t_in, t_out in t1.loc[weight.index].iteritems():
         weight.loc[t_in] = (1. / num_co_events.loc[t_in: t_out]).mean()
