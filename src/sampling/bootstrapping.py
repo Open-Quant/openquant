@@ -3,7 +3,6 @@ import pandas as pd
 
 
 def get_indicator_matrix(bar_index, t1):
-
     """
     Advances in Financial Machine Learning, Snippet 4.3, page 65.
 
@@ -16,7 +15,6 @@ def get_indicator_matrix(bar_index, t1):
 
     :return: (np.array) Indicator binary matrix indicating what (price) bars influence the label for each observation
     """
-
     indicator_matrix = pd.DataFrame(0, index = bar_index, columns = range(t1.shape[0]))
 
     for i, (t0, t1) in enumerate(t1.iteritems()):
@@ -25,7 +23,6 @@ def get_indicator_matrix(bar_index, t1):
     return indicator_matrix
 
 def get_average_uniqueness(indicator_matrix):
-
     """
     Advances in Financial Machine Learning, Snippet 4.4. page 65.
 
@@ -37,7 +34,6 @@ def get_average_uniqueness(indicator_matrix):
 
     :return: (float) Average uniqueness
     """
-
     c = indicator_matrix.sum(axis = 1) #concurrency
     u = indicator_matrix.div(c,axis = 0) #uniqueness
     average_uniqueness = u[u > 0].mean()
@@ -46,7 +42,6 @@ def get_average_uniqueness(indicator_matrix):
     return average_uniqueness
 
 def sequential_bootstrap(indicator_matrix, sample_length = None):
-
     """
     Advances in Financial Machine Learning, Snippet 4.5, Snippet 4.6, page 65.
 
@@ -59,7 +54,6 @@ def sequential_bootstrap(indicator_matrix, sample_length = None):
 
     :return: (array) Bootstrapped samples indexes
     """
-
     if sample_length is None:
         sample_length = indicator_matrix.shape[1]
 

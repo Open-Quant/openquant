@@ -18,9 +18,11 @@ def cusum_filter(g_raw, h):
     for i in diff.index[1:]:
         s_pos, s_neg = max(0, s_pos + diff.loc[i]), min(0, s_neg + diff.loc[i])
         if s_neg <- h:
-            s_neg = 0;t_events.append(i)
+            s_neg = 0;
+            t_events.append(i)
         elif s_pos > h:
-            s_pos = 0;t_events.append(i)
+            s_pos = 0;
+            t_events.append(i)
 
     return pd.Datetimeindex(t_events)
 

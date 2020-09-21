@@ -42,13 +42,11 @@ def lin_parts(num_atoms, num_threads):
 
 
 def nested_parts(num_atoms, num_threads, upper_triang = False):
-
     """
     Advances in Financial Machine Learning snippet 20.6, page 308
 
     Partition of atoms with inner loop
     """
-
     parts ,num_threads_ = [0], min(num_threads, num_atoms)
 
     for num in range(num_threads_):
@@ -65,7 +63,6 @@ def nested_parts(num_atoms, num_threads, upper_triang = False):
     return parts
 
 def mp_pandas(func, pd_obj, num_threads = 24, mp_batches = 1, lin_mols = True, **kwargs):
-
     """
     Parallelize jobs, return a dataframe or series
 
@@ -77,7 +74,6 @@ def mp_pandas(func, pd_obj, num_threads = 24, mp_batches = 1, lin_mols = True, *
     :return: computes function in parallel
 
     """
-
     #if linMols: parts = lin_parts(len(argList[1]), num_threads * mp_batches)
     #else: parts = nested_parts(len(argList[1]), num_threads * mp_batches)
     if lin_mols:
@@ -113,11 +109,9 @@ def mp_pandas(func, pd_obj, num_threads = 24, mp_batches = 1, lin_mols = True, *
 
 # TODO: Add in documentation
 def process_jobs_(jobs):
-
     """
     Runs jobs sequentially for debugging
     """
-
     out=[]
 
     for job in jobs:
@@ -128,13 +122,11 @@ def process_jobs_(jobs):
 
 # TODO: Add in documentation
 def report_progress(job_num, num_jobs, time0, task):
-
     """
     Advances in Financial Machine Learning. Snippet 20.9 , page 312.
 
     Reports progress as async jobs are completed
     """
-
     msg = [float(job_num) / num_jobs, (time.time() - time0) / 60.]
     msg.append(msg[1] * (1 / msg[0] - 1))
 
@@ -151,11 +143,9 @@ def report_progress(job_num, num_jobs, time0, task):
 
 # TODO: Add in documentation
 def process_jobs(jobs, task = None, num_threads = 24):
-
     """
     Advances in Financial Machine Learning. Snippet 20.9 , page 312.
     """
-
     if task is None:
         task = jobs[0]['func'].__name__
 
@@ -178,7 +168,6 @@ def expand_call(kwargs):
     """
     Advances in Financial Machine Learning. Snippet 20.10 , page 312.
     """
-
     # Expand the arguments of a callback function, kwargs['func']
     func = kwargs['func']
 
@@ -190,11 +179,9 @@ def expand_call(kwargs):
 
 # TODO: Add in documentation
 def _pickle_method(method):
-
     """
     Advances in Financial Machine Learning. Snippet 20.11 , page 313.
     """
-
     func_name = method.im_func.__name__
     obj = method.im_self
     cls = method.im_class
@@ -203,11 +190,9 @@ def _pickle_method(method):
 
 # TODO: Add in documentation
 def _unpickle_method(func_name, obj, cls):
-
     """
     Advances in Financial Machine Learning. Snippet 20.11 , page 313.
     """
-
     for cls in cls.mro():
         try:
             func = cls.__dict__[func_name]

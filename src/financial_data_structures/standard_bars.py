@@ -6,7 +6,6 @@
 import pandas as pd
 
 def dollar_bars(df, dollar_value_column, threshold):
-
     """
     Computes dollar bars (index)
 
@@ -16,7 +15,6 @@ def dollar_bars(df, dollar_value_column, threshold):
 
     :return idx: (list) list of tick bar indices
     """
-
     t = df[dollar_value_column]
     ts = 0
     idx = []
@@ -30,7 +28,6 @@ def dollar_bars(df, dollar_value_column, threshold):
     return idx
 
 def dollar_bar_df(df, dollar_value_column, threshold):
-
     """
     Computes dollar bars
 
@@ -40,13 +37,11 @@ def dollar_bar_df(df, dollar_value_column, threshold):
 
     :return: pd.DataFrame() dollar bars
     """
-
     idx = dollar_bars(df, dollar_value_column, threshold)
 
     return df.iloc[idx].drop_duplicates()
 
 def tick_bars(df, price_column, threshold):
-
     """
     Computes tick bars (index)
 
@@ -56,7 +51,6 @@ def tick_bars(df, price_column, threshold):
 
     :return idx: (list) list of tick bar indices
     """
-
     t_price = df[price_column]
     ts = 0
     idx = []
@@ -70,7 +64,6 @@ def tick_bars(df, price_column, threshold):
     return idx
 
 def tick_bar_df(df, price_column, threshold):
-
     """
     Computes tick bars (pd.Dataframe)
 
@@ -79,13 +72,11 @@ def tick_bar_df(df, price_column, threshold):
 
     :return: pd.DataFrame() tick bars
     """
-
     idx = tick_bars(df, price_column, threshold)
 
     return df.iloc[idx].drop_duplicates()
 
 def volume_bars(df, volume_column, threshold):
-
     """
     Computes volume bars (index)
 
@@ -95,7 +86,6 @@ def volume_bars(df, volume_column, threshold):
 
     :return idx: returns list of indices
     """
-
     t = df[volume_column]
     ts = 0
     idx = []
@@ -109,7 +99,6 @@ def volume_bars(df, volume_column, threshold):
     return idx
 
 def volume_bar_df(df, volume_column, threshold):
-
     """
     Computes volume bars (pd.DataFrame)
 
@@ -119,7 +108,6 @@ def volume_bar_df(df, volume_column, threshold):
 
     :return: pd.DataFrame() volume bars
     """
-
     idx = volume_bars(df, volume_column, threshold)
 
     return df.iloc[idx].drop_duplicates()

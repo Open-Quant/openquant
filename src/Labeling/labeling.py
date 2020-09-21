@@ -4,7 +4,6 @@ from utils import mp_pandas
 
 
 def triple_barrier_method(close, events, pt_sl, molecule):
-
     """
     Advances in Financial Machine Learning, Snippet 3.2, page 45.
 
@@ -21,7 +20,6 @@ def triple_barrier_method(close, events, pt_sl, molecule):
 
     :return: (pd.DataFrame) Timestamps of when first barrier was touched
     """
-
     # apply stop loss/profit taking, if it takes place before t1 (end of event)
     events_ = events.loc[molecule]
     out = events_[['t1']].copy(deep = True)
@@ -47,7 +45,6 @@ def triple_barrier_method(close, events, pt_sl, molecule):
 
 def get_events(close, t_events, pt_sl, target, min_ret = 0,
                num_threads = 1, t1 = False, side = None):
-
     """
     Advances in Financial Machine Learning, Snippet 3.6 page 50.
 
@@ -64,6 +61,7 @@ def get_events(close, t_events, pt_sl, target, min_ret = 0,
     :param t1: (pd.Series) A pandas series with the timestamps of the vertical barriers.
         Pass False to disable vertical barriers.
     :param side: (pd.Series) Long or Short side prediction.
+
     :return: (pd.DataFrame) Events
             -events.index is event's starttime
             -events['t1'] is event's endtime
@@ -72,7 +70,6 @@ def get_events(close, t_events, pt_sl, target, min_ret = 0,
             -events['pt'] is profit taking multiple
             -events['sl']  is stop loss multiple
     """
-
     # Get sampled target values
     target = target.loc[t_events]
     target = target[target > min_ret]
@@ -102,7 +99,6 @@ def get_events(close, t_events, pt_sl, target, min_ret = 0,
 
 
 def add_vertical_barrier(t_events, close, num_days = 1):
-
     """
     Advances in Financial Machine Learning, Snippet 3.4 page 49.
 
@@ -119,7 +115,6 @@ def add_vertical_barrier(t_events, close, num_days = 1):
 
     :return: (pd.Series) Timestamps of vertical barriers
     """
-
     t1 = close.index.searchsorted(t_events + pd.Timedelta(days = num_days))
     t1 = t1[t1<close.shape[0]]
     t1 = (pd.Series(close.index[t1], index = t_events[:t1.shape[0]]))
@@ -128,7 +123,6 @@ def add_vertical_barrier(t_events, close, num_days = 1):
 
 
 def get_bins(events, close):
-
     """
     Advances in Financial Machine Learning, Snippet 3.7, page 51.
 
@@ -145,7 +139,6 @@ def get_bins(events, close):
 
     :return: (pd.DataFrame) Meta-labeled events
     """
-
     # Prices algined with events
     events = events.dropna(subset = ['t1'])
     px = events.index.union(events['t1'].values).drop_duplicates()
@@ -167,7 +160,6 @@ def get_bins(events, close):
 
 
 def drop_labels(events, min_pct):
-
     """
     Advances in Financial Machine Learning, Snippet 3.8 pg. 64.
 
@@ -178,7 +170,6 @@ def drop_labels(events, min_pct):
 
     :return: (pd.Series) Events with the bottom min_pct labels removed
     """
-
     while True:
         df = events['bin'].value_counts(normalize = True)
 

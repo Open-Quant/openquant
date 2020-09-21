@@ -1,4 +1,4 @@
-# TODO: Add in generator
+# TODO: Add in generator for t_events
 def generate_random_t1(num_obs,num_bars,max_height):
     # generates a random t1 series
     """
