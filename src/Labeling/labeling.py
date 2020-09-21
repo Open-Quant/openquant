@@ -22,29 +22,30 @@ def triple_barrier_method(close, events, pt_sl, molecule):
     """
     # apply stop loss/profit taking, if it takes place before t1 (end of event)
     events_ = events.loc[molecule]
-    out = events_[['t1']].copy(deep = True)
+    out = events_[['t1']].copy(deep=True)
 
     if pt_sl[0] > 0:
         pt = pt_sl[0] * events_['target']
     else:
-        pt = pd.Series(index = events.index) # NaNs
+        pt = pd.Series(index=events.index) # NaNs
 
     if pt_sl[1] > 0:
         sl = -pt_sl[1] * events_['target']
     else:
-        sl = pd.Series(index = events.index) # NaNs
+        sl = pd.Series(index=events.index) # NaNs
 
     for loc.t1 in events_['t1'].fillna(close.index[-1]).iteritems():
         df0 = close[loc:t1] # path prices
         df0 = (df0 / close[loc] - 1) * events_.at[loc, 'side'] # path returns
+
         out.loc[loc, 'sl'] = df0[df0 < sl[loc]].index.min() # earliest stop loss
         out.loc[loc, 'pt'] = df0[df0 > pt[loc]].index.min() # earliest profit taking
 
     return out
 
 
-def get_events(close, t_events, pt_sl, target, min_ret = 0,
-               num_threads = 1, t1 = False, side = None):
+def get_events(close, t_events, pt_sl, target, min_ret=0,
+               num_threads=1, t1=False, side=None):
     """
     Advances in Financial Machine Learning, Snippet 3.6 page 50.
 
@@ -76,11 +77,11 @@ def get_events(close, t_events, pt_sl, target, min_ret = 0,
 
     # Get time boundary t1
     if t1 is False:
-        t1 = pd.Series(pd.NaT, index = t_events)
+        t1 = pd.Series(pd.NaT, index=t_events)
 
     # Define the side
     if side is None:
-        _side = pd.Series(1., index = target.index)
+        _side = pd.Series(1., index=target.index)
         _pt_sl = [pt_sl, pt_sl]
     else:
         _side = side.loc[target.index]
@@ -88,17 +89,17 @@ def get_events(close, t_events, pt_sl, target, min_ret = 0,
 
     events = pd.concat({'t1': t1, 'target': target, 'side': _side}, axis = 1)
     events = events.dropna(subset = ['target'])
-    df0 = mp_pandas(func = triple_barrier_method, pd = ('molecule', events.index),
-                    num_threads = num_threads, close = inst['Close'], events = events, pt_sl = pt_sl)
-    events['t1'] = df0.dropna(how = 'all').min(axis = 1) # ignores NaN
+    df0 = mp_pandas(func=triple_barrier_method, pd=('molecule', events.index),
+                    num_threads=num_threads, close=close, events=events, pt_sl=pt_sl)
+    events['t1'] = df0.dropna(how='all').min(axis=1) # ignores NaN
 
     if side is None:
-        events = events.drop('side', axis = 1)
+        events = events.drop('side', axis=1)
 
     return events
 
 
-def add_vertical_barrier(t_events, close, num_days = 1):
+def add_vertical_barrier(t_events, close, num_days=1):
     """
     Advances in Financial Machine Learning, Snippet 3.4 page 49.
 
@@ -115,9 +116,9 @@ def add_vertical_barrier(t_events, close, num_days = 1):
 
     :return: (pd.Series) Timestamps of vertical barriers
     """
-    t1 = close.index.searchsorted(t_events + pd.Timedelta(days = num_days))
+    t1 = close.index.searchsorted(t_events + pd.Timedelta(days=num_days))
     t1 = t1[t1<close.shape[0]]
-    t1 = (pd.Series(close.index[t1], index = t_events[:t1.shape[0]]))
+    t1 = (pd.Series(close.index[t1], index=t_events[:t1.shape[0]]))
 
     return t1
 
@@ -140,9 +141,9 @@ def get_bins(events, close):
     :return: (pd.DataFrame) Meta-labeled events
     """
     # Prices algined with events
-    events = events.dropna(subset = ['t1'])
+    events = events.dropna(subset=['t1'])
     px = events.index.union(events['t1'].values).drop_duplicates()
-    px = close.reindex(px, method = 'bfill')
+    px = close.reindex(px, method='bfill')
 
     # Create out object
     out = pd.DataFrame(index = events.index)
@@ -171,7 +172,7 @@ def drop_labels(events, min_pct):
     :return: (pd.Series) Events with the bottom min_pct labels removed
     """
     while True:
-        df = events['bin'].value_counts(normalize = True)
+        df = events['bin'].value_counts(normalize=True)
 
         if df.min() > min_pct or df.shape[0] < 3:
             break

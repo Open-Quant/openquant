@@ -13,10 +13,10 @@ def skewness(r):
     """
     demeaned_r = r - r.mean()
 
-    sigma_r = r.std(ddof = 0)
-    exp = (demeaned_r ** 3).mean()
+    sigma_r = r.std(ddof=0)
+    exp = (demeaned_r**3).mean()
 
-    return exp / sigma_r ** 3
+    return exp / sigma_r**3
 
 
 def kurtosis(r):
@@ -29,7 +29,7 @@ def kurtosis(r):
     """
     demeaned_r = r - r.mean()
 
-    sigma_r = r.std(ddof = 0)
-    exp = (demeaned_r ** 4).mean()
+    sigma_r = r.std(ddof=0)
+    exp = (demeaned_r**4).mean()
 
-    return exp / sigma_r ** 4
+    return exp / sigma_r**4
