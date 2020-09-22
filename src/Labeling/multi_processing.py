@@ -25,7 +25,7 @@ def nested_parts(num_atoms, num_threads, upper_triang=False):
     parts ,num_threads_ = [0], min(num_threads, num_atoms)
 
     for num in range(num_threads_):
-        part = 1 + 4 (parts[-1]**2 + parts[-1] + num_atoms*(num_atoms + 1.) / num_threads_)
+        part = 1 + 4 * (parts[-1]**2 + parts[-1] + num_atoms*(num_atoms + 1.) / num_threads_)
         part = (-1 + part**.5) / 2.
         parts.append(part)
 
