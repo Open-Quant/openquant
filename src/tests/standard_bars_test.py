@@ -19,7 +19,8 @@ def dollar_bars_test(dataframe):
     """
     This validates that the dollar_bars() function does not error
     """
-    list0 = standard_bars.dollar_bars(dataframe, 'close', .05)
+    list0 = standard_bars.dollar_bars(dataframe, 'cum_dollar', 70000000.75)
+    print(list0)
     if len(list0) > 0:
         pass
     else:
@@ -30,8 +31,9 @@ def dollar_bars_df_test(dataframe):
     """
     This validates that the dollar_bars_df() function returns a correct ammount of columns
     """
-    df = standard_bars.dollar_bar_df(dataframe, 'close', .05)
-    if len(df.columns) > 0:
+    desired_length = len(dataframe.columns) + 1
+    df = standard_bars.dollar_bar_df(dataframe, 'close', 33)
+    if len(df.columns) == desired_length:
         pass
     else:
         print('error')

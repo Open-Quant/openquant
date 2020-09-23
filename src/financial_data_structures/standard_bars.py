@@ -38,8 +38,10 @@ def dollar_bar_df(df, dollar_value_column, threshold):
     :return: pd.DataFrame() dollar bars
     """
     idx = dollar_bars(df, dollar_value_column, threshold)
+    df['dollar_bar'] = idx
+    df.drop_duplicates()
 
-    return df.iloc[idx].drop_duplicates()
+    return df
 
 
 def tick_bars(df, price_column, threshold):
