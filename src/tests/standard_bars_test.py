@@ -2,3 +2,9 @@
 import sys
 import os
 
+from src import financial_data_structures
+
+
+print('we made it')
+
+
