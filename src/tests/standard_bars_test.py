@@ -37,10 +37,7 @@ def dollar_bars_df_test(dataframe):
         print('error')
 
 
-df = pd.read_csv('../data/raw/raw_data.csv')
 
-dollar_bars_test(df)
-dollar_bars_df_test(df)
 
 
 # standard_bars.dollar_bar_df()
@@ -51,6 +48,10 @@ dollar_bars_df_test(df)
 
 # standard_bars.volume_bar_df()
 
+# Below here is the code that runs the tests
+df = pd.read_csv('../data/raw/raw_data.csv')
+dollar_bars_test(df)
+dollar_bars_df_test(df)
 print('all tests complete')
 
 
