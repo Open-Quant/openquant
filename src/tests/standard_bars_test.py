@@ -12,10 +12,12 @@ sys.path.insert(0,parentdir)
 
 from financial_data_structures import standard_bars
 
-
+"""
+This validates that the dollar_bars() function does not error
+"""
 def standard_bars_test(dataframe):
-    df0 = standard_bars.dollar_bar_df(dataframe, 0, 5)
-    if df0.columns > 0:
+    list0 = standard_bars.dollar_bars(dataframe, 'close', .05)
+    if len(list0) > 0:
         pass
     else:
         print('error')
