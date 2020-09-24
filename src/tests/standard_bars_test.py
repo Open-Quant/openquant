@@ -20,14 +20,13 @@ def dollar_bars_test(dataframe):
     This validates that the dollar_bars() function does not error
     """
     list0 = standard_bars.dollar_bars(dataframe, 'cum_dollar', 70000000.75)
-    print(list0)
     if len(list0) > 0:
         pass
     else:
         print('error')
 
 
-def dollar_bars_df_test(dataframe):
+def dollar_bar_df_test(dataframe):
     """
     This validates that the dollar_bars_df() function returns a correct amount of columns 
     """
@@ -40,6 +39,7 @@ def dollar_bars_df_test(dataframe):
         print('error')
 
 
+<<<<<<< HEAD
 def volume_bars_test(dataframe):
     """
     This validates the volume_bars() function does not error
@@ -77,6 +77,22 @@ def tick_bars_test(dataframe):
     else:
         print('error')
         
+=======
+def tick_bars_test(dataframe):
+    """
+    This validates that the tick_bar() function works
+    """
+    list0 = standard_bars.tick_bars(dataframe, 'close', 33)
+    print('ok')
+
+
+def tick_bar_df_test(dataframe):
+    """
+    This validates that the tick_bar() function works
+    """
+    df = standard_bars.tick_bar_df(dataframe, 'close', 33)
+    print('ok')
+>>>>>>> ab59ded59a1f4cb3dec68d53bfed0a70341dcde3
 
 def tick_bars_df_test(dataframe):
     """
@@ -91,21 +107,39 @@ def tick_bars_df_test(dataframe):
     else:
         print('error')
 
+def volume_bars_test(dataframe):
+    """
+    This validates that the volume_bar() function works
+    """
+    list0 = standard_bars.volume_bars(dataframe, 'close', 33)
+    print('ok')
 
-# standard_bars.dollar_bar_df()
+
+def volume_bar_df_test(dataframe):
+    """
+    This validates that the volume_bar() function works
+    """
+    df = standard_bars.volume_bar_df(dataframe, 'close', 33)
+    print('ok')
 
 
-# standard_bars.tick_bar_df()
 
-
-# standard_bars.volume_bar_df()
 
 # Below here is the code that runs the tests
 df = pd.read_csv('../data/raw/raw_data.csv')
+
 dollar_bars_test(df)
+<<<<<<< HEAD
 dollar_bars_df_test(df)
 volume_bars_test(df)
 volume_bars_df_test(df)
+=======
+dollar_bar_df_test(df)
+tick_bars_test(df)
+tick_bar_df_test(df)
+volume_bars_test(df)
+volume_bar_df_test(df)
+>>>>>>> ab59ded59a1f4cb3dec68d53bfed0a70341dcde3
 
 print('all tests complete')
 
