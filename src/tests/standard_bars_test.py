@@ -82,7 +82,7 @@ def volume_bars_df_test(dataframe):
 
 
 
-# Below here is the code that runs the tests
+# RUN THE TESTS
 df = pd.read_csv('../data/raw/raw_data.csv')
 
 dollar_bars_test(df)
