@@ -39,16 +39,31 @@ def dollar_bars_df_test(dataframe):
         print('error')
 
 
+def dollar_bar_df_test(dataframe):
+    """
+    This validates that the dollar_bar_df() function works
+    """
+    list0 = standard_bars.dollar_bars(dataframe) 
+    print(list0)
 
 
-
-# standard_bars.dollar_bar_df()
-
-
+def tick_bar_test(dataframe):
+    """
+    This validates that the tick_bar() function works
+    """
+    pass
 # standard_bars.tick_bar_df()
 
 
-# standard_bars.volume_bar_df()
+def volume_bar_test(dataframe):
+    """
+    This validates that the volume_bar() function works
+    """
+    list0 = standard_bars.volume_bar_df(dataframe)
+    print(list0)
+
+
+
 
 # Below here is the code that runs the tests
 df = pd.read_csv('../data/raw/raw_data.csv')
