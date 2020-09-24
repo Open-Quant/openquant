@@ -39,28 +39,36 @@ def dollar_bars_df_test(dataframe):
         print('error')
 
 
-def dollar_bar_df_test(dataframe):
-    """
-    This validates that the dollar_bar_df() function works
-    """
-    list0 = standard_bars.dollar_bars(dataframe) 
-    print(list0)
-
-
 def tick_bar_test(dataframe):
     """
     This validates that the tick_bar() function works
     """
-    pass
-# standard_bars.tick_bar_df()
+    list0 = standard_bars.tick_bars(dataframe)
+    print(list0)
+
+
+def tick_bar_df_test(dataframe):
+    """
+    This validates that the tick_bar() function works
+    """
+    df = standard_bars.tick_bar_df(dataframe)
+    print(df)
 
 
 def volume_bar_test(dataframe):
     """
     This validates that the volume_bar() function works
     """
-    list0 = standard_bars.volume_bar_df(dataframe)
+    list0 = standard_bars.volume_bars(dataframe)
     print(list0)
+
+
+def volume_bar_df_test(dataframe):
+    """
+    This validates that the volume_bar() function works
+    """
+    df = standard_bars.volume_bar_df(dataframe)
+    print(df)
 
 
 
