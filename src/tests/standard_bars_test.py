@@ -21,9 +21,9 @@ def dollar_bars_test(dataframe):
     """
     list0 = standard_bars.dollar_bars(dataframe, 'cum_dollar', 70000000.75)
     if len(list0) > 0:
-        pass
+        print('dollar_bars_test() pass')
     else:
-        print('error')
+        print('error with dollar_bars_test()')
 
 
 def dollar_bars_df_test(dataframe):
@@ -31,12 +31,10 @@ def dollar_bars_df_test(dataframe):
     This validates that the dollar_bars_df() function returns a correct amount of columns 
     """
     df0 = standard_bars.dollar_bars_df(dataframe, 'cum_dollar', .05)
-    print(df0)
-
     if len(df0) > 0:
-        pass
+        print('dollar_bars_df_test() pass')
     else:
-        print('error')
+        print('error with dollar_bars_df_test()')
 
 
 def tick_bars_test(dataframe):
@@ -44,35 +42,31 @@ def tick_bars_test(dataframe):
     This validates that the tick_bar() function works
     """
     list0 = standard_bars.tick_bars(dataframe, 'close', 33)
-    print('ok')
+    if len(list0) > 0:
+        print('tick_bars_test() pass')
+    else:
+        print('error with tick_vars_test()')
 
 
-def tick_bar_df_test(dataframe):
+def tick_bars_df_test(dataframe):
     """
     This validates that the tick_bar() function works
     """
     df = standard_bars.tick_bars_df(dataframe, 'close', 33)
-    print('ok')
-
-def tick_bars_df_test(dataframe):
-    """
-    This validates the tick_bars_df() returns the correct amount of columns
-    """
-   
-    df0 = standard_bars.tick_bars_df(dataframe, 'cum_ticks', .05)
-    print(df0)
-    
-    if len(df0) > 0:
-        pass
+    if len(df.columns) > 0:
+        print('tick_bars_df_test() ok')
     else:
-        print('error')
+        print('error with tick_bars_df_test()')
 
 def volume_bars_test(dataframe):
     """
     This validates that the volume_bar() function works
     """
     list0 = standard_bars.volume_bars(dataframe, 'close', 33)
-    print('ok')
+    if len(list0) > 0:
+        print('volume_bars_test() pass')
+    else:
+        print('error with volume_bars_test()')
 
 
 def volume_bars_df_test(dataframe):
@@ -80,7 +74,10 @@ def volume_bars_df_test(dataframe):
     This validates that the volume_bar() function works
     """
     df = standard_bars.volume_bars_df(dataframe, 'close', 33)
-    print('ok')
+    if len(df.columns) > 0:
+        print('volume_bars_df_test() pass')
+    else:
+        print('error with volume_bars_df_test()')
 
 
 
