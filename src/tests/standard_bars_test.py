@@ -39,45 +39,6 @@ def dollar_bar_df_test(dataframe):
         print('error')
 
 
-<<<<<<< HEAD
-def volume_bars_test(dataframe):
-    """
-    This validates the volume_bars() function does not error
-    """
-
-    list0 = standard_bars.volume_bars(dataframe, 'cum_vol', .05)
-
-    if len(list0) > 0:
-        pass
-    else:
-        print('error')
-
-def volume_bars_df_test(dataframe):
-    """
-    This validates the volume_bars_df() returns the correct amount of columns
-    """
-    df0 = standard_bars.volume_bars_df(dataframe, 'cum_vol', .05)
-    print(df0)
-
-    if len(df0) > 0:
-        pass
-    else:
-        print('error')
-
-def tick_bars_test(dataframe):
-    """
-    This validates tick_bars() function does not errorb 
-    """
-    list0 = standard_bars.tick_bars(dataframe, 'cum_ticks', .05)
-    
-    print(list0)
-    
-    if len(list0) > 0:
-        pass
-    else:
-        print('error')
-        
-=======
 def tick_bars_test(dataframe):
     """
     This validates that the tick_bar() function works
@@ -92,7 +53,6 @@ def tick_bar_df_test(dataframe):
     """
     df = standard_bars.tick_bar_df(dataframe, 'close', 33)
     print('ok')
->>>>>>> ab59ded59a1f4cb3dec68d53bfed0a70341dcde3
 
 def tick_bars_df_test(dataframe):
     """
@@ -129,17 +89,13 @@ def volume_bar_df_test(dataframe):
 df = pd.read_csv('../data/raw/raw_data.csv')
 
 dollar_bars_test(df)
-<<<<<<< HEAD
 dollar_bars_df_test(df)
+
 volume_bars_test(df)
 volume_bars_df_test(df)
-=======
-dollar_bar_df_test(df)
+
 tick_bars_test(df)
 tick_bar_df_test(df)
-volume_bars_test(df)
-volume_bar_df_test(df)
->>>>>>> ab59ded59a1f4cb3dec68d53bfed0a70341dcde3
 
 print('all tests complete')
 
