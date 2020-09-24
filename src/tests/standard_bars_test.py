@@ -14,7 +14,6 @@ sys.path.insert(0,parentdir)
 from financial_data_structures import standard_bars
 
 
-
 def dollar_bars_test(dataframe):
     """
     This validates that the dollar_bars() function does not error
@@ -57,6 +56,7 @@ def tick_bars_df_test(dataframe):
         print('tick_bars_df_test() ok')
     else:
         print('error with tick_bars_df_test()')
+
 
 def volume_bars_test(dataframe):
     """
