@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from multi_processing import mp_pandas
+from src.labeling.multi_processing import mp_pandas
 import sys
 
 
@@ -91,7 +91,7 @@ def get_events(close, t_events, pt_sl, target, min_ret=0,
 
     events = pd.concat({'t1': t1, 'target': target, 'side': _side}, axis = 1)
     events = events.dropna(subset = ['target'])
-    df0 = mp_pandas(func=triple_barrier_method, pd=('molecule', events.index),
+    df0 = mp_pandas(func=triple_barrier_method, pd_obj=('molecule', events.index),
                     num_threads=num_threads, close=close, events=events, pt_sl=pt_sl)
     events['t1'] = df0.dropna(how='all').min(axis=1) # ignores NaN
 

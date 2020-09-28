@@ -24,11 +24,10 @@ def dollar_bars(df, dollar_value_column, threshold):
         if ts >= threshold:
             idx.append(i)
             ts = 0
-
     return idx
 
 
-def dollar_bar_df(df, dollar_value_column, threshold):
+def dollar_bars_df(df, dollar_value_column, threshold):
     """
     Computes dollar bars
 
@@ -39,8 +38,10 @@ def dollar_bar_df(df, dollar_value_column, threshold):
     :return: pd.DataFrame() dollar bars
     """
     idx = dollar_bars(df, dollar_value_column, threshold)
+    df['dollar_bar'] = idx
+    df.drop_duplicates()
 
-    return df.iloc[idx].drop_duplicates()
+    return df
 
 
 def tick_bars(df, price_column, threshold):
@@ -66,7 +67,7 @@ def tick_bars(df, price_column, threshold):
     return idx
 
 
-def tick_bar_df(df, price_column, threshold):
+def tick_bars_df(df, price_column, threshold):
     """
     Computes tick bars (pd.Dataframe)
 
@@ -103,7 +104,7 @@ def volume_bars(df, volume_column, threshold):
     return idx
 
 
-def volume_bar_df(df, volume_column, threshold):
+def volume_bars_df(df, volume_column, threshold):
     """
     Computes volume bars (pd.DataFrame)
 
