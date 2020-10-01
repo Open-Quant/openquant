@@ -5,115 +5,125 @@
 
 import pandas as pd
 
-def dollar_bars(df, dollar_value_column, threshold):
+class StandardBars():
     """
-    Computes dollar bars (index)
-
-    :param df: pd.DataFrame
-    :param dollar_value_column: (str) name of the dollar value column
-    :param threshold: (int) threshold value for dollar bar creation
-
-    :return idx: (list) list of tick bar indices
+    This is the class that you can use to generate all types
+    of standard bars. The only required input param is df (for now).
     """
-    t = df[dollar_value_column]
-    ts = 0
-    idx = []
 
-    for i, x in enumerate(t):
-        ts += x
-        if ts >= threshold:
-            idx.append(i)
-            ts = 0
-    return idx
+    def __init__(self, df, batch_size=1):
+        self.df = df
+        self.batch_size = df
 
+    def dollar_bars(self, df, dollar_value_column, threshold):
+        """
+        Computes dollar bars (index)
 
-def dollar_bars_df(df, dollar_value_column, threshold):
-    """
-    Computes dollar bars
+        :param df: pd.DataFrame
+        :param dollar_value_column: (str) name of the dollar value column
+        :param threshold: (int) threshold value for dollar bar creation
 
-    :param df: pd.DataFrame()
-    :param dollar_value_column: (str) name of the dollar value column
-    :param threshold: (int) threshold value for dollar bar creation
+        :return idx: (list) list of tick bar indices
+        """
+        t = df[dollar_value_column]
+        ts = 0
+        idx = []
 
-    :return: pd.DataFrame() dollar bars
-    """
-    idx = dollar_bars(df, dollar_value_column, threshold)
-    df['dollar_bar'] = idx
-    df.drop_duplicates()
-
-    return df
+        for i, x in enumerate(t):
+            ts += x
+            if ts >= threshold:
+                idx.append(i)
+                ts = 0
+        return idx
 
 
-def tick_bars(df, price_column, threshold):
-    """
-    Computes tick bars (index)
+    def dollar_bars_df(self, df, dollar_value_column, threshold):
+        """
+        Computes dollar bars
 
-    :param df: pd.DataFrame()
-    :param price: (str) name of the price data column
-    :param m: (int) threshold value for tick bar creation
+        :param df: pd.DataFrame()
+        :param dollar_value_column: (str) name of the dollar value column
+        :param threshold: (int) threshold value for dollar bar creation
 
-    :return idx: (list) list of tick bar indices
-    """
-    t_price = df[price_column]
-    ts = 0
-    idx = []
+        :return: pd.DataFrame() dollar bars
+        """
+        idx = dollar_bars(df, dollar_value_column, threshold)
+        df['dollar_bar'] = idx
+        df.drop_duplicates()
 
-    for i, x in enumerate(t_price):
-        ts += 1
-        if ts >= threshold:
-            idx.append(i)
-            ts = 0
-
-    return idx
+        return df
 
 
-def tick_bars_df(df, price_column, threshold):
-    """
-    Computes tick bars (pd.Dataframe)
+    def tick_bars(df, price_column, threshold):
+        """
+        Computes tick bars (index)
 
-    :param df: pd.DataFrame()
-    :param price_column: (str) name of the price data column
+        :param df: pd.DataFrame()
+        :param price: (str) name of the price data column
+        :param m: (int) threshold value for tick bar creation
 
-    :return: pd.DataFrame() tick bars
-    """
-    idx = tick_bars(df, price_column, threshold)
+        :return idx: (list) list of tick bar indices
+        """
+        t_price = df[price_column]
+        ts = 0
+        idx = []
 
-    return df.iloc[idx].drop_duplicates()
+        for i, x in enumerate(t_price):
+            ts += 1
+            if ts >= threshold:
+                idx.append(i)
+                ts = 0
 
-
-def volume_bars(df, volume_column, threshold):
-    """
-    Computes volume bars (index)
-
-    :param df: pd.DataFrame()
-    :param volume_column: (str) name for the column with volume data
-    :param m: (int) threshold for volume
-
-    :return idx: returns list of indices
-    """
-    t = df[volume_column]
-    ts = 0
-    idx = []
-
-    for i, x in enumerate(t):
-        ts += x
-        if ts >= threshold:
-            idx.append(i)
-            ts = 0
-
-    return idx
+        return idx
 
 
-def volume_bars_df(df, volume_column, threshold):
-    """
-    Computes volume bars (pd.DataFrame)
+    def tick_bars_df(self, df, price_column, threshold):
+        """
+        Computes tick bars (pd.Dataframe)
 
-    :param df: pd.DataFrame()
-    :param volume_column: (str) name for the column with volume data
-    :param m: (int) threshold for volume
+        :param df: pd.DataFrame()
+        :param price_column: (str) name of the price data column
 
-    :return: pd.DataFrame() volume bars
-    """
-    idx = volume_bars(df, volume_column, threshold)
+        :return: pd.DataFrame() tick bars
+        """
+        idx = tick_bars(df, price_column, threshold)
 
-    return df.iloc[idx].drop_duplicates()
+        return df.iloc[idx].drop_duplicates()
+
+
+    def volume_bars(self, df, volume_column, threshold):
+        """
+        Computes volume bars (index)
+
+        :param df: pd.DataFrame()
+        :param volume_column: (str) name for the column with volume data
+        :param m: (int) threshold for volume
+
+        :return idx: returns list of indices
+        """
+        t = df[volume_column]
+        ts = 0
+        idx = []
+
+        for i, x in enumerate(t):
+            ts += x
+            if ts >= threshold:
+                idx.append(i)
+                ts = 0
+
+        return idx
+
+
+    def volume_bars_df(self, df, volume_column, threshold):
+        """
+        Computes volume bars (pd.DataFrame)
+
+        :param df: pd.DataFrame()
+        :param volume_column: (str) name for the column with volume data
+        :param m: (int) threshold for volume
+
+        :return: pd.DataFrame() volume bars
+        """
+        idx = volume_bars(df, volume_column, threshold)
+
+        return df.iloc[idx].drop_duplicates()
