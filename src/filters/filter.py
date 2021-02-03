@@ -1,6 +1,6 @@
 import pandas as pd
 
-def cusum_filter(g_raw, h):
+def cusum_filter(df, treshold):
     """
     CUSUM filter that is used to calculate t_events (points of change detection)
     for Triple-Barrier method.
@@ -13,14 +13,14 @@ def cusum_filter(g_raw, h):
     t_events = []
     s_pos = 0
     s_neg = 0
-    diff = g_raw.diff()
+    diff = df.diff()
 
     for i in diff.index[1:]:
         s_pos, s_neg = max(0, s_pos + diff.loc[i]), min(0, s_neg + diff.loc[i])
         if s_neg <- h:
             s_neg = 0;
             t_events.append(i)
-        elif s_pos > h:
+        elif s_pos > threshold:
             s_pos = 0;
             t_events.append(i)
 
