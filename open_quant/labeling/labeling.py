@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
-from src.labeling.multi_processing import mp_pandas
+from open_quant.labeling.multi_processing import mp_pandas
 import sys
 
-
+def test(a, b):
+    return a + b
 
 def triple_barrier_method(close, events, pt_sl, molecule):
     """

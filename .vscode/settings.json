@@ -1,4 +1,4 @@
 {
-    "python.pythonPath": "/usr/local/bin/python3",
+    "python.pythonPath": "/Users/seankoval/.pyenv/versions/3.8.5/bin/python",
     "python.dataScience.jupyterServerURI": "local"
 }
