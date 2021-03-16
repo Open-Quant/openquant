@@ -24,6 +24,7 @@ def dollar_bars(df, dollar_value_column, threshold):
         if ts >= threshold:
             idx.append(i)
             ts = 0
+            
     return idx
 
 
