@@ -83,33 +83,33 @@ class RiskMetrics:
     
     @staticmethod
     def skewness(r):
-    """
-    Computes the skewness of the supplied Series or DataFrame.
+        """
+        Computes the skewness of the supplied Series or DataFrame.
 
-    :param r: (pd.Series or pd.DataFrame) Asset returns
+        :param r: (pd.Series or pd.DataFrame) Asset returns
 
-    :return: (pd.Series or Float) Skewness of r
-    """
-    demeaned_r = r - r.mean()
+        :return: (pd.Series or Float) Skewness of r
+        """
+        demeaned_r = r - r.mean()
 
-    sigma_r = r.std(ddof=0)
-    exp = (demeaned_r**3).mean()
+        sigma_r = r.std(ddof=0)
+        exp = (demeaned_r**3).mean()
 
-    return exp / sigma_r**3
+        return exp / sigma_r**3
 
     @staticmethod
     def kurtosis(r):
-    """
-    Computes Kurtosis. Kurtosis greater >3 is leptokurtic and suggests
-    significant level of tail risk.
+        """
+        Computes Kurtosis. Kurtosis greater >3 is leptokurtic and suggests
+        significant level of tail risk.
 
-    :param r: (pd.Series or pd.DataFrame) Asset returns
+        :param r: (pd.Series or pd.DataFrame) Asset returns
 
-    :return: (pd.Series or float) Kurtosis of r
-    """
-    demeaned_r = r - r.mean()
+        :return: (pd.Series or float) Kurtosis of r
+        """
+        demeaned_r = r - r.mean()
 
-    sigma_r = r.std(ddof=0)
-    exp = (demeaned_r**4).mean()
+        sigma_r = r.std(ddof=0)
+        exp = (demeaned_r**4).mean()
 
-    return exp / sigma_r**4
+        return exp / sigma_r**4
