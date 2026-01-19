@@ -5,10 +5,7 @@ pub trait SimpleClassifier {
     fn fit(&mut self, x: &[Vec<f64>], y: &[f64], sample_weight: Option<&[f64]>);
     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64>;
     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {
-        self.predict_proba(x)
-            .into_iter()
-            .map(|p| if p >= 0.5 { 1.0 } else { 0.0 })
-            .collect()
+        self.predict_proba(x).into_iter().map(|p| if p >= 0.5 { 1.0 } else { 0.0 }).collect()
     }
 }
 
@@ -30,7 +27,8 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
     for (train_idx, test_idx) in splits {
         let x_train: Vec<Vec<f64>> = train_idx.iter().map(|i| x[*i].clone()).collect();
         let y_train: Vec<f64> = train_idx.iter().map(|i| y[*i]).collect();
-        let sw_train: Option<Vec<f64>> = sample_weight.map(|sw| train_idx.iter().map(|i| sw[*i]).collect());
+        let sw_train: Option<Vec<f64>> =
+            sample_weight.map(|sw| train_idx.iter().map(|i| sw[*i]).collect());
 
         classifier.fit(&x_train, &y_train, sw_train.as_deref());
         let x_test: Vec<Vec<f64>> = test_idx.iter().map(|i| x[*i].clone()).collect();
@@ -93,7 +91,11 @@ pub struct PurgedKFold {
 }
 
 impl PurgedKFold {
-    pub fn new(n_splits: usize, samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)>, pct_embargo: f64) -> Result<Self, String> {
+    pub fn new(
+        n_splits: usize,
+        samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)>,
+        pct_embargo: f64,
+    ) -> Result<Self, String> {
         if samples_info_sets.is_empty() {
             return Err("samples_info_sets cannot be empty".into());
         }

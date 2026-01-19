@@ -120,15 +120,14 @@ pub fn compute_expected_and_covariance(
     returns_method: ReturnsMethod,
     resample_by: Option<&str>,
 ) -> Result<(Vec<f64>, DMatrix<f64>), AllocError> {
-    let opts = AllocationOptions {
-        returns_method,
-        resample_by,
-        ..Default::default()
-    };
+    let opts = AllocationOptions { returns_method, resample_by, ..Default::default() };
     returns_and_means(prices, &opts)
 }
 
-fn returns_and_means(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<(Vec<f64>, DMatrix<f64>), AllocError> {
+fn returns_and_means(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<(Vec<f64>, DMatrix<f64>), AllocError> {
     let step = freq_step(opts.resample_by);
     let sampled_prices = resample_prices(prices, step);
     let returns = returns_from_prices(&sampled_prices)?;
@@ -172,9 +171,7 @@ fn covariance(returns: &DMatrix<f64>) -> DMatrix<f64> {
         return DMatrix::<f64>::zeros(cols, cols);
     }
     let mut cov = DMatrix::<f64>::zeros(cols, cols);
-    let means: Vec<f64> = (0..cols)
-        .map(|c| returns.column(c).sum() / rows as f64)
-        .collect();
+    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
     for i in 0..cols {
         for j in i..cols {
             let mut s = 0.0;
@@ -204,11 +201,13 @@ fn ones(n: usize) -> DVector<f64> {
     DVector::from_element(n, 1.0)
 }
 
-fn build_bounds(n: usize, bounds: &Option<HashMap<usize, (f64, f64)>>, tuple_bounds: Option<(f64, f64)>) -> Vec<(f64, f64)> {
+fn build_bounds(
+    n: usize,
+    bounds: &Option<HashMap<usize, (f64, f64)>>,
+    tuple_bounds: Option<(f64, f64)>,
+) -> Vec<(f64, f64)> {
     let default = tuple_bounds.unwrap_or((0.0, 1.0));
-    (0..n)
-        .map(|i| bounds.as_ref().and_then(|m| m.get(&i)).copied().unwrap_or(default))
-        .collect()
+    (0..n).map(|i| bounds.as_ref().and_then(|m| m.get(&i)).copied().unwrap_or(default)).collect()
 }
 
 fn check_bounds_feasible(bounds: &[(f64, f64)]) -> Result<(), AllocError> {
@@ -221,19 +220,20 @@ fn check_bounds_feasible(bounds: &[(f64, f64)]) -> Result<(), AllocError> {
     }
 }
 
+#[allow(dead_code)]
 fn initial_feasible(bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
     check_bounds_feasible(bounds)?;
     let mut weights: Vec<f64> = bounds.iter().map(|b| b.0).collect();
     let remaining = 1.0 - weights.iter().sum::<f64>();
     if remaining < -1e-9 {
-        return Err(AllocError::InfeasibleBounds { lower_sum: 1.0 - remaining, upper_sum: 1.0 - remaining });
+        return Err(AllocError::InfeasibleBounds {
+            lower_sum: 1.0 - remaining,
+            upper_sum: 1.0 - remaining,
+        });
     }
     if remaining > 0.0 {
-        let capacities: Vec<f64> = bounds
-            .iter()
-            .zip(weights.iter())
-            .map(|(b, w)| b.1.min(1.0) - *w)
-            .collect();
+        let capacities: Vec<f64> =
+            bounds.iter().zip(weights.iter()).map(|(b, w)| b.1.min(1.0) - *w).collect();
         let total_cap: f64 = capacities.iter().sum();
         if total_cap <= 0.0 {
             return Err(AllocError::InfeasibleBounds { lower_sum: 1.0, upper_sum: 0.0 });
@@ -255,11 +255,8 @@ fn project_to_bounds(weights: &mut [f64], bounds: &[(f64, f64)]) -> Result<(), A
     }
     if sum < 1.0 {
         let deficit = 1.0 - sum;
-        let capacities: Vec<f64> = bounds
-            .iter()
-            .zip(weights.iter())
-            .map(|(b, w)| b.1.min(1.0) - *w)
-            .collect();
+        let capacities: Vec<f64> =
+            bounds.iter().zip(weights.iter()).map(|(b, w)| b.1.min(1.0) - *w).collect();
         let total_cap: f64 = capacities.iter().sum();
         if total_cap <= 1e-12 {
             return Err(AllocError::InfeasibleBounds { lower_sum: 1.0, upper_sum: 0.0 });
@@ -269,11 +266,8 @@ fn project_to_bounds(weights: &mut [f64], bounds: &[(f64, f64)]) -> Result<(), A
         }
     } else {
         let excess = sum - 1.0;
-        let removable: Vec<f64> = bounds
-            .iter()
-            .zip(weights.iter())
-            .map(|(b, w)| (w - b.0).max(0.0))
-            .collect();
+        let removable: Vec<f64> =
+            bounds.iter().zip(weights.iter()).map(|(b, w)| (w - b.0).max(0.0)).collect();
         let total_rm: f64 = removable.iter().sum();
         if total_rm <= 1e-12 {
             return Err(AllocError::InfeasibleBounds { lower_sum: 1.0, upper_sum: 0.0 });
@@ -310,7 +304,10 @@ fn solve_min_vol(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, 
         return Err(AllocError::NoData);
     }
     // Closed form: w = inv(C)1 / (1^T inv(C) 1)
-    let inv = cov.clone().try_inverse().ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
+    let inv = cov
+        .clone()
+        .try_inverse()
+        .ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
     let ones = ones(n);
     let num = &inv * &ones;
     let denom = (ones.transpose() * &inv * &ones)[(0, 0)];
@@ -322,7 +319,12 @@ fn solve_min_vol(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, 
     Ok(w)
 }
 
-fn solve_max_sharpe(cov: &DMatrix<f64>, exp_ret: &[f64], risk_free: f64, bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
+fn solve_max_sharpe(
+    cov: &DMatrix<f64>,
+    exp_ret: &[f64],
+    risk_free: f64,
+    bounds: &[(f64, f64)],
+) -> Result<Vec<f64>, AllocError> {
     check_bounds_feasible(bounds)?;
     let n = cov.nrows();
     if n == 0 || exp_ret.len() != n {
@@ -354,14 +356,17 @@ fn efficient_risk_from_inputs(
     cov: &DMatrix<f64>,
     target_return: f64,
     bounds: &[(f64, f64)],
-    risk_free: f64,
+    _risk_free: f64,
 ) -> Result<Vec<f64>, AllocError> {
     check_bounds_feasible(bounds)?;
     let n = cov.nrows();
     if n == 0 || exp_ret.len() != n {
         return Err(AllocError::DimensionMismatch);
     }
-    let inv = cov.clone().try_inverse().ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
+    let inv = cov
+        .clone()
+        .try_inverse()
+        .ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
     let ones = ones(n);
     let mu = DVector::from_vec(exp_ret.to_vec());
     let a = (ones.transpose() * &inv * &ones)[(0, 0)];
@@ -383,7 +388,10 @@ pub fn allocate_inverse_variance(prices: &DMatrix<f64>) -> Result<MeanVariance, 
     allocate_inverse_variance_with(prices, &AllocationOptions::default())
 }
 
-pub fn allocate_inverse_variance_with(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<MeanVariance, AllocError> {
+pub fn allocate_inverse_variance_with(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<MeanVariance, AllocError> {
     let (exp_ret, cov) = returns_and_means(prices, opts)?;
     let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
     let w = inverse_variance(&cov, &bounds)?;
@@ -396,12 +404,19 @@ pub fn allocate_inverse_variance_with(prices: &DMatrix<f64>, opts: &AllocationOp
     })
 }
 
-pub fn allocate_min_vol(prices: &DMatrix<f64>, bounds: Option<HashMap<usize, (f64, f64)>>, tuple_bounds: Option<(f64, f64)>) -> Result<MeanVariance, AllocError> {
+pub fn allocate_min_vol(
+    prices: &DMatrix<f64>,
+    bounds: Option<HashMap<usize, (f64, f64)>>,
+    tuple_bounds: Option<(f64, f64)>,
+) -> Result<MeanVariance, AllocError> {
     let opts = AllocationOptions { bounds, tuple_bounds, ..Default::default() };
     allocate_min_vol_with(prices, &opts)
 }
 
-pub fn allocate_min_vol_with(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<MeanVariance, AllocError> {
+pub fn allocate_min_vol_with(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<MeanVariance, AllocError> {
     let (exp_ret, cov) = returns_and_means(prices, opts)?;
     let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
     let w = solve_min_vol(&cov, &bounds)?;
@@ -420,11 +435,15 @@ pub fn allocate_max_sharpe(
     bounds: Option<HashMap<usize, (f64, f64)>>,
     tuple_bounds: Option<(f64, f64)>,
 ) -> Result<MeanVariance, AllocError> {
-    let opts = AllocationOptions { risk_free_rate: risk_free, bounds, tuple_bounds, ..Default::default() };
+    let opts =
+        AllocationOptions { risk_free_rate: risk_free, bounds, tuple_bounds, ..Default::default() };
     allocate_max_sharpe_with(prices, &opts)
 }
 
-pub fn allocate_max_sharpe_with(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<MeanVariance, AllocError> {
+pub fn allocate_max_sharpe_with(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<MeanVariance, AllocError> {
     let (exp_ret, cov) = returns_and_means(prices, opts)?;
     let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
     let weights = solve_max_sharpe(&cov, &exp_ret, opts.risk_free_rate, &bounds)?;
@@ -452,10 +471,19 @@ pub fn allocate_efficient_risk(
     allocate_efficient_risk_with(prices, &opts)
 }
 
-pub fn allocate_efficient_risk_with(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<MeanVariance, AllocError> {
+pub fn allocate_efficient_risk_with(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<MeanVariance, AllocError> {
     let (exp_ret, cov) = returns_and_means(prices, opts)?;
     let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
-    let weights = efficient_risk_from_inputs(&exp_ret, &cov, opts.target_return, &bounds, opts.risk_free_rate)?;
+    let weights = efficient_risk_from_inputs(
+        &exp_ret,
+        &cov,
+        opts.target_return,
+        &bounds,
+        opts.risk_free_rate,
+    )?;
     let risk = quad_risk(&cov, &weights).sqrt();
     Ok(MeanVariance {
         weights: weights.clone(),
@@ -500,12 +528,22 @@ pub fn allocate_from_inputs(
             Ok(MeanVariance {
                 portfolio_risk: risk,
                 portfolio_return: dot(expected_returns, &w),
-                portfolio_sharpe: if risk > 0.0 { (dot(expected_returns, &w) - opts.risk_free_rate) / risk } else { 0.0 },
+                portfolio_sharpe: if risk > 0.0 {
+                    (dot(expected_returns, &w) - opts.risk_free_rate) / risk
+                } else {
+                    0.0
+                },
                 weights: w,
             })
         }
         "efficient_risk" => {
-            let w = efficient_risk_from_inputs(expected_returns, covariance, opts.target_return, &bounds, opts.risk_free_rate)?;
+            let w = efficient_risk_from_inputs(
+                expected_returns,
+                covariance,
+                opts.target_return,
+                &bounds,
+                opts.risk_free_rate,
+            )?;
             Ok(MeanVariance {
                 portfolio_risk: quad_risk(covariance, &w).sqrt(),
                 portfolio_return: dot(expected_returns, &w),

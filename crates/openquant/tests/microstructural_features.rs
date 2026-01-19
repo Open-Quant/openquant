@@ -1,9 +1,10 @@
 use csv::ReaderBuilder;
 use openquant::microstructural_features::{
-    get_bekker_parkinson_vol, get_corwin_schultz_estimator, get_roll_impact, get_roll_measure,
-    get_bar_based_kyle_lambda, get_bar_based_amihud_lambda, get_bar_based_hasbrouck_lambda,
-    encode_tick_rule_array, quantile_mapping, get_shannon_entropy, get_lempel_ziv_entropy,
-    get_plug_in_entropy, get_konto_entropy, get_bvc_buy_volume, get_vpin, MicrostructuralFeaturesGenerator,
+    encode_tick_rule_array, get_bar_based_amihud_lambda, get_bar_based_hasbrouck_lambda,
+    get_bar_based_kyle_lambda, get_bekker_parkinson_vol, get_bvc_buy_volume,
+    get_corwin_schultz_estimator, get_konto_entropy, get_lempel_ziv_entropy, get_plug_in_entropy,
+    get_roll_impact, get_roll_measure, get_shannon_entropy, get_vpin, quantile_mapping,
+    MicrostructuralFeaturesGenerator,
 };
 use std::path::Path;
 
@@ -29,7 +30,7 @@ fn load_dollar_bars() -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
 
 #[test]
 fn test_second_generation_intra_bar() {
-    let (close, _high, _low, cum_dollar, volume) = load_dollar_bars();
+    let (close, _high, _low, cum_dollar, _volume) = load_dollar_bars();
     let volume: Vec<f64> = {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/microstructural_features/dollar_bar_sample.csv");
@@ -54,7 +55,11 @@ fn test_second_generation_intra_bar() {
                 count += 1.0;
             }
         }
-        if count > 0.0 { sum / count } else { f64::NAN }
+        if count > 0.0 {
+            sum / count
+        } else {
+            f64::NAN
+        }
     };
     assert!((max(&kyle) - 0.000163423).abs() < 1e-6);
     assert!((mean(&kyle) - 7.02e-5).abs() < 1e-5);
@@ -85,7 +90,11 @@ fn test_third_generation_features() {
                 count += 1.0;
             }
         }
-        if count > 0.0 { sum / count } else { f64::NAN }
+        if count > 0.0 {
+            sum / count
+        } else {
+            f64::NAN
+        }
     };
     assert!((max(&vpin1) - 0.999).abs() < 1e-3);
     assert!((mean(&vpin1) - 0.501).abs() < 1e-3);
@@ -152,7 +161,8 @@ fn test_feature_generator_function() {
     // Build tick_num via simple volume bar threshold like Python get_volume_bars(threshold=20)
     let tick_num = build_tick_num_from_volume_bars(20.0);
     // build encodings from tick data
-    let mut tick_rdr = ReaderBuilder::new().has_headers(true).from_path(load_tick_data_path()).unwrap();
+    let mut tick_rdr =
+        ReaderBuilder::new().has_headers(true).from_path(load_tick_data_path()).unwrap();
     let mut volume_vals = Vec::new();
     let mut price_vals = Vec::new();
     for rec in tick_rdr.records() {
@@ -172,7 +182,8 @@ fn test_feature_generator_function() {
         &tick_num,
         Some(volume_enc.clone()),
         Some(pct_enc.clone()),
-    ).unwrap();
+    )
+    .unwrap();
     let feats = gen.get_features_from_csv(load_tick_data_path().to_str().unwrap()).unwrap();
     assert!(!feats.is_empty());
     // basic shape and a few value checks vs Python expectations
@@ -188,9 +199,9 @@ fn test_csv_format_validation() {
     // ensure valid csv passes
     let gen = MicrostructuralFeaturesGenerator::new_from_csv(
         load_tick_data_path().to_str().unwrap(),
-        &[1,2,3],
+        &[1, 2, 3],
         None,
-        None
+        None,
     );
     assert!(gen.is_ok());
 }
@@ -218,7 +229,11 @@ fn test_first_generation_features() {
                 count += 1.0;
             }
         }
-        if count > 0.0 { sum / count } else { f64::NAN }
+        if count > 0.0 {
+            sum / count
+        } else {
+            f64::NAN
+        }
     };
     assert!((max(&roll) - 7.1584).abs() < 1e-3);
     assert!((mean(&roll) - 2.341).abs() < 1e-3);

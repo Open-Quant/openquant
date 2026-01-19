@@ -17,14 +17,13 @@ fn num_concurrent_events(
 }
 
 /// Average uniqueness from triple barrier events.
+#[allow(dead_code)]
 fn get_av_uniqueness_from_triple_barrier(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close_index: &[NaiveDateTime],
 ) -> BTreeMap<NaiveDateTime, f64> {
-    let label_endtime: Vec<_> = triple_barrier_events
-        .iter()
-        .map(|(t_in, t1, _)| (*t_in, *t1))
-        .collect();
+    let label_endtime: Vec<_> =
+        triple_barrier_events.iter().map(|(t_in, t1, _)| (*t_in, *t1)).collect();
     let num_conc = num_concurrent_events(close_index, &label_endtime);
 
     // Compute uniqueness per event timestamp
@@ -56,7 +55,9 @@ pub fn get_weights_by_return(
         return Ok(Vec::new());
     }
     // Validate none are NaN
-    if triple_barrier_events.iter().any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
+    if triple_barrier_events
+        .iter()
+        .any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
     {
         return Err("NaN values in triple_barrier_events, delete nans".into());
     }
@@ -64,10 +65,7 @@ pub fn get_weights_by_return(
     let _close_map: HashMap<NaiveDateTime, f64> = close.iter().cloned().collect();
     let num_conc = num_concurrent_events(
         &close.iter().map(|(ts, _)| *ts).collect_vec(),
-        &triple_barrier_events
-            .iter()
-            .map(|(t_in, t1, _)| (*t_in, *t1))
-            .collect_vec(),
+        &triple_barrier_events.iter().map(|(t_in, t1, _)| (*t_in, *t1)).collect_vec(),
     );
 
     let mut weights: Vec<(NaiveDateTime, f64)> = Vec::new();
@@ -131,11 +129,8 @@ pub fn get_weights_by_time_decay(
             .filter(|(ts, _)| *ts >= *start && *ts <= *end)
             .map(|(_, c)| 1.0 / (*c as f64))
             .collect();
-        let avg = if vals.is_empty() {
-            0.0
-        } else {
-            vals.iter().sum::<f64>() / (vals.len() as f64)
-        };
+        let avg =
+            if vals.is_empty() { 0.0 } else { vals.iter().sum::<f64>() / (vals.len() as f64) };
         av_uniqueness.push((*start, avg));
     }
 
@@ -149,11 +144,8 @@ pub fn get_weights_by_time_decay(
     }
     if let Some((_, last)) = decay_w.last().cloned() {
         let denom = last;
-        let slope = if decay >= 0.0 {
-            (1.0 - decay) / denom
-        } else {
-            1.0 / ((decay + 1.0) * denom)
-        };
+        let slope =
+            if decay >= 0.0 { (1.0 - decay) / denom } else { 1.0 / ((decay + 1.0) * denom) };
         let constant = 1.0 - slope * denom;
         for (_, w) in decay_w.iter_mut() {
             *w = constant + slope * *w;

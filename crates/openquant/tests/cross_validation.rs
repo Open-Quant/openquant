@@ -1,7 +1,13 @@
 use chrono::NaiveDateTime;
-use openquant::cross_validation::{ml_cross_val_score, ml_get_train_times, PurgedKFold, Scoring, SimpleClassifier};
+use openquant::cross_validation::{
+    ml_cross_val_score, ml_get_train_times, PurgedKFold, Scoring, SimpleClassifier,
+};
 
-fn make_series(start: &str, periods: usize, freq_minutes: i64) -> Vec<(NaiveDateTime, NaiveDateTime)> {
+fn make_series(
+    start: &str,
+    periods: usize,
+    freq_minutes: i64,
+) -> Vec<(NaiveDateTime, NaiveDateTime)> {
     let start_dt = NaiveDateTime::parse_from_str(start, "%Y-%m-%d %H:%M:%S").unwrap();
     (0..periods)
         .map(|i| {

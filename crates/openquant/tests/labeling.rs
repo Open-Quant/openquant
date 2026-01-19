@@ -1,9 +1,7 @@
 use chrono::NaiveDateTime;
 use csv::ReaderBuilder;
 use openquant::filters::{cusum_filter_timestamps, Threshold};
-use openquant::labeling::{
-    add_vertical_barrier, drop_labels, get_bins, get_events, Event,
-};
+use openquant::labeling::{add_vertical_barrier, drop_labels, get_bins, get_events, Event};
 use openquant::util::volatility::get_daily_vol;
 use serde::Deserialize;
 use std::path::Path;
@@ -23,10 +21,7 @@ fn fixture_dir() -> std::path::PathBuf {
 
 fn load_close() -> Vec<(NaiveDateTime, f64)> {
     let path = fixture_dir().join("dollar_bar_sample.csv");
-    let mut rdr = ReaderBuilder::new()
-        .has_headers(true)
-        .from_path(&path)
-        .expect("read csv");
+    let mut rdr = ReaderBuilder::new().has_headers(true).from_path(&path).expect("read csv");
     let mut out = Vec::new();
     for result in rdr.deserialize::<Row>() {
         let row = result.expect("row");
@@ -37,7 +32,9 @@ fn load_close() -> Vec<(NaiveDateTime, f64)> {
     out
 }
 
-fn events_to_map(events: Vec<(NaiveDateTime, Event)>) -> std::collections::HashMap<NaiveDateTime, Event> {
+fn events_to_map(
+    events: Vec<(NaiveDateTime, Event)>,
+) -> std::collections::HashMap<NaiveDateTime, Event> {
     events.into_iter().collect()
 }
 
@@ -50,10 +47,7 @@ fn test_daily_volatility() {
     assert!((last - 0.008968238932170641).abs() < 1e-4);
 
     // tz-localized version should match values
-    let tz_close: Vec<_> = close
-        .iter()
-        .map(|(ts, price)| (*ts, *price))
-        .collect();
+    let tz_close: Vec<_> = close.iter().map(|(ts, price)| (*ts, *price)).collect();
     let tz_vol = get_daily_vol(&tz_close, 100);
     assert_eq!(daily_vol.len(), tz_vol.len());
     for (a, b) in daily_vol.iter().zip(tz_vol.iter()) {
@@ -65,8 +59,11 @@ fn test_daily_volatility() {
 fn test_vertical_barriers() {
     let close = load_close();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events =
-        cusum_filter_timestamps(&close.iter().map(|(_, p)| *p).collect::<Vec<_>>(), &timestamps, Threshold::Scalar(0.02));
+    let cusum_events = cusum_filter_timestamps(
+        &close.iter().map(|(_, p)| *p).collect::<Vec<_>>(),
+        &timestamps,
+        Threshold::Scalar(0.02),
+    );
 
     for days in 1..=5 {
         let vbars = add_vertical_barrier(&cusum_events, &close, days, 0, 0, 0);
@@ -142,16 +139,8 @@ fn test_triple_barrier_events() {
     assert_eq!(meta_events.len(), 8);
 
     // No vertical barriers
-    let no_vertical_events = get_events(
-        &close,
-        &cusum_events,
-        (1.0, 1.0),
-        &daily_vol,
-        0.005,
-        3,
-        None,
-        None,
-    );
+    let no_vertical_events =
+        get_events(&close, &cusum_events, (1.0, 1.0), &daily_vol, 0.005, 3, None, None);
     assert_eq!(no_vertical_events.len(), 8);
     let diff_count = no_vertical_events
         .iter()
@@ -184,10 +173,8 @@ fn test_triple_barrier_labeling() {
         None,
     );
     let labels = get_bins(&events, &close);
-    let zero_vertical: Vec<_> = labels
-        .iter()
-        .filter(|(_, ret, trgt, bin, _)| ret.abs() < *trgt && *bin == 0)
-        .collect();
+    let zero_vertical: Vec<_> =
+        labels.iter().filter(|(_, ret, trgt, bin, _)| ret.abs() < *trgt && *bin == 0).collect();
     assert!(!zero_vertical.is_empty());
 
     // meta labeling with side=1

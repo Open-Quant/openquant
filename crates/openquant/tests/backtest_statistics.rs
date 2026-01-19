@@ -1,7 +1,7 @@
-use chrono::{NaiveDate, NaiveDateTime, Duration};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 use csv::ReaderBuilder;
-use std::path::Path;
 use openquant::backtest_statistics::*;
+use std::path::Path;
 
 fn dates(n: usize, start: &str, days: i64) -> Vec<NaiveDateTime> {
     let base = NaiveDate::parse_from_str(start, "%Y-%m-%d").unwrap().and_hms_opt(0, 0, 0).unwrap();
@@ -36,7 +36,8 @@ fn log_returns(series: &[(NaiveDateTime, f64)]) -> Vec<(NaiveDateTime, f64)> {
 fn test_timing_of_flattening_and_flips() {
     let dates = dates(10, "2000-01-01", 1);
     let flip_positions = [1.0, 1.5, 0.5, 0.0, -0.5, -1.0, 0.5, 1.5, 1.5, 1.5];
-    let series: Vec<(NaiveDateTime, f64)> = dates.iter().copied().zip(flip_positions.iter().copied()).collect();
+    let series: Vec<(NaiveDateTime, f64)> =
+        dates.iter().copied().zip(flip_positions.iter().copied()).collect();
     let res = timing_of_flattening_and_flips(&series);
     let flips = vec![dates[6]];
     let flattenings = vec![dates[3], dates[9]];
@@ -50,12 +51,14 @@ fn test_timing_of_flattening_and_flips() {
 fn test_average_holding_period() {
     let dates = dates(10, "2000-01-01", 1);
     let hold_positions = [0.0, 1.0, 1.0, -1.0, -1.0, 0.0, 0.0, 2.0, 2.0, 0.0];
-    let series: Vec<(NaiveDateTime, f64)> = dates.iter().copied().zip(hold_positions.iter().copied()).collect();
+    let series: Vec<(NaiveDateTime, f64)> =
+        dates.iter().copied().zip(hold_positions.iter().copied()).collect();
     let avg = average_holding_period(&series).unwrap();
     assert!((avg - 2.0).abs() < 1e-4);
 
     let no_closed = [0.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0];
-    let series2: Vec<(NaiveDateTime, f64)> = dates.iter().copied().zip(no_closed.iter().copied()).collect();
+    let series2: Vec<(NaiveDateTime, f64)> =
+        dates.iter().copied().zip(no_closed.iter().copied()).collect();
     assert!(average_holding_period(&series2).is_none());
 }
 
@@ -88,7 +91,8 @@ fn test_all_bets_concentration() {
 fn test_drawdown_and_time_under_water() {
     let dates = dates(10, "2000-01-01", 1);
     let dollar_ret = [100.0, 110.0, 90.0, 100.0, 120.0, 130.0, 100.0, 120.0, 140.0, 130.0];
-    let series: Vec<(NaiveDateTime, f64)> = dates.iter().copied().zip(dollar_ret.iter().copied()).collect();
+    let series: Vec<(NaiveDateTime, f64)> =
+        dates.iter().copied().zip(dollar_ret.iter().copied()).collect();
     let (dd, tuw) = drawdown_and_time_under_water(&series, true);
     assert_eq!(dd, vec![20.0, 30.0, 10.0]);
     assert_eq!(tuw.len(), dd.len());

@@ -95,10 +95,8 @@ pub fn get_events(
     }
 
     // vertical barriers map
-    let mut vbar_map: Vec<(NaiveDateTime, Option<NaiveDateTime>)> = target_map
-        .iter()
-        .map(|(ts, _)| (*ts, None))
-        .collect();
+    let mut vbar_map: Vec<(NaiveDateTime, Option<NaiveDateTime>)> =
+        target_map.iter().map(|(ts, _)| (*ts, None)).collect();
     if let Some(vbars) = vertical_barrier_times {
         for (start, end) in vbars {
             if let Some(item) = vbar_map.iter_mut().find(|(ts, _)| ts == start) {
@@ -119,16 +117,7 @@ pub fn get_events(
         .map(|(ts, trgt)| {
             let t1 = vbar_map.iter().find(|(t, _)| t == ts).and_then(|(_, v)| *v);
             let side = side_map.iter().find(|(t, _)| t == ts).map(|(_, s)| *s);
-            (
-                *ts,
-                Event {
-                    t1,
-                    trgt: *trgt,
-                    side,
-                    pt: pt_sl.0,
-                    sl: pt_sl.1,
-                },
-            )
+            (*ts, Event { t1, trgt: *trgt, side, pt: pt_sl.0, sl: pt_sl.1 })
         })
         .collect();
 
@@ -160,7 +149,10 @@ pub fn get_events(
 }
 
 /// Label outcomes given events and close prices.
-pub fn get_bins(events: &[(NaiveDateTime, Event)], close: &[(NaiveDateTime, f64)]) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
+pub fn get_bins(
+    events: &[(NaiveDateTime, Event)],
+    close: &[(NaiveDateTime, f64)],
+) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
     let mut out = Vec::new();
     for (start, ev) in events {
         let t1 = match ev.t1 {
@@ -198,7 +190,10 @@ fn barrier_touched(ret: f64, trgt: f64, pt: f64, sl: f64) -> i8 {
 }
 
 /// Drop labels whose frequency is below `min_pct`.
-pub fn drop_labels(events: &[(NaiveDateTime, f64, f64, i8, Option<f64>)], min_pct: f64) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
+pub fn drop_labels(
+    events: &[(NaiveDateTime, f64, f64, i8, Option<f64>)],
+    min_pct: f64,
+) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
     let mut filtered: Vec<_> = events.to_vec();
     loop {
         let mut counts: std::collections::HashMap<i8, usize> = std::collections::HashMap::new();

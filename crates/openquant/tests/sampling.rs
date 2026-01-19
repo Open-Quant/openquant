@@ -1,6 +1,6 @@
 use openquant::sampling::{
-    get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness, get_ind_mat_label_uniqueness,
-    get_ind_matrix, num_concurrent_events, seq_bootstrap,
+    get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness,
+    get_ind_mat_label_uniqueness, get_ind_matrix, num_concurrent_events, seq_bootstrap,
 };
 
 fn setup_labels() -> (Vec<usize>, Vec<(usize, usize)>) {
@@ -99,10 +99,14 @@ fn test_seq_bootstrap_and_ind_matrix() {
         let boot_samp = seq_bootstrap(&ind, Some(3), None);
         let random_samp: Vec<usize> = (0..3).map(|_| rand::random::<usize>() % 3).collect();
         standard_unq.push(get_ind_mat_average_uniqueness(
-            &ind.iter().map(|row| random_samp.iter().map(|c| row[*c]).collect()).collect::<Vec<Vec<u8>>>(),
+            &ind.iter()
+                .map(|row| random_samp.iter().map(|c| row[*c]).collect())
+                .collect::<Vec<Vec<u8>>>(),
         ));
         seq_unq.push(get_ind_mat_average_uniqueness(
-            &ind.iter().map(|row| boot_samp.iter().map(|c| row[*c]).collect()).collect::<Vec<Vec<u8>>>(),
+            &ind.iter()
+                .map(|row| boot_samp.iter().map(|c| row[*c]).collect())
+                .collect::<Vec<Vec<u8>>>(),
         ));
     }
     let avg_seq = seq_unq.iter().sum::<f64>() / seq_unq.len() as f64;
@@ -121,9 +125,27 @@ fn test_get_ind_mat_uniqueness() {
     ind[5] = vec![0, 0, 1];
     let uniq = get_ind_mat_label_uniqueness(&ind);
     let avg = get_ind_mat_average_uniqueness(&ind);
-    assert!((uniq[0].iter().filter(|v| **v > 0.0).sum::<f64>() / uniq[0].iter().filter(|v| **v > 0.0).count() as f64 - 0.8333).abs() <= 1e-2);
-    assert!((uniq[1].iter().filter(|v| **v > 0.0).sum::<f64>() / uniq[1].iter().filter(|v| **v > 0.0).count() as f64 - 0.75).abs() <= 1e-2);
-    assert!((uniq[2].iter().filter(|v| **v > 0.0).sum::<f64>() / uniq[2].iter().filter(|v| **v > 0.0).count() as f64 - 1.0).abs() <= 1e-2);
+    assert!(
+        (uniq[0].iter().filter(|v| **v > 0.0).sum::<f64>()
+            / uniq[0].iter().filter(|v| **v > 0.0).count() as f64
+            - 0.8333)
+            .abs()
+            <= 1e-2
+    );
+    assert!(
+        (uniq[1].iter().filter(|v| **v > 0.0).sum::<f64>()
+            / uniq[1].iter().filter(|v| **v > 0.0).count() as f64
+            - 0.75)
+            .abs()
+            <= 1e-2
+    );
+    assert!(
+        (uniq[2].iter().filter(|v| **v > 0.0).sum::<f64>()
+            / uniq[2].iter().filter(|v| **v > 0.0).count() as f64
+            - 1.0)
+            .abs()
+            <= 1e-2
+    );
     assert!((avg - 0.8571).abs() <= 1e-2);
 }
 

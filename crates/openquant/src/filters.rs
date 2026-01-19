@@ -59,10 +59,7 @@ pub fn cusum_filter_timestamps(
     threshold: Threshold,
 ) -> Vec<NaiveDateTime> {
     let indices = cusum_filter_indices(close, threshold);
-    indices
-        .into_iter()
-        .map(|i| timestamps.get(i).copied().expect("timestamp index"))
-        .collect()
+    indices.into_iter().map(|i| timestamps.get(i).copied().expect("timestamp index")).collect()
 }
 
 fn rolling_mean_std(window: &[f64]) -> (f64, f64) {
@@ -124,8 +121,5 @@ pub fn z_score_filter_timestamps(
     threshold: f64,
 ) -> Vec<NaiveDateTime> {
     let indices = z_score_filter_indices(close, mean_window, std_window, threshold);
-    indices
-        .into_iter()
-        .map(|i| timestamps.get(i).copied().expect("timestamp index"))
-        .collect()
+    indices.into_iter().map(|i| timestamps.get(i).copied().expect("timestamp index")).collect()
 }

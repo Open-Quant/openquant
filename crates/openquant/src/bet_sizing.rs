@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use statrs::distribution::{Normal, ContinuousCDF};
+use statrs::distribution::{ContinuousCDF, Normal};
 
 fn bet_size_sigmoid(w_param: f64, price_div: f64) -> f64 {
     price_div * (w_param + price_div * price_div).powf(-0.5)
@@ -40,7 +40,10 @@ pub fn discrete_signal(signal0: &[f64], step_size: f64) -> Vec<f64> {
         .collect()
 }
 
-pub fn avg_active_signals(signal: &[(NaiveDateTime, f64)], t1: &[NaiveDateTime]) -> Vec<(NaiveDateTime, f64)> {
+pub fn avg_active_signals(
+    signal: &[(NaiveDateTime, f64)],
+    t1: &[NaiveDateTime],
+) -> Vec<(NaiveDateTime, f64)> {
     // Average bet sizes across active signals at each change point.
     let mut t_points: Vec<NaiveDateTime> = t1.iter().copied().collect();
     t_points.extend(signal.iter().map(|(ts, _)| *ts));
@@ -74,21 +77,29 @@ pub fn bet_size_probability(
     let prob: Vec<f64> = events.iter().map(|(_, _, p, _)| *p).collect();
     let side: Vec<f64> = events.iter().map(|(_, _, _, s)| *s).collect();
     let signal0 = get_signal(&prob, num_classes, &side);
-    let mut signals: Vec<(NaiveDateTime, f64)> = events.iter().map(|(ts, _, _, _)| *ts).zip(signal0.into_iter()).collect();
+    let mut signals: Vec<(NaiveDateTime, f64)> =
+        events.iter().map(|(ts, _, _, _)| *ts).zip(signal0.into_iter()).collect();
     if average_active {
         let t1: Vec<NaiveDateTime> = events.iter().map(|(_, t1, _, _)| *t1).collect();
         signals = avg_active_signals(&signals, &t1);
     }
-    let discretized: Vec<f64> = discrete_signal(&signals.iter().map(|(_, v)| *v).collect::<Vec<_>>(), step_size);
-    signals
-        .iter()
-        .zip(discretized.iter())
-        .map(|(t, v)| (t.0, *v))
-        .collect()
+    let discretized: Vec<f64> =
+        discrete_signal(&signals.iter().map(|(_, v)| *v).collect::<Vec<_>>(), step_size);
+    signals.iter().zip(discretized.iter()).map(|(t, v)| (t.0, *v)).collect()
 }
 
-pub fn confirm_and_cast_to_df(pos: &[f64], max_pos: &[f64], m_p: &[f64], f: &[f64]) -> Vec<(f64, f64, f64, f64)> {
-    pos.iter().zip(max_pos.iter()).zip(m_p.iter()).zip(f.iter()).map(|(((p, m), mp), f)| (*p, *m, *mp, *f)).collect()
+pub fn confirm_and_cast_to_df(
+    pos: &[f64],
+    max_pos: &[f64],
+    m_p: &[f64],
+    f: &[f64],
+) -> Vec<(f64, f64, f64, f64)> {
+    pos.iter()
+        .zip(max_pos.iter())
+        .zip(m_p.iter())
+        .zip(f.iter())
+        .map(|(((p, m), mp), f)| (*p, *m, *mp, *f))
+        .collect()
 }
 
 pub fn get_w(price_div: f64, m_bet_size: f64, func: &str) -> f64 {
@@ -152,10 +163,13 @@ pub fn bet_size_dynamic(
     out
 }
 
-pub fn get_concurrent_sides(t1: &[(NaiveDateTime, NaiveDateTime)], side: &[f64]) -> Vec<(NaiveDateTime, f64, f64)> {
+pub fn get_concurrent_sides(
+    t1: &[(NaiveDateTime, NaiveDateTime)],
+    side: &[f64],
+) -> Vec<(NaiveDateTime, f64, f64)> {
     // returns (index, active_long, active_short)
     let mut out = Vec::new();
-    for (start, end) in t1.iter() {
+    for (start, _end) in t1.iter() {
         let mut long = 0.0;
         let mut short = 0.0;
         for (j, (s, e)) in t1.iter().enumerate() {
@@ -172,7 +186,10 @@ pub fn get_concurrent_sides(t1: &[(NaiveDateTime, NaiveDateTime)], side: &[f64])
     out
 }
 
-pub fn bet_size_budget(t1: &[(NaiveDateTime, NaiveDateTime)], side: &[f64]) -> Vec<(NaiveDateTime, f64)> {
+pub fn bet_size_budget(
+    t1: &[(NaiveDateTime, NaiveDateTime)],
+    side: &[f64],
+) -> Vec<(NaiveDateTime, f64)> {
     let conc = get_concurrent_sides(t1, side);
     let max_long = conc.iter().map(|(_, l, _)| *l).fold(0.0, f64::max);
     let max_short = conc.iter().map(|(_, _, s)| *s).fold(0.0, f64::max);

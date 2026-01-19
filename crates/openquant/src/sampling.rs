@@ -41,7 +41,11 @@ pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> f64 {
             count += 1;
         }
     }
-    if count > 0 { uniq_sum / count as f64 } else { 0.0 }
+    if count > 0 {
+        uniq_sum / count as f64
+    } else {
+        0.0
+    }
 }
 
 /// Per-label uniqueness series.
@@ -123,7 +127,11 @@ pub fn get_av_uniqueness_from_triple_barrier(
         .map(|u| {
             let sum: f64 = u.iter().filter(|v| **v > 0.0).sum();
             let cnt = u.iter().filter(|v| **v > 0.0).count() as f64;
-            if cnt > 0.0 { sum / cnt } else { 0.0 }
+            if cnt > 0.0 {
+                sum / cnt
+            } else {
+                0.0
+            }
         })
         .collect()
 }

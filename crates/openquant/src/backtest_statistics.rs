@@ -3,7 +3,9 @@ use statrs::distribution::{ContinuousCDF, Normal};
 
 const EULER_GAMMA: f64 = 0.5772156649015329_f64;
 
-pub fn timing_of_flattening_and_flips(target_positions: &[(NaiveDateTime, f64)]) -> Vec<NaiveDateTime> {
+pub fn timing_of_flattening_and_flips(
+    target_positions: &[(NaiveDateTime, f64)],
+) -> Vec<NaiveDateTime> {
     let mut flattenings = Vec::new();
     let mut flips = Vec::new();
     for i in 1..target_positions.len() {
@@ -39,10 +41,7 @@ pub fn average_holding_period(target_positions: &[(NaiveDateTime, f64)]) -> Opti
         .iter()
         .map(|(ts, _)| (*ts - target_positions[0].0).num_seconds() as f64 / 86_400.0)
         .collect();
-    let mut position_diff: Vec<f64> = target_positions
-        .iter()
-        .map(|(_, v)| *v)
-        .collect();
+    let mut position_diff: Vec<f64> = target_positions.iter().map(|(_, v)| *v).collect();
     for i in (1..position_diff.len()).rev() {
         position_diff[i] -= position_diff[i - 1];
     }
@@ -89,13 +88,16 @@ pub fn bets_concentration(returns: &[f64]) -> Option<f64> {
     Some(adj)
 }
 
-pub fn all_bets_concentration(returns: &[(NaiveDateTime, f64)]) -> (Option<f64>, Option<f64>, Option<f64>) {
+pub fn all_bets_concentration(
+    returns: &[(NaiveDateTime, f64)],
+) -> (Option<f64>, Option<f64>, Option<f64>) {
     let positives: Vec<f64> = returns.iter().filter(|(_, r)| *r >= 0.0).map(|(_, r)| *r).collect();
     let negatives: Vec<f64> = returns.iter().filter(|(_, r)| *r < 0.0).map(|(_, r)| *r).collect();
     let pos = bets_concentration(&positives);
     let neg = bets_concentration(&negatives);
     // time grouping by day including gaps between first and last date (zeros matter)
-    let mut per_day: std::collections::HashMap<chrono::NaiveDate, usize> = std::collections::HashMap::new();
+    let mut per_day: std::collections::HashMap<chrono::NaiveDate, usize> =
+        std::collections::HashMap::new();
     for (ts, _) in returns {
         *per_day.entry(ts.date()).or_insert(0) += 1;
     }
@@ -148,11 +150,8 @@ pub fn drawdown_and_time_under_water(
     let mut dd_times = Vec::new();
     for i in 0..hwms.len() {
         if segment_min[i] < hwms[i] {
-            let dd = if dollars {
-                hwms[i] - segment_min[i]
-            } else {
-                1.0 - segment_min[i] / hwms[i]
-            };
+            let dd =
+                if dollars { hwms[i] - segment_min[i] } else { 1.0 - segment_min[i] / hwms[i] };
             drawdowns.push(dd);
             dd_times.push(hwm_times[i]);
         }
@@ -162,11 +161,7 @@ pub fn drawdown_and_time_under_water(
     let mut tuw = Vec::new();
     for i in 0..dd_times.len() {
         let start = dd_times[i];
-        let end = if i + 1 < dd_times.len() {
-            dd_times[i + 1]
-        } else {
-            returns.last().unwrap().0
-        };
+        let end = if i + 1 < dd_times.len() { dd_times[i + 1] } else { returns.last().unwrap().0 };
         let years = (end - start).num_seconds() as f64 / (365.25 * 24.0 * 3600.0);
         tuw.push(years);
     }
@@ -176,7 +171,8 @@ pub fn drawdown_and_time_under_water(
 
 pub fn sharpe_ratio(returns: &[f64], entries_per_year: f64, risk_free_rate: f64) -> f64 {
     let mean = returns.iter().sum::<f64>() / returns.len() as f64;
-    let var = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (returns.len() as f64 - 1.0);
+    let var =
+        returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (returns.len() as f64 - 1.0);
     let std = var.sqrt();
     ((mean - risk_free_rate) / std) * entries_per_year.sqrt()
 }
@@ -194,7 +190,8 @@ pub fn probabilistic_sharpe_ratio(
     kurtosis: f64,
 ) -> f64 {
     let z = ((observed_sr - benchmark_sr) * (number_of_returns as f64 - 1.0).sqrt())
-        / (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr).sqrt();
+        / (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr)
+            .sqrt();
     let norm = Normal::new(0.0, 1.0).unwrap();
     norm.cdf(z)
 }
@@ -217,7 +214,9 @@ pub fn deflated_sharpe_ratio(
     } else {
         let sd = {
             let mean = sr_estimates.iter().sum::<f64>() / sr_estimates.len() as f64;
-            (sr_estimates.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / sr_estimates.len() as f64).sqrt()
+            (sr_estimates.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
+                / sr_estimates.len() as f64)
+                .sqrt()
         };
         let n = sr_estimates.len() as f64;
         let norm = Normal::new(0.0, 1.0).unwrap();

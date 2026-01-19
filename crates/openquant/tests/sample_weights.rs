@@ -18,10 +18,7 @@ fn load_close() -> Vec<(NaiveDateTime, f64)> {
         .join("../../tests/fixtures/filters/dollar_bar_sample.csv")
         .canonicalize()
         .expect("fixture dir");
-    let mut rdr = ReaderBuilder::new()
-        .has_headers(true)
-        .from_path(&path)
-        .expect("read csv");
+    let mut rdr = ReaderBuilder::new().has_headers(true).from_path(&path).expect("read csv");
     let mut out = Vec::new();
     for result in rdr.deserialize::<Row>() {
         let row = result.expect("row");
@@ -32,7 +29,12 @@ fn load_close() -> Vec<(NaiveDateTime, f64)> {
     out
 }
 
-fn setup_events() -> (Vec<(NaiveDateTime, NaiveDateTime, f64)>, Vec<(NaiveDateTime, f64)>, Vec<NaiveDateTime>, Vec<f64>) {
+fn setup_events() -> (
+    Vec<(NaiveDateTime, NaiveDateTime, f64)>,
+    Vec<(NaiveDateTime, f64)>,
+    Vec<NaiveDateTime>,
+    Vec<f64>,
+) {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
@@ -89,7 +91,10 @@ fn test_time_decay_weights() {
     assert!((standard.first().unwrap().1 - 0.582191).abs() <= 1e5);
     assert!(no_decay.iter().all(|(_, w)| (*w - 1.0).abs() < 1e-12));
     assert_eq!(neg_decay.iter().filter(|(_, w)| *w == 0.0).count(), 3);
-    assert_eq!(pos_decay.first().unwrap().1, pos_decay.iter().map(|(_, w)| *w).fold(f64::MIN, f64::max));
+    assert_eq!(
+        pos_decay.first().unwrap().1,
+        pos_decay.iter().map(|(_, w)| *w).fold(f64::MIN, f64::max)
+    );
     assert!(pos_decay[pos_decay.len() - 2].1 >= pos_decay.last().unwrap().1);
 }
 
@@ -97,7 +102,7 @@ fn test_time_decay_weights() {
 fn test_value_error_raise() {
     let (mut events, close, _, _) = setup_events();
     // Introduce NaN via zero timestamp to trigger validation
-    events[0].0 = NaiveDateTime::from_timestamp_opt(0, 0).unwrap();
+    events[0].0 = chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0).unwrap().naive_utc();
     assert!(get_weights_by_return(&events, &close).is_err());
     assert!(get_weights_by_time_decay(&events, &close, 0.5).is_err());
 }

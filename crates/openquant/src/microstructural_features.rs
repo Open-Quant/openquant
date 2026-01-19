@@ -1,6 +1,6 @@
-use std::f64::NAN;
-use statrs::distribution::{ContinuousCDF, Normal};
 use chrono::NaiveDateTime;
+use statrs::distribution::{ContinuousCDF, Normal};
+use std::f64::NAN;
 
 fn rolling_cov(x: &[f64], y: &[f64], window: usize) -> Vec<f64> {
     let n = x.len();
@@ -39,9 +39,7 @@ pub fn get_roll_measure(close: &[f64], window: usize) -> Vec<f64> {
         diff_lag[i] = diff[i - 1];
     }
     let cov = rolling_cov(&diff, &diff_lag, window);
-    cov.iter()
-        .map(|c| if c.is_nan() { NAN } else { 2.0 * (c.abs()).sqrt() })
-        .collect()
+    cov.iter().map(|c| if c.is_nan() { NAN } else { 2.0 * (c.abs()).sqrt() }).collect()
 }
 
 pub fn get_roll_impact(close: &[f64], dollar_volume: &[f64], window: usize) -> Vec<f64> {
@@ -126,13 +124,15 @@ fn _get_gamma(high: &[f64], low: &[f64]) -> Vec<f64> {
     high_max
         .iter()
         .zip(low_min.iter())
-        .map(|(h, l)| {
-            if h.is_nan() || l.is_nan() || *l == 0.0 {
-                NAN
-            } else {
-                (h / l).ln().powi(2)
-            }
-        })
+        .map(
+            |(h, l)| {
+                if h.is_nan() || l.is_nan() || *l == 0.0 {
+                    NAN
+                } else {
+                    (h / l).ln().powi(2)
+                }
+            },
+        )
         .collect()
 }
 
@@ -225,7 +225,11 @@ pub fn get_bar_based_kyle_lambda(close: &[f64], volume: &[f64], window: usize) -
     out
 }
 
-pub fn get_bar_based_amihud_lambda(close: &[f64], dollar_volume: &[f64], window: usize) -> Vec<f64> {
+pub fn get_bar_based_amihud_lambda(
+    close: &[f64],
+    dollar_volume: &[f64],
+    window: usize,
+) -> Vec<f64> {
     let mut ret_abs = vec![NAN; close.len()];
     for i in 1..close.len() {
         if close[i - 1] == 0.0 {
@@ -255,7 +259,11 @@ pub fn get_bar_based_amihud_lambda(close: &[f64], dollar_volume: &[f64], window:
     out
 }
 
-pub fn get_bar_based_hasbrouck_lambda(close: &[f64], dollar_volume: &[f64], window: usize) -> Vec<f64> {
+pub fn get_bar_based_hasbrouck_lambda(
+    close: &[f64],
+    dollar_volume: &[f64],
+    window: usize,
+) -> Vec<f64> {
     let mut log_ret = vec![NAN; close.len()];
     for i in 1..close.len() {
         if close[i - 1] == 0.0 {
@@ -295,28 +303,45 @@ pub fn get_bar_based_hasbrouck_lambda(close: &[f64], dollar_volume: &[f64], wind
     out
 }
 
-pub fn get_trades_based_kyle_lambda(price_diff: &[f64], volume: &[f64], aggressor_flags: &[f64]) -> f64 {
+pub fn get_trades_based_kyle_lambda(
+    price_diff: &[f64],
+    volume: &[f64],
+    aggressor_flags: &[f64],
+) -> f64 {
     let signed: Vec<f64> = volume.iter().zip(aggressor_flags.iter()).map(|(v, a)| v * a).collect();
     let num: f64 = signed.iter().zip(price_diff.iter()).map(|(x, y)| x * y).sum();
     let den: f64 = signed.iter().map(|x| x * x).sum();
-    if den == 0.0 { NAN } else { num / den }
+    if den == 0.0 {
+        NAN
+    } else {
+        num / den
+    }
 }
 
 pub fn get_trades_based_amihud_lambda(log_ret: &[f64], dollar_volume: &[f64]) -> f64 {
     let num: f64 = dollar_volume.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
     let den: f64 = dollar_volume.iter().map(|x| x * x).sum();
-    if den == 0.0 { NAN } else { num / den }
+    if den == 0.0 {
+        NAN
+    } else {
+        num / den
+    }
 }
 
-pub fn get_trades_based_hasbrouck_lambda(log_ret: &[f64], dollar_volume: &[f64], aggressor_flags: &[f64]) -> f64 {
-    let signed: Vec<f64> = dollar_volume
-        .iter()
-        .zip(aggressor_flags.iter())
-        .map(|(v, a)| v.sqrt() * a)
-        .collect();
+pub fn get_trades_based_hasbrouck_lambda(
+    log_ret: &[f64],
+    dollar_volume: &[f64],
+    aggressor_flags: &[f64],
+) -> f64 {
+    let signed: Vec<f64> =
+        dollar_volume.iter().zip(aggressor_flags.iter()).map(|(v, a)| v.sqrt() * a).collect();
     let num: f64 = signed.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
     let den: f64 = signed.iter().map(|x| x * x).sum();
-    if den == 0.0 { NAN } else { num / den }
+    if den == 0.0 {
+        NAN
+    } else {
+        num / den
+    }
 }
 
 // Misc helpers
@@ -337,11 +362,8 @@ pub fn get_avg_tick_size(tick_sizes: &[f64]) -> f64 {
 
 pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Vec<f64> {
     let sell_volume: Vec<f64> = volume.iter().zip(buy_volume.iter()).map(|(v, b)| v - b).collect();
-    let imbalance: Vec<f64> = buy_volume
-        .iter()
-        .zip(sell_volume.iter())
-        .map(|(b, s)| (b - s).abs())
-        .collect();
+    let imbalance: Vec<f64> =
+        buy_volume.iter().zip(sell_volume.iter()).map(|(b, s)| (b - s).abs()).collect();
     let mut out = vec![NAN; volume.len()];
     for i in 0..volume.len() {
         if i + 1 < window {
@@ -528,9 +550,7 @@ fn prob_mass_function(message: &str, word_length: usize) -> std::collections::Ha
         lib.entry(sub.to_string()).or_default().push(i - word_length);
     }
     let total = (message.len() - word_length) as f64;
-    lib.into_iter()
-        .map(|(k, v)| (k, v.len() as f64 / total))
-        .collect()
+    lib.into_iter().map(|(k, v)| (k, v.len() as f64 / total)).collect()
 }
 
 pub fn get_plug_in_entropy(message: &str, word_length: usize) -> f64 {
@@ -602,7 +622,7 @@ pub struct MicrostructuralFeaturesGenerator {
     prev_tick_rule: f64,
     volume_encoding: Option<Vec<(f64, char)>>,
     pct_encoding: Option<Vec<(f64, char)>>,
-    entropy_types: Vec<&'static str>,
+    _entropy_types: Vec<&'static str>,
 }
 
 impl MicrostructuralFeaturesGenerator {
@@ -613,14 +633,19 @@ impl MicrostructuralFeaturesGenerator {
         pct_encoding: Option<Vec<(f64, char)>>,
     ) -> Result<Self, String> {
         // validate header
-        let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_path(trades_path).map_err(|e| e.to_string())?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(trades_path)
+            .map_err(|e| e.to_string())?;
         if let Some(result) = rdr.records().next() {
             let rec = result.map_err(|e| e.to_string())?;
             if rec.len() != 3 {
                 return Err("Must have only 3 columns in csv: date_time, price, & volume.".into());
             }
             rec[1].parse::<f64>().map_err(|_| "price column in csv not float.".to_string())?;
-            rec[2].parse::<f64>().map_err(|_| "volume column in csv not int or float.".to_string())?;
+            rec[2]
+                .parse::<f64>()
+                .map_err(|_| "volume column in csv not int or float.".to_string())?;
             // Try multiple datetime formats (with/without fractional seconds)
             let _ = parse_datetime(&rec[0]).map_err(|_| "column 0 not datetime".to_string())?;
         }
@@ -636,7 +661,7 @@ impl MicrostructuralFeaturesGenerator {
             prev_tick_rule: 0.0,
             volume_encoding,
             pct_encoding,
-            entropy_types: vec!["shannon", "plug_in", "lempel_ziv", "konto"],
+            _entropy_types: vec!["shannon", "plug_in", "lempel_ziv", "konto"],
         })
     }
 
@@ -685,15 +710,25 @@ impl MicrostructuralFeaturesGenerator {
 
     fn bar_features(&self, date_time: NaiveDateTime) -> Vec<f64> {
         let mut features = Vec::new();
-        features.push(date_time.timestamp_millis() as f64);
+        features.push(date_time.and_utc().timestamp_millis() as f64);
         features.push(get_avg_tick_size(&self.trade_size));
         features.push(self.tick_rule.iter().sum::<f64>());
         features.push(vwap(&self.dollar_size, &self.trade_size));
-        features.push(get_trades_based_kyle_lambda(&self.price_diff, &self.trade_size, &self.tick_rule));
+        features.push(get_trades_based_kyle_lambda(
+            &self.price_diff,
+            &self.trade_size,
+            &self.tick_rule,
+        ));
         features.push(get_trades_based_amihud_lambda(&self.log_ret, &self.dollar_size));
-        features.push(get_trades_based_hasbrouck_lambda(&self.log_ret, &self.dollar_size, &self.tick_rule));
+        features.push(get_trades_based_hasbrouck_lambda(
+            &self.log_ret,
+            &self.dollar_size,
+            &self.tick_rule,
+        ));
 
-        let tick_msg = encode_tick_rule_array(&self.tick_rule.iter().map(|v| *v as i32).collect::<Vec<_>>()).unwrap_or_default();
+        let tick_msg =
+            encode_tick_rule_array(&self.tick_rule.iter().map(|v| *v as i32).collect::<Vec<_>>())
+                .unwrap_or_default();
         self.encode_entropy_features(&tick_msg, &mut features);
 
         if let Some(enc) = &self.volume_encoding {
@@ -708,7 +743,10 @@ impl MicrostructuralFeaturesGenerator {
     }
 
     pub fn get_features_from_csv(&mut self, trades_path: &str) -> Result<Vec<Vec<f64>>, String> {
-        let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_path(trades_path).map_err(|e| e.to_string())?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_path(trades_path)
+            .map_err(|e| e.to_string())?;
         let mut bars: Vec<Vec<f64>> = Vec::new();
         let mut tick_num = 0usize;
         for rec in rdr.records() {

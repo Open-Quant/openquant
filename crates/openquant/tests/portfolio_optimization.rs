@@ -1,9 +1,9 @@
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
 use openquant::portfolio_optimization::{
-    allocate_efficient_risk, allocate_from_inputs, allocate_inverse_variance, allocate_max_sharpe, allocate_min_vol,
-    allocate_with_solution, compute_expected_and_covariance, returns_method_from_str, AllocationOptions, AllocError,
-    ReturnsMethod,
+    allocate_efficient_risk, allocate_from_inputs, allocate_inverse_variance, allocate_max_sharpe,
+    allocate_min_vol, allocate_with_solution, compute_expected_and_covariance,
+    returns_method_from_str, AllocError, AllocationOptions, ReturnsMethod,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -112,10 +112,7 @@ fn test_specific_weight_bounds() {
     let prices = load_prices();
     let mut bounds = HashMap::new();
     bounds.insert(0, (0.3, 1.0));
-    let opts = AllocationOptions {
-        bounds: Some(bounds),
-        ..Default::default()
-    };
+    let opts = AllocationOptions { bounds: Some(bounds), ..Default::default() };
     let res = allocate_min_vol_with_opts(&prices, &opts).expect("solution");
     assert!(res.weights[0] >= 0.3 - 1e-6);
     let sum: f64 = res.weights.iter().sum();
@@ -146,8 +143,11 @@ fn test_unknown_returns_method() {
 #[test]
 fn test_allocation_with_supplied_inputs() {
     let prices = load_prices();
-    let (expected, cov) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
-    let res = allocate_from_inputs(&expected, &cov, "inverse_variance", &AllocationOptions::default()).unwrap();
+    let (expected, cov) =
+        compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+    let res =
+        allocate_from_inputs(&expected, &cov, "inverse_variance", &AllocationOptions::default())
+            .unwrap();
     assert_eq!(res.weights.len(), prices.ncols());
     assert!((res.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
 }
@@ -158,10 +158,7 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
     let fixture = load_fixture();
     let mut bounds = HashMap::new();
     bounds.insert(0, (0.3, 1.0));
-    let opts = AllocationOptions {
-        bounds: Some(bounds),
-        ..Default::default()
-    };
+    let opts = AllocationOptions { bounds: Some(bounds), ..Default::default() };
     let res_min = openquant::portfolio_optimization::allocate_min_vol_with(&prices, &opts).unwrap();
     let exp_min = fixture["weights"]["min_volatility_bound0"].as_array().unwrap();
     let max_diff = res_min
@@ -172,7 +169,8 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
         .fold(0.0_f64, f64::max);
     assert!(max_diff < 0.25, "min vol bound diff {}", max_diff);
 
-    let res_max = openquant::portfolio_optimization::allocate_max_sharpe_with(&prices, &opts).unwrap();
+    let res_max =
+        openquant::portfolio_optimization::allocate_max_sharpe_with(&prices, &opts).unwrap();
     let exp_max = fixture["weights"]["max_sharpe_bound0"].as_array().unwrap();
     let max_diff = res_max
         .weights
@@ -182,7 +180,11 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
         .fold(0.0_f64, f64::max);
     assert!(max_diff < 1.0, "max sharpe bound diff {}", max_diff);
 
-    let res_eff = openquant::portfolio_optimization::allocate_efficient_risk_with(&prices, &AllocationOptions { target_return: 0.01, ..opts.clone() }).unwrap();
+    let res_eff = openquant::portfolio_optimization::allocate_efficient_risk_with(
+        &prices,
+        &AllocationOptions { target_return: 0.01, ..opts.clone() },
+    )
+    .unwrap();
     let exp_eff = fixture["weights"]["efficient_risk_bound0"].as_array().unwrap();
     let max_diff = res_eff
         .weights
@@ -211,24 +213,30 @@ fn test_exponential_returns_method() {
 #[test]
 fn test_resample_weekly() {
     let prices = load_prices();
-    let opts = AllocationOptions {
-        resample_by: Some("W"),
-        target_return: 0.001,
-        ..Default::default()
-    };
+    let opts =
+        AllocationOptions { resample_by: Some("W"), target_return: 0.001, ..Default::default() };
     let res = allocate_efficient_risk_with_opts(&prices, &opts).unwrap();
     assert!((res.weights.iter().sum::<f64>() - 1.0).abs() < 1e-2);
 }
 
 // Helper wrappers to keep test calls succinct
-fn allocate_inverse_variance_with_opts(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
+fn allocate_inverse_variance_with_opts(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
     openquant::portfolio_optimization::allocate_inverse_variance_with(prices, opts)
 }
 
-fn allocate_min_vol_with_opts(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
+fn allocate_min_vol_with_opts(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
     openquant::portfolio_optimization::allocate_min_vol_with(prices, opts)
 }
 
-fn allocate_efficient_risk_with_opts(prices: &DMatrix<f64>, opts: &AllocationOptions) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
+fn allocate_efficient_risk_with_opts(
+    prices: &DMatrix<f64>,
+    opts: &AllocationOptions,
+) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
     openquant::portfolio_optimization::allocate_efficient_risk_with(prices, opts)
 }
