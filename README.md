@@ -4,10 +4,10 @@
 
 # OpenQuant-rs
 
-OpenQuant-rs is a Rust implementation of the Python mlfinlab library with a focus on test parity, shared fixtures, and performance-ready foundations for quantitative finance workflows.
+OpenQuant-rs is a Rust-first library for modern machine learning methods in finance, inspired by and building on the ideas from *Advances in Financial Machine Learning* by Marcos Lopez de Prado.
 
 ## What this repo is
-- A Rust-first port of mlfinlab modules with a strict parity mindset.
+- A Rust implementation of core AFML techniques with a strict, testable baseline.
 - A place to consolidate fixtures and baseline behavior before optimization.
 - A stepping stone toward benchmarks and accelerated algorithms once parity is locked.
 
