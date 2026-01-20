@@ -1,5 +1,7 @@
 pub mod backtest_statistics;
 pub mod bet_sizing;
+pub mod cla;
+pub mod codependence;
 pub mod cross_validation;
 pub mod data_structures;
 pub mod filters;
@@ -8,4 +10,5 @@ pub mod microstructural_features;
 pub mod portfolio_optimization;
 pub mod sample_weights;
 pub mod sampling;
+pub mod structural_breaks;
 pub mod util;

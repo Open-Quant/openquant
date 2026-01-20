@@ -15,10 +15,10 @@
 | test_standard_data_structures.py | crates/openquant/tests/data_structures_standard.rs | (inline fixtures) | ✅ ported (standard bars) |
 | test_time_data_structures.py | crates/openquant/tests/data_structures_standard.rs | (inline fixtures) | ✅ ported (time bars) |
 | test_imbalance_data_structures.py | crates/openquant/tests/data_structures_run_imbalance.rs | (inline fixtures) | ✅ ported (imbalance bars) |
-| test_structural_breaks.py | (tbd) | (tbd) | |
-| test_ch10_snippets.py | (tbd) | (tbd) | |
-| test_cla.py | (tbd) | (tbd) | |
-| test_codependence.py | (tbd) | (tbd) | |
+| test_structural_breaks.py | crates/openquant/tests/structural_breaks.rs | tests/fixtures/structural_breaks/dollar_bar_sample.csv | ✅ ported |
+| test_ch10_snippets.py | crates/openquant/tests/ch10_snippets.rs | (inline fixtures) | ✅ ported |
+| test_cla.py | crates/openquant/tests/cla.rs | tests/fixtures/portfolio_optimization/stock_prices.csv | ✅ ported |
+| test_codependence.py | crates/openquant/tests/codependence.rs | tests/fixtures/codependence/random_state_42.csv | ✅ ported |
 | test_ef3m.py | (tbd) | (tbd) | |
 | test_etf_trick.py | (tbd) | (tbd) | |
 | test_fast_ewma.py | (tbd) | (tbd) | |
