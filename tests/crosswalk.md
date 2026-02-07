@@ -4,7 +4,7 @@
 | --- | --- | --- | --- |
 | test_filters.py | crates/openquant/tests/filters.rs | tests/fixtures/filters/{dollar_bar_sample.csv, events.json} | ✅ ported |
 | test_backtest_statistics.py | crates/openquant/tests/backtest_statistics.rs | tests/fixtures/backtest_statistics/dollar_bar_sample.csv | ✅ ported |
-| test_bet_sizing.py | crates/openquant/tests/bet_sizing.rs | tests/fixtures/bet_sizing/{prob_dynamic_budget.json,reserve_fixture.json} | ✅ ported |
+| test_bet_sizing.py | crates/openquant/tests/bet_sizing.rs | tests/fixtures/bet_sizing/{prob_dynamic_budget.json,reserve_fixture.json} | ✅ ported (reserve fit/return-params + broadcast semantics added) |
 | test_cross_validation.py | crates/openquant/tests/cross_validation.rs | (inline fixtures) | ✅ ported |
 | test_labels.py | crates/openquant/tests/labeling.rs | (inline fixtures) | ✅ ported |
 | test_microstructural_features.py | crates/openquant/tests/microstructural_features.rs | tests/fixtures/microstructural_features/{tick_data.csv,tick_data_time_bars.csv,dollar_bar_sample.csv} | ✅ ported |
