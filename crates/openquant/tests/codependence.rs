@@ -79,10 +79,10 @@ fn test_information_metrics() {
     assert!((mut_info_norm - 0.6409642333987833).abs() < 1e-6);
     assert!((mut_info_bins - 0.6264238716396385).abs() < 1e-6);
 
-    let info_var = variation_of_information_score(&x, &y_1, None, false)
-        .expect("information variation");
-    let info_var_norm = variation_of_information_score(&x, &y_1, None, true)
-        .expect("information variation norm");
+    let info_var =
+        variation_of_information_score(&x, &y_1, None, false).expect("information variation");
+    let info_var_norm =
+        variation_of_information_score(&x, &y_1, None, true).expect("information variation norm");
     let info_var_bins = variation_of_information_score(&x, &y_1, Some(10), false)
         .expect("information variation bins");
 

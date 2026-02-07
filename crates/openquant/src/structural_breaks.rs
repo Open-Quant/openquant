@@ -21,7 +21,10 @@ pub enum SadfLags {
     Array(Vec<usize>),
 }
 
-pub fn get_chow_type_stat(_log_prices: &[f64], _min_length: usize) -> StructuralBreakResult<Vec<f64>> {
+pub fn get_chow_type_stat(
+    _log_prices: &[f64],
+    _min_length: usize,
+) -> StructuralBreakResult<Vec<f64>> {
     let series_len = _log_prices.len();
     if series_len < _min_length * 2 {
         return Ok(Vec::new());
@@ -89,10 +92,7 @@ pub fn get_chu_stinchcombe_white_statistics(
         critical_value.push(max_s_n_critical_value.unwrap_or(f64::NAN));
     }
 
-    Ok(ChuStinchcombeWhiteResult {
-        critical_value,
-        stat,
-    })
+    Ok(ChuStinchcombeWhiteResult { critical_value, stat })
 }
 
 pub fn get_sadf(
@@ -232,11 +232,7 @@ fn get_y_x(
                     new_row.push(1.0);
                 }
                 let trend = i as f64;
-                let trend_value = if model == "quadratic" {
-                    trend * trend
-                } else {
-                    trend
-                };
+                let trend_value = if model == "quadratic" { trend * trend } else { trend };
                 new_row.push(trend_value);
                 updated.push(new_row);
             }
@@ -290,11 +286,7 @@ fn get_y_x(
     Ok((x, y, indices))
 }
 
-fn get_sadf_at_t(
-    x: &[Vec<f64>],
-    y: &[f64],
-    min_length: usize,
-) -> StructuralBreakResult<f64> {
+fn get_sadf_at_t(x: &[Vec<f64>], y: &[f64], min_length: usize) -> StructuralBreakResult<f64> {
     let y_len = y.len();
     if y_len < min_length {
         return Ok(f64::NEG_INFINITY);
@@ -303,10 +295,7 @@ fn get_sadf_at_t(
     let mut bsadf = f64::NEG_INFINITY;
     let start_points = 0..=(y_len - min_length);
     for start in start_points {
-        let y_subset = y[start..]
-            .iter()
-            .map(|v| vec![*v])
-            .collect::<Vec<_>>();
+        let y_subset = y[start..].iter().map(|v| vec![*v]).collect::<Vec<_>>();
         let x_subset = x[start..].to_vec();
 
         let (b_mean, b_var) = _get_betas(&x_subset, &y_subset)?;

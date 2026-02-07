@@ -92,32 +92,21 @@ fn test_sadf_test() {
     let lags_array = vec![1usize, 2, 5, 7];
     let min_length = 20usize;
 
-    let sm_power =
-        get_sadf(&log_prices, "sm_power", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("sm_power sadf");
-    let linear =
-        get_sadf(&log_prices, "linear", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("linear sadf");
-    let linear_no_const = get_sadf(
-        &log_prices,
-        "linear",
-        false,
-        min_length,
-        SadfLags::Array(lags_array.clone()),
-    )
-    .expect("linear no const sadf");
-    let quadratic =
-        get_sadf(&log_prices, "quadratic", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("quadratic sadf");
-    let sm_poly_1 =
-        get_sadf(&log_prices, "sm_poly_1", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("sm_poly_1 sadf");
-    let sm_poly_2 =
-        get_sadf(&log_prices, "sm_poly_2", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("sm_poly_2 sadf");
-    let sm_exp =
-        get_sadf(&log_prices, "sm_exp", true, min_length, SadfLags::Fixed(lags_int))
-            .expect("sm_exp sadf");
+    let sm_power = get_sadf(&log_prices, "sm_power", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("sm_power sadf");
+    let linear = get_sadf(&log_prices, "linear", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("linear sadf");
+    let linear_no_const =
+        get_sadf(&log_prices, "linear", false, min_length, SadfLags::Array(lags_array.clone()))
+            .expect("linear no const sadf");
+    let quadratic = get_sadf(&log_prices, "quadratic", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("quadratic sadf");
+    let sm_poly_1 = get_sadf(&log_prices, "sm_poly_1", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("sm_poly_1 sadf");
+    let sm_poly_2 = get_sadf(&log_prices, "sm_poly_2", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("sm_poly_2 sadf");
+    let sm_exp = get_sadf(&log_prices, "sm_exp", true, min_length, SadfLags::Fixed(lags_int))
+        .expect("sm_exp sadf");
 
     let expected_len = log_prices.len() - min_length - lags_int - 1;
     assert_eq!(expected_len, sm_power.len());
@@ -147,14 +136,11 @@ fn test_sadf_test() {
         get_sadf(&ones, "sm_power", true, min_length, SadfLags::Fixed(lags_int)).expect("ones");
     assert!(trivial.iter().all(|v| v.is_infinite() && v.is_sign_negative()));
 
-    let invalid = get_sadf(&log_prices, "rubbish_string", true, min_length, SadfLags::Fixed(lags_int));
+    let invalid =
+        get_sadf(&log_prices, "rubbish_string", true, min_length, SadfLags::Fixed(lags_int));
     assert!(matches!(invalid, Err(StructuralBreakError::InvalidModel(_))));
 
-    let singular_matrix = vec![
-        vec![1.0, 0.0, 0.0],
-        vec![-1.0, 3.0, 3.0],
-        vec![1.0, 2.0, 2.0],
-    ];
+    let singular_matrix = vec![vec![1.0, 0.0, 0.0], vec![-1.0, 3.0, 3.0], vec![1.0, 2.0, 2.0]];
     let (b_mean, b_var) = _get_betas(&singular_matrix, &singular_matrix).expect("betas");
     assert!(b_mean.iter().all(|v| v.is_nan()));
     assert!(b_var.iter().all(|row| row.iter().all(|v| v.is_nan())));

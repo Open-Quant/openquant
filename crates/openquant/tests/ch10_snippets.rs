@@ -19,10 +19,8 @@ fn build_ch10_setup() -> Ch10Setup {
     let base = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
     let dates: Vec<NaiveDateTime> = (0..6).map(|i| base + Duration::days(i)).collect();
     let shift_list: Vec<f64> = vec![0.5, 1.0, 2.0, 1.5, 0.8, 0.2];
-    let shift_dt: Vec<Duration> = shift_list
-        .iter()
-        .map(|d| Duration::seconds((d * 86400.0).round() as i64))
-        .collect();
+    let shift_dt: Vec<Duration> =
+        shift_list.iter().map(|d| Duration::seconds((d * 86400.0).round() as i64)).collect();
     let t1: Vec<NaiveDateTime> = dates.iter().zip(shift_dt.iter()).map(|(d, s)| *d + *s).collect();
 
     let norm = Normal::new(0.0, 1.0).unwrap();
@@ -50,7 +48,8 @@ fn build_ch10_setup() -> Ch10Setup {
         })
         .collect();
 
-    let signal: Vec<(NaiveDateTime, f64)> = dates.iter().copied().zip(bet_size.iter().copied()).collect();
+    let signal: Vec<(NaiveDateTime, f64)> =
+        dates.iter().copied().zip(bet_size.iter().copied()).collect();
     let mut t_pnts: Vec<NaiveDateTime> = t1.iter().copied().collect();
     t_pnts.extend(dates.iter().copied());
     t_pnts.sort();
@@ -73,16 +72,7 @@ fn build_ch10_setup() -> Ch10Setup {
         }
     }
 
-    Ch10Setup {
-        prob,
-        side,
-        bet_size,
-        bet_size_d,
-        t1,
-        signal,
-        t_pnts,
-        avg_active,
-    }
+    Ch10Setup { prob, side, bet_size, bet_size_d, t1, signal, t_pnts, avg_active }
 }
 
 #[test]
@@ -215,7 +205,8 @@ fn test_get_target_pos() {
     let x_div_sig = f_i_sig - m_p_sig;
     let w_param_sig: f64 = 2.6;
     let max_pos_sig: f64 = 220.0;
-    let pos_test_sig = (max_pos_sig * x_div_sig / (w_param_sig + x_div_sig * x_div_sig).sqrt()).trunc();
+    let pos_test_sig =
+        (max_pos_sig * x_div_sig / (w_param_sig + x_div_sig * x_div_sig).sqrt()).trunc();
     let res_sig = get_target_pos(w_param_sig, f_i_sig, m_p_sig, max_pos_sig, "sigmoid");
     assert!((res_sig - pos_test_sig).abs() < 1e-7);
 
@@ -224,7 +215,8 @@ fn test_get_target_pos() {
     let x_div_pow = f_i_pow - m_p_pow;
     let w_param_pow: f64 = 2.9;
     let max_pos_pow: f64 = 175.0;
-    let pos_test_pow = (max_pos_pow * x_div_pow.signum() * x_div_pow.abs().powf(w_param_pow)).trunc();
+    let pos_test_pow =
+        (max_pos_pow * x_div_pow.signum() * x_div_pow.abs().powf(w_param_pow)).trunc();
     let res_pow = get_target_pos(w_param_pow, f_i_pow, m_p_pow, max_pos_pow, "power");
     assert!((res_pow - pos_test_pow).abs() < 1e-7);
 }

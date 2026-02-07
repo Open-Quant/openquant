@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
 use openquant::cla::{
-    covariance, AssetPrices, AssetPricesInput, ClaError, CLA, ReturnsEstimation, WeightBounds,
+    covariance, AssetPrices, AssetPricesInput, ClaError, ReturnsEstimation, WeightBounds, CLA,
 };
 use std::path::Path;
 
@@ -58,8 +58,7 @@ fn test_cla_with_mean_returns() {
     }
 
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None)
-        .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None).unwrap();
     for turning_point in cla.weights.iter() {
         let cleaned: Vec<f64> =
             turning_point.iter().map(|w| if *w <= 1e-15 { 0.0 } else { *w }).collect();
@@ -72,10 +71,8 @@ fn test_cla_with_mean_returns() {
 fn test_cla_with_weight_bounds_as_lists() {
     let prices = load_asset_prices();
     let n = prices.data.ncols();
-    let mut cla =
-        CLA::new(WeightBounds::Lists(vec![0.0; n], vec![1.0; n]), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None)
-        .unwrap();
+    let mut cla = CLA::new(WeightBounds::Lists(vec![0.0; n], vec![1.0; n]), "mean");
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None).unwrap();
     for turning_point in cla.weights.iter() {
         let cleaned: Vec<f64> =
             turning_point.iter().map(|w| if *w <= 1e-15 { 0.0 } else { *w }).collect();
@@ -88,8 +85,7 @@ fn test_cla_with_weight_bounds_as_lists() {
 fn test_cla_with_exponential_returns() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "exponential");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None)
-        .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None).unwrap();
     for turning_point in cla.weights.iter() {
         let cleaned: Vec<f64> =
             turning_point.iter().map(|w| if *w <= 1e-15 { 0.0 } else { *w }).collect();
@@ -102,14 +98,8 @@ fn test_cla_with_exponential_returns() {
 fn test_cla_max_sharpe() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("max_sharpe"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("max_sharpe"))
+        .unwrap();
     let weights = &cla.weights[0];
     assert!(weights.iter().all(|w| *w >= -1e-12));
     assert_eq!(weights.len(), prices.data.ncols());
@@ -120,14 +110,8 @@ fn test_cla_max_sharpe() {
 fn test_cla_min_volatility() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("min_volatility"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
+        .unwrap();
     let weights = &cla.weights[0];
     assert_eq!(weights.len(), prices.data.ncols());
     assert_weights_basic(weights, true);
@@ -147,28 +131,16 @@ fn test_cla_efficient_frontier() {
     .unwrap();
     assert_eq!(cla.efficient_frontier_means.len(), cla.efficient_frontier_sigma.len());
     assert_eq!(cla.efficient_frontier_sigma.len(), cla.weights.len());
-    assert!(
-        cla.efficient_frontier_sigma.last().unwrap()
-            <= &cla.efficient_frontier_sigma[0]
-    );
-    assert!(
-        cla.efficient_frontier_means.last().unwrap()
-            <= &cla.efficient_frontier_means[0]
-    );
+    assert!(cla.efficient_frontier_sigma.last().unwrap() <= &cla.efficient_frontier_sigma[0]);
+    assert!(cla.efficient_frontier_means.last().unwrap() <= &cla.efficient_frontier_means[0]);
 }
 
 #[test]
 fn test_lambda_for_no_bounded_weights() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("min_volatility"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
+        .unwrap();
     let cov = covariance(&prices.data);
     let (x, y) = cla._compute_lambda(&cov, &cov, &cla.expected_returns, None, &[1], &[0]);
     assert!(x.is_finite());
@@ -179,14 +151,8 @@ fn test_lambda_for_no_bounded_weights() {
 fn test_free_bound_weights() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("min_volatility"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
+        .unwrap();
     let free = vec![1usize; cla.expected_returns.nrows() + 1];
     let (x, y) = cla._free_bound_weight(&free);
     assert!(!x);
@@ -212,14 +178,8 @@ fn test_expected_returns_equals_means() {
 fn test_lambda_for_zero_matrices() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("min_volatility"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
+        .unwrap();
     let mut cov = covariance(&prices.data);
     for v in cov.iter_mut() {
         *v = 0.0;
@@ -233,14 +193,8 @@ fn test_lambda_for_zero_matrices() {
 fn test_w_for_no_bounded_weights() {
     let prices = load_asset_prices();
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(
-        Some(AssetPricesInput::Prices(&prices)),
-        None,
-        None,
-        None,
-        Some("min_volatility"),
-    )
-    .unwrap();
+    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
+        .unwrap();
     let cov = covariance(&prices.data);
     let (x, y) = cla._compute_w(&cov, &cov, &cla.expected_returns, None);
     assert_eq!(x.len(), cov.nrows());

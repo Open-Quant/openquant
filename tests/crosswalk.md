@@ -19,19 +19,19 @@
 | test_ch10_snippets.py | crates/openquant/tests/ch10_snippets.rs | (inline fixtures) | ✅ ported |
 | test_cla.py | crates/openquant/tests/cla.rs | tests/fixtures/portfolio_optimization/stock_prices.csv | ✅ ported |
 | test_codependence.py | crates/openquant/tests/codependence.rs | tests/fixtures/codependence/random_state_42.csv | ✅ ported |
-| test_ef3m.py | (tbd) | (tbd) | |
-| test_etf_trick.py | (tbd) | (tbd) | |
-| test_fast_ewma.py | (tbd) | (tbd) | |
-| test_feature_importance.py | (tbd) | (tbd) | |
-| test_fingerpint.py | (tbd) | (tbd) | |
-| test_fracdiff.py | (tbd) | (tbd) | |
-| test_futures_roll.py | (tbd) | (tbd) | |
-| test_hcaa.py | (tbd) | (tbd) | |
-| test_hrp.py | (tbd) | (tbd) | |
-| test_onc.py | (tbd) | (tbd) | |
-| test_risk_metrics.py | (tbd) | (tbd) | |
-| test_sb_bagging.py | (tbd) | (tbd) | |
-| test_volatility_features.py | (tbd) | (tbd) | |
+| test_ef3m.py | crates/openquant/tests/ef3m.rs | (inline fixtures) | ✅ ported |
+| test_etf_trick.py | crates/openquant/tests/etf_trick.rs | tests/fixtures/etf_trick/{open_df.csv,close_df.csv,alloc_df.csv,costs_df.csv,rates_df.csv} | ✅ ported |
+| test_fast_ewma.py | crates/openquant/tests/fast_ewma.rs | tests/fixtures/microstructural_features/tick_data.csv | ✅ ported |
+| test_feature_importance.py | crates/openquant/tests/feature_importance.rs | (inline fixtures) | ✅ ported (core MDI/MDA/SFI + orthogonal/PCA + output file behavior) |
+| test_fingerpint.py | crates/openquant/tests/fingerprint.rs | (inline fixtures) | ✅ ported (Rust-native deterministic models; linear/non-linear/pairwise + classification parity) |
+| test_fracdiff.py | crates/openquant/tests/fracdiff.rs | tests/fixtures/backtest_statistics/dollar_bar_sample.csv | ✅ ported |
+| test_futures_roll.py | crates/openquant/tests/futures_roll.rs | tests/fixtures/etf_trick/{open_df.csv,close_df.csv} | ✅ ported |
+| test_hcaa.py | crates/openquant/tests/hcaa.rs | tests/fixtures/portfolio_optimization/stock_prices.csv | ✅ ported |
+| test_hrp.py | crates/openquant/tests/hrp.rs | tests/fixtures/portfolio_optimization/stock_prices.csv | ✅ ported |
+| test_onc.py | crates/openquant/tests/onc.rs | tests/fixtures/onc/breast_cancer.csv | ✅ ported |
+| test_risk_metrics.py | crates/openquant/tests/risk_metrics.rs | tests/fixtures/portfolio_optimization/stock_prices.csv | ✅ ported |
+| test_sb_bagging.py | crates/openquant/tests/sb_bagging.rs | (inline fixtures) | ✅ ported |
+| test_volatility_features.py | crates/openquant/tests/volatility_features.rs | tests/fixtures/backtest_statistics/dollar_bar_sample.csv | ✅ ported |
 
 Notes:
 - Fixtures live under `openquant-rs/tests/fixtures/` and should be shared across Python/Rust tests.

@@ -133,22 +133,13 @@ impl CLA {
             return Err(ClaError::MissingInputs);
         }
         if let Some(AssetPricesInput::RawMatrix(_)) = asset_prices {
-            return Err(ClaError::InvalidAssetPrices(
-                "Asset prices matrix must be a dataframe",
-            ));
+            return Err(ClaError::InvalidAssetPrices("Asset prices matrix must be a dataframe"));
         }
         if let Some(AssetPricesInput::Prices(prices)) = asset_prices {
             if prices.index.len() != prices.data.nrows() || prices.index.is_empty() {
-                return Err(ClaError::InvalidAssetPrices(
-                    "Asset prices index must be datetime",
-                ));
+                return Err(ClaError::InvalidAssetPrices("Asset prices index must be datetime"));
             }
-            self._initialise(
-                &prices.data,
-                resample_by,
-                expected_asset_returns,
-                covariance_matrix,
-            )?;
+            self._initialise(&prices.data, resample_by, expected_asset_returns, covariance_matrix)?;
         } else if let (Some(exp), Some(cov)) = (expected_asset_returns, covariance_matrix) {
             self.expected_returns = normalize_expected_returns(exp)?;
             self.cov_matrix = cov.clone_owned();
@@ -205,23 +196,18 @@ impl CLA {
         if let Some(exp) = expected_asset_returns {
             self.expected_returns = normalize_expected_returns(exp)?;
         } else if self.calculate_expected_returns == "mean" {
-            let exp = ReturnsEstimation::calculate_mean_historical_returns(asset_prices, resample_by)?;
-            self.expected_returns = normalize_expected_returns(&DMatrix::from_column_slice(
-                exp.len(),
-                1,
-                &exp,
-            ))?;
+            let exp =
+                ReturnsEstimation::calculate_mean_historical_returns(asset_prices, resample_by)?;
+            self.expected_returns =
+                normalize_expected_returns(&DMatrix::from_column_slice(exp.len(), 1, &exp))?;
         } else if self.calculate_expected_returns == "exponential" {
             let exp = ReturnsEstimation::calculate_exponential_historical_returns(
                 asset_prices,
                 resample_by,
                 500,
             )?;
-            self.expected_returns = normalize_expected_returns(&DMatrix::from_column_slice(
-                exp.len(),
-                1,
-                &exp,
-            ))?;
+            self.expected_returns =
+                normalize_expected_returns(&DMatrix::from_column_slice(exp.len(), 1, &exp))?;
         } else {
             return Err(ClaError::UnknownReturns(self.calculate_expected_returns.clone()));
         }
@@ -293,9 +279,7 @@ impl CLA {
             }
             if flag {
                 self.weights.remove(i);
-                if i >= self.lambdas.len()
-                    || i >= self.gammas.len()
-                    || i >= self.free_weights.len()
+                if i >= self.lambdas.len() || i >= self.gammas.len() || i >= self.free_weights.len()
                 {
                     return Err(ClaError::IndexError);
                 }
@@ -329,8 +313,7 @@ impl CLA {
             let mut index_2 = index_1 + 1;
             repeat = false;
             while index_2 < self.weights.len() {
-                let mean_ =
-                    dot(&self.weights[index_2], self.expected_returns.column(0).as_slice());
+                let mean_ = dot(&self.weights[index_2], self.expected_returns.column(0).as_slice());
                 if mean < mean_ {
                     self.weights.remove(index_1);
                     self.lambdas.remove(index_1);
