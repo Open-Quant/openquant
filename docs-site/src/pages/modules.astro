@@ -1,72 +1,69 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { moduleDocs } from "../data/moduleDocs";
+import { chapterCoverage } from "../data/afmlDocs";
 
 const base = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL.slice(0, -1)
   : import.meta.env.BASE_URL;
-
-const subjects = [
-  "Event-Driven Data and Labeling",
-  "Sampling, Validation and ML Diagnostics",
-  "Position Sizing and Trade Construction",
-  "Portfolio Construction and Risk",
-  "Market Microstructure, Dependence and Regime Detection",
-];
-
-const grouped = subjects.map((subject) => ({
-  subject,
-  modules: moduleDocs.filter((doc) => doc.subject === subject),
-}));
+const chapters = chapterCoverage();
+const modulesByName = new Map(moduleDocs.map((doc) => [doc.module, doc]));
 ---
 <Layout title="Subjects (AFML) • OpenQuant-rs" description="AFML-style subject map with dedicated pages for each OpenQuant module.">
   <section class="hero">
     <h1>Subjects (AFML-Aligned)</h1>
-    <p class="muted">Each module now has a dedicated page with mathematical definitions, API surface, and implementation-oriented code examples.</p>
+    <p class="muted">Section-by-section AFML hierarchy with module-level pages, formulas, API surfaces, and implementation examples.</p>
   </section>
 
-  <h2>Subject Dividers</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Divider</th>
-        <th>AFML Orientation</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Event-Driven Data and Labeling</td>
-        <td>Event bars, filters, labeling, and sample weighting.</td>
-      </tr>
-      <tr>
-        <td>Sampling, Validation and ML Diagnostics</td>
-        <td>Leakage-aware validation, bootstrap, and model diagnostics.</td>
-      </tr>
-      <tr>
-        <td>Position Sizing and Trade Construction</td>
-        <td>Sizing transforms, execution-aware construction, synthetic ETF/roll.</td>
-      </tr>
-      <tr>
-        <td>Portfolio Construction and Risk</td>
-        <td>Optimization, clustering allocation, and risk overlays.</td>
-      </tr>
-      <tr>
-        <td>Market Microstructure, Dependence and Regime Detection</td>
-        <td>Microstructure estimators, dependence metrics, structural breaks.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  {grouped.map((group) => (
+  {chapters.map((chapter) => (
     <section>
-      <h2>{group.subject}</h2>
+      <h2>{chapter.chapter}</h2>
+      <p class="muted">{chapter.theme}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Subject</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {chapter.sections.map((section) => {
+            const doc = modulesByName.get(section.module);
+            if (!doc) {
+              return (
+                <tr>
+                  <td>{section.module}</td>
+                  <td class="muted">missing from moduleDocs.ts</td>
+                  <td>{section.status}</td>
+                </tr>
+              );
+            }
+
+            return (
+              <tr>
+                <td><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></td>
+                <td>{doc.subject}</td>
+                <td>{section.status}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
       <div class="grid">
-        {group.modules.map((doc) => (
+        {chapter.sections.map((section) => {
+          const doc = modulesByName.get(section.module);
+          if (!doc) {
+            return null;
+          }
+          return (
           <article class="card">
             <h3><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></h3>
             <p class="muted">{doc.summary}</p>
+            <p class="muted">{doc.subject}</p>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   ))}

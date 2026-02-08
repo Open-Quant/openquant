@@ -69,3 +69,18 @@ notebook-smoke:
     uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
 
 research-smoke: py-develop notebook-smoke exp-run
+
+docs-loop-init:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh init
+
+docs-loop-status:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh status
+
+docs-loop-next:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh next --print-prompt
+
+docs-loop-export:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh export
+
+docs-loop-evidence:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh evidence
