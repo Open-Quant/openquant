@@ -2,20 +2,63 @@
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Performance • OpenQuant-rs">
-  <h1>Performance Baseline</h1>
-  <p class="muted">OpenQuant-rs tracks benchmark drift using criterion snapshots and threshold gates.</p>
+  <section class="hero">
+    <h1>Performance and Benchmarking</h1>
+    <p class="muted">Performance is treated as a tracked contract: benchmark suites, baselines, and threshold checks are versioned in-repo.</p>
+  </section>
 
-  <h2>Bench Suites</h2>
+  <h2>Benchmark Suites</h2>
   <div class="grid">
-    <article class="card"><h3>Hotspots</h3><p><code>perf_hotspots</code> covers SADF and reserve bet sizing paths.</p></article>
-    <article class="card"><h3>Synthetic Ticker</h3><p><code>synthetic_ticker_pipeline</code> demonstrates realistic throughput over generated time series.</p></article>
+    <article class="card">
+      <h3><code>perf_hotspots</code></h3>
+      <p>Targets algorithmically heavy paths (including structural-break and bet-sizing hotspots).</p>
+    </article>
+    <article class="card">
+      <h3><code>synthetic_ticker_pipeline</code></h3>
+      <p>Measures realistic end-to-end throughput over synthetic market-like time series.</p>
+    </article>
   </div>
 
-  <h2>Data Files</h2>
-  <p><code>benchmarks/baseline_benchmarks.json</code></p>
-  <p><code>benchmarks/latest_benchmarks.json</code></p>
-  <p><code>docs/benchmark_snapshot.md</code></p>
+  <h2>Artifacts</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Artifact</th>
+        <th>Role</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>benchmarks/baseline_benchmarks.json</code></td>
+        <td>Stable regression baseline committed to git.</td>
+      </tr>
+      <tr>
+        <td><code>benchmarks/latest_benchmarks.json</code></td>
+        <td>Latest collected run snapshot.</td>
+      </tr>
+      <tr>
+        <td><code>benchmarks/benchmark_manifest.json</code></td>
+        <td>Benchmark ID allow-list used for deterministic checks.</td>
+      </tr>
+      <tr>
+        <td><code>docs/benchmark_snapshot.md</code></td>
+        <td>Human-readable benchmark report for releases.</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <h2>Regression Gate</h2>
-  <p><code>.github/workflows/benchmark-regression.yml</code> enforces performance thresholds on pull requests.</p>
+  <h2>Recommended Protocol</h2>
+  <ol>
+    <li>Run benches on a consistent machine profile and avoid concurrent heavy workloads.</li>
+    <li>Collect JSON output and compare against committed baseline.</li>
+    <li>Investigate regressions before baseline updates.</li>
+    <li>Only update baseline when behavior/perf changes are intended.</li>
+  </ol>
+
+  <pre><code class="language-bash">cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
+python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></pre>
+
+  <h2>CI Gate</h2>
+  <p>The workflow <code>.github/workflows/benchmark-regression.yml</code> enforces configured regression thresholds on pull requests and mainline changes.</p>
 </Layout>

@@ -2,17 +2,70 @@
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Getting Started • OpenQuant-rs">
-  <h1>Getting Started</h1>
-  <h2>Build + Test</h2>
-  <p><code>cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</code></p>
+  <section class="hero">
+    <h1>Getting Started</h1>
+    <p class="muted">Set up OpenQuant-rs for local research and production-facing validation.</p>
+  </section>
 
-  <h2>Run Long SADF Path</h2>
-  <p><code>cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored</code></p>
+  <h2>Requirements</h2>
+  <ul>
+    <li>Rust toolchain: stable channel (`rustup default stable`)</li>
+    <li>Python 3 (for benchmark snapshot scripts)</li>
+    <li>GitHub Actions for release/docs automation (optional for local dev)</li>
+  </ul>
 
-  <h2>Benchmarks</h2>
-  <p><code>cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline</code></p>
+  <h2>Clone and Validate</h2>
+  <pre><code class="language-bash">git clone https://github.com/Open-Quant/openquant.git
+cd openquant-rs
 
-  <h2>Track Performance Over Time</h2>
-  <p><code>python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json</code></p>
-  <p><code>python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></p>
+# Fast test pass used by CI
+cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+
+# Run long path explicitly
+cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored</code></pre>
+
+  <h2>Project Layout</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Path</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>crates/openquant/src/</code></td>
+        <td>Main library modules.</td>
+      </tr>
+      <tr>
+        <td><code>crates/openquant/tests/</code></td>
+        <td>Module-level Rust parity tests.</td>
+      </tr>
+      <tr>
+        <td><code>tests/fixtures/</code></td>
+        <td>Shared deterministic fixtures.</td>
+      </tr>
+      <tr>
+        <td><code>benchmarks/</code></td>
+        <td>Benchmark baseline/latest snapshots and manifest.</td>
+      </tr>
+      <tr>
+        <td><code>docs/</code></td>
+        <td>Release status, benchmark, and productionization notes.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>First Quant Workflow</h2>
+  <pre><code class="language-rust">use openquant::risk_metrics::RiskMetrics;
+
+let returns = vec![-0.02, 0.01, 0.015, -0.01, 0.005];
+let var_95 = RiskMetrics::calculate_value_at_risk(&returns, 0.05)?;
+let es_95 = RiskMetrics::calculate_expected_shortfall(&returns, 0.05)?;
+println!("VaR 95%: &#123;var_95:.6&#125;, ES 95%: &#123;es_95:.6&#125;");</code></pre>
+
+  <h2>Benchmark Workflow</h2>
+  <pre><code class="language-bash">cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
+python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></pre>
 </Layout>

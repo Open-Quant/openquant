@@ -1,5 +1,29 @@
 ---
-const { title = 'OpenQuant-rs Docs', description = 'Rust-native quantitative finance toolkit.' } = Astro.props;
+const {
+  title = "OpenQuant-rs Docs",
+  description = "Rust-native quantitative finance toolkit docs.",
+} = Astro.props;
+
+const base = "/openquant-rs";
+const nav = [
+  { href: `${base}/`, label: "Overview" },
+  { href: `${base}/getting-started`, label: "Getting Started" },
+  { href: `${base}/modules`, label: "Module Guide" },
+  { href: `${base}/api-reference`, label: "API Reference" },
+  { href: `${base}/examples`, label: "Examples" },
+  { href: `${base}/migration-parity`, label: "Parity" },
+  { href: `${base}/performance`, label: "Performance" },
+  { href: `${base}/publishing`, label: "Publishing" },
+  { href: `${base}/contributing`, label: "Contributing" },
+  { href: `${base}/faq`, label: "FAQ" },
+];
+
+const path = Astro.url.pathname.endsWith("/")
+  ? Astro.url.pathname
+  : `${Astro.url.pathname}/`;
+const canonical = Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).toString()
+  : undefined;
 ---
 <!doctype html>
 <html lang="en">
@@ -8,97 +32,306 @@ const { title = 'OpenQuant-rs Docs', description = 'Rust-native quantitative fin
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
       :root {
-        --bg-0: #041018;
-        --bg-1: #0b1f2c;
-        --panel: #0a1620cc;
-        --line: #1dcab8;
-        --line-2: #25e9a0;
-        --text: #daf3ff;
-        --muted: #8cb7c9;
-        --accent: #12d9ff;
+        --bg-0: #070a12;
+        --bg-1: #101a2e;
+        --panel: #12192ccf;
+        --surface: #0f1626;
+        --surface-2: #111d31;
+        --line: #30496d;
+        --line-strong: #3f6aa5;
+        --text: #e6efff;
+        --muted: #9bb0d1;
+        --accent: #7dc2ff;
+        --accent-2: #7cf7d4;
       }
-      * { box-sizing: border-box; }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
         color: var(--text);
+        font-family: "IBM Plex Mono", monospace;
+        line-height: 1.6;
         background:
-          radial-gradient(1000px 500px at 100% -10%, #10406044, transparent),
-          radial-gradient(1000px 600px at -10% 120%, #0d6e6044, transparent),
-          linear-gradient(160deg, var(--bg-0), var(--bg-1));
+          radial-gradient(850px 540px at 105% -5%, #2a5fbd30, transparent),
+          radial-gradient(760px 420px at -8% 105%, #1a6f8e3d, transparent),
+          linear-gradient(150deg, var(--bg-0), var(--bg-1));
         min-height: 100vh;
       }
-      a { color: var(--accent); text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
-      .top {
-        border: 1px solid #1a465d;
-        border-radius: 14px;
-        background: var(--panel);
-        backdrop-filter: blur(4px);
-        overflow: hidden;
+
+      a {
+        color: var(--accent);
       }
+
+      .shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .frame {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--panel);
+        backdrop-filter: blur(6px);
+      }
+
       .topbar {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         padding: 10px 14px;
-        background: #0b2533;
-        border-bottom: 1px solid #1b4258;
+        border-bottom: 1px solid var(--line);
+        background: #101a2a;
       }
-      .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); }
-      .brand { margin-left: 8px; color: var(--muted); font-size: 13px; }
-      nav {
-        display: flex;
-        gap: 20px;
-        padding: 14px;
-        border-bottom: 1px solid #173748;
-        flex-wrap: wrap;
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent-2);
       }
-      main { padding: 22px 20px 30px; }
-      h1, h2, h3 { line-height: 1.2; }
-      h1 { margin-top: 0; font-size: 2rem; }
-      .muted { color: var(--muted); }
+
+      .brand {
+        margin-left: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, #0f1624, #0e1522);
+        padding: 18px 14px 24px;
+      }
+
+      .sidebar h2 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-family: "Space Grotesk", sans-serif;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .nav-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .nav-list a {
+        display: block;
+        padding: 9px 10px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: #c8daff;
+        text-decoration: none;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+      }
+
+      .nav-list a:hover {
+        border-color: var(--line-strong);
+        background: #102037;
+      }
+
+      .nav-list a.active {
+        border-color: var(--line-strong);
+        background: linear-gradient(135deg, #19335b, #14314c);
+        color: #eaf4ff;
+      }
+
+      .sidebar-note {
+        margin-top: 18px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--muted);
+        background: #101727;
+      }
+
+      .content {
+        padding: 26px 26px 32px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 20px;
+        background: linear-gradient(140deg, #13223a, #0f2030);
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: "Space Grotesk", sans-serif;
+        line-height: 1.2;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 2rem;
+      }
+
+      h2 {
+        margin-top: 26px;
+        margin-bottom: 10px;
+        font-size: 1.4rem;
+      }
+
+      h3 {
+        margin-top: 18px;
+        margin-bottom: 8px;
+        font-size: 1.1rem;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 12px;
       }
+
       .card {
-        border: 1px solid #1b4258;
+        border: 1px solid var(--line);
         border-radius: 10px;
+        background: var(--surface);
         padding: 14px;
-        background: #09141d;
       }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      pre {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #090f1b;
+        padding: 12px;
+      }
+
       code {
-        background: #08121a;
-        border: 1px solid #1d3b4b;
+        font-family: "IBM Plex Mono", monospace;
+      }
+
+      :not(pre) > code {
+        border: 1px solid #2f4468;
         border-radius: 6px;
+        background: #0c1422;
         padding: 2px 6px;
       }
-      footer { color: var(--muted); font-size: 12px; padding: 20px 0 8px; }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        border: 1px solid var(--line);
+        padding: 8px;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--surface-2);
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      footer {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 18px;
+      }
+
+      @media (max-width: 980px) {
+        .shell {
+          padding: 14px;
+        }
+
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .nav-list {
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+      }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <section class="top">
+    <div class="shell">
+      <section class="frame">
         <div class="topbar">
-          <span class="dot"></span><span class="dot" style="background:#12d9ff"></span><span class="dot" style="background:#1dcab8"></span>
-          <span class="brand">openquant-rs docs terminal</span>
+          <span class="dot"></span>
+          <span class="dot" style="background:#7dc2ff"></span>
+          <span class="dot" style="background:#9de07a"></span>
+          <span class="brand">openquant-rs / documentation terminal</span>
         </div>
-        <nav>
-          <a href="/openquant-rs/">Home</a>
-          <a href="/openquant-rs/getting-started">Getting Started</a>
-          <a href="/openquant-rs/performance">Performance</a>
-          <a href="/openquant-rs/publishing">Publishing</a>
-        </nav>
-        <main>
-          <slot />
-        </main>
+        <div class="layout">
+          <aside class="sidebar">
+            <h2>Documentation</h2>
+            <ul class="nav-list">
+              {
+                nav.map((item) => {
+                  const hrefPath = item.href.endsWith("/") ? item.href : `${item.href}/`;
+                  const isActive = path === hrefPath;
+                  return (
+                    <li>
+                      <a href={item.href} class={isActive ? "active" : undefined}>{item.label}</a>
+                    </li>
+                  );
+                })
+              }
+            </ul>
+            <div class="sidebar-note">
+              Source of truth for migration parity:
+              <br />
+              <code>tests/crosswalk.md</code>
+              <br />
+              <br />
+              Release and stability docs:
+              <br />
+              <code>docs/</code>
+            </div>
+          </aside>
+          <main class="content">
+            <slot />
+          </main>
+        </div>
       </section>
-      <footer>OpenQuant-rs docs • built with Astro</footer>
+      <footer>OpenQuant-rs docs built with Astro and deployed via GitHub Pages.</footer>
     </div>
   </body>
 </html>

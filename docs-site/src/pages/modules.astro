@@ -1,0 +1,62 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+<Layout title="Module Guide • OpenQuant-rs" description="Module-level guide to OpenQuant-rs for quant workflows.">
+  <section class="hero">
+    <h1>Module Guide</h1>
+    <p class="muted">OpenQuant-rs modules are organized by research workflow: event detection, labeling, model diagnostics, allocation, and risk control.</p>
+  </section>
+
+  <h2>Core Groups</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Area</th>
+        <th>Modules</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Data Structures and Sampling</td>
+        <td><code>data_structures</code>, <code>sampling</code>, <code>sample_weights</code></td>
+        <td>Bar construction, concurrency/uniqueness calculations, and sample weighting.</td>
+      </tr>
+      <tr>
+        <td>Filters and Labeling</td>
+        <td><code>filters</code>, <code>labeling</code>, <code>bet_sizing</code></td>
+        <td>CUSUM/z-score filtering, triple-barrier labeling, and position sizing logic.</td>
+      </tr>
+      <tr>
+        <td>Risk and Performance Analytics</td>
+        <td><code>risk_metrics</code>, <code>backtest_statistics</code>, <code>structural_breaks</code></td>
+        <td>VaR/ES/CDaR, Sharpe variants, drawdown metrics, and break detection.</td>
+      </tr>
+      <tr>
+        <td>Portfolio Construction</td>
+        <td><code>portfolio_optimization</code>, <code>cla</code>, <code>hrp</code>, <code>hcaa</code>, <code>onc</code></td>
+        <td>Mean-variance and hierarchical allocation families with clustering-based methods.</td>
+      </tr>
+      <tr>
+        <td>Dependence and Feature Diagnostics</td>
+        <td><code>codependence</code>, <code>feature_importance</code>, <code>fingerprint</code>, <code>sb_bagging</code></td>
+        <td>Dependence metrics, feature attribution, model fingerprinting, and sequential bagging.</td>
+      </tr>
+      <tr>
+        <td>Microstructure and Utilities</td>
+        <td><code>microstructural_features</code>, <code>etf_trick</code>, <code>ef3m</code>, <code>fracdiff</code>, <code>util::fast_ewma</code>, <code>util::volatility</code></td>
+        <td>Microstructure estimators, ETF/futures roll tools, moment fitting, fractional differentiation, and volatility estimators.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Parity State</h2>
+  <p>Tracked migration parity for module tests is complete. Crosswalk source of truth: <code>tests/crosswalk.md</code>.</p>
+
+  <h2>How to Select Modules</h2>
+  <ol>
+    <li>Start from your research question (event detection, sizing, risk, allocation, or diagnostics).</li>
+    <li>Use the corresponding module family above.</li>
+    <li>Validate with fixture-backed tests before production assumptions are changed.</li>
+  </ol>
+</Layout>

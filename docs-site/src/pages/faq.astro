@@ -1,0 +1,27 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+<Layout title="FAQ • OpenQuant-rs" description="Operational FAQ for OpenQuant-rs users and maintainers.">
+  <section class="hero">
+    <h1>FAQ</h1>
+    <p class="muted">Common decisions and operating guidance for OpenQuant-rs.</p>
+  </section>
+
+  <h2>Do I still need the local mlfinlab repo?</h2>
+  <p>Not for normal OpenQuant-rs usage. Keep it only for parity maintenance tasks such as fixture regeneration or upstream behavior comparisons.</p>
+
+  <h2>Is OpenQuant-rs functionally complete?</h2>
+  <p>For the tracked migration scope, yes. Module parity tasks are complete, and the project is in stabilization and productionization mode.</p>
+
+  <h2>Why is one SADF test excluded from fast CI?</h2>
+  <p><code>test_sadf_test</code> is intentionally isolated because it is long-running. It remains covered in dedicated slow/nightly validation paths.</p>
+
+  <h2>How do I validate performance regressions?</h2>
+  <p>Run both benchmark suites, collect the latest snapshot, and compare against baseline with threshold checks from <code>scripts/check_bench_thresholds.py</code>.</p>
+
+  <h2>Can I publish now?</h2>
+  <p>Yes once release checks pass in your target environment, including a successful <code>cargo package -p openquant</code> run and docs deployment verification.</p>
+
+  <h2>Where should I look for migration ground truth?</h2>
+  <p>Use <code>tests/crosswalk.md</code> first, then align <code>ROADMAP.md</code> and Beads issue status to match.</p>
+</Layout>

@@ -2,20 +2,42 @@
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout title="Publishing • OpenQuant-rs">
-  <h1>Publishing</h1>
-  <p>Release process is documented in <code>docs/publishing.md</code>.</p>
+  <section class="hero">
+    <h1>Publishing and Release</h1>
+    <p class="muted">Use this checklist for every crate release to maintain reproducibility and user trust.</p>
+  </section>
 
-  <h2>Release Gate Summary</h2>
+  <h2>Release Checklist</h2>
   <ol>
-    <li>Format + clippy</li>
-    <li>Fast test sweep</li>
-    <li>Long SADF test</li>
-    <li>Benchmark run + threshold check</li>
-    <li><code>cargo package -p openquant</code></li>
-    <li>Tag and publish</li>
+    <li>Run formatting and lints (`cargo fmt`, `cargo clippy --all-targets --all-features`).</li>
+    <li>Run fast test sweep and explicit long SADF path.</li>
+    <li>Run benchmark suites and threshold checks.</li>
+    <li>Regenerate benchmark snapshot docs when needed.</li>
+    <li>Run `cargo package -p openquant` and review package contents.</li>
+    <li>Tag release, publish crate, and verify docs links.</li>
   </ol>
 
-  <h2>GitHub Workflows</h2>
-  <p><code>.github/workflows/release.yml</code></p>
-  <p><code>.github/workflows/nightly-validation.yml</code></p>
+  <h2>Commands</h2>
+  <pre><code class="language-bash">cargo fmt -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
+cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
+python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
+cargo package -p openquant</code></pre>
+
+  <h2>Release Workflows</h2>
+  <ul>
+    <li><code>.github/workflows/release.yml</code> for release readiness checks.</li>
+    <li><code>.github/workflows/nightly-validation.yml</code> for deep, slower validations.</li>
+    <li><code>.github/workflows/docs-pages.yml</code> for documentation deployment.</li>
+  </ul>
+
+  <h2>Versioning Policy</h2>
+  <ul>
+    <li>Bump patch for bug fixes without public API changes.</li>
+    <li>Bump minor for additive APIs and new modules.</li>
+    <li>Bump major for breaking API or numerical behavior changes.</li>
+  </ul>
 </Layout>

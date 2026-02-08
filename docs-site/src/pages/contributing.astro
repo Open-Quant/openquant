@@ -1,0 +1,44 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+<Layout title="Contributing • OpenQuant-rs" description="Contribution standards for OpenQuant-rs: code quality, tests, performance, and docs.">
+  <section class="hero">
+    <h1>Contributing</h1>
+    <p class="muted">Contributions are expected to preserve numerical correctness, reproducibility, and benchmark discipline.</p>
+  </section>
+
+  <h2>Engineering Standards</h2>
+  <ul>
+    <li>Keep APIs explicit and avoid hidden mutable global state.</li>
+    <li>Document assumptions around data ordering, timestamps, and units.</li>
+    <li>Prefer deterministic tests over stochastic-only assertions.</li>
+  </ul>
+
+  <h2>Required Checks</h2>
+  <pre><code class="language-bash">cargo fmt -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored</code></pre>
+
+  <h2>Performance Change Policy</h2>
+  <ol>
+    <li>Run benchmark suites for performance-sensitive changes.</li>
+    <li>Attach benchmark comparison summary in the PR.</li>
+    <li>Update baseline only for intentional and justified performance shifts.</li>
+  </ol>
+
+  <h2>Documentation Standards</h2>
+  <ul>
+    <li>Update docs when APIs, behavior, or release workflows change.</li>
+    <li>Keep examples realistic for quant workflows and include assumptions.</li>
+    <li>Avoid ambiguous terms such as "fast" without measured context.</li>
+  </ul>
+
+  <h2>Useful Paths</h2>
+  <ul>
+    <li><code>crates/openquant/src/</code>: library source</li>
+    <li><code>crates/openquant/tests/</code>: parity and behavior tests</li>
+    <li><code>benchmarks/</code>: baseline/latest benchmark snapshots</li>
+    <li><code>docs-site/</code>: Astro docs site</li>
+  </ul>
+</Layout>

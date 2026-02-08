@@ -1,0 +1,71 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+<Layout title="Examples • OpenQuant-rs" description="Practical OpenQuant-rs examples for quant workflows.">
+  <section class="hero">
+    <h1>Examples</h1>
+    <p class="muted">Examples are oriented around practical research pipelines rather than isolated one-off calls.</p>
+  </section>
+
+  <h2>1. Triple-Barrier Labeling Pipeline</h2>
+<pre><code class="language-rust">use chrono::NaiveDateTime;
+use openquant::filters::&#123;cusum_filter_timestamps, Threshold&#125;;
+use openquant::labeling::&#123;add_vertical_barrier, get_bins, get_events&#125;;
+use openquant::util::volatility::get_daily_vol;
+
+let close: Vec&lt;(NaiveDateTime, f64)&gt; = /* timestamped close series */;
+let prices: Vec&lt;f64&gt; = close.iter().map(|(_, p)| *p).collect();
+let timestamps: Vec&lt;NaiveDateTime&gt; = close.iter().map(|(ts, _)| *ts).collect();
+
+let events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+let target = get_daily_vol(&close, 100);
+let barriers = add_vertical_barrier(&events, &close, 1, 0, 0, 0);
+
+let labeled_events = get_events(
+    &close,
+    &events,
+    (1.0, 1.0),
+    &target,
+    0.005,
+    3,
+    Some(&barriers),
+    None,
+);
+let labels = get_bins(&labeled_events, &close);</code></pre>
+
+  <h2>2. Mean-Variance Allocation</h2>
+<pre><code class="language-rust">use nalgebra::DMatrix;
+use openquant::portfolio_optimization::&#123;
+    allocate_max_sharpe, allocate_min_vol, AllocationOptions, ReturnsMethod
+&#125;;
+
+let prices: DMatrix&lt;f64&gt; = /* rows=time, cols=assets */;
+let min_vol = allocate_min_vol(&prices, None, None)?;
+let max_sharpe = allocate_max_sharpe(&prices, 0.0, None, None)?;
+
+let opts = AllocationOptions &#123;
+    returns_method: ReturnsMethod::Exponential &#123; span: 50 &#125;,
+    ..Default::default()
+&#125;;
+let exp_weighted = openquant::portfolio_optimization::allocate_inverse_variance_with(&prices, &opts)?;</code></pre>
+
+  <h2>3. Risk Metrics Snapshot</h2>
+  <pre><code class="language-rust">use openquant::risk_metrics::RiskMetrics;
+
+let returns = vec![-0.015, 0.007, 0.011, -0.006, 0.004];
+let var_95 = RiskMetrics::calculate_value_at_risk(&returns, 0.05)?;
+let es_95 = RiskMetrics::calculate_expected_shortfall(&returns, 0.05)?;
+let cdar_95 = RiskMetrics::calculate_conditional_drawdown_risk(&returns, 0.05)?;</code></pre>
+
+  <h2>4. Performance Snapshot Update</h2>
+  <pre><code class="language-bash">cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
+python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></pre>
+
+  <h2>Example Design Principles</h2>
+  <ul>
+    <li>Prefer deterministic fixture-backed experiments for comparisons.</li>
+    <li>Separate exploratory notebooks from committed regression tests.</li>
+    <li>Track benchmark and numerical tolerance drift explicitly in PRs.</li>
+  </ul>
+</Layout>
