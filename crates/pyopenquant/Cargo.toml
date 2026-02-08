@@ -1,0 +1,19 @@
+[package]
+name = "pyopenquant"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for openquant via PyO3"
+license = "MIT"
+
+[lib]
+name = "_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+chrono = "0.4"
+nalgebra = "0.32"
+openquant = { path = "../openquant" }
+pyo3 = { version = "0.21", features = ["extension-module"] }
+
+[package.metadata.maturin]
+name = "openquant._core"

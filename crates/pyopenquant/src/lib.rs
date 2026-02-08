@@ -1,0 +1,348 @@
+use nalgebra::DMatrix;
+use openquant::filters::Threshold;
+use openquant::pipeline::{
+    run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
+};
+use openquant::portfolio_optimization::{
+    allocate_inverse_variance, allocate_max_sharpe, allocate_min_vol,
+};
+use openquant::risk_metrics::RiskMetrics;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use pyo3::types::PyModule;
+
+fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
+    PyValueError::new_err(format!("{err:?}"))
+}
+
+fn matrix_from_rows(rows: Vec<Vec<f64>>) -> PyResult<DMatrix<f64>> {
+    let nrows = rows.len();
+    if nrows == 0 {
+        return Err(PyValueError::new_err("prices matrix must have at least one row"));
+    }
+    let ncols = rows[0].len();
+    if ncols == 0 {
+        return Err(PyValueError::new_err("prices matrix must have at least one column"));
+    }
+    if rows.iter().any(|r| r.len() != ncols) {
+        return Err(PyValueError::new_err("prices matrix must be rectangular"));
+    }
+    let flat: Vec<f64> = rows.into_iter().flatten().collect();
+    Ok(DMatrix::from_vec(nrows, ncols, flat))
+}
+
+fn parse_naive_datetimes(values: Vec<String>) -> PyResult<Vec<chrono::NaiveDateTime>> {
+    values
+        .into_iter()
+        .map(|v| {
+            chrono::NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S").map_err(|e| {
+                PyValueError::new_err(format!(
+                    "invalid datetime '{v}' (expected '%Y-%m-%d %H:%M:%S'): {e}"
+                ))
+            })
+        })
+        .collect()
+}
+
+fn format_naive_datetimes(values: Vec<chrono::NaiveDateTime>) -> Vec<String> {
+    values.into_iter().map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()).collect()
+}
+
+#[pyfunction(name = "calculate_value_at_risk")]
+fn risk_calculate_value_at_risk(returns: Vec<f64>, confidence_level: f64) -> PyResult<f64> {
+    RiskMetrics::default().calculate_value_at_risk(&returns, confidence_level).map_err(to_py_err)
+}
+
+#[pyfunction(name = "calculate_expected_shortfall")]
+fn risk_calculate_expected_shortfall(returns: Vec<f64>, confidence_level: f64) -> PyResult<f64> {
+    RiskMetrics::default()
+        .calculate_expected_shortfall(&returns, confidence_level)
+        .map_err(to_py_err)
+}
+
+#[pyfunction(name = "calculate_conditional_drawdown_risk")]
+fn risk_calculate_conditional_drawdown_risk(
+    returns: Vec<f64>,
+    confidence_level: f64,
+) -> PyResult<f64> {
+    RiskMetrics::default()
+        .calculate_conditional_drawdown_risk(&returns, confidence_level)
+        .map_err(to_py_err)
+}
+
+#[pyfunction(name = "cusum_filter_indices")]
+fn filters_cusum_filter_indices(close: Vec<f64>, threshold: f64) -> Vec<usize> {
+    openquant::filters::cusum_filter_indices(&close, Threshold::Scalar(threshold))
+}
+
+#[pyfunction(name = "cusum_filter_timestamps")]
+fn filters_cusum_filter_timestamps(
+    close: Vec<f64>,
+    timestamps: Vec<String>,
+    threshold: f64,
+) -> PyResult<Vec<String>> {
+    let ts = parse_naive_datetimes(timestamps)?;
+    if close.len() != ts.len() {
+        return Err(PyValueError::new_err(format!(
+            "close/timestamps length mismatch: {} vs {}",
+            close.len(),
+            ts.len()
+        )));
+    }
+    let out =
+        openquant::filters::cusum_filter_timestamps(&close, &ts, Threshold::Scalar(threshold));
+    Ok(format_naive_datetimes(out))
+}
+
+#[pyfunction(name = "z_score_filter_indices")]
+fn filters_z_score_filter_indices(
+    close: Vec<f64>,
+    mean_window: usize,
+    std_window: usize,
+    threshold: f64,
+) -> Vec<usize> {
+    openquant::filters::z_score_filter_indices(&close, mean_window, std_window, threshold)
+}
+
+#[pyfunction(name = "z_score_filter_timestamps")]
+fn filters_z_score_filter_timestamps(
+    close: Vec<f64>,
+    timestamps: Vec<String>,
+    mean_window: usize,
+    std_window: usize,
+    threshold: f64,
+) -> PyResult<Vec<String>> {
+    let ts = parse_naive_datetimes(timestamps)?;
+    if close.len() != ts.len() {
+        return Err(PyValueError::new_err(format!(
+            "close/timestamps length mismatch: {} vs {}",
+            close.len(),
+            ts.len()
+        )));
+    }
+    let out = openquant::filters::z_score_filter_timestamps(
+        &close,
+        &ts,
+        mean_window,
+        std_window,
+        threshold,
+    );
+    Ok(format_naive_datetimes(out))
+}
+
+#[pyfunction(name = "get_ind_matrix")]
+fn sampling_get_ind_matrix(
+    label_endtime: Vec<(usize, usize)>,
+    bar_index: Vec<usize>,
+) -> Vec<Vec<u8>> {
+    openquant::sampling::get_ind_matrix(&label_endtime, &bar_index)
+}
+
+#[pyfunction(name = "get_ind_mat_average_uniqueness")]
+fn sampling_get_ind_mat_average_uniqueness(ind_mat: Vec<Vec<u8>>) -> f64 {
+    openquant::sampling::get_ind_mat_average_uniqueness(&ind_mat)
+}
+
+#[pyfunction(name = "seq_bootstrap")]
+fn sampling_seq_bootstrap(
+    ind_mat: Vec<Vec<u8>>,
+    sample_length: Option<usize>,
+    warmup_samples: Option<Vec<usize>>,
+) -> Vec<usize> {
+    openquant::sampling::seq_bootstrap(&ind_mat, sample_length, warmup_samples)
+}
+
+#[pyfunction(name = "get_signal")]
+fn bet_sizing_get_signal(prob: Vec<f64>, num_classes: usize, pred: Option<Vec<f64>>) -> Vec<f64> {
+    openquant::bet_sizing::get_signal(&prob, num_classes, pred.as_deref())
+}
+
+#[pyfunction(name = "discrete_signal")]
+fn bet_sizing_discrete_signal(signal0: Vec<f64>, step_size: f64) -> Vec<f64> {
+    openquant::bet_sizing::discrete_signal(&signal0, step_size)
+}
+
+#[pyfunction(name = "bet_size")]
+fn bet_sizing_bet_size(w_param: f64, price_div: f64, func: String) -> PyResult<f64> {
+    if func != "sigmoid" && func != "power" {
+        return Err(PyValueError::new_err(format!(
+            "invalid func '{func}'; expected 'sigmoid' or 'power'"
+        )));
+    }
+    std::panic::catch_unwind(|| openquant::bet_sizing::bet_size(w_param, price_div, &func))
+        .map_err(|_| PyRuntimeError::new_err("bet_size panicked for the supplied arguments"))
+}
+
+#[pyfunction(name = "allocate_inverse_variance")]
+fn portfolio_allocate_inverse_variance(
+    prices: Vec<Vec<f64>>,
+) -> PyResult<(Vec<f64>, f64, f64, f64)> {
+    let m = matrix_from_rows(prices)?;
+    let out = allocate_inverse_variance(&m).map_err(to_py_err)?;
+    Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
+}
+
+#[pyfunction(name = "allocate_min_vol")]
+fn portfolio_allocate_min_vol(prices: Vec<Vec<f64>>) -> PyResult<(Vec<f64>, f64, f64, f64)> {
+    let m = matrix_from_rows(prices)?;
+    let out = allocate_min_vol(&m, None, None).map_err(to_py_err)?;
+    Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
+}
+
+#[pyfunction(name = "allocate_max_sharpe")]
+fn portfolio_allocate_max_sharpe(
+    prices: Vec<Vec<f64>>,
+    risk_free_rate: Option<f64>,
+) -> PyResult<(Vec<f64>, f64, f64, f64)> {
+    let m = matrix_from_rows(prices)?;
+    let out =
+        allocate_max_sharpe(&m, risk_free_rate.unwrap_or(0.0), None, None).map_err(to_py_err)?;
+    Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
+}
+
+#[pyfunction(name = "run_mid_frequency_pipeline")]
+#[pyo3(signature = (
+    timestamps,
+    close,
+    model_probabilities,
+    asset_prices,
+    model_sides=None,
+    asset_names=None,
+    cusum_threshold=0.001,
+    num_classes=2,
+    step_size=0.1,
+    risk_free_rate=0.0,
+    confidence_level=0.05
+))]
+fn pipeline_run_mid_frequency_pipeline(
+    py: Python<'_>,
+    timestamps: Vec<String>,
+    close: Vec<f64>,
+    model_probabilities: Vec<f64>,
+    asset_prices: Vec<Vec<f64>>,
+    model_sides: Option<Vec<f64>>,
+    asset_names: Option<Vec<String>>,
+    cusum_threshold: f64,
+    num_classes: usize,
+    step_size: f64,
+    risk_free_rate: f64,
+    confidence_level: f64,
+) -> PyResult<PyObject> {
+    let timestamps = parse_naive_datetimes(timestamps)?;
+    let asset_prices = matrix_from_rows(asset_prices)?;
+
+    let asset_names = asset_names.unwrap_or_else(|| {
+        (0..asset_prices.ncols()).map(|i| format!("asset_{i}")).collect::<Vec<_>>()
+    });
+
+    let input = ResearchPipelineInput {
+        timestamps: &timestamps,
+        close: &close,
+        model_probabilities: &model_probabilities,
+        model_sides: model_sides.as_deref(),
+        asset_prices: &asset_prices,
+        asset_names: &asset_names,
+    };
+    let config = ResearchPipelineConfig {
+        cusum_threshold,
+        num_classes,
+        step_size,
+        risk_free_rate,
+        confidence_level,
+    };
+    let out = run_mid_frequency_pipeline(input, &config).map_err(to_py_err)?;
+
+    let root = PyDict::new_bound(py);
+
+    let events = PyDict::new_bound(py);
+    events.set_item("indices", out.events.indices)?;
+    events.set_item("timestamps", format_naive_datetimes(out.events.timestamps))?;
+    events.set_item("probabilities", out.events.probabilities)?;
+    events.set_item("sides", out.events.sides)?;
+    root.set_item("events", events)?;
+
+    let signals = PyDict::new_bound(py);
+    signals.set_item("timestamps", format_naive_datetimes(timestamps.clone()))?;
+    signals.set_item("values", out.signals.timeline_signal)?;
+    signals.set_item("event_signal", out.signals.event_signal)?;
+    root.set_item("signals", signals)?;
+
+    let portfolio = PyDict::new_bound(py);
+    portfolio.set_item("asset_names", out.portfolio.asset_names)?;
+    portfolio.set_item("weights", out.portfolio.weights)?;
+    portfolio.set_item("portfolio_risk", out.portfolio.portfolio_risk)?;
+    portfolio.set_item("portfolio_return", out.portfolio.portfolio_return)?;
+    portfolio.set_item("portfolio_sharpe", out.portfolio.portfolio_sharpe)?;
+    root.set_item("portfolio", portfolio)?;
+
+    let risk = PyDict::new_bound(py);
+    risk.set_item("value_at_risk", out.risk.value_at_risk)?;
+    risk.set_item("expected_shortfall", out.risk.expected_shortfall)?;
+    risk.set_item("conditional_drawdown_risk", out.risk.conditional_drawdown_risk)?;
+    risk.set_item("realized_sharpe", out.risk.realized_sharpe)?;
+    root.set_item("risk", risk)?;
+
+    let backtest = PyDict::new_bound(py);
+    backtest.set_item("timestamps", format_naive_datetimes(out.backtest.timestamps))?;
+    backtest.set_item("strategy_returns", out.backtest.strategy_returns)?;
+    backtest.set_item("equity_curve", out.backtest.equity_curve)?;
+    backtest.set_item("drawdowns", out.backtest.drawdowns)?;
+    backtest.set_item("time_under_water_years", out.backtest.time_under_water_years)?;
+    root.set_item("backtest", backtest)?;
+
+    let leakage_checks = PyDict::new_bound(py);
+    leakage_checks.set_item("inputs_aligned", out.leakage_checks.inputs_aligned)?;
+    leakage_checks.set_item("event_indices_sorted", out.leakage_checks.event_indices_sorted)?;
+    leakage_checks.set_item("has_forward_look_bias", out.leakage_checks.has_forward_look_bias)?;
+    root.set_item("leakage_checks", leakage_checks)?;
+
+    Ok(root.into_py(py))
+}
+
+#[pymodule]
+fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let risk = PyModule::new_bound(py, "risk")?;
+    risk.add_function(wrap_pyfunction!(risk_calculate_value_at_risk, &risk)?)?;
+    risk.add_function(wrap_pyfunction!(risk_calculate_expected_shortfall, &risk)?)?;
+    risk.add_function(wrap_pyfunction!(risk_calculate_conditional_drawdown_risk, &risk)?)?;
+    m.add_submodule(&risk)?;
+    m.add("risk", risk)?;
+
+    let filters = PyModule::new_bound(py, "filters")?;
+    filters.add_function(wrap_pyfunction!(filters_cusum_filter_indices, &filters)?)?;
+    filters.add_function(wrap_pyfunction!(filters_cusum_filter_timestamps, &filters)?)?;
+    filters.add_function(wrap_pyfunction!(filters_z_score_filter_indices, &filters)?)?;
+    filters.add_function(wrap_pyfunction!(filters_z_score_filter_timestamps, &filters)?)?;
+    m.add_submodule(&filters)?;
+    m.add("filters", filters)?;
+
+    let sampling = PyModule::new_bound(py, "sampling")?;
+    sampling.add_function(wrap_pyfunction!(sampling_get_ind_matrix, &sampling)?)?;
+    sampling.add_function(wrap_pyfunction!(sampling_get_ind_mat_average_uniqueness, &sampling)?)?;
+    sampling.add_function(wrap_pyfunction!(sampling_seq_bootstrap, &sampling)?)?;
+    m.add_submodule(&sampling)?;
+    m.add("sampling", sampling)?;
+
+    let bet_sizing = PyModule::new_bound(py, "bet_sizing")?;
+    bet_sizing.add_function(wrap_pyfunction!(bet_sizing_get_signal, &bet_sizing)?)?;
+    bet_sizing.add_function(wrap_pyfunction!(bet_sizing_discrete_signal, &bet_sizing)?)?;
+    bet_sizing.add_function(wrap_pyfunction!(bet_sizing_bet_size, &bet_sizing)?)?;
+    m.add_submodule(&bet_sizing)?;
+    m.add("bet_sizing", bet_sizing)?;
+
+    let portfolio = PyModule::new_bound(py, "portfolio")?;
+    portfolio.add_function(wrap_pyfunction!(portfolio_allocate_inverse_variance, &portfolio)?)?;
+    portfolio.add_function(wrap_pyfunction!(portfolio_allocate_min_vol, &portfolio)?)?;
+    portfolio.add_function(wrap_pyfunction!(portfolio_allocate_max_sharpe, &portfolio)?)?;
+    m.add_submodule(&portfolio)?;
+    m.add("portfolio", portfolio)?;
+
+    let pipeline = PyModule::new_bound(py, "pipeline")?;
+    pipeline.add_function(wrap_pyfunction!(pipeline_run_mid_frequency_pipeline, &pipeline)?)?;
+    m.add_submodule(&pipeline)?;
+    m.add("pipeline", pipeline)?;
+
+    Ok(())
+}

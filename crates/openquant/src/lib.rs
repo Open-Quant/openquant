@@ -15,6 +15,7 @@ pub mod hrp;
 pub mod labeling;
 pub mod microstructural_features;
 pub mod onc;
+pub mod pipeline;
 pub mod portfolio_optimization;
 pub mod risk_metrics;
 pub mod sample_weights;
