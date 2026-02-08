@@ -1,5 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
 ---
 <Layout title="OpenQuant-rs Documentation" description="Production-grade documentation for OpenQuant-rs: APIs, examples, methodology, and release guidance.">
   <section class="hero">
@@ -18,7 +21,7 @@ import Layout from '../layouts/Layout.astro';
     </article>
     <article class="card">
       <h3>How To Use This Docs Site</h3>
-      <p>Start with <a href="/openquant-rs/getting-started">Getting Started</a>, then move to <a href="/openquant-rs/examples">Examples</a> and <a href="/openquant-rs/modules">Module Guide</a>.</p>
+      <p>Start with <a href={`${base}/getting-started`}>Getting Started</a>, then move to <a href={`${base}/examples`}>Examples</a> and <a href={`${base}/modules`}>Module Guide</a>.</p>
     </article>
   </div>
 
@@ -32,39 +35,39 @@ import Layout from '../layouts/Layout.astro';
     </thead>
     <tbody>
       <tr>
-        <td><a href="/openquant-rs/getting-started">Getting Started</a></td>
+        <td><a href={`${base}/getting-started`}>Getting Started</a></td>
         <td>Install, validate, and run the first meaningful commands.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/modules">Module Guide</a></td>
+        <td><a href={`${base}/modules`}>Module Guide</a></td>
         <td>Understand the library structure by functional area.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/api-reference">API Reference</a></td>
+        <td><a href={`${base}/api-reference`}>API Reference</a></td>
         <td>Find major public functions and types quickly.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/examples">Examples</a></td>
+        <td><a href={`${base}/examples`}>Examples</a></td>
         <td>Copy practical pipeline examples for research and production prototyping.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/migration-parity">Parity</a></td>
+        <td><a href={`${base}/migration-parity`}>Parity</a></td>
         <td>Review migration status and parity governance.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/performance">Performance</a></td>
+        <td><a href={`${base}/performance`}>Performance</a></td>
         <td>Understand benchmark methodology and regression checks.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/publishing">Publishing</a></td>
+        <td><a href={`${base}/publishing`}>Publishing</a></td>
         <td>Release the crate and docs with confidence.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/contributing">Contributing</a></td>
+        <td><a href={`${base}/contributing`}>Contributing</a></td>
         <td>Follow coding, testing, and documentation standards.</td>
       </tr>
       <tr>
-        <td><a href="/openquant-rs/faq">FAQ</a></td>
+        <td><a href={`${base}/faq`}>FAQ</a></td>
         <td>Resolve operational questions quickly.</td>
       </tr>
     </tbody>

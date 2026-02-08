@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://openquant.github.io',
-  base: '/openquant-rs',
+  site: 'https://open-quant.github.io',
+  base: '/openquant',
   output: 'static'
 });
