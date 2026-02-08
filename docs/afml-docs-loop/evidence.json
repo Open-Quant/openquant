@@ -1,0 +1,1864 @@
+{
+  "generated_at": "2026-02-08T21:38:20+00:00",
+  "top_k": 6,
+  "top_k_context": 4,
+  "window": 1,
+  "chapters": [
+    {
+      "chapter": "CHAPTER 2",
+      "query": "Bars and sampling features",
+      "anchor": {
+        "chunk_id": "afml-S00416-c000058",
+        "chapter": "CHAPTER 2",
+        "section": "2.3.1 Standard Bars",
+        "page_start": 55,
+        "page_end": 55,
+        "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+        "score": 0.672162
+      },
+      "sections": [
+        {
+          "id": "chapter-2-data_structures",
+          "module": "data_structures",
+          "slug": "data-structures",
+          "status": "done",
+          "module_query": "Standard Bars time bars imbalance bars run bars",
+          "anchor": {
+            "chunk_id": "afml-S00417-c000059",
+            "chapter": "CHAPTER 2",
+            "section": "2.3.1.1 Time Bars",
+            "page_start": 55,
+            "page_end": 56,
+            "heading_path": "PART 1 > CHAPTER 2 > 2.3.1.1 Time Bars",
+            "score": 0.593406
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00417-c000059",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1.1 Time Bars",
+              "page_start": 55,
+              "page_end": 56,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1.1 Time Bars",
+              "score": 0.593406
+            },
+            {
+              "chunk_id": "afml-S00416-c000058",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1 Standard Bars",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+              "score": 0.592777
+            },
+            {
+              "chunk_id": "afml-S00415-c000057",
+              "chapter": "CHAPTER 2",
+              "section": "2.3 BARS",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3 BARS",
+              "score": 0.434046
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00417-c000059",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1.1 Time Bars",
+              "page_start": 55,
+              "page_end": 56,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1.1 Time Bars",
+              "score": 0.593406
+            },
+            {
+              "chunk_id": "afml-S00416-c000058",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1 Standard Bars",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+              "score": 0.592777
+            },
+            {
+              "chunk_id": "afml-S00415-c000057",
+              "chapter": "CHAPTER 2",
+              "section": "2.3 BARS",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3 BARS",
+              "score": 0.434046
+            }
+          ]
+        },
+        {
+          "id": "chapter-2-filters",
+          "module": "filters",
+          "slug": "filters",
+          "status": "done",
+          "module_query": "CUSUM filter event-based sampling",
+          "anchor": {
+            "chunk_id": "afml-S00416-c000058",
+            "chapter": "CHAPTER 2",
+            "section": "2.3.1 Standard Bars",
+            "page_start": 55,
+            "page_end": 55,
+            "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+            "score": 0.330291
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00416-c000058",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1 Standard Bars",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+              "score": 0.330291
+            },
+            {
+              "chunk_id": "afml-S00418-c000060",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1.2 Tick Bars",
+              "page_start": 56,
+              "page_end": 57,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1.2 Tick Bars",
+              "score": 0.324269
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00416-c000058",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1 Standard Bars",
+              "page_start": 55,
+              "page_end": 55,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1 Standard Bars",
+              "score": 0.330291
+            },
+            {
+              "chunk_id": "afml-S00418-c000060",
+              "chapter": "CHAPTER 2",
+              "section": "2.3.1.2 Tick Bars",
+              "page_start": 56,
+              "page_end": 57,
+              "heading_path": "PART 1 > CHAPTER 2 > 2.3.1.2 Tick Bars",
+              "score": 0.324269
+            }
+          ]
+        },
+        {
+          "id": "chapter-2-etf_trick",
+          "module": "etf_trick",
+          "slug": "etf-trick",
+          "status": "done",
+          "module_query": "ETF Trick single future roll",
+          "anchor": {},
+          "search_hits": [],
+          "context_hits": []
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 3",
+      "query": "Triple-Barrier Method meta-labeling",
+      "anchor": {
+        "chunk_id": "afml-S00471-c000103",
+        "chapter": "CHAPTER 3",
+        "section": "3.8 THE QUANTAMENTAL WAY",
+        "page_start": 88,
+        "page_end": 89,
+        "heading_path": "PART 1 > CHAPTER 3 > 3.8 THE QUANTAMENTAL WAY",
+        "score": 0.627412
+      },
+      "sections": [
+        {
+          "id": "chapter-3-labeling",
+          "module": "labeling",
+          "slug": "labeling",
+          "status": "done",
+          "module_query": "Triple-Barrier Method meta-labeling",
+          "anchor": {
+            "chunk_id": "afml-S00471-c000103",
+            "chapter": "CHAPTER 3",
+            "section": "3.8 THE QUANTAMENTAL WAY",
+            "page_start": 88,
+            "page_end": 89,
+            "heading_path": "PART 1 > CHAPTER 3 > 3.8 THE QUANTAMENTAL WAY",
+            "score": 0.627412
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00471-c000103",
+              "chapter": "CHAPTER 3",
+              "section": "3.8 THE QUANTAMENTAL WAY",
+              "page_start": 88,
+              "page_end": 89,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.8 THE QUANTAMENTAL WAY",
+              "score": 0.627412
+            },
+            {
+              "chunk_id": "afml-S00456-c000091",
+              "chapter": "CHAPTER 3",
+              "section": "3.4 THE TRIPLE-BARRIER METHOD",
+              "page_start": 78,
+              "page_end": 78,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.4 THE TRIPLE-BARRIER METHOD",
+              "score": 0.613888
+            },
+            {
+              "chunk_id": "afml-S00458-c000093",
+              "chapter": "CHAPTER 3",
+              "section": "SNIPPET 3.2 TRIPLE-BARRIER LABELING METHOD",
+              "page_start": 79,
+              "page_end": 81,
+              "heading_path": "PART 1 > CHAPTER 3 > SNIPPET 3.2 TRIPLE-BARRIER LABELING METHOD",
+              "score": 0.572737
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00471-c000103",
+              "chapter": "CHAPTER 3",
+              "section": "3.8 THE QUANTAMENTAL WAY",
+              "page_start": 88,
+              "page_end": 89,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.8 THE QUANTAMENTAL WAY",
+              "score": 0.627412
+            },
+            {
+              "chunk_id": "afml-S00456-c000091",
+              "chapter": "CHAPTER 3",
+              "section": "3.4 THE TRIPLE-BARRIER METHOD",
+              "page_start": 78,
+              "page_end": 78,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.4 THE TRIPLE-BARRIER METHOD",
+              "score": 0.613888
+            },
+            {
+              "chunk_id": "afml-S00458-c000093",
+              "chapter": "CHAPTER 3",
+              "section": "SNIPPET 3.2 TRIPLE-BARRIER LABELING METHOD",
+              "page_start": 79,
+              "page_end": 81,
+              "heading_path": "PART 1 > CHAPTER 3 > SNIPPET 3.2 TRIPLE-BARRIER LABELING METHOD",
+              "score": 0.572737
+            }
+          ]
+        },
+        {
+          "id": "chapter-3-bet_sizing",
+          "module": "bet_sizing",
+          "slug": "bet-sizing",
+          "status": "done",
+          "module_query": "Bet Sizing from Predicted Probabilities averaging active bets",
+          "anchor": {
+            "chunk_id": "afml-S00469-c000100",
+            "chapter": "CHAPTER 3",
+            "section": "LABELING",
+            "page_start": 85,
+            "page_end": 86,
+            "heading_path": "PART 1 > CHAPTER 3 > LABELING",
+            "score": 0.417783
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00469-c000100",
+              "chapter": "CHAPTER 3",
+              "section": "LABELING",
+              "page_start": 85,
+              "page_end": 86,
+              "heading_path": "PART 1 > CHAPTER 3 > LABELING",
+              "score": 0.417783
+            },
+            {
+              "chunk_id": "afml-S00453-c000089",
+              "chapter": "CHAPTER 3",
+              "section": "3.3 COMPUTING DYNAMIC THRESHOLDS",
+              "page_start": 77,
+              "page_end": 77,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.3 COMPUTING DYNAMIC THRESHOLDS",
+              "score": 0.388627
+            },
+            {
+              "chunk_id": "afml-S00479-c000109",
+              "chapter": "CHAPTER 3",
+              "section": "3.5 Develop a mean-reverting strategy based on Bollinger bands. For each",
+              "page_start": 91,
+              "page_end": 91,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.5 Develop a mean-reverting strategy based on Bollinger bands. For each",
+              "score": 0.388312
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00469-c000100",
+              "chapter": "CHAPTER 3",
+              "section": "LABELING",
+              "page_start": 85,
+              "page_end": 86,
+              "heading_path": "PART 1 > CHAPTER 3 > LABELING",
+              "score": 0.417783
+            },
+            {
+              "chunk_id": "afml-S00453-c000089",
+              "chapter": "CHAPTER 3",
+              "section": "3.3 COMPUTING DYNAMIC THRESHOLDS",
+              "page_start": 77,
+              "page_end": 77,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.3 COMPUTING DYNAMIC THRESHOLDS",
+              "score": 0.388627
+            },
+            {
+              "chunk_id": "afml-S00479-c000109",
+              "chapter": "CHAPTER 3",
+              "section": "3.5 Develop a mean-reverting strategy based on Bollinger bands. For each",
+              "page_start": 91,
+              "page_end": 91,
+              "heading_path": "PART 1 > CHAPTER 3 > 3.5 Develop a mean-reverting strategy based on Bollinger bands. For each",
+              "score": 0.388312
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 4",
+      "query": "Average uniqueness sequential bootstrap",
+      "anchor": {
+        "chunk_id": "afml-S00573-c000173",
+        "chapter": "CHAPTER 4",
+        "section": "6.4 RANDOM FOREST",
+        "page_start": 140,
+        "page_end": 141,
+        "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+        "score": 0.472548
+      },
+      "sections": [
+        {
+          "id": "chapter-4-sampling",
+          "module": "sampling",
+          "slug": "sampling",
+          "status": "done",
+          "module_query": "Average uniqueness sequential bootstrap",
+          "anchor": {
+            "chunk_id": "afml-S00573-c000173",
+            "chapter": "CHAPTER 4",
+            "section": "6.4 RANDOM FOREST",
+            "page_start": 140,
+            "page_end": 141,
+            "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+            "score": 0.472548
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00573-c000173",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.472548
+            },
+            {
+              "chunk_id": "afml-S00572-c000171",
+              "chapter": "CHAPTER 4",
+              "section": "",
+              "page_start": 139,
+              "page_end": 140,
+              "heading_path": "PART 2 > CHAPTER 4",
+              "score": 0.335347
+            },
+            {
+              "chunk_id": "afml-S00573-c000172",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.282583
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00573-c000173",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.472548
+            },
+            {
+              "chunk_id": "afml-S00572-c000171",
+              "chapter": "CHAPTER 4",
+              "section": "",
+              "page_start": 139,
+              "page_end": 140,
+              "heading_path": "PART 2 > CHAPTER 4",
+              "score": 0.335347
+            },
+            {
+              "chunk_id": "afml-S00573-c000172",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.282583
+            }
+          ]
+        },
+        {
+          "id": "chapter-4-sample_weights",
+          "module": "sample_weights",
+          "slug": "sample-weights",
+          "status": "done",
+          "module_query": "Return attribution time decay class weights",
+          "anchor": {
+            "chunk_id": "afml-S00581-c000179",
+            "chapter": "CHAPTER 4",
+            "section": "6.3 Build an ensemble of estimators, where the base estimator is a decision",
+            "page_start": 145,
+            "page_end": 145,
+            "heading_path": "PART 2 > CHAPTER 4 > 6.3 Build an ensemble of estimators, where the base estimator is a decision",
+            "score": 0.210495
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00581-c000179",
+              "chapter": "CHAPTER 4",
+              "section": "6.3 Build an ensemble of estimators, where the base estimator is a decision",
+              "page_start": 145,
+              "page_end": 145,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.3 Build an ensemble of estimators, where the base estimator is a decision",
+              "score": 0.210495
+            },
+            {
+              "chunk_id": "afml-S00577-c000177",
+              "chapter": "CHAPTER 4",
+              "section": "6.7 BAGGING FOR SCALABILITY",
+              "page_start": 144,
+              "page_end": 144,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.7 BAGGING FOR SCALABILITY",
+              "score": 0.205885
+            },
+            {
+              "chunk_id": "afml-S00574-c000174",
+              "chapter": "CHAPTER 4",
+              "section": "SNIPPET 6.2 THREE WAYS OF SETTING UP AN RF",
+              "page_start": 141,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > SNIPPET 6.2 THREE WAYS OF SETTING UP AN RF",
+              "score": 0.203952
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00581-c000179",
+              "chapter": "CHAPTER 4",
+              "section": "6.3 Build an ensemble of estimators, where the base estimator is a decision",
+              "page_start": 145,
+              "page_end": 145,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.3 Build an ensemble of estimators, where the base estimator is a decision",
+              "score": 0.210495
+            },
+            {
+              "chunk_id": "afml-S00577-c000177",
+              "chapter": "CHAPTER 4",
+              "section": "6.7 BAGGING FOR SCALABILITY",
+              "page_start": 144,
+              "page_end": 144,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.7 BAGGING FOR SCALABILITY",
+              "score": 0.205885
+            },
+            {
+              "chunk_id": "afml-S00574-c000174",
+              "chapter": "CHAPTER 4",
+              "section": "SNIPPET 6.2 THREE WAYS OF SETTING UP AN RF",
+              "page_start": 141,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > SNIPPET 6.2 THREE WAYS OF SETTING UP AN RF",
+              "score": 0.203952
+            }
+          ]
+        },
+        {
+          "id": "chapter-4-sb_bagging",
+          "module": "sb_bagging",
+          "slug": "sb-bagging",
+          "status": "done",
+          "module_query": "Bagging classifiers uniqueness sequential bootstrap",
+          "anchor": {
+            "chunk_id": "afml-S00573-c000173",
+            "chapter": "CHAPTER 4",
+            "section": "6.4 RANDOM FOREST",
+            "page_start": 140,
+            "page_end": 141,
+            "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+            "score": 0.616354
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00573-c000173",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.616354
+            },
+            {
+              "chunk_id": "afml-S00576-c000176",
+              "chapter": "CHAPTER 4",
+              "section": "6.6 BAGGING VS. BOOSTING IN FINANCE",
+              "page_start": 143,
+              "page_end": 144,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.6 BAGGING VS. BOOSTING IN FINANCE",
+              "score": 0.536669
+            },
+            {
+              "chunk_id": "afml-S00572-c000171",
+              "chapter": "CHAPTER 4",
+              "section": "",
+              "page_start": 139,
+              "page_end": 140,
+              "heading_path": "PART 2 > CHAPTER 4",
+              "score": 0.491578
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00573-c000173",
+              "chapter": "CHAPTER 4",
+              "section": "6.4 RANDOM FOREST",
+              "page_start": 140,
+              "page_end": 141,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.4 RANDOM FOREST",
+              "score": 0.616354
+            },
+            {
+              "chunk_id": "afml-S00576-c000176",
+              "chapter": "CHAPTER 4",
+              "section": "6.6 BAGGING VS. BOOSTING IN FINANCE",
+              "page_start": 143,
+              "page_end": 144,
+              "heading_path": "PART 2 > CHAPTER 4 > 6.6 BAGGING VS. BOOSTING IN FINANCE",
+              "score": 0.536669
+            },
+            {
+              "chunk_id": "afml-S00572-c000171",
+              "chapter": "CHAPTER 4",
+              "section": "",
+              "page_start": 139,
+              "page_end": 140,
+              "heading_path": "PART 2 > CHAPTER 4",
+              "score": 0.491578
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 5",
+      "query": "Fractional differentiation",
+      "anchor": {
+        "chunk_id": "afml-S00528-c000141",
+        "chapter": "CHAPTER 5",
+        "section": "5.1 MOTIVATION",
+        "page_start": 114,
+        "page_end": 114,
+        "heading_path": "PART 1 > CHAPTER 5 > 5.1 MOTIVATION",
+        "score": 0.248351
+      },
+      "sections": [
+        {
+          "id": "chapter-5-fracdiff",
+          "module": "fracdiff",
+          "slug": "fracdiff",
+          "status": "done",
+          "module_query": "fractional differentiation stationarity memory",
+          "anchor": {
+            "chunk_id": "afml-S00529-c000142",
+            "chapter": "CHAPTER 5",
+            "section": "5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+            "page_start": 114,
+            "page_end": 114,
+            "heading_path": "PART 1 > CHAPTER 5 > 5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+            "score": 0.550599
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00529-c000142",
+              "chapter": "CHAPTER 5",
+              "section": "5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+              "page_start": 114,
+              "page_end": 114,
+              "heading_path": "PART 1 > CHAPTER 5 > 5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+              "score": 0.550599
+            },
+            {
+              "chunk_id": "afml-S00528-c000141",
+              "chapter": "CHAPTER 5",
+              "section": "5.1 MOTIVATION",
+              "page_start": 114,
+              "page_end": 114,
+              "heading_path": "PART 1 > CHAPTER 5 > 5.1 MOTIVATION",
+              "score": 0.538956
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00529-c000142",
+              "chapter": "CHAPTER 5",
+              "section": "5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+              "page_start": 114,
+              "page_end": 114,
+              "heading_path": "PART 1 > CHAPTER 5 > 5.2 THE STATIONARITY VS. MEMORY DILEMMA",
+              "score": 0.550599
+            },
+            {
+              "chunk_id": "afml-S00528-c000141",
+              "chapter": "CHAPTER 5",
+              "section": "5.1 MOTIVATION",
+              "page_start": 114,
+              "page_end": 114,
+              "heading_path": "PART 1 > CHAPTER 5 > 5.1 MOTIVATION",
+              "score": 0.538956
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 7",
+      "query": "Purged K-Fold CV embargo",
+      "anchor": {
+        "chunk_id": "afml-S00597-c000193",
+        "chapter": "CHAPTER 7",
+        "section": "7.4.3 The Purged K-Fold Class",
+        "page_start": 153,
+        "page_end": 154,
+        "heading_path": "PART 2 > CHAPTER 7 > 7.4.3 The Purged K-Fold Class",
+        "score": 0.700027
+      },
+      "sections": [
+        {
+          "id": "chapter-7-cross_validation",
+          "module": "cross_validation",
+          "slug": "cross-validation",
+          "status": "done",
+          "module_query": "Purged K-Fold CV embargo",
+          "anchor": {
+            "chunk_id": "afml-S00597-c000193",
+            "chapter": "CHAPTER 7",
+            "section": "7.4.3 The Purged K-Fold Class",
+            "page_start": 153,
+            "page_end": 154,
+            "heading_path": "PART 2 > CHAPTER 7 > 7.4.3 The Purged K-Fold Class",
+            "score": 0.700027
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00597-c000193",
+              "chapter": "CHAPTER 7",
+              "section": "7.4.3 The Purged K-Fold Class",
+              "page_start": 153,
+              "page_end": 154,
+              "heading_path": "PART 2 > CHAPTER 7 > 7.4.3 The Purged K-Fold Class",
+              "score": 0.700027
+            },
+            {
+              "chunk_id": "afml-S00591-c000188",
+              "chapter": "CHAPTER 7",
+              "section": "7.4 A SOLUTION: PURGED K-FOLD CV",
+              "page_start": 149,
+              "page_end": 150,
+              "heading_path": "PART 2 > CHAPTER 7 > 7.4 A SOLUTION: PURGED K-FOLD CV",
+              "score": 0.674563
+            },
+            {
+              "chunk_id": "afml-S00602-c000196",
+              "chapter": "CHAPTER 7",
+              "section": "SNIPPET 7.4 USING THE PURGEDKFOLD CLASS",
+              "page_start": 155,
+              "page_end": 155,
+              "heading_path": "PART 2 > CHAPTER 7 > SNIPPET 7.4 USING THE PURGEDKFOLD CLASS",
+              "score": 0.590021
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00597-c000193",
+              "chapter": "CHAPTER 7",
+              "section": "7.4.3 The Purged K-Fold Class",
+              "page_start": 153,
+              "page_end": 154,
+              "heading_path": "PART 2 > CHAPTER 7 > 7.4.3 The Purged K-Fold Class",
+              "score": 0.700027
+            },
+            {
+              "chunk_id": "afml-S00591-c000188",
+              "chapter": "CHAPTER 7",
+              "section": "7.4 A SOLUTION: PURGED K-FOLD CV",
+              "page_start": 149,
+              "page_end": 150,
+              "heading_path": "PART 2 > CHAPTER 7 > 7.4 A SOLUTION: PURGED K-FOLD CV",
+              "score": 0.674563
+            },
+            {
+              "chunk_id": "afml-S00602-c000196",
+              "chapter": "CHAPTER 7",
+              "section": "SNIPPET 7.4 USING THE PURGEDKFOLD CLASS",
+              "page_start": 155,
+              "page_end": 155,
+              "heading_path": "PART 2 > CHAPTER 7 > SNIPPET 7.4 USING THE PURGEDKFOLD CLASS",
+              "score": 0.590021
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 8",
+      "query": "Feature Importance MDI MDA",
+      "anchor": {
+        "chunk_id": "afml-S00620-c000209",
+        "chapter": "CHAPTER 8",
+        "section": "8.3.2 Mean Decrease Accuracy",
+        "page_start": 161,
+        "page_end": 162,
+        "heading_path": "PART 2 > CHAPTER 8 > 8.3.2 Mean Decrease Accuracy",
+        "score": 0.665134
+      },
+      "sections": [
+        {
+          "id": "chapter-8-feature_importance",
+          "module": "feature_importance",
+          "slug": "feature-importance",
+          "status": "done",
+          "module_query": "Feature Importance MDI MDA",
+          "anchor": {
+            "chunk_id": "afml-S00620-c000209",
+            "chapter": "CHAPTER 8",
+            "section": "8.3.2 Mean Decrease Accuracy",
+            "page_start": 161,
+            "page_end": 162,
+            "heading_path": "PART 2 > CHAPTER 8 > 8.3.2 Mean Decrease Accuracy",
+            "score": 0.665134
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00620-c000209",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.2 Mean Decrease Accuracy",
+              "page_start": 161,
+              "page_end": 162,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.2 Mean Decrease Accuracy",
+              "score": 0.665134
+            },
+            {
+              "chunk_id": "afml-S00618-c000208",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.627125
+            },
+            {
+              "chunk_id": "afml-S00618-c000207",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.584383
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00620-c000209",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.2 Mean Decrease Accuracy",
+              "page_start": 161,
+              "page_end": 162,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.2 Mean Decrease Accuracy",
+              "score": 0.665134
+            },
+            {
+              "chunk_id": "afml-S00618-c000208",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.627125
+            },
+            {
+              "chunk_id": "afml-S00618-c000207",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.584383
+            }
+          ]
+        },
+        {
+          "id": "chapter-8-fingerprint",
+          "module": "fingerprint",
+          "slug": "fingerprint",
+          "status": "done",
+          "module_query": "feature effects substitution effects",
+          "anchor": {
+            "chunk_id": "afml-S00617-c000206",
+            "chapter": "CHAPTER 8",
+            "section": "SUBSTITUTION EFFECTS",
+            "page_start": 159,
+            "page_end": 160,
+            "heading_path": "PART 2 > CHAPTER 8 > SUBSTITUTION EFFECTS",
+            "score": 0.765114
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00617-c000206",
+              "chapter": "CHAPTER 8",
+              "section": "SUBSTITUTION EFFECTS",
+              "page_start": 159,
+              "page_end": 160,
+              "heading_path": "PART 2 > CHAPTER 8 > SUBSTITUTION EFFECTS",
+              "score": 0.765114
+            },
+            {
+              "chunk_id": "afml-S00618-c000207",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.316302
+            },
+            {
+              "chunk_id": "afml-S00727-c000275",
+              "chapter": "CHAPTER 8",
+              "section": "11.1 An analyst fits an RF classifier where some of the features include",
+              "page_start": 211,
+              "page_end": 211,
+              "heading_path": "PART 3 > CHAPTER 8 > 11.1 An analyst fits an RF classifier where some of the features include",
+              "score": 0.249555
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00617-c000206",
+              "chapter": "CHAPTER 8",
+              "section": "SUBSTITUTION EFFECTS",
+              "page_start": 159,
+              "page_end": 160,
+              "heading_path": "PART 2 > CHAPTER 8 > SUBSTITUTION EFFECTS",
+              "score": 0.765114
+            },
+            {
+              "chunk_id": "afml-S00618-c000207",
+              "chapter": "CHAPTER 8",
+              "section": "8.3.1 Mean Decrease Impurity",
+              "page_start": 160,
+              "page_end": 161,
+              "heading_path": "PART 2 > CHAPTER 8 > 8.3.1 Mean Decrease Impurity",
+              "score": 0.316302
+            },
+            {
+              "chunk_id": "afml-S00727-c000275",
+              "chapter": "CHAPTER 8",
+              "section": "11.1 An analyst fits an RF classifier where some of the features include",
+              "page_start": 211,
+              "page_end": 211,
+              "heading_path": "PART 3 > CHAPTER 8 > 11.1 An analyst fits an RF classifier where some of the features include",
+              "score": 0.249555
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 10",
+      "query": "Bet Sizing from Predicted Probabilities",
+      "anchor": {
+        "chunk_id": "afml-S00684-c000247",
+        "chapter": "CHAPTER 10",
+        "section": "10.1 MOTIVATION",
+        "page_start": 191,
+        "page_end": 191,
+        "heading_path": "PART 3 > CHAPTER 10 > 10.1 MOTIVATION",
+        "score": 0.573965
+      },
+      "sections": [
+        {
+          "id": "chapter-10-bet_sizing",
+          "module": "bet_sizing",
+          "slug": "bet-sizing",
+          "status": "done",
+          "module_query": "Bet Sizing from Predicted Probabilities averaging active bets",
+          "anchor": {
+            "chunk_id": "afml-S00690-c000251",
+            "chapter": "CHAPTER 10",
+            "section": "10.4 AVERAGING ACTIVE BETS",
+            "page_start": 194,
+            "page_end": 194,
+            "heading_path": "PART 3 > CHAPTER 10 > 10.4 AVERAGING ACTIVE BETS",
+            "score": 0.716889
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00690-c000251",
+              "chapter": "CHAPTER 10",
+              "section": "10.4 AVERAGING ACTIVE BETS",
+              "page_start": 194,
+              "page_end": 194,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.4 AVERAGING ACTIVE BETS",
+              "score": 0.716889
+            },
+            {
+              "chunk_id": "afml-S00696-c000253",
+              "chapter": "CHAPTER 10",
+              "section": "10.6 DYNAMIC BET SIZES AND LIMIT PRICES",
+              "page_start": 196,
+              "page_end": 197,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.6 DYNAMIC BET SIZES AND LIMIT PRICES",
+              "score": 0.583858
+            },
+            {
+              "chunk_id": "afml-S00693-c000252",
+              "chapter": "CHAPTER 10",
+              "section": "10.5 SIZE DISCRETIZATION",
+              "page_start": 195,
+              "page_end": 196,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.5 SIZE DISCRETIZATION",
+              "score": 0.565663
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00690-c000251",
+              "chapter": "CHAPTER 10",
+              "section": "10.4 AVERAGING ACTIVE BETS",
+              "page_start": 194,
+              "page_end": 194,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.4 AVERAGING ACTIVE BETS",
+              "score": 0.716889
+            },
+            {
+              "chunk_id": "afml-S00696-c000253",
+              "chapter": "CHAPTER 10",
+              "section": "10.6 DYNAMIC BET SIZES AND LIMIT PRICES",
+              "page_start": 196,
+              "page_end": 197,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.6 DYNAMIC BET SIZES AND LIMIT PRICES",
+              "score": 0.583858
+            },
+            {
+              "chunk_id": "afml-S00693-c000252",
+              "chapter": "CHAPTER 10",
+              "section": "10.5 SIZE DISCRETIZATION",
+              "page_start": 195,
+              "page_end": 196,
+              "heading_path": "PART 3 > CHAPTER 10 > 10.5 SIZE DISCRETIZATION",
+              "score": 0.565663
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 14",
+      "query": "Deflated Sharpe Ratio probabilistic Sharpe",
+      "anchor": {
+        "chunk_id": "afml-S00812-c000338",
+        "chapter": "CHAPTER 14",
+        "section": "14.7.3 The Deflated Sharpe Ratio",
+        "page_start": 274,
+        "page_end": 276,
+        "heading_path": "PART 3 > CHAPTER 14 > 14.7.3 The Deflated Sharpe Ratio",
+        "score": 0.673441
+      },
+      "sections": [
+        {
+          "id": "chapter-14-backtest_statistics",
+          "module": "backtest_statistics",
+          "slug": "backtest-statistics",
+          "status": "done",
+          "module_query": "Deflated Sharpe Ratio probabilistic Sharpe drawdown",
+          "anchor": {
+            "chunk_id": "afml-S00812-c000338",
+            "chapter": "CHAPTER 14",
+            "section": "14.7.3 The Deflated Sharpe Ratio",
+            "page_start": 274,
+            "page_end": 276,
+            "heading_path": "PART 3 > CHAPTER 14 > 14.7.3 The Deflated Sharpe Ratio",
+            "score": 0.608121
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00812-c000338",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.3 The Deflated Sharpe Ratio",
+              "page_start": 274,
+              "page_end": 276,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.3 The Deflated Sharpe Ratio",
+              "score": 0.608121
+            },
+            {
+              "chunk_id": "afml-S00811-c000337",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.2 The Probabilistic Sharpe Ratio",
+              "page_start": 273,
+              "page_end": 274,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.2 The Probabilistic Sharpe Ratio",
+              "score": 0.523969
+            },
+            {
+              "chunk_id": "afml-S00810-c000336",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.1 The Sharpe Ratio",
+              "page_start": 273,
+              "page_end": 273,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.1 The Sharpe Ratio",
+              "score": 0.514189
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00812-c000338",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.3 The Deflated Sharpe Ratio",
+              "page_start": 274,
+              "page_end": 276,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.3 The Deflated Sharpe Ratio",
+              "score": 0.608121
+            },
+            {
+              "chunk_id": "afml-S00811-c000337",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.2 The Probabilistic Sharpe Ratio",
+              "page_start": 273,
+              "page_end": 274,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.2 The Probabilistic Sharpe Ratio",
+              "score": 0.523969
+            },
+            {
+              "chunk_id": "afml-S00810-c000336",
+              "chapter": "CHAPTER 14",
+              "section": "14.7.1 The Sharpe Ratio",
+              "page_start": 273,
+              "page_end": 273,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.7.1 The Sharpe Ratio",
+              "score": 0.514189
+            }
+          ]
+        },
+        {
+          "id": "chapter-14-risk_metrics",
+          "module": "risk_metrics",
+          "slug": "risk-metrics",
+          "status": "done",
+          "module_query": "value at risk expected shortfall drawdown risk",
+          "anchor": {
+            "chunk_id": "afml-S00808-c000335",
+            "chapter": "CHAPTER 14",
+            "section": "14.6 IMPLEMENTATION SHORTFALL",
+            "page_start": 272,
+            "page_end": 273,
+            "heading_path": "PART 3 > CHAPTER 14 > 14.6 IMPLEMENTATION SHORTFALL",
+            "score": 0.459892
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00808-c000335",
+              "chapter": "CHAPTER 14",
+              "section": "14.6 IMPLEMENTATION SHORTFALL",
+              "page_start": 272,
+              "page_end": 273,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.6 IMPLEMENTATION SHORTFALL",
+              "score": 0.459892
+            },
+            {
+              "chunk_id": "afml-S00828-c000351",
+              "chapter": "CHAPTER 14",
+              "section": "BIBLIOGRAPHY",
+              "page_start": 281,
+              "page_end": 284,
+              "heading_path": "PART 3 > CHAPTER 14 > BIBLIOGRAPHY",
+              "score": 0.387507
+            },
+            {
+              "chunk_id": "afml-S00821-c000346",
+              "chapter": "CHAPTER 14",
+              "section": "14.2 On the dollar bars dataset for E-mini S&P 500 futures, compute",
+              "page_start": 280,
+              "page_end": 280,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.2 On the dollar bars dataset for E-mini S&P 500 futures, compute",
+              "score": 0.35545
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00808-c000335",
+              "chapter": "CHAPTER 14",
+              "section": "14.6 IMPLEMENTATION SHORTFALL",
+              "page_start": 272,
+              "page_end": 273,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.6 IMPLEMENTATION SHORTFALL",
+              "score": 0.459892
+            },
+            {
+              "chunk_id": "afml-S00828-c000351",
+              "chapter": "CHAPTER 14",
+              "section": "BIBLIOGRAPHY",
+              "page_start": 281,
+              "page_end": 284,
+              "heading_path": "PART 3 > CHAPTER 14 > BIBLIOGRAPHY",
+              "score": 0.387507
+            },
+            {
+              "chunk_id": "afml-S00821-c000346",
+              "chapter": "CHAPTER 14",
+              "section": "14.2 On the dollar bars dataset for E-mini S&P 500 futures, compute",
+              "page_start": 280,
+              "page_end": 280,
+              "heading_path": "PART 3 > CHAPTER 14 > 14.2 On the dollar bars dataset for E-mini S&P 500 futures, compute",
+              "score": 0.35545
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 16",
+      "query": "Hierarchical relationships recursive bisection",
+      "anchor": {
+        "chunk_id": "afml-S00870-c000382",
+        "chapter": "CHAPTER 16",
+        "section": "16.4.3 Recursive Bisection",
+        "page_start": 306,
+        "page_end": 307,
+        "heading_path": "PART 3 > CHAPTER 16 > 16.4.3 Recursive Bisection",
+        "score": 0.537596
+      },
+      "sections": [
+        {
+          "id": "chapter-16-hrp",
+          "module": "hrp",
+          "slug": "hrp",
+          "status": "done",
+          "module_query": "hierarchical relationships recursive bisection",
+          "anchor": {
+            "chunk_id": "afml-S00870-c000382",
+            "chapter": "CHAPTER 16",
+            "section": "16.4.3 Recursive Bisection",
+            "page_start": 306,
+            "page_end": 307,
+            "heading_path": "PART 3 > CHAPTER 16 > 16.4.3 Recursive Bisection",
+            "score": 0.537596
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00870-c000382",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.3 Recursive Bisection",
+              "page_start": 306,
+              "page_end": 307,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.3 Recursive Bisection",
+              "score": 0.537596
+            },
+            {
+              "chunk_id": "afml-S00872-c000384",
+              "chapter": "CHAPTER 16",
+              "section": "SNIPPET 16.3 RECURSIVE BISECTION",
+              "page_start": 308,
+              "page_end": 308,
+              "heading_path": "PART 3 > CHAPTER 16 > SNIPPET 16.3 RECURSIVE BISECTION",
+              "score": 0.528224
+            },
+            {
+              "chunk_id": "afml-S00863-c000377",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.1 Tree Clustering",
+              "page_start": 302,
+              "page_end": 303,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.1 Tree Clustering",
+              "score": 0.383966
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00870-c000382",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.3 Recursive Bisection",
+              "page_start": 306,
+              "page_end": 307,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.3 Recursive Bisection",
+              "score": 0.537596
+            },
+            {
+              "chunk_id": "afml-S00872-c000384",
+              "chapter": "CHAPTER 16",
+              "section": "SNIPPET 16.3 RECURSIVE BISECTION",
+              "page_start": 308,
+              "page_end": 308,
+              "heading_path": "PART 3 > CHAPTER 16 > SNIPPET 16.3 RECURSIVE BISECTION",
+              "score": 0.528224
+            },
+            {
+              "chunk_id": "afml-S00863-c000377",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.1 Tree Clustering",
+              "page_start": 302,
+              "page_end": 303,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.1 Tree Clustering",
+              "score": 0.383966
+            }
+          ]
+        },
+        {
+          "id": "chapter-16-hcaa",
+          "module": "hcaa",
+          "slug": "hcaa",
+          "status": "done",
+          "module_query": "hierarchical clustering based asset allocation",
+          "anchor": {
+            "chunk_id": "afml-S00874-c000386",
+            "chapter": "CHAPTER 16",
+            "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+            "page_start": 309,
+            "page_end": 312,
+            "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+            "score": 0.508843
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00874-c000386",
+              "chapter": "CHAPTER 16",
+              "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "page_start": 309,
+              "page_end": 312,
+              "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "score": 0.508843
+            },
+            {
+              "chunk_id": "afml-S00862-c000376",
+              "chapter": "CHAPTER 16",
+              "section": "RELATIONSHIPS",
+              "page_start": 300,
+              "page_end": 302,
+              "heading_path": "PART 3 > CHAPTER 16 > RELATIONSHIPS",
+              "score": 0.498753
+            },
+            {
+              "chunk_id": "afml-S00863-c000377",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.1 Tree Clustering",
+              "page_start": 302,
+              "page_end": 303,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.1 Tree Clustering",
+              "score": 0.428867
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00874-c000386",
+              "chapter": "CHAPTER 16",
+              "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "page_start": 309,
+              "page_end": 312,
+              "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "score": 0.508843
+            },
+            {
+              "chunk_id": "afml-S00862-c000376",
+              "chapter": "CHAPTER 16",
+              "section": "RELATIONSHIPS",
+              "page_start": 300,
+              "page_end": 302,
+              "heading_path": "PART 3 > CHAPTER 16 > RELATIONSHIPS",
+              "score": 0.498753
+            },
+            {
+              "chunk_id": "afml-S00863-c000377",
+              "chapter": "CHAPTER 16",
+              "section": "16.4.1 Tree Clustering",
+              "page_start": 302,
+              "page_end": 303,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.4.1 Tree Clustering",
+              "score": 0.428867
+            }
+          ]
+        },
+        {
+          "id": "chapter-16-onc",
+          "module": "onc",
+          "slug": "onc",
+          "status": "done",
+          "module_query": "optimal number of clusters",
+          "anchor": {
+            "chunk_id": "afml-S00874-c000386",
+            "chapter": "CHAPTER 16",
+            "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+            "page_start": 309,
+            "page_end": 312,
+            "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+            "score": 0.448683
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00874-c000386",
+              "chapter": "CHAPTER 16",
+              "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "page_start": 309,
+              "page_end": 312,
+              "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "score": 0.448683
+            },
+            {
+              "chunk_id": "afml-S00864-c000378",
+              "chapter": "CHAPTER 16",
+              "section": "D,",
+              "page_start": 303,
+              "page_end": 304,
+              "heading_path": "PART 3 > CHAPTER 16 > D,",
+              "score": 0.417624
+            },
+            {
+              "chunk_id": "afml-S00867-c000380",
+              "chapter": "CHAPTER 16",
+              "section": "FUNCTIONALITY",
+              "page_start": 305,
+              "page_end": 306,
+              "heading_path": "PART 3 > CHAPTER 16 > FUNCTIONALITY",
+              "score": 0.402364
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00874-c000386",
+              "chapter": "CHAPTER 16",
+              "section": "snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "page_start": 309,
+              "page_end": 312,
+              "heading_path": "PART 3 > CHAPTER 16 > snippet 16.4 (see Section 16.A.3). The last five columns are partially correlated",
+              "score": 0.448683
+            },
+            {
+              "chunk_id": "afml-S00864-c000378",
+              "chapter": "CHAPTER 16",
+              "section": "D,",
+              "page_start": 303,
+              "page_end": 304,
+              "heading_path": "PART 3 > CHAPTER 16 > D,",
+              "score": 0.417624
+            },
+            {
+              "chunk_id": "afml-S00867-c000380",
+              "chapter": "CHAPTER 16",
+              "section": "FUNCTIONALITY",
+              "page_start": 305,
+              "page_end": 306,
+              "heading_path": "PART 3 > CHAPTER 16 > FUNCTIONALITY",
+              "score": 0.402364
+            }
+          ]
+        },
+        {
+          "id": "chapter-16-cla",
+          "module": "cla",
+          "slug": "cla",
+          "status": "done",
+          "module_query": "critical line algorithm mean-variance constraints",
+          "anchor": {
+            "chunk_id": "afml-S00857-c000371",
+            "chapter": "CHAPTER 16",
+            "section": "16.1 MOTIVATION",
+            "page_start": 297,
+            "page_end": 297,
+            "heading_path": "PART 3 > CHAPTER 16 > 16.1 MOTIVATION",
+            "score": 0.475175
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00857-c000371",
+              "chapter": "CHAPTER 16",
+              "section": "16.1 MOTIVATION",
+              "page_start": 297,
+              "page_end": 297,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.1 MOTIVATION",
+              "score": 0.475175
+            },
+            {
+              "chunk_id": "afml-S00859-c000372",
+              "chapter": "CHAPTER 16",
+              "section": "OPTIMIZATION",
+              "page_start": 297,
+              "page_end": 298,
+              "heading_path": "PART 3 > CHAPTER 16 > OPTIMIZATION",
+              "score": 0.47138
+            },
+            {
+              "chunk_id": "afml-S00862-c000375",
+              "chapter": "CHAPTER 16",
+              "section": "RELATIONSHIPS",
+              "page_start": 300,
+              "page_end": 302,
+              "heading_path": "PART 3 > CHAPTER 16 > RELATIONSHIPS",
+              "score": 0.416174
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00857-c000371",
+              "chapter": "CHAPTER 16",
+              "section": "16.1 MOTIVATION",
+              "page_start": 297,
+              "page_end": 297,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.1 MOTIVATION",
+              "score": 0.475175
+            },
+            {
+              "chunk_id": "afml-S00859-c000372",
+              "chapter": "CHAPTER 16",
+              "section": "OPTIMIZATION",
+              "page_start": 297,
+              "page_end": 298,
+              "heading_path": "PART 3 > CHAPTER 16 > OPTIMIZATION",
+              "score": 0.47138
+            },
+            {
+              "chunk_id": "afml-S00862-c000375",
+              "chapter": "CHAPTER 16",
+              "section": "RELATIONSHIPS",
+              "page_start": 300,
+              "page_end": 302,
+              "heading_path": "PART 3 > CHAPTER 16 > RELATIONSHIPS",
+              "score": 0.416174
+            }
+          ]
+        },
+        {
+          "id": "chapter-16-portfolio_optimization",
+          "module": "portfolio_optimization",
+          "slug": "portfolio-optimization",
+          "status": "done",
+          "module_query": "Markowitz portfolio optimization covariance",
+          "anchor": {
+            "chunk_id": "afml-S00859-c000372",
+            "chapter": "CHAPTER 16",
+            "section": "OPTIMIZATION",
+            "page_start": 297,
+            "page_end": 298,
+            "heading_path": "PART 3 > CHAPTER 16 > OPTIMIZATION",
+            "score": 0.703031
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00859-c000372",
+              "chapter": "CHAPTER 16",
+              "section": "OPTIMIZATION",
+              "page_start": 297,
+              "page_end": 298,
+              "heading_path": "PART 3 > CHAPTER 16 > OPTIMIZATION",
+              "score": 0.703031
+            },
+            {
+              "chunk_id": "afml-S00857-c000371",
+              "chapter": "CHAPTER 16",
+              "section": "16.1 MOTIVATION",
+              "page_start": 297,
+              "page_end": 297,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.1 MOTIVATION",
+              "score": 0.637993
+            },
+            {
+              "chunk_id": "afml-S00860-c000374",
+              "chapter": "CHAPTER 16",
+              "section": "16.3 MARKOWITZ\u2019S CURSE",
+              "page_start": 298,
+              "page_end": 300,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.3 MARKOWITZ\u2019S CURSE",
+              "score": 0.620569
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00859-c000372",
+              "chapter": "CHAPTER 16",
+              "section": "OPTIMIZATION",
+              "page_start": 297,
+              "page_end": 298,
+              "heading_path": "PART 3 > CHAPTER 16 > OPTIMIZATION",
+              "score": 0.703031
+            },
+            {
+              "chunk_id": "afml-S00857-c000371",
+              "chapter": "CHAPTER 16",
+              "section": "16.1 MOTIVATION",
+              "page_start": 297,
+              "page_end": 297,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.1 MOTIVATION",
+              "score": 0.637993
+            },
+            {
+              "chunk_id": "afml-S00860-c000374",
+              "chapter": "CHAPTER 16",
+              "section": "16.3 MARKOWITZ\u2019S CURSE",
+              "page_start": 298,
+              "page_end": 300,
+              "heading_path": "PART 3 > CHAPTER 16 > 16.3 MARKOWITZ\u2019S CURSE",
+              "score": 0.620569
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 17",
+      "query": "Structural break tests SADF CUSUM",
+      "anchor": {
+        "chunk_id": "afml-S00911-c000406",
+        "chapter": "CHAPTER 17",
+        "section": "17.2 TYPES OF STRUCTURAL BREAK TESTS",
+        "page_start": 332,
+        "page_end": 333,
+        "heading_path": "PART 4 > CHAPTER 17 > 17.2 TYPES OF STRUCTURAL BREAK TESTS",
+        "score": 0.734728
+      },
+      "sections": [
+        {
+          "id": "chapter-17-structural_breaks",
+          "module": "structural_breaks",
+          "slug": "structural-breaks",
+          "status": "done",
+          "module_query": "CUSUM tests explosiveness tests SADF",
+          "anchor": {
+            "chunk_id": "afml-S00915-c000410",
+            "chapter": "CHAPTER 17",
+            "section": "17.4 EXPLOSIVENESS TESTS",
+            "page_start": 334,
+            "page_end": 334,
+            "heading_path": "PART 4 > CHAPTER 17 > 17.4 EXPLOSIVENESS TESTS",
+            "score": 0.574059
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00915-c000410",
+              "chapter": "CHAPTER 17",
+              "section": "17.4 EXPLOSIVENESS TESTS",
+              "page_start": 334,
+              "page_end": 334,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.4 EXPLOSIVENESS TESTS",
+              "score": 0.574059
+            },
+            {
+              "chunk_id": "afml-S00912-c000407",
+              "chapter": "CHAPTER 17",
+              "section": "17.3 CUSUM TESTS",
+              "page_start": 333,
+              "page_end": 333,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.3 CUSUM TESTS",
+              "score": 0.571649
+            },
+            {
+              "chunk_id": "afml-S00911-c000406",
+              "chapter": "CHAPTER 17",
+              "section": "17.2 TYPES OF STRUCTURAL BREAK TESTS",
+              "page_start": 332,
+              "page_end": 333,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.2 TYPES OF STRUCTURAL BREAK TESTS",
+              "score": 0.513904
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00915-c000410",
+              "chapter": "CHAPTER 17",
+              "section": "17.4 EXPLOSIVENESS TESTS",
+              "page_start": 334,
+              "page_end": 334,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.4 EXPLOSIVENESS TESTS",
+              "score": 0.574059
+            },
+            {
+              "chunk_id": "afml-S00912-c000407",
+              "chapter": "CHAPTER 17",
+              "section": "17.3 CUSUM TESTS",
+              "page_start": 333,
+              "page_end": 333,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.3 CUSUM TESTS",
+              "score": 0.571649
+            },
+            {
+              "chunk_id": "afml-S00911-c000406",
+              "chapter": "CHAPTER 17",
+              "section": "17.2 TYPES OF STRUCTURAL BREAK TESTS",
+              "page_start": 332,
+              "page_end": 333,
+              "heading_path": "PART 4 > CHAPTER 17 > 17.2 TYPES OF STRUCTURAL BREAK TESTS",
+              "score": 0.513904
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 18",
+      "query": "Shannon entropy Lempel-Ziv",
+      "anchor": {
+        "chunk_id": "afml-S00951-c000430",
+        "chapter": "CHAPTER 18",
+        "section": "18.4 LEMPEL-ZIV ESTIMATORS",
+        "page_start": 352,
+        "page_end": 352,
+        "heading_path": "PART 4 > CHAPTER 18 > 18.4 LEMPEL-ZIV ESTIMATORS",
+        "score": 0.711347
+      },
+      "sections": [
+        {
+          "id": "chapter-18-microstructural_features",
+          "module": "microstructural_features",
+          "slug": "microstructural-features",
+          "status": "done",
+          "module_query": "Kyle lambda Amihud Hasbrouck VPIN Shannon entropy",
+          "anchor": {
+            "chunk_id": "afml-S00947-c000428",
+            "chapter": "CHAPTER 18",
+            "section": "18.2 SHANNON\u2019S ENTROPY",
+            "page_start": 349,
+            "page_end": 350,
+            "heading_path": "PART 4 > CHAPTER 18 > 18.2 SHANNON\u2019S ENTROPY",
+            "score": 0.527655
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00947-c000428",
+              "chapter": "CHAPTER 18",
+              "section": "18.2 SHANNON\u2019S ENTROPY",
+              "page_start": 349,
+              "page_end": 350,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.2 SHANNON\u2019S ENTROPY",
+              "score": 0.527655
+            },
+            {
+              "chunk_id": "afml-S00958-c000435",
+              "chapter": "CHAPTER 18",
+              "section": "18.5 ENCODING SCHEMES",
+              "page_start": 357,
+              "page_end": 357,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.5 ENCODING SCHEMES",
+              "score": 0.468267
+            },
+            {
+              "chunk_id": "afml-S00962-c000439",
+              "chapter": "CHAPTER 18",
+              "section": "18.6 ENTROPY OF A GAUSSIAN PROCESS",
+              "page_start": 358,
+              "page_end": 360,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.6 ENTROPY OF A GAUSSIAN PROCESS",
+              "score": 0.445361
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00947-c000428",
+              "chapter": "CHAPTER 18",
+              "section": "18.2 SHANNON\u2019S ENTROPY",
+              "page_start": 349,
+              "page_end": 350,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.2 SHANNON\u2019S ENTROPY",
+              "score": 0.527655
+            },
+            {
+              "chunk_id": "afml-S00958-c000435",
+              "chapter": "CHAPTER 18",
+              "section": "18.5 ENCODING SCHEMES",
+              "page_start": 357,
+              "page_end": 357,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.5 ENCODING SCHEMES",
+              "score": 0.468267
+            },
+            {
+              "chunk_id": "afml-S00962-c000439",
+              "chapter": "CHAPTER 18",
+              "section": "18.6 ENTROPY OF A GAUSSIAN PROCESS",
+              "page_start": 358,
+              "page_end": 360,
+              "heading_path": "PART 4 > CHAPTER 18 > 18.6 ENTROPY OF A GAUSSIAN PROCESS",
+              "score": 0.445361
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 19",
+      "query": "Kyle lambda Amihud Hasbrouck VPIN",
+      "anchor": {
+        "chunk_id": "afml-S01019-c000487",
+        "chapter": "CHAPTER 19",
+        "section": "19.5 Compute Kyle\u2019s lambda from:",
+        "page_start": 390,
+        "page_end": 390,
+        "heading_path": "PART 4 > CHAPTER 19 > 19.5 Compute Kyle\u2019s lambda from:",
+        "score": 0.471121
+      },
+      "sections": [
+        {
+          "id": "chapter-19-microstructural_features",
+          "module": "microstructural_features",
+          "slug": "microstructural-features",
+          "status": "done",
+          "module_query": "Kyle lambda Amihud Hasbrouck VPIN Shannon entropy",
+          "anchor": {
+            "chunk_id": "afml-S00977-c000451",
+            "chapter": "CHAPTER 19",
+            "section": "18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+            "page_start": 366,
+            "page_end": 367,
+            "heading_path": "PART 4 > CHAPTER 19 > 18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+            "score": 0.473341
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00977-c000451",
+              "chapter": "CHAPTER 19",
+              "section": "18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+              "page_start": 366,
+              "page_end": 367,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+              "score": 0.473341
+            },
+            {
+              "chunk_id": "afml-S00975-c000449",
+              "chapter": "CHAPTER 19",
+              "section": "18.2 Using the bars from exercise 1:",
+              "page_start": 366,
+              "page_end": 366,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.2 Using the bars from exercise 1:",
+              "score": 0.465167
+            },
+            {
+              "chunk_id": "afml-S00978-c000452",
+              "chapter": "CHAPTER 19",
+              "section": "18.5 Suppose a portfolio of 10 holdings with equal dollar allocations.",
+              "page_start": 367,
+              "page_end": 367,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.5 Suppose a portfolio of 10 holdings with equal dollar allocations.",
+              "score": 0.431651
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00977-c000451",
+              "chapter": "CHAPTER 19",
+              "section": "18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+              "page_start": 366,
+              "page_end": 367,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.4 Using the draws from exercise 3, {xt}t = 1,\u2026, 1000:",
+              "score": 0.473341
+            },
+            {
+              "chunk_id": "afml-S00975-c000449",
+              "chapter": "CHAPTER 19",
+              "section": "18.2 Using the bars from exercise 1:",
+              "page_start": 366,
+              "page_end": 366,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.2 Using the bars from exercise 1:",
+              "score": 0.465167
+            },
+            {
+              "chunk_id": "afml-S00978-c000452",
+              "chapter": "CHAPTER 19",
+              "section": "18.5 Suppose a portfolio of 10 holdings with equal dollar allocations.",
+              "page_start": 367,
+              "page_end": 367,
+              "heading_path": "PART 4 > CHAPTER 19 > 18.5 Suppose a portfolio of 10 holdings with equal dollar allocations.",
+              "score": 0.431651
+            }
+          ]
+        },
+        {
+          "id": "chapter-19-codependence",
+          "module": "codependence",
+          "slug": "codependence",
+          "status": "done",
+          "module_query": "mutual information variation of information dependence",
+          "anchor": {
+            "chunk_id": "afml-S00979-c000454",
+            "chapter": "CHAPTER 19",
+            "section": "REFERENCES",
+            "page_start": 367,
+            "page_end": 369,
+            "heading_path": "PART 4 > CHAPTER 19 > REFERENCES",
+            "score": 0.611456
+          },
+          "search_hits": [
+            {
+              "chunk_id": "afml-S00979-c000454",
+              "chapter": "CHAPTER 19",
+              "section": "REFERENCES",
+              "page_start": 367,
+              "page_end": 369,
+              "heading_path": "PART 4 > CHAPTER 19 > REFERENCES",
+              "score": 0.611456
+            },
+            {
+              "chunk_id": "afml-S01013-c000481",
+              "chapter": "CHAPTER 19",
+              "section": "INFORMATION?",
+              "page_start": 387,
+              "page_end": 389,
+              "heading_path": "PART 4 > CHAPTER 19 > INFORMATION?",
+              "score": 0.504485
+            },
+            {
+              "chunk_id": "afml-S00423-c000064",
+              "chapter": "CHAPTER 19",
+              "section": "2.3.2 Information-Driven Bars",
+              "page_start": 59,
+              "page_end": 59,
+              "heading_path": "PART 1 > CHAPTER 19 > 2.3.2 Information-Driven Bars",
+              "score": 0.489615
+            }
+          ],
+          "context_hits": [
+            {
+              "chunk_id": "afml-S00979-c000454",
+              "chapter": "CHAPTER 19",
+              "section": "REFERENCES",
+              "page_start": 367,
+              "page_end": 369,
+              "heading_path": "PART 4 > CHAPTER 19 > REFERENCES",
+              "score": 0.611456
+            },
+            {
+              "chunk_id": "afml-S01013-c000481",
+              "chapter": "CHAPTER 19",
+              "section": "INFORMATION?",
+              "page_start": 387,
+              "page_end": 389,
+              "heading_path": "PART 4 > CHAPTER 19 > INFORMATION?",
+              "score": 0.504485
+            },
+            {
+              "chunk_id": "afml-S00423-c000064",
+              "chapter": "CHAPTER 19",
+              "section": "2.3.2 Information-Driven Bars",
+              "page_start": 59,
+              "page_end": 59,
+              "heading_path": "PART 1 > CHAPTER 19 > 2.3.2 Information-Driven Bars",
+              "score": 0.489615
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

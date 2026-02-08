@@ -1,0 +1,67 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { afmlDocsState } from "../data/afmlDocsState";
+import { chapterCoverage } from "../data/afmlDocs";
+
+const chapters = chapterCoverage();
+const totals = chapters.reduce(
+  (acc, chapter) => {
+    acc.total += chapter.total;
+    acc.done += chapter.done;
+    acc.inProgress += chapter.inProgress;
+    acc.pending += chapter.pending;
+    return acc;
+  },
+  { total: 0, done: 0, inProgress: 0, pending: 0 },
+);
+---
+<Layout title="Coverage • OpenQuant-rs" description="AFML chapter/module documentation coverage status.">
+  <section class="hero">
+    <h1>Documentation Coverage</h1>
+    <p class="muted">Generated from the AFML docs loop state.</p>
+    <p class="muted">Last generated: {afmlDocsState.generatedAt}</p>
+  </section>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Total Sections</th>
+        <th>Done</th>
+        <th>In Progress</th>
+        <th>Pending</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{totals.total}</td>
+        <td>{totals.done}</td>
+        <td>{totals.inProgress}</td>
+        <td>{totals.pending}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {chapters.map((chapter) => (
+    <section>
+      <h2>{chapter.chapter}</h2>
+      <p class="muted">{chapter.theme}</p>
+      <p class="muted">{chapter.done}/{chapter.total} complete ({chapter.completionPct}%)</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Module</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {chapter.sections.map((section) => (
+            <tr>
+              <td><code>{section.module}</code></td>
+              <td>{section.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  ))}
+</Layout>

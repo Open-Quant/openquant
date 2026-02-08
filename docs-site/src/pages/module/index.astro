@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { moduleDocs } from "../../data/moduleDocs";
+import { getSectionsByModule } from "../../data/afmlDocs";
 
 const base = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL.slice(0, -1)
@@ -15,12 +16,17 @@ const sorted = [...moduleDocs].sort((a, b) => a.module.localeCompare(b.module));
   </section>
 
   <div class="grid">
-    {sorted.map((doc) => (
-      <article class="card">
-        <h3><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></h3>
-        <p class="muted">{doc.subject}</p>
-        <p>{doc.summary}</p>
-      </article>
-    ))}
-  </div>
+        {sorted.map((doc) => (
+          <article class="card">
+            <h3><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></h3>
+            <p class="muted">{doc.subject}</p>
+            <p>{doc.summary}</p>
+            <p class="muted">
+              {getSectionsByModule(doc.module)
+                .map((section) => `${section.chapter}:${section.status}`)
+                .join(" • ")}
+            </p>
+          </article>
+        ))}
+      </div>
 </Layout>

@@ -45,3 +45,18 @@ bench-collect:
 
 bench-check:
     python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
+
+docs-loop-init:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh init
+
+docs-loop-status:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh status
+
+docs-loop-next:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh next --print-prompt
+
+docs-loop-export:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh export
+
+docs-loop-evidence:
+    skills/afml-docs-loop/scripts/run_afml_docs_loop.sh evidence
