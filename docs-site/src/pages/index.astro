@@ -7,73 +7,67 @@ const base = import.meta.env.BASE_URL.endsWith("/")
 <Layout title="OpenQuant-rs Documentation" description="Production-grade documentation for OpenQuant-rs: APIs, examples, methodology, and release guidance.">
   <section class="hero">
     <h1>OpenQuant-rs Documentation</h1>
-    <p class="muted">Rust-first quantitative finance toolkit migrated from mlfinlab with tracked parity, CI validation, and benchmark governance.</p>
+    <p class="muted">Subject-first documentation aligned to core AFML domains so navigation follows quant research workflows, not project notes.</p>
   </section>
 
-  <div class="grid">
-    <article class="card">
-      <h3>What You Get</h3>
-      <p>Core quantitative workflows for labeling, sampling, risk metrics, portfolio construction, structural breaks, and model diagnostics.</p>
-    </article>
-    <article class="card">
-      <h3>Current State</h3>
-      <p>Tracked module migration parity is complete. The roadmap parity list is empty and production baseline checks are active.</p>
-    </article>
-    <article class="card">
-      <h3>How To Use This Docs Site</h3>
-      <p>Start with <a href={`${base}/getting-started`}>Getting Started</a>, then move to <a href={`${base}/examples`}>Examples</a> and <a href={`${base}/modules`}>Module Guide</a>.</p>
-    </article>
-  </div>
-
-  <h2>Documentation Map</h2>
+  <h2>Subject Dividers (Used Across All Core Pages)</h2>
   <table>
     <thead>
       <tr>
-        <th>Section</th>
-        <th>When to Use It</th>
+        <th>Subject Divider</th>
+        <th>AFML Orientation</th>
+        <th>What You Find</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><a href={`${base}/getting-started`}>Getting Started</a></td>
-        <td>Install, validate, and run the first meaningful commands.</td>
+        <td>Event-Driven Data and Labeling</td>
+        <td>Ch. 2-3</td>
+        <td>Bars, filters, triple-barrier labeling, sample events.</td>
       </tr>
       <tr>
-        <td><a href={`${base}/modules`}>Module Guide</a></td>
-        <td>Understand the library structure by functional area.</td>
+        <td>Sampling, Validation and ML Diagnostics</td>
+        <td>Ch. 4, 7</td>
+        <td>Sequential bootstrapping, purged CV, feature importance, model fingerprinting.</td>
       </tr>
       <tr>
-        <td><a href={`${base}/api-reference`}>API Reference</a></td>
-        <td>Find major public functions and types quickly.</td>
+        <td>Position Sizing and Trade Construction</td>
+        <td>Ch. 10</td>
+        <td>Probability/dynamic/budget/reserve bet sizing, ETF and futures roll helpers.</td>
       </tr>
       <tr>
-        <td><a href={`${base}/examples`}>Examples</a></td>
-        <td>Copy practical pipeline examples for research and production prototyping.</td>
+        <td>Portfolio Construction and Risk</td>
+        <td>Ch. 16 + risk overlays</td>
+        <td>CLA, HRP, HCAA, ONC, mean-variance family, VaR/ES/CDaR, backtest stats.</td>
       </tr>
       <tr>
-        <td><a href={`${base}/migration-parity`}>Parity</a></td>
-        <td>Review migration status and parity governance.</td>
-      </tr>
-      <tr>
-        <td><a href={`${base}/performance`}>Performance</a></td>
-        <td>Understand benchmark methodology and regression checks.</td>
-      </tr>
-      <tr>
-        <td><a href={`${base}/publishing`}>Publishing</a></td>
-        <td>Release the crate and docs with confidence.</td>
-      </tr>
-      <tr>
-        <td><a href={`${base}/contributing`}>Contributing</a></td>
-        <td>Follow coding, testing, and documentation standards.</td>
-      </tr>
-      <tr>
-        <td><a href={`${base}/faq`}>FAQ</a></td>
-        <td>Resolve operational questions quickly.</td>
+        <td>Market Microstructure, Dependence and Regime Detection</td>
+        <td>Microstructure + diagnostics</td>
+        <td>Kyle/Amihud/Hasbrouck lambdas, entropy features, codependence, SADF/CUSUM-style regimes.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>Primary Validation Commands</h2>
+  <h2>Where To Read</h2>
+  <div class="grid">
+    <article class="card">
+      <h3><a href={`${base}/modules`}>Subjects (AFML)</a></h3>
+      <p>Conceptual map from subject to OpenQuant modules.</p>
+    </article>
+    <article class="card">
+      <h3><a href={`${base}/api-reference`}>API by Subject</a></h3>
+      <p>Primary functions and public types grouped by the same subject dividers.</p>
+    </article>
+    <article class="card">
+      <h3><a href={`${base}/examples`}>Examples by Subject</a></h3>
+      <p>Working snippets organized with the same domain taxonomy.</p>
+    </article>
+  </div>
+
+  <h2>Engineering and Release Tracks</h2>
+  <p><a href={`${base}/performance`}>Performance</a> and <a href={`${base}/publishing`}>Publishing</a> stay separate from the subject docs so research navigation remains clean.</p>
+
+  <h2>Validation Commands</h2>
   <pre><code class="language-bash"># Fast CI equivalent
 cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 

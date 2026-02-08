@@ -3,11 +3,11 @@ import Layout from "../layouts/Layout.astro";
 ---
 <Layout title="Examples • OpenQuant-rs" description="Practical OpenQuant-rs examples for quant workflows.">
   <section class="hero">
-    <h1>Examples</h1>
-    <p class="muted">Examples are oriented around practical research pipelines rather than isolated one-off calls.</p>
+    <h1>Examples by Subject</h1>
+    <p class="muted">Examples follow the same five subject dividers used in the index, subjects, and API pages.</p>
   </section>
 
-  <h2>1. Triple-Barrier Labeling Pipeline</h2>
+  <h2>1. Event-Driven Data and Labeling</h2>
 <pre><code class="language-rust">use chrono::NaiveDateTime;
 use openquant::filters::&#123;cusum_filter_timestamps, Threshold&#125;;
 use openquant::labeling::&#123;add_vertical_barrier, get_bins, get_events&#125;;
@@ -33,7 +33,35 @@ let labeled_events = get_events(
 );
 let labels = get_bins(&labeled_events, &close);</code></pre>
 
-  <h2>2. Mean-Variance Allocation</h2>
+  <h2>2. Sampling, Validation and ML Diagnostics</h2>
+  <pre><code class="language-rust">use openquant::sampling::seq_bootstrap;
+use openquant::cross_validation::&#123;ml_cross_val_score, PurgedKFold, Scoring&#125;;
+
+let ind_mat = vec![vec![1, 0, 1], vec![0, 1, 1], vec![1, 1, 0]];
+let boot = seq_bootstrap(&ind_mat, Some(3), None);
+
+// Use PurgedKFold and ml_cross_val_score with your classifier implementation.
+let _ = (boot, Scoring::NegLogLoss);</code></pre>
+
+  <h2>3. Position Sizing and Trade Construction</h2>
+  <pre><code class="language-rust">use openquant::bet_sizing::bet_size_probability;
+use chrono::NaiveDateTime;
+
+let ts0 = NaiveDateTime::parse_from_str("2024-01-01 09:30:00", "%Y-%m-%d %H:%M:%S")?;
+let ts1 = NaiveDateTime::parse_from_str("2024-01-01 16:00:00", "%Y-%m-%d %H:%M:%S")?;
+let events = vec![
+    (ts0, ts1, 0.55, 1.0),
+    (ts0, ts1, 0.62, 1.0),
+    (ts0, ts1, 0.48, -1.0),
+];
+let size = bet_size_probability(
+    &events,
+    2,
+    0.1,
+    false,
+);</code></pre>
+
+  <h2>4. Portfolio Construction and Risk</h2>
 <pre><code class="language-rust">use nalgebra::DMatrix;
 use openquant::portfolio_optimization::&#123;
     allocate_max_sharpe, allocate_min_vol, AllocationOptions, ReturnsMethod
@@ -49,18 +77,17 @@ let opts = AllocationOptions &#123;
 &#125;;
 let exp_weighted = openquant::portfolio_optimization::allocate_inverse_variance_with(&prices, &opts)?;</code></pre>
 
-  <h2>3. Risk Metrics Snapshot</h2>
+  <h2>5. Market Microstructure, Dependence and Regime Detection</h2>
   <pre><code class="language-rust">use openquant::risk_metrics::RiskMetrics;
+use openquant::microstructural_features::get_roll_measure;
+use openquant::structural_breaks::get_sadf;
 
 let returns = vec![-0.015, 0.007, 0.011, -0.006, 0.004];
 let var_95 = RiskMetrics::calculate_value_at_risk(&returns, 0.05)?;
 let es_95 = RiskMetrics::calculate_expected_shortfall(&returns, 0.05)?;
-let cdar_95 = RiskMetrics::calculate_conditional_drawdown_risk(&returns, 0.05)?;</code></pre>
-
-  <h2>4. Performance Snapshot Update</h2>
-  <pre><code class="language-bash">cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
-python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
-python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></pre>
+let spread = get_roll_measure(&[100.0, 100.2, 100.1, 100.3], 2);
+let _ = (es_95, var_95, spread);
+// get_sadf(...) is typically run on longer time series with explicit lag config.</code></pre>
 
   <h2>Example Design Principles</h2>
   <ul>

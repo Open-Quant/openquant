@@ -3,60 +3,49 @@ import Layout from "../layouts/Layout.astro";
 ---
 <Layout title="API Reference • OpenQuant-rs" description="High-level API reference for OpenQuant-rs public interfaces.">
   <section class="hero">
-    <h1>API Reference</h1>
-    <p class="muted">This page catalogs major public entry points. For full signatures and rustdoc details, use generated crate docs during local builds.</p>
+    <h1>API by Subject</h1>
+    <p class="muted">Public entry points grouped using the same five subject dividers as the index and subject map.</p>
   </section>
 
-  <h2>Risk Metrics</h2>
+  <h2>1. Event-Driven Data and Labeling</h2>
   <ul>
-    <li><code>RiskMetrics::calculate_value_at_risk</code></li>
-    <li><code>RiskMetrics::calculate_expected_shortfall</code></li>
-    <li><code>RiskMetrics::calculate_conditional_drawdown_risk</code></li>
-    <li><code>RiskMetrics::calculate_variance</code></li>
+    <li><code>data_structures::standard_bars</code>, <code>data_structures::time_bars</code>, <code>data_structures::run_bars</code>, <code>data_structures::imbalance_bars</code></li>
+    <li><code>filters::cusum_filter_indices</code>, <code>filters::cusum_filter_timestamps</code>, <code>filters::z_score_filter_indices</code></li>
+    <li><code>labeling::add_vertical_barrier</code>, <code>labeling::get_events</code>, <code>labeling::get_bins</code>, <code>labeling::drop_labels</code></li>
+    <li><code>sample_weights::get_weights_by_return</code>, <code>sample_weights::get_weights_by_time_decay</code></li>
   </ul>
 
-  <h2>Portfolio Optimization</h2>
+  <h2>2. Sampling, Validation and ML Diagnostics</h2>
   <ul>
-    <li><code>allocate_inverse_variance</code>, <code>allocate_min_vol</code>, <code>allocate_max_sharpe</code>, <code>allocate_efficient_risk</code></li>
-    <li><code>allocate_from_inputs</code>, <code>allocate_with_solution</code></li>
-    <li><code>AllocationOptions</code>, <code>ReturnsMethod</code>, <code>MeanVariance</code></li>
-  </ul>
-
-  <h2>Labeling and Sampling</h2>
-  <ul>
-    <li><code>labeling::get_events</code>, <code>labeling::get_bins</code>, <code>labeling::drop_labels</code></li>
-    <li><code>filters::cusum_filter_indices</code>, <code>filters::z_score_filter_indices</code></li>
-    <li><code>sampling::seq_bootstrap</code>, <code>sampling::get_ind_matrix</code></li>
-  </ul>
-
-  <h2>Structural Breaks and Fractional Differentiation</h2>
-  <ul>
-    <li><code>structural_breaks::get_chow_type_stat</code></li>
-    <li><code>structural_breaks::get_chu_stinchcombe_white_statistics</code></li>
-    <li><code>structural_breaks::get_sadf</code></li>
-    <li><code>fracdiff::frac_diff</code>, <code>fracdiff::frac_diff_ffd</code></li>
-  </ul>
-
-  <h2>Microstructure</h2>
-  <ul>
-    <li><code>get_roll_measure</code>, <code>get_corwin_schultz_estimator</code>, <code>get_bekker_parkinson_vol</code></li>
-    <li><code>get_bar_based_kyle_lambda</code>, <code>get_bar_based_amihud_lambda</code>, <code>get_bar_based_hasbrouck_lambda</code></li>
-    <li><code>MicrostructuralFeaturesGenerator</code></li>
-  </ul>
-
-  <h2>Bet Sizing</h2>
-  <ul>
-    <li><code>bet_size_probability</code>, <code>bet_size_dynamic</code>, <code>bet_size_budget</code></li>
-    <li><code>bet_size_reserve</code>, <code>bet_size_reserve_with_fit</code>, <code>bet_size_reserve_full</code></li>
-    <li><code>get_target_pos</code>, <code>limit_price</code>, <code>discrete_signal</code></li>
-  </ul>
-
-  <h2>Model Diagnostics</h2>
-  <ul>
-    <li><code>feature_importance::mean_decrease_impurity</code></li>
-    <li><code>feature_importance::mean_decrease_accuracy</code></li>
-    <li><code>feature_importance::single_feature_importance</code></li>
+    <li><code>sampling::seq_bootstrap</code>, <code>sampling::get_ind_matrix</code>, <code>sampling::get_ind_mat_average_uniqueness</code></li>
+    <li><code>cross_validation::ml_cross_val_score</code>, <code>cross_validation::ml_get_train_times</code>, <code>cross_validation::PurgedKFold</code></li>
+    <li><code>feature_importance::mean_decrease_impurity</code>, <code>feature_importance::mean_decrease_accuracy</code>, <code>feature_importance::single_feature_importance</code></li>
     <li><code>fingerprint::RegressionModelFingerprint</code>, <code>fingerprint::ClassificationModelFingerprint</code></li>
+    <li><code>sb_bagging::SequentiallyBootstrappedBaggingClassifier</code>, <code>sb_bagging::SequentiallyBootstrappedBaggingRegressor</code></li>
+  </ul>
+
+  <h2>3. Position Sizing and Trade Construction</h2>
+  <ul>
+    <li><code>bet_sizing::bet_size_probability</code>, <code>bet_sizing::bet_size_dynamic</code>, <code>bet_sizing::bet_size_budget</code>, <code>bet_sizing::bet_size_reserve</code></li>
+    <li><code>bet_sizing::get_target_pos</code>, <code>bet_sizing::limit_price</code>, <code>bet_sizing::discrete_signal</code></li>
+    <li><code>etf_trick::EtfTrick</code>, <code>etf_trick::get_futures_roll_series</code></li>
+  </ul>
+
+  <h2>4. Portfolio Construction and Risk</h2>
+  <ul>
+    <li><code>portfolio_optimization::allocate_inverse_variance</code>, <code>allocate_min_vol</code>, <code>allocate_max_sharpe</code>, <code>allocate_efficient_risk</code></li>
+    <li><code>portfolio_optimization::AllocationOptions</code>, <code>ReturnsMethod</code>, <code>MeanVariance</code></li>
+    <li><code>cla::CLA</code>, <code>hrp::HierarchicalRiskParity</code>, <code>hcaa::HierarchicalClusteringAssetAllocation</code>, <code>onc::get_onc_clusters</code></li>
+    <li><code>RiskMetrics::calculate_value_at_risk</code>, <code>RiskMetrics::calculate_expected_shortfall</code>, <code>RiskMetrics::calculate_conditional_drawdown_risk</code></li>
+    <li><code>backtest_statistics::sharpe_ratio</code>, <code>backtest_statistics::deflated_sharpe_ratio</code>, <code>backtest_statistics::drawdown_and_time_under_water</code></li>
+  </ul>
+
+  <h2>5. Market Microstructure, Dependence and Regime Detection</h2>
+  <ul>
+    <li><code>microstructural_features::get_roll_measure</code>, <code>get_corwin_schultz_estimator</code>, <code>get_bekker_parkinson_vol</code>, <code>MicrostructuralFeaturesGenerator</code></li>
+    <li><code>codependence::distance_correlation</code>, <code>codependence::get_mutual_info</code>, <code>codependence::variation_of_information_score</code></li>
+    <li><code>structural_breaks::get_chow_type_stat</code>, <code>get_chu_stinchcombe_white_statistics</code>, <code>get_sadf</code></li>
+    <li><code>fracdiff::frac_diff</code>, <code>fracdiff::frac_diff_ffd</code>, <code>util::fast_ewma::ewma</code></li>
   </ul>
 
   <h2>Generate Local Rustdoc</h2>

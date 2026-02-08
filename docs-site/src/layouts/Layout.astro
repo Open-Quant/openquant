@@ -10,14 +10,13 @@ const base = import.meta.env.BASE_URL.endsWith("/")
 const nav = [
   { href: `${base}/`, label: "Overview" },
   { href: `${base}/getting-started`, label: "Getting Started" },
-  { href: `${base}/modules`, label: "Module Guide" },
-  { href: `${base}/api-reference`, label: "API Reference" },
-  { href: `${base}/examples`, label: "Examples" },
-  { href: `${base}/migration-parity`, label: "Parity" },
+  { href: `${base}/modules`, label: "Subjects (AFML)" },
+  { href: `${base}/api-reference`, label: "API by Subject" },
+  { href: `${base}/examples`, label: "Examples by Subject" },
   { href: `${base}/performance`, label: "Performance" },
   { href: `${base}/publishing`, label: "Publishing" },
-  { href: `${base}/contributing`, label: "Contributing" },
   { href: `${base}/faq`, label: "FAQ" },
+  { href: `${base}/contributing`, label: "Contributing" },
 ];
 
 const path = Astro.url.pathname.endsWith("/")
