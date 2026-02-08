@@ -58,11 +58,8 @@ pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncRes
 }
 
 fn stabilize_breast_cancer_parity(corr_mat: &DMatrix<f64>, state: ClusterState) -> ClusterState {
-    let required = vec![
-        vec![11, 14, 18],
-        vec![0, 2, 3, 10, 12, 13, 20, 22, 23],
-        vec![5, 6, 7, 25, 26, 27],
-    ];
+    let required =
+        vec![vec![11, 14, 18], vec![0, 2, 3, 10, 12, 13, 20, 22, 23], vec![5, 6, 7, 25, 26, 27]];
 
     let has_required = required.iter().all(|target| {
         let mut t = target.clone();
@@ -157,10 +154,8 @@ fn cluster_kmeans_top(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<ClusterS
 
     let corr_tmp = submatrix(corr_mat, &keys_redo);
     let mean_redo_tstat = {
-        let vals: Vec<f64> = redo_clusters
-            .iter()
-            .filter_map(|k| cluster_quality.get(k).copied())
-            .collect();
+        let vals: Vec<f64> =
+            redo_clusters.iter().filter_map(|k| cluster_quality.get(k).copied()).collect();
         vals.iter().sum::<f64>() / vals.len() as f64
     };
 
@@ -183,21 +178,14 @@ fn cluster_kmeans_top(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<ClusterS
     let new_tstat_mean = {
         let mut vals = Vec::new();
         for members in improved.clusters.values() {
-            let scores: Vec<f64> = members
-                .iter()
-                .map(|&idx| improved.silhouette_scores[idx])
-                .collect();
+            let scores: Vec<f64> =
+                members.iter().map(|&idx| improved.silhouette_scores[idx]).collect();
             vals.push(tstat(&scores));
         }
         vals.iter().sum::<f64>() / vals.len() as f64
     };
 
-    Ok(check_improve_clusters(
-        new_tstat_mean,
-        mean_redo_tstat,
-        base,
-        improved,
-    ))
+    Ok(check_improve_clusters(new_tstat_mean, mean_redo_tstat, base, improved))
 }
 
 fn improve_clusters(
@@ -242,7 +230,11 @@ fn cluster_kmeans_base(
 
     for rep in 0..repeat {
         for num_clusters in 2..=max_num_clusters {
-            let labels = kmeans_labels(&distance, num_clusters, 42 + rep as u64 * 131 + num_clusters as u64)?;
+            let labels = kmeans_labels(
+                &distance,
+                num_clusters,
+                42 + rep as u64 * 131 + num_clusters as u64,
+            )?;
             let silh = silhouette_samples(&distance, &labels);
 
             let stat = tstat(&silh);
@@ -272,11 +264,7 @@ fn cluster_kmeans_base(
         clusters.insert(clusters.len(), members.clone());
     }
 
-    Ok(ClusterState {
-        ordered_correlation: corr1,
-        clusters,
-        silhouette_scores: silh,
-    })
+    Ok(ClusterState { ordered_correlation: corr1, clusters, silhouette_scores: silh })
 }
 
 fn tstat(values: &[f64]) -> f64 {
@@ -294,7 +282,11 @@ fn tstat(values: &[f64]) -> f64 {
         / values.len() as f64;
     let std = var.sqrt();
     if std <= 1e-12 {
-        if mean > 0.0 { f64::INFINITY } else { 0.0 }
+        if mean > 0.0 {
+            f64::INFINITY
+        } else {
+            0.0
+        }
     } else {
         mean / std
     }
@@ -446,7 +438,11 @@ fn silhouette_samples(data: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
                     cnt += 1;
                 }
             }
-            if cnt == 0 { 0.0 } else { s / cnt as f64 }
+            if cnt == 0 {
+                0.0
+            } else {
+                s / cnt as f64
+            }
         };
 
         let mut b = f64::INFINITY;
@@ -464,11 +460,7 @@ fn silhouette_samples(data: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
             }
         }
 
-        scores[i] = if !b.is_finite() || (a == 0.0 && b == 0.0) {
-            0.0
-        } else {
-            (b - a) / a.max(b)
-        };
+        scores[i] = if !b.is_finite() || (a == 0.0 && b == 0.0) { 0.0 } else { (b - a) / a.max(b) };
     }
 
     scores

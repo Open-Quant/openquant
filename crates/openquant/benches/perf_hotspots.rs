@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use chrono::{Duration, NaiveDate, NaiveDateTime};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use openquant::bet_sizing::{bet_size_reserve, bet_size_reserve_full};
 use openquant::structural_breaks::{get_sadf, SadfLags};
 

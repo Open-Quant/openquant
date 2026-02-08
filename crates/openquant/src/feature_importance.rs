@@ -48,16 +48,8 @@ pub fn mean_decrease_impurity(
     let denom: f64 = means.iter().filter(|v| v.is_finite()).sum();
     let mut out = BTreeMap::new();
     for (j, name) in feature_names.iter().enumerate() {
-        let mean = if denom > 0.0 && means[j].is_finite() {
-            means[j] / denom
-        } else {
-            0.0
-        };
-        let std = if denom > 0.0 && stderrs[j].is_finite() {
-            stderrs[j] / denom
-        } else {
-            0.0
-        };
+        let mean = if denom > 0.0 && means[j].is_finite() { means[j] / denom } else { 0.0 };
+        let std = if denom > 0.0 && stderrs[j].is_finite() { stderrs[j] / denom } else { 0.0 };
         out.insert(name.clone(), ImportanceStats { mean, std });
     }
     Ok(out)
@@ -133,10 +125,7 @@ pub fn single_feature_importance<C: SimpleClassifier>(
         let (mean, std) = mean_std(&scores);
         out.insert(
             name.clone(),
-            ImportanceStats {
-                mean,
-                std: std * (scores.len() as f64).powf(-0.5),
-            },
+            ImportanceStats { mean, std: std * (scores.len() as f64).powf(-0.5) },
         );
     }
     Ok(out)
@@ -150,10 +139,7 @@ pub fn get_orthogonal_features(
         return Ok(Vec::new());
     }
     let (_, evec, x_std) = compute_pca(feature_rows, variance_thresh)?;
-    Ok((to_dmatrix(&x_std) * evec)
-        .row_iter()
-        .map(|r| r.iter().copied().collect())
-        .collect())
+    Ok((to_dmatrix(&x_std) * evec).row_iter().map(|r| r.iter().copied().collect()).collect())
 }
 
 pub fn feature_pca_analysis(
@@ -199,12 +185,7 @@ pub fn feature_pca_analysis(
     let inv_rank: Vec<f64> = pca_rank.iter().map(|r| 1.0 / *r as f64).collect();
     let weighted = weighted_kendall_tau(feature_importance_mean, &inv_rank);
 
-    Ok(PcaCorrelation {
-        pearson,
-        spearman,
-        kendall,
-        weighted_kendall_rank: weighted,
-    })
+    Ok(PcaCorrelation { pearson, spearman, kendall, weighted_kendall_rank: weighted })
 }
 
 pub fn plot_feature_importance(
@@ -237,9 +218,7 @@ fn compute_pca(
 
     let mut idx: Vec<usize> = (0..eig.eigenvalues.len()).collect();
     idx.sort_by(|&a, &b| {
-        eig.eigenvalues[b]
-            .partial_cmp(&eig.eigenvalues[a])
-            .unwrap_or(std::cmp::Ordering::Equal)
+        eig.eigenvalues[b].partial_cmp(&eig.eigenvalues[a]).unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut eval = Vec::with_capacity(idx.len());
     let mut evec_cols = Vec::with_capacity(idx.len());
@@ -309,7 +288,11 @@ fn score_model<C: SimpleClassifier>(
                     num += w;
                 }
             }
-            if den > 0.0 { num / den } else { 0.0 }
+            if den > 0.0 {
+                num / den
+            } else {
+                0.0
+            }
         }
         Scoring::NegLogLoss => {
             let probs = model.predict_proba(x_test);
@@ -322,7 +305,11 @@ fn score_model<C: SimpleClassifier>(
                 loss += w * (-(y_test[i] * p.ln() + (1.0 - y_test[i]) * (1.0 - p).ln()));
                 den += w;
             }
-            if den > 0.0 { -(loss / den) } else { 0.0 }
+            if den > 0.0 {
+                -(loss / den)
+            } else {
+                0.0
+            }
         }
     }
 }
@@ -343,11 +330,7 @@ fn pack_stats(feature_names: &[String], values: &[Vec<f64>]) -> BTreeMap<String,
     for (j, name) in feature_names.iter().enumerate() {
         let (m, s) = mean_std(&values[j]);
         let mean = if m.is_finite() { m } else { 0.0 };
-        let std = if s.is_finite() {
-            s * (values[j].len() as f64).powf(-0.5)
-        } else {
-            0.0
-        };
+        let std = if s.is_finite() { s * (values[j].len() as f64).powf(-0.5) } else { 0.0 };
         out.insert(name.clone(), ImportanceStats { mean, std });
     }
     out
@@ -391,15 +374,7 @@ fn standardize(rows: &[Vec<f64>]) -> Vec<Vec<f64>> {
 
     rows.iter()
         .map(|r| {
-            (0..m)
-                .map(|j| {
-                    if stds[j] > 0.0 {
-                        (r[j] - means[j]) / stds[j]
-                    } else {
-                        0.0
-                    }
-                })
-                .collect()
+            (0..m).map(|j| if stds[j] > 0.0 { (r[j] - means[j]) / stds[j] } else { 0.0 }).collect()
         })
         .collect()
 }
@@ -436,11 +411,7 @@ fn pearson_corr(x: &[f64], y: &[f64]) -> f64 {
 
 fn rank_desc(values: &[f64]) -> Vec<usize> {
     let mut idx: Vec<usize> = (0..values.len()).collect();
-    idx.sort_by(|&a, &b| {
-        values[b]
-            .partial_cmp(&values[a])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    idx.sort_by(|&a, &b| values[b].partial_cmp(&values[a]).unwrap_or(std::cmp::Ordering::Equal));
     let mut rank = vec![0usize; values.len()];
     for (r, i) in idx.iter().enumerate() {
         rank[*i] = r + 1;
@@ -473,7 +444,11 @@ fn kendall_tau(x: &[f64], y: &[f64]) -> f64 {
         }
     }
     let denom = c + d;
-    if denom == 0.0 { 0.0 } else { (c - d) / denom }
+    if denom == 0.0 {
+        0.0
+    } else {
+        (c - d) / denom
+    }
 }
 
 fn weighted_kendall_tau(x: &[f64], y: &[f64]) -> f64 {
@@ -496,5 +471,9 @@ fn weighted_kendall_tau(x: &[f64], y: &[f64]) -> f64 {
         }
     }
     let denom = c + d;
-    if denom == 0.0 { 0.0 } else { (c - d) / denom }
+    if denom == 0.0 {
+        0.0
+    } else {
+        (c - d) / denom
+    }
 }

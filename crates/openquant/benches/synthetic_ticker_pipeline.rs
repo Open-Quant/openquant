@@ -53,9 +53,7 @@ fn bench_risk_metrics_on_ticker(c: &mut Criterion) {
         b.iter(|| {
             let var = rm.calculate_value_at_risk(black_box(&rets), 0.05).unwrap();
             let es = rm.calculate_expected_shortfall(black_box(&rets), 0.05).unwrap();
-            let cdar = rm
-                .calculate_conditional_drawdown_risk(black_box(&rets), 0.05)
-                .unwrap();
+            let cdar = rm.calculate_conditional_drawdown_risk(black_box(&rets), 0.05).unwrap();
             black_box((var, es, cdar));
         });
     });
@@ -89,14 +87,16 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
 
                 let n = rets.len().min(1000);
                 let mut cov = DMatrix::zeros(3, 3);
-                let mut cols = [Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n)];
+                let mut cols =
+                    [Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n)];
                 for i in 0..n {
                     let r = rets[i];
                     cols[0].push(r);
                     cols[1].push((1.0 + r).ln());
                     cols[2].push(r * r.signum());
                 }
-                let means: Vec<f64> = cols.iter().map(|v| v.iter().sum::<f64>() / v.len() as f64).collect();
+                let means: Vec<f64> =
+                    cols.iter().map(|v| v.iter().sum::<f64>() / v.len() as f64).collect();
                 for i in 0..3 {
                     for j in 0..3 {
                         let mut s = 0.0;

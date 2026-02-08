@@ -64,7 +64,13 @@ pub fn get_parksinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec<f64> 
 
 /// Garman-Klass volatility estimator.
 /// Mirrors mlfinlab.util.volatility.get_garman_class_vol.
-pub fn get_garman_class_vol(open: &[f64], high: &[f64], low: &[f64], close: &[f64], window: usize) -> Vec<f64> {
+pub fn get_garman_class_vol(
+    open: &[f64],
+    high: &[f64],
+    low: &[f64],
+    close: &[f64],
+    window: usize,
+) -> Vec<f64> {
     assert_eq!(open.len(), high.len(), "open/high length mismatch");
     assert_eq!(open.len(), low.len(), "open/low length mismatch");
     assert_eq!(open.len(), close.len(), "open/close length mismatch");
@@ -155,13 +161,7 @@ pub fn get_yang_zhang_vol(
 fn rolling_sqrt_mean(values: &[f64], window: usize) -> Vec<f64> {
     rolling_sum_with_min_periods(values, window, window)
         .iter()
-        .map(|&x| {
-            if x.is_nan() {
-                f64::NAN
-            } else {
-                (x / window as f64).sqrt()
-            }
-        })
+        .map(|&x| if x.is_nan() { f64::NAN } else { (x / window as f64).sqrt() })
         .collect()
 }
 

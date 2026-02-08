@@ -13,9 +13,7 @@ fn load_prices_and_names() -> (DMatrix<f64>, Vec<String>) {
     let mut rows: Vec<Vec<f64>> = Vec::new();
     for rec in rdr.records() {
         let row = rec.unwrap();
-        rows.push(
-            row.iter().skip(1).map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>(),
-        );
+        rows.push(row.iter().skip(1).map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>());
     }
     let nrows = rows.len();
     let ncols = rows[0].len();
@@ -63,18 +61,8 @@ fn assert_basic_weights(weights: &[f64], n_assets: usize) {
 fn test_hcaa_equal_weight() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
-    hcaa.allocate(
-        &names,
-        Some(&prices),
-        None,
-        None,
-        None,
-        "equal_weighting",
-        0.05,
-        Some(5),
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, Some(&prices), None, None, None, "equal_weighting", 0.05, Some(5), None)
+        .unwrap();
     assert_basic_weights(&hcaa.weights, names.len());
 }
 
@@ -82,18 +70,8 @@ fn test_hcaa_equal_weight() {
 fn test_hcaa_min_variance() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
-    hcaa.allocate(
-        &names,
-        Some(&prices),
-        None,
-        None,
-        None,
-        "minimum_variance",
-        0.05,
-        Some(5),
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, Some(&prices), None, None, None, "minimum_variance", 0.05, Some(5), None)
+        .unwrap();
     assert_basic_weights(&hcaa.weights, names.len());
 }
 
@@ -120,18 +98,8 @@ fn test_hcaa_min_standard_deviation() {
 fn test_hcaa_sharpe_ratio_mean() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");
-    hcaa.allocate(
-        &names,
-        Some(&prices),
-        None,
-        None,
-        None,
-        "sharpe_ratio",
-        0.05,
-        Some(5),
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, Some(&prices), None, None, None, "sharpe_ratio", 0.05, Some(5), None)
+        .unwrap();
     assert_basic_weights(&hcaa.weights, names.len());
 }
 
@@ -139,18 +107,8 @@ fn test_hcaa_sharpe_ratio_mean() {
 fn test_hcaa_sharpe_ratio_exponential() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::new("exponential");
-    hcaa.allocate(
-        &names,
-        Some(&prices),
-        None,
-        None,
-        None,
-        "sharpe_ratio",
-        0.05,
-        Some(5),
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, Some(&prices), None, None, None, "sharpe_ratio", 0.05, Some(5), None)
+        .unwrap();
     assert_basic_weights(&hcaa.weights, names.len());
 }
 
@@ -159,17 +117,7 @@ fn test_value_error_for_unknown_returns() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::new("unknown_returns");
     let err = hcaa
-        .allocate(
-            &names,
-            Some(&prices),
-            None,
-            None,
-            None,
-            "sharpe_ratio",
-            0.05,
-            Some(5),
-            None,
-        )
+        .allocate(&names, Some(&prices), None, None, None, "sharpe_ratio", 0.05, Some(5), None)
         .unwrap_err();
     assert!(matches!(err, HcaaError::UnknownReturns(_)));
 }
@@ -180,17 +128,7 @@ fn test_value_error_for_sharpe_ratio_without_prices_or_expected() {
     let returns = returns_from_prices(&prices);
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
     let err = hcaa
-        .allocate(
-            &names,
-            None,
-            Some(&returns),
-            None,
-            None,
-            "sharpe_ratio",
-            0.05,
-            Some(5),
-            None,
-        )
+        .allocate(&names, None, Some(&returns), None, None, "sharpe_ratio", 0.05, Some(5), None)
         .unwrap_err();
     assert_eq!(err, HcaaError::MissingExpectedReturnsForSharpe);
 }
@@ -237,18 +175,8 @@ fn test_hcaa_conditional_drawdown_risk() {
 fn test_quasi_diagonalization() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
-    hcaa.allocate(
-        &names,
-        Some(&prices),
-        None,
-        None,
-        None,
-        "equal_weighting",
-        0.05,
-        Some(5),
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, Some(&prices), None, None, None, "equal_weighting", 0.05, Some(5), None)
+        .unwrap();
     assert_eq!(
         hcaa.ordered_indices,
         vec![13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19]
@@ -260,17 +188,7 @@ fn test_all_inputs_none() {
     let (_, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
     let err = hcaa
-        .allocate(
-            &names,
-            None,
-            None,
-            None,
-            None,
-            "equal_weighting",
-            0.05,
-            Some(5),
-            None,
-        )
+        .allocate(&names, None, None, None, None, "equal_weighting", 0.05, Some(5), None)
         .unwrap_err();
     assert_eq!(err, HcaaError::NoData);
 }
@@ -280,18 +198,8 @@ fn test_hcaa_with_input_as_returns() {
     let (prices, names) = load_prices_and_names();
     let returns = returns_from_prices(&prices);
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
-    hcaa.allocate(
-        &names,
-        None,
-        Some(&returns),
-        None,
-        None,
-        "equal_weighting",
-        0.05,
-        None,
-        None,
-    )
-    .unwrap();
+    hcaa.allocate(&names, None, Some(&returns), None, None, "equal_weighting", 0.05, None, None)
+        .unwrap();
     assert_basic_weights(&hcaa.weights, names.len());
 }
 
@@ -321,17 +229,7 @@ fn test_value_error_for_allocation_metric() {
     let (prices, names) = load_prices_and_names();
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
     let err = hcaa
-        .allocate(
-            &names,
-            Some(&prices),
-            None,
-            None,
-            None,
-            "random_metric",
-            0.05,
-            Some(5),
-            None,
-        )
+        .allocate(&names, Some(&prices), None, None, None, "random_metric", 0.05, Some(5), None)
         .unwrap_err();
     assert!(matches!(err, HcaaError::UnknownAllocationMetric(_)));
 }

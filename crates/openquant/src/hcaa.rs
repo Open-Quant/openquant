@@ -76,7 +76,9 @@ impl HierarchicalClusteringAssetAllocation {
             DMatrix::zeros(0, n_assets)
         };
         if returns_owned.ncols() != n_assets && returns_owned.nrows() > 0 {
-            return Err(HcaaError::DimensionMismatch("asset_returns columns != asset_names length"));
+            return Err(HcaaError::DimensionMismatch(
+                "asset_returns columns != asset_names length",
+            ));
         }
 
         let covariance_owned = if let Some(cov) = covariance_matrix {
@@ -124,8 +126,7 @@ impl HierarchicalClusteringAssetAllocation {
         // Keep deterministic parity with the canonical mlfinlab stock_prices fixture order.
         if n_assets == 23 {
             self.ordered_indices = vec![
-                13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5,
-                19,
+                13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19,
             ];
         }
         self.weights = recursive_bisection(
@@ -285,8 +286,7 @@ fn single_linkage_children(corr: &DMatrix<f64>) -> Vec<[usize; 2]> {
         }
     }
 
-    let mut clusters: Vec<Cluster> =
-        (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
+    let mut clusters: Vec<Cluster> = (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
     let mut next_id = n;
     let mut children: Vec<[usize; 2]> = Vec::with_capacity(n.saturating_sub(1));
     let eps = 1e-12;
@@ -308,12 +308,8 @@ fn single_linkage_children(corr: &DMatrix<f64>) -> Vec<[usize; 2]> {
                         d = d.min(distance[(a, b)]);
                     }
                 }
-                let ids = (
-                    clusters[i].id.min(clusters[j].id),
-                    clusters[i].id.max(clusters[j].id),
-                );
-                let better = d + eps < best_d
-                    || ((d - best_d).abs() <= eps && ids < best_pair_ids);
+                let ids = (clusters[i].id.min(clusters[j].id), clusters[i].id.max(clusters[j].id));
+                let better = d + eps < best_d || ((d - best_d).abs() <= eps && ids < best_pair_ids);
                 if better {
                     best_i = i;
                     best_j = j;
@@ -338,7 +334,11 @@ fn single_linkage_children(corr: &DMatrix<f64>) -> Vec<[usize; 2]> {
     children
 }
 
-fn quasi_diagonalization(num_assets: usize, clusters: &[[usize; 2]], curr_index: usize) -> Vec<usize> {
+fn quasi_diagonalization(
+    num_assets: usize,
+    clusters: &[[usize; 2]],
+    curr_index: usize,
+) -> Vec<usize> {
     if curr_index < num_assets {
         return vec![curr_index];
     }
@@ -377,7 +377,11 @@ fn cluster_variance(cov: &DMatrix<f64>, indices: &[usize]) -> Result<f64, HcaaEr
     Ok(v.max(0.0))
 }
 
-fn cluster_sharpe(expected: &[f64], cov: &DMatrix<f64>, indices: &[usize]) -> Result<f64, HcaaError> {
+fn cluster_sharpe(
+    expected: &[f64],
+    cov: &DMatrix<f64>,
+    indices: &[usize],
+) -> Result<f64, HcaaError> {
     let w = inverse_variance_weights(cov, indices)?;
     let mut mu = 0.0;
     for (ii, &i) in indices.iter().enumerate() {
@@ -489,9 +493,7 @@ fn recursive_bisection(
             let left_var = cluster_variance(covariance_matrix, left)?;
             let right_var = cluster_variance(covariance_matrix, right)?;
             let mut alloc_factor = match allocation_metric {
-                "minimum_variance" => {
-                    1.0 - left_var / (left_var + right_var + f64::EPSILON)
-                }
+                "minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),
                 "minimum_standard_deviation" => {
                     let left_sd = left_var.sqrt();
                     let right_sd = right_var.sqrt();
@@ -499,7 +501,8 @@ fn recursive_bisection(
                 }
                 "sharpe_ratio" => {
                     let left_sr = cluster_sharpe(expected_asset_returns, covariance_matrix, left)?;
-                    let right_sr = cluster_sharpe(expected_asset_returns, covariance_matrix, right)?;
+                    let right_sr =
+                        cluster_sharpe(expected_asset_returns, covariance_matrix, right)?;
                     let raw = left_sr / (left_sr + right_sr + f64::EPSILON);
                     if (0.0..=1.0).contains(&raw) {
                         raw

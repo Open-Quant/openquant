@@ -43,7 +43,10 @@ struct RegressorEstimator {
     intercept: f64,
 }
 
-fn validate_and_resolve_max_samples(max_samples: MaxSamples, n_samples: usize) -> Result<usize, SbBaggingError> {
+fn validate_and_resolve_max_samples(
+    max_samples: MaxSamples,
+    n_samples: usize,
+) -> Result<usize, SbBaggingError> {
     let resolved = match max_samples {
         MaxSamples::Int(v) => v,
         MaxSamples::Float(v) => {
@@ -173,8 +176,13 @@ impl SequentiallyBootstrappedBaggingClassifier {
         let mut rng = StdRng::seed_from_u64(self.random_state + self.estimators.len() as u64);
 
         for _ in 0..(n_more as usize) {
-            let features = sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
-            let warmup = warmup_indices(&mut rng, ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1), max_samples);
+            let features =
+                sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
+            let warmup = warmup_indices(
+                &mut rng,
+                ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
+                max_samples,
+            );
             let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
@@ -215,11 +223,7 @@ impl SequentiallyBootstrappedBaggingClassifier {
 
         if self.oob_score {
             let preds = self.predict(x)?;
-            let correct = preds
-                .iter()
-                .zip(y.iter())
-                .filter(|(p, t)| **p == **t)
-                .count();
+            let correct = preds.iter().zip(y.iter()).filter(|(p, t)| **p == **t).count();
             self.oob_score_value = Some(correct as f64 / y.len() as f64);
         }
 
@@ -320,14 +324,18 @@ impl SequentiallyBootstrappedBaggingRegressor {
         let mut rng = StdRng::seed_from_u64(self.random_state + self.estimators.len() as u64);
 
         for _ in 0..(n_more as usize) {
-            let features = sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
-            let warmup = warmup_indices(&mut rng, ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1), max_samples);
+            let features =
+                sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
+            let warmup = warmup_indices(
+                &mut rng,
+                ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
+                max_samples,
+            );
             let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
             let n = samples.len() as f64;
-            let mean_x =
-                samples.iter().map(|&i| x[(i, feature_idx)]).sum::<f64>() / n;
+            let mean_x = samples.iter().map(|&i| x[(i, feature_idx)]).sum::<f64>() / n;
             let mean_y = samples.iter().map(|&i| y[i]).sum::<f64>() / n;
             let mut cov_xy = 0.0;
             let mut var_x = 0.0;
