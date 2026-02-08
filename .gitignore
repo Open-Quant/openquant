@@ -6,3 +6,7 @@ docs-site/dist/
 .beads/
 .serena/
 **/*.rs.bk
+.venv/
+**/__pycache__/
+python/openquant/_core*.so
+experiments/artifacts/

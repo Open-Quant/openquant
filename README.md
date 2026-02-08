@@ -38,17 +38,36 @@ python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out 
 python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
 ```
 
+## Research Flywheel (Python + Rust)
+```bash
+# Python env + bindings
+uv venv --python 3.11 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+
+# Notebook logic smoke + reproducible experiment run
+uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
+
+# Rust notebook-companion smoke
+cargo run -p openquant --example research_notebook_smoke
+```
+
 ## Crate Layout
 - `crates/openquant/src/`: core library modules
 - `crates/openquant/tests/`: Rust test suite
 - `crates/openquant/benches/`: criterion benchmarks
 - `tests/fixtures/`: shared fixtures
 - `benchmarks/`: baseline + latest benchmark snapshots
+- `notebooks/`: Python notebooks + Rust Evcxr companions
+- `experiments/`: config-driven experiment runner + artifacts
 
 ## Publish Readiness
 - Publishing checklist: `docs/publishing.md`
 - Stabilization + productionization checklist: `docs/stabilization_productionization.md`
 - Latest benchmark report: `docs/benchmark_snapshot.md`
+- Python bindings quickstart + API map: `docs/python_bindings.md`
+- Notebook-first workflow + promotion checklist: `docs/research_workflow.md`
 
 ## Astro Docs Site (GitHub Pages)
 A modern docs site scaffold is included under `docs-site/`.
