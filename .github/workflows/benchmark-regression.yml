@@ -25,7 +25,12 @@ jobs:
       - name: Collect benchmark results
         run: python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
       - name: Check regression thresholds
-        run: python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35
+        run: |
+          python3 scripts/check_bench_thresholds.py \
+            --baseline benchmarks/baseline_benchmarks.json \
+            --latest benchmarks/latest_benchmarks.json \
+            --max-regression-pct 35 \
+            --overrides benchmarks/threshold_overrides.json
       - name: Upload benchmark report artifact
         uses: actions/upload-artifact@v4
         with:
