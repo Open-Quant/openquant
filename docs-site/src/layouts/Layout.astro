@@ -11,6 +11,7 @@ const nav = [
   { href: `${base}/`, label: "Overview" },
   { href: `${base}/getting-started`, label: "Getting Started" },
   { href: `${base}/modules`, label: "Subjects (AFML)" },
+  { href: `${base}/module`, label: "Module Pages" },
   { href: `${base}/api-reference`, label: "API by Subject" },
   { href: `${base}/examples`, label: "Examples by Subject" },
   { href: `${base}/performance`, label: "Performance" },
@@ -38,6 +39,31 @@ const canonical = Astro.site
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     {canonical && <meta property="og:url" content={canonical} />}
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+    <script is:inline>
+      document.addEventListener("DOMContentLoaded", () => {
+        if (window.renderMathInElement) {
+          window.renderMathInElement(document.body, {
+            delimiters: [
+              { left: "$$", right: "$$", display: true },
+              { left: "$", right: "$", display: false },
+              { left: "\\\\(", right: "\\\\)", display: false },
+              { left: "\\\\[", right: "\\\\]", display: true },
+            ],
+            throwOnError: false,
+          });
+        }
+      });
+    </script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
 
@@ -89,6 +115,20 @@ const canonical = Astro.site
         backdrop-filter: blur(6px);
       }
 
+      .masthead {
+        border-bottom: 1px solid var(--line);
+        background: #0c1527;
+        padding: 14px;
+      }
+
+      .masthead img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 10px;
+        border: 1px solid #2f4d7f;
+      }
+
       .topbar {
         display: flex;
         align-items: center;
@@ -109,6 +149,12 @@ const canonical = Astro.site
         margin-left: 8px;
         color: var(--muted);
         font-size: 13px;
+      }
+
+      .brand-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
       }
 
       .layout {
@@ -172,6 +218,13 @@ const canonical = Astro.site
 
       .content {
         padding: 26px 26px 32px;
+      }
+
+      .math {
+        padding: 8px 10px;
+        border: 1px dashed #365a91;
+        border-radius: 8px;
+        background: #0c1422;
       }
 
       .hero {
@@ -294,7 +347,11 @@ const canonical = Astro.site
   <body>
     <div class="shell">
       <section class="frame">
+        <div class="masthead">
+          <img src={`${base}/brand/openquant-banner.svg`} alt="OpenQuant Docs banner" />
+        </div>
         <div class="topbar">
+          <img class="brand-icon" src={`${base}/brand/openquant-icon.svg`} alt="OpenQuant icon" />
           <span class="dot"></span>
           <span class="dot" style="background:#7dc2ff"></span>
           <span class="dot" style="background:#9de07a"></span>

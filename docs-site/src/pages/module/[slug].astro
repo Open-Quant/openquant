@@ -1,0 +1,49 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { moduleDocs } from "../../data/moduleDocs";
+
+export function getStaticPaths() {
+  return moduleDocs.map((doc) => ({
+    params: { slug: doc.slug },
+    props: { doc },
+  }));
+}
+
+const { doc } = Astro.props;
+---
+<Layout title={`${doc.module} • OpenQuant-rs Docs`} description={doc.summary}>
+  <section class="hero">
+    <h1>{doc.module}</h1>
+    <p class="muted">{doc.subject}</p>
+    <p>{doc.summary}</p>
+  </section>
+
+  <h2>Why This Module Exists</h2>
+  <p>{doc.whyItExists}</p>
+
+  <h2>Key Public APIs</h2>
+  <ul>
+    {doc.keyApis.map((api: string) => <li><code>{api}</code></li>)}
+  </ul>
+
+  <h2>Core Math</h2>
+  {doc.formulas.map((f: { label: string; latex: string }) => (
+    <div class="card">
+      <h3>{f.label}</h3>
+      <p class="math">\[{f.latex}\]</p>
+    </div>
+  ))}
+
+  <h2>Code Examples</h2>
+  {doc.examples.map((ex: { title: string; language: string; code: string }) => (
+    <article class="card">
+      <h3>{ex.title}</h3>
+      <pre><code class={`language-${ex.language}`}>{ex.code}</code></pre>
+    </article>
+  ))}
+
+  <h2>Implementation Notes</h2>
+  <ul>
+    {doc.notes.map((n: string) => <li>{n}</li>)}
+  </ul>
+</Layout>

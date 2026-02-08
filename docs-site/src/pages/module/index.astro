@@ -1,0 +1,26 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { moduleDocs } from "../../data/moduleDocs";
+
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+
+const sorted = [...moduleDocs].sort((a, b) => a.module.localeCompare(b.module));
+---
+<Layout title="Module Pages • OpenQuant-rs" description="Detailed pages for each OpenQuant module including formulas and code examples.">
+  <section class="hero">
+    <h1>Module Pages</h1>
+    <p class="muted">One documentation page per module with purpose, formulas, key APIs, and implementation examples.</p>
+  </section>
+
+  <div class="grid">
+    {sorted.map((doc) => (
+      <article class="card">
+        <h3><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></h3>
+        <p class="muted">{doc.subject}</p>
+        <p>{doc.summary}</p>
+      </article>
+    ))}
+  </div>
+</Layout>

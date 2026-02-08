@@ -1,32 +1,73 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { moduleDocs } from "../data/moduleDocs";
+
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+
+const subjects = [
+  "Event-Driven Data and Labeling",
+  "Sampling, Validation and ML Diagnostics",
+  "Position Sizing and Trade Construction",
+  "Portfolio Construction and Risk",
+  "Market Microstructure, Dependence and Regime Detection",
+];
+
+const grouped = subjects.map((subject) => ({
+  subject,
+  modules: moduleDocs.filter((doc) => doc.subject === subject),
+}));
 ---
-<Layout title="Module Guide • OpenQuant-rs" description="Module-level guide to OpenQuant-rs for quant workflows.">
+<Layout title="Subjects (AFML) • OpenQuant-rs" description="AFML-style subject map with dedicated pages for each OpenQuant module.">
   <section class="hero">
     <h1>Subjects (AFML-Aligned)</h1>
-    <p class="muted">This is the primary subject map. The same five dividers are reused in API and examples pages.</p>
+    <p class="muted">Each module now has a dedicated page with mathematical definitions, API surface, and implementation-oriented code examples.</p>
   </section>
 
-  <h2>1. Event-Driven Data and Labeling</h2>
-  <p class="muted">AFML orientation: Ch. 2-3</p>
-  <p><code>data_structures</code>, <code>filters</code>, <code>labeling</code>, <code>sample_weights</code></p>
+  <h2>Subject Dividers</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Divider</th>
+        <th>AFML Orientation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Event-Driven Data and Labeling</td>
+        <td>Event bars, filters, labeling, and sample weighting.</td>
+      </tr>
+      <tr>
+        <td>Sampling, Validation and ML Diagnostics</td>
+        <td>Leakage-aware validation, bootstrap, and model diagnostics.</td>
+      </tr>
+      <tr>
+        <td>Position Sizing and Trade Construction</td>
+        <td>Sizing transforms, execution-aware construction, synthetic ETF/roll.</td>
+      </tr>
+      <tr>
+        <td>Portfolio Construction and Risk</td>
+        <td>Optimization, clustering allocation, and risk overlays.</td>
+      </tr>
+      <tr>
+        <td>Market Microstructure, Dependence and Regime Detection</td>
+        <td>Microstructure estimators, dependence metrics, structural breaks.</td>
+      </tr>
+    </tbody>
+  </table>
 
-  <h2>2. Sampling, Validation and ML Diagnostics</h2>
-  <p class="muted">AFML orientation: Ch. 4, 7</p>
-  <p><code>sampling</code>, <code>cross_validation</code>, <code>feature_importance</code>, <code>fingerprint</code>, <code>sb_bagging</code>, <code>ef3m</code></p>
-
-  <h2>3. Position Sizing and Trade Construction</h2>
-  <p class="muted">AFML orientation: Ch. 10 + execution tooling</p>
-  <p><code>bet_sizing</code>, <code>etf_trick</code></p>
-
-  <h2>4. Portfolio Construction and Risk</h2>
-  <p class="muted">AFML orientation: Ch. 16 + risk overlays</p>
-  <p><code>portfolio_optimization</code>, <code>cla</code>, <code>hrp</code>, <code>hcaa</code>, <code>onc</code>, <code>risk_metrics</code>, <code>backtest_statistics</code></p>
-
-  <h2>5. Market Microstructure, Dependence and Regime Detection</h2>
-  <p class="muted">AFML orientation: microstructure and structural diagnostics</p>
-  <p><code>microstructural_features</code>, <code>codependence</code>, <code>structural_breaks</code>, <code>fracdiff</code>, <code>util::fast_ewma</code>, <code>util::volatility</code></p>
-
-  <h2>Usage Rule</h2>
-  <p>Start in this subject map, then use <code>API by Subject</code> and <code>Examples by Subject</code> with the same divider names.</p>
+  {grouped.map((group) => (
+    <section>
+      <h2>{group.subject}</h2>
+      <div class="grid">
+        {group.modules.map((doc) => (
+          <article class="card">
+            <h3><a href={`${base}/module/${doc.slug}`}>{doc.module}</a></h3>
+            <p class="muted">{doc.summary}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  ))}
 </Layout>

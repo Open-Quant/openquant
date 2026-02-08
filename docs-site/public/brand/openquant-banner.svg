@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 360" role="img" aria-label="OpenQuant Docs Banner">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b1222"/>
+      <stop offset="100%" stop-color="#111f37"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#66d6ff"/>
+      <stop offset="100%" stop-color="#7dffc8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="360" rx="24" fill="url(#bg)"/>
+  <g opacity="0.25" stroke="#4f7ec2" stroke-width="2" fill="none">
+    <path d="M0 280C180 250 260 120 420 142S640 292 820 260s260-190 430-178 220 120 350 96"/>
+    <path d="M0 316C170 286 290 188 430 208s250 140 400 122 250-134 380-126 230 92 390 78"/>
+  </g>
+  <g transform="translate(72 68)">
+    <rect x="0" y="0" width="228" height="228" rx="44" fill="#0d172c" stroke="#395a92" stroke-width="4"/>
+    <path d="M46 156V72l38 58 38-58v84" fill="none" stroke="url(#line)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="170" cy="114" r="28" fill="none" stroke="url(#line)" stroke-width="14"/>
+  </g>
+  <g transform="translate(356 98)">
+    <text x="0" y="72" font-family="'Space Grotesk', sans-serif" font-size="86" fill="#e9f1ff" font-weight="700">OpenQuant-rs Docs</text>
+    <text x="0" y="126" font-family="'IBM Plex Mono', monospace" font-size="30" fill="#9db7df">Rust-native financial machine learning toolkit</text>
+    <rect x="0" y="162" width="940" height="4" rx="2" fill="url(#line)"/>
+  </g>
+</svg>
