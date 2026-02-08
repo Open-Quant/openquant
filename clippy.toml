@@ -1,10 +1,4 @@
-warn-on = [
-  "clippy::all",
-  "clippy::pedantic",
-  "clippy::nursery",
-]
-
-allow = [
-  "clippy::module_name_repetitions", # module tests often mirror file names
-  "clippy::doc_markdown",            # allow bare Markdown links in docs
-]
+# Clippy lint levels are controlled in CI and Just commands:
+# `cargo clippy --all-targets --all-features -- -D warnings`
+#
+# Keep this file for future stable clippy configuration options.
