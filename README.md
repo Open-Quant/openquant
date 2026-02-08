@@ -2,7 +2,7 @@
   <img src="assets/banner_v3.svg" alt="OpenQuant-rs" width="100%" />
 </p>
 
-<h1 align="center">OpenQuant-rs</h1>
+<h1 align="center">openquant-rs</h1>
 
 <p align="center">
   <strong>Rust-native quantitative finance toolkit for research and production workflows.</strong>
