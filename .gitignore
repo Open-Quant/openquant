@@ -1,4 +1,7 @@
 target/
+.astro/
+docs-site/node_modules/
+docs-site/dist/
 .DS_Store
 .beads/
 .serena/

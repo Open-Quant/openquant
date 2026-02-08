@@ -1,0 +1,49 @@
+{
+  "generated_at_utc": "2026-02-07T23:49:55.928292+00:00",
+  "commit": "8135e47",
+  "count": 7,
+  "benchmarks": {
+    "bet_sizing_bet_size_reserve_fit": {
+      "mean_ns": 18754325.0534127,
+      "mean_ms": 18.7543250534127,
+      "ci_lower_ns": 17820417.08174603,
+      "ci_upper_ns": 19813834.543099206
+    },
+    "bet_sizing_bet_size_reserve_reuse_fit": {
+      "mean_ns": 278429.1168404281,
+      "mean_ms": 0.2784291168404281,
+      "ci_lower_ns": 273885.3137061087,
+      "ci_upper_ns": 283583.1875432901
+    },
+    "structural_breaks_get_sadf_sm_power": {
+      "mean_ns": 601996787.5,
+      "mean_ms": 601.9967875,
+      "ci_lower_ns": 600011204.2,
+      "ci_upper_ns": 604016037.4
+    },
+    "synthetic_ticker_ewma_100k": {
+      "mean_ns": 4722958.300049603,
+      "mean_ms": 4.722958300049603,
+      "ci_lower_ns": 4694276.286507936,
+      "ci_upper_ns": 4750677.070238096
+    },
+    "synthetic_ticker_pipeline_end_to_end": {
+      "mean_ns": 61722068.9,
+      "mean_ms": 61.7220689,
+      "ci_lower_ns": 60895246.0,
+      "ci_upper_ns": 62480760.6
+    },
+    "synthetic_ticker_risk_metrics_var_es_cdar": {
+      "mean_ns": 8009347.839484127,
+      "mean_ms": 8.009347839484127,
+      "ci_lower_ns": 7496498.677777779,
+      "ci_upper_ns": 8602283.541438492
+    },
+    "synthetic_ticker_seq_bootstrap_2k_600": {
+      "mean_ns": 383857933.3,
+      "mean_ms": 383.8579333,
+      "ci_lower_ns": 360271362.4,
+      "ci_upper_ns": 409751169.99749994
+    }
+  }
+}

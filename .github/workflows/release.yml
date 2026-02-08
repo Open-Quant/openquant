@@ -1,0 +1,25 @@
+name: Release Readiness
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Format/Lint/Test (fast)
+        run: |
+          cargo fmt -- --check
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+      - name: Package dry-run
+        run: cargo package -p openquant
+      - name: Benchmark compile check
+        run: cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run

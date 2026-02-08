@@ -1,0 +1,49 @@
+<svg width="1600" height="420" viewBox="0 0 1600 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenQuant-rs Banner</title>
+  <desc id="desc">Neon terminal inspired banner for OpenQuant-rs</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#071018"/>
+      <stop offset="100%" stop-color="#0a1f2a"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#10d4c4"/>
+      <stop offset="100%" stop-color="#21f3a2"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#123247" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="420" fill="url(#bg)"/>
+  <rect width="1600" height="420" fill="url(#grid)" opacity="0.35"/>
+
+  <g opacity="0.28" stroke="url(#line)" stroke-width="2" fill="none">
+    <path d="M0 310 L180 280 L320 300 L500 250 L670 270 L860 220 L1040 245 L1240 190 L1430 210 L1600 160"/>
+    <path d="M0 350 L220 330 L390 350 L580 300 L760 320 L940 285 L1130 300 L1310 255 L1600 235"/>
+  </g>
+
+  <rect x="120" y="72" width="1360" height="276" rx="16" fill="#06141d" stroke="#1dd8c6" stroke-width="2" filter="url(#glow)"/>
+  <rect x="120" y="72" width="1360" height="36" rx="16" fill="#0d2532"/>
+  <circle cx="148" cy="90" r="6" fill="#20f3a2"/>
+  <circle cx="170" cy="90" r="6" fill="#12c9ff"/>
+  <circle cx="192" cy="90" r="6" fill="#1dd8c6"/>
+
+  <text x="230" y="95" fill="#9fd6ff" font-size="16" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">openquant-rs :: terminal</text>
+
+  <text x="170" y="170" fill="#20f3a2" font-size="54" font-weight="700" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">OpenQuant-rs</text>
+  <text x="170" y="220" fill="#9fd6ff" font-size="25" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">Rust-native quant research and production toolkit</text>
+
+  <text x="170" y="270" fill="#53f5ba" font-size="20" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">[parity complete]</text>
+  <text x="390" y="270" fill="#9fd6ff" font-size="20" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">[benchmarks tracked]</text>
+  <text x="700" y="270" fill="#9fd6ff" font-size="20" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">[release pipeline ready]</text>
+
+  <text x="170" y="320" fill="#6db8da" font-size="18" font-family="JetBrains Mono, Fira Code, Menlo, Consolas, monospace">$ cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</text>
+</svg>

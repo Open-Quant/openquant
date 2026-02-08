@@ -86,6 +86,7 @@ fn test_chu_stinchcombe_white_test() {
 }
 
 #[test]
+#[ignore = "long-running hotspot; run explicitly with `cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored`"]
 fn test_sadf_test() {
     let log_prices = log_prices();
     let lags_int = 5usize;

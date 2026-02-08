@@ -1,0 +1,9 @@
+[
+  "structural_breaks_get_sadf_sm_power",
+  "bet_sizing_bet_size_reserve_fit",
+  "bet_sizing_bet_size_reserve_reuse_fit",
+  "synthetic_ticker_ewma_100k",
+  "synthetic_ticker_risk_metrics_var_es_cdar",
+  "synthetic_ticker_seq_bootstrap_2k_600",
+  "synthetic_ticker_pipeline_end_to_end"
+]

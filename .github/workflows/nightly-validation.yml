@@ -1,0 +1,19 @@
+name: Nightly Validation
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  slow-validation:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Full OpenQuant test sweep (including long SADF test)
+        run: cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
+      - name: Hotspot benchmark smoke check
+        run: cargo bench -p openquant --bench perf_hotspots --no-run

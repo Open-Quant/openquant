@@ -1,0 +1,33 @@
+name: Benchmark Regression
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/openquant/**"
+      - "scripts/check_bench_thresholds.py"
+      - "scripts/collect_bench_results.py"
+      - "benchmarks/baseline_benchmarks.json"
+      - ".github/workflows/benchmark-regression.yml"
+
+jobs:
+  benchmark-regression:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run benchmark suites (short measurement)
+        run: |
+          cargo bench -p openquant --bench perf_hotspots -- --sample-size 20 --warm-up-time 1 --measurement-time 2
+          cargo bench -p openquant --bench synthetic_ticker_pipeline -- --sample-size 20 --warm-up-time 1 --measurement-time 2
+      - name: Collect benchmark results
+        run: python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+      - name: Check regression thresholds
+        run: python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
+      - name: Upload benchmark report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-benchmarks
+          path: benchmarks/latest_benchmarks.json

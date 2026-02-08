@@ -3,6 +3,14 @@ name = "openquant"
 version = "0.1.0"
 authors = ["seankoval <seanmkoval@gmail.com>"]
 edition = "2021"
+description = "Rust-first quantitative finance toolkit inspired by mlfinlab/AFML"
+repository = "https://github.com/Open-Quant/openquant"
+homepage = "https://openquant.github.io/openquant-rs/"
+documentation = "https://openquant.github.io/openquant-rs/"
+license = "MIT"
+keywords = ["quant", "finance", "trading", "afml", "mlfinlab"]
+categories = ["finance", "science", "algorithms"]
+readme = "../../README.md"
 
 [dependencies]
 chrono = "0.4"
@@ -18,3 +26,12 @@ csv = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 itertools = "0.13"
+criterion = "0.5"
+
+[[bench]]
+name = "perf_hotspots"
+harness = false
+
+[[bench]]
+name = "synthetic_ticker_pipeline"
+harness = false

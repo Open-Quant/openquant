@@ -1,0 +1,104 @@
+---
+const { title = 'OpenQuant-rs Docs', description = 'Rust-native quantitative finance toolkit.' } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <style>
+      :root {
+        --bg-0: #041018;
+        --bg-1: #0b1f2c;
+        --panel: #0a1620cc;
+        --line: #1dcab8;
+        --line-2: #25e9a0;
+        --text: #daf3ff;
+        --muted: #8cb7c9;
+        --accent: #12d9ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+        color: var(--text);
+        background:
+          radial-gradient(1000px 500px at 100% -10%, #10406044, transparent),
+          radial-gradient(1000px 600px at -10% 120%, #0d6e6044, transparent),
+          linear-gradient(160deg, var(--bg-0), var(--bg-1));
+        min-height: 100vh;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+      .top {
+        border: 1px solid #1a465d;
+        border-radius: 14px;
+        background: var(--panel);
+        backdrop-filter: blur(4px);
+        overflow: hidden;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: #0b2533;
+        border-bottom: 1px solid #1b4258;
+      }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); }
+      .brand { margin-left: 8px; color: var(--muted); font-size: 13px; }
+      nav {
+        display: flex;
+        gap: 20px;
+        padding: 14px;
+        border-bottom: 1px solid #173748;
+        flex-wrap: wrap;
+      }
+      main { padding: 22px 20px 30px; }
+      h1, h2, h3 { line-height: 1.2; }
+      h1 { margin-top: 0; font-size: 2rem; }
+      .muted { color: var(--muted); }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid #1b4258;
+        border-radius: 10px;
+        padding: 14px;
+        background: #09141d;
+      }
+      code {
+        background: #08121a;
+        border: 1px solid #1d3b4b;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      footer { color: var(--muted); font-size: 12px; padding: 20px 0 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="top">
+        <div class="topbar">
+          <span class="dot"></span><span class="dot" style="background:#12d9ff"></span><span class="dot" style="background:#1dcab8"></span>
+          <span class="brand">openquant-rs docs terminal</span>
+        </div>
+        <nav>
+          <a href="/openquant-rs/">Home</a>
+          <a href="/openquant-rs/getting-started">Getting Started</a>
+          <a href="/openquant-rs/performance">Performance</a>
+          <a href="/openquant-rs/publishing">Publishing</a>
+        </nav>
+        <main>
+          <slot />
+        </main>
+      </section>
+      <footer>OpenQuant-rs docs • built with Astro</footer>
+    </div>
+  </body>
+</html>

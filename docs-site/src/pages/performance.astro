@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Performance • OpenQuant-rs">
+  <h1>Performance Baseline</h1>
+  <p class="muted">OpenQuant-rs tracks benchmark drift using criterion snapshots and threshold gates.</p>
+
+  <h2>Bench Suites</h2>
+  <div class="grid">
+    <article class="card"><h3>Hotspots</h3><p><code>perf_hotspots</code> covers SADF and reserve bet sizing paths.</p></article>
+    <article class="card"><h3>Synthetic Ticker</h3><p><code>synthetic_ticker_pipeline</code> demonstrates realistic throughput over generated time series.</p></article>
+  </div>
+
+  <h2>Data Files</h2>
+  <p><code>benchmarks/baseline_benchmarks.json</code></p>
+  <p><code>benchmarks/latest_benchmarks.json</code></p>
+  <p><code>docs/benchmark_snapshot.md</code></p>
+
+  <h2>Regression Gate</h2>
+  <p><code>.github/workflows/benchmark-regression.yml</code> enforces performance thresholds on pull requests.</p>
+</Layout>

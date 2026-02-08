@@ -1,0 +1,18 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Getting Started • OpenQuant-rs">
+  <h1>Getting Started</h1>
+  <h2>Build + Test</h2>
+  <p><code>cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</code></p>
+
+  <h2>Run Long SADF Path</h2>
+  <p><code>cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored</code></p>
+
+  <h2>Benchmarks</h2>
+  <p><code>cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline</code></p>
+
+  <h2>Track Performance Over Time</h2>
+  <p><code>python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json</code></p>
+  <p><code>python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></p>
+</Layout>

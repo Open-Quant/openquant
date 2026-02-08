@@ -1,46 +1,73 @@
 <p align="center">
-  <img src="assets/banner_v2.svg" alt="OpenQuant-rs" width="100%" />
+  <img src="assets/banner_v3.svg" alt="OpenQuant-rs" width="100%" />
 </p>
 
-# OpenQuant-rs
+<h1 align="center">OpenQuant-rs</h1>
 
-OpenQuant-rs is a Rust-first library for modern machine learning methods in finance, inspired by and building on the ideas from *Advances in Financial Machine Learning* by Marcos Lopez de Prado.
+<p align="center">
+  <strong>Rust-native quantitative finance toolkit, migrated from mlfinlab with test parity.</strong>
+</p>
 
-## What this repo is
-- A Rust implementation of core AFML techniques with a strict, testable baseline.
-- A place to consolidate fixtures and baseline behavior before optimization.
-- A stepping stone toward benchmarks and accelerated algorithms once parity is locked.
+<p align="center">
+  <a href="https://github.com/Open-Quant/openquant/actions/workflows/ci.yml">CI</a>
+  ·
+  <a href="https://github.com/Open-Quant/openquant/actions/workflows/benchmark-regression.yml">Benchmark Regression</a>
+  ·
+  <a href="https://github.com/Open-Quant/openquant/actions/workflows/release.yml">Release Readiness</a>
+</p>
 
-## Migration status
+## Status
+- Python-to-Rust migration parity for tracked mlfinlab modules: complete.
 - Source of truth: `openquant-rs/tests/crosswalk.md`
-- Project roadmap: `ROADMAP.md`
+- Roadmap parity sync: `ROADMAP.md` remaining list is empty.
+- Production baseline package: benchmarks + regression checks + release workflow are in place.
 
-## Getting started
+Detailed status: `docs/project_status.md`
+
+## Quick Start
 ```bash
-# Run all Rust tests
-cargo test -p openquant
+# Fast validation (default CI path)
+cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 
-# Sync ROADMAP.md from the crosswalk
-python scripts/sync_roadmap.py
+# Long-running SADF hotspot (explicit)
+cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
+
+# Benchmarks
+cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
+
+# Collect + check benchmark thresholds
+python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
 ```
 
-## Structure
-- `openquant-rs/crates/openquant/src/`: core library modules
-- `openquant-rs/crates/openquant/tests/`: Rust test suite
-- `openquant-rs/tests/fixtures/`: shared fixtures used for parity
-- `openquant-rs/tests/crosswalk.md`: mapping of Python tests to Rust tests
+## Crate Layout
+- `crates/openquant/src/`: core library modules
+- `crates/openquant/tests/`: Rust test suite
+- `crates/openquant/benches/`: criterion benchmarks
+- `tests/fixtures/`: shared fixtures
+- `tests/crosswalk.md`: Python-to-Rust parity map
+- `benchmarks/`: baseline + latest benchmark snapshots
 
-## Principles
-- Parity first: use crosswalk + shared fixtures to match Python behavior.
-- Explicit tolerances: document any intentional deviations.
-- Performance after parity: optimize only after tests are green and aligned.
+## Publish Readiness
+- Publishing checklist: `docs/publishing.md`
+- Stabilization + productionization checklist: `docs/stabilization_productionization.md`
+- Latest benchmark report: `docs/benchmark_snapshot.md`
 
-## Contributing
-If you are porting a module:
-1) Add or update fixtures under `openquant-rs/tests/fixtures/`.
-2) Implement Rust tests in `openquant-rs/crates/openquant/tests/`.
-3) Update `openquant-rs/tests/crosswalk.md` with status and fixtures.
-4) Run `python scripts/sync_roadmap.py` to keep the roadmap current.
+## Do You Still Need mlfinlab Locally?
+Short answer: for runtime use, no. For ongoing parity maintenance and fixture regeneration, yes.
+
+See full guidance in `docs/project_status.md`.
+
+## Astro Docs Site (GitHub Pages)
+A modern docs site scaffold is included under `docs-site/`.
+
+```bash
+cd docs-site
+npm install
+npm run dev
+```
+
+Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.
 
 ## License
-TBD
+MIT (`LICENSE`)

@@ -1,0 +1,27 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="OpenQuant-rs Docs" description="Rust-native quantitative finance toolkit docs.">
+  <h1>OpenQuant-rs</h1>
+  <p class="muted">Rust-native quantitative finance toolkit with completed mlfinlab parity and production baseline infrastructure.</p>
+
+  <div class="grid">
+    <article class="card">
+      <h3>Status</h3>
+      <p>Module parity complete. Stabilization and production baseline package now active.</p>
+    </article>
+    <article class="card">
+      <h3>Validation</h3>
+      <p>Fast CI excludes long SADF test; long path runs separately for deep validation.</p>
+    </article>
+    <article class="card">
+      <h3>Performance</h3>
+      <p>Criterion suites, synthetic ticker benchmarks, baseline snapshots, and regression thresholds are wired.</p>
+    </article>
+  </div>
+
+  <h2>Core Commands</h2>
+  <p><code>cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</code></p>
+  <p><code>cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline</code></p>
+  <p><code>python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25</code></p>
+</Layout>

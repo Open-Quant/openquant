@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Publishing • OpenQuant-rs">
+  <h1>Publishing</h1>
+  <p>Release process is documented in <code>docs/publishing.md</code>.</p>
+
+  <h2>Release Gate Summary</h2>
+  <ol>
+    <li>Format + clippy</li>
+    <li>Fast test sweep</li>
+    <li>Long SADF test</li>
+    <li>Benchmark run + threshold check</li>
+    <li><code>cargo package -p openquant</code></li>
+    <li>Tag and publish</li>
+  </ol>
+
+  <h2>GitHub Workflows</h2>
+  <p><code>.github/workflows/release.yml</code></p>
+  <p><code>.github/workflows/nightly-validation.yml</code></p>
+</Layout>
