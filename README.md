@@ -5,7 +5,7 @@
 <h1 align="center">OpenQuant-rs</h1>
 
 <p align="center">
-  <strong>Rust-native quantitative finance toolkit, migrated from mlfinlab with test parity.</strong>
+  <strong>Rust-native quantitative finance toolkit for research and production workflows.</strong>
 </p>
 
 <p align="center">
@@ -17,10 +17,8 @@
 </p>
 
 ## Status
-- Python-to-Rust migration parity for tracked mlfinlab modules: complete.
-- Source of truth: `openquant-rs/tests/crosswalk.md`
-- Roadmap parity sync: `ROADMAP.md` remaining list is empty.
 - Production baseline package: benchmarks + regression checks + release workflow are in place.
+- High-coverage module-level tests, benchmark tracking, and release gates are active.
 
 Detailed status: `docs/project_status.md`
 
@@ -45,18 +43,12 @@ python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchma
 - `crates/openquant/tests/`: Rust test suite
 - `crates/openquant/benches/`: criterion benchmarks
 - `tests/fixtures/`: shared fixtures
-- `tests/crosswalk.md`: Python-to-Rust parity map
 - `benchmarks/`: baseline + latest benchmark snapshots
 
 ## Publish Readiness
 - Publishing checklist: `docs/publishing.md`
 - Stabilization + productionization checklist: `docs/stabilization_productionization.md`
 - Latest benchmark report: `docs/benchmark_snapshot.md`
-
-## Do You Still Need mlfinlab Locally?
-Short answer: for runtime use, no. For ongoing parity maintenance and fixture regeneration, yes.
-
-See full guidance in `docs/project_status.md`.
 
 ## Astro Docs Site (GitHub Pages)
 A modern docs site scaffold is included under `docs-site/`.

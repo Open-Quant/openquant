@@ -7,11 +7,8 @@ import Layout from "../layouts/Layout.astro";
     <p class="muted">Common decisions and operating guidance for OpenQuant-rs.</p>
   </section>
 
-  <h2>Do I still need the local mlfinlab repo?</h2>
-  <p>Not for normal OpenQuant-rs usage. Keep it only for parity maintenance tasks such as fixture regeneration or upstream behavior comparisons.</p>
-
   <h2>Is OpenQuant-rs functionally complete?</h2>
-  <p>For the tracked migration scope, yes. Module parity tasks are complete, and the project is in stabilization and productionization mode.</p>
+  <p>Yes for the current library scope. The project is in stabilization and productionization mode with CI, benchmarks, and release checks.</p>
 
   <h2>Why is one SADF test excluded from fast CI?</h2>
   <p><code>test_sadf_test</code> is intentionally isolated because it is long-running. It remains covered in dedicated slow/nightly validation paths.</p>
@@ -22,6 +19,6 @@ import Layout from "../layouts/Layout.astro";
   <h2>Can I publish now?</h2>
   <p>Yes once release checks pass in your target environment, including a successful <code>cargo package -p openquant</code> run and docs deployment verification.</p>
 
-  <h2>Where should I look for migration ground truth?</h2>
-  <p>Use <code>tests/crosswalk.md</code> first, then align <code>ROADMAP.md</code> and Beads issue status to match.</p>
+  <h2>Where should I start reading the docs?</h2>
+  <p>Start with <code>Subjects (AFML)</code>, then move to <code>Module Pages</code> for detailed formulas and implementation examples.</p>
 </Layout>
