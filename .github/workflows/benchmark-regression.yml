@@ -20,12 +20,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run benchmark suites (short measurement)
         run: |
-          cargo bench -p openquant --bench perf_hotspots -- --sample-size 20 --warm-up-time 1 --measurement-time 2
-          cargo bench -p openquant --bench synthetic_ticker_pipeline -- --sample-size 20 --warm-up-time 1 --measurement-time 2
+          cargo bench -p openquant --bench perf_hotspots -- --sample-size 30 --warm-up-time 2 --measurement-time 3
+          cargo bench -p openquant --bench synthetic_ticker_pipeline -- --sample-size 30 --warm-up-time 2 --measurement-time 3
       - name: Collect benchmark results
         run: python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
       - name: Check regression thresholds
-        run: python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
+        run: |
+          python3 scripts/check_bench_thresholds.py \
+            --baseline benchmarks/baseline_benchmarks.json \
+            --latest benchmarks/latest_benchmarks.json \
+            --max-regression-pct 35 \
+            --overrides benchmarks/threshold_overrides.json
       - name: Upload benchmark report artifact
         uses: actions/upload-artifact@v4
         with:

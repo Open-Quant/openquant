@@ -85,8 +85,7 @@ impl HierarchicalRiskParity {
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);
         if n_assets == 23 {
             self.ordered_indices = vec![
-                13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5,
-                19,
+                13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19,
             ];
         }
 
@@ -242,8 +241,7 @@ fn single_linkage_children(distance: &DMatrix<f64>) -> Vec<[usize; 2]> {
     }
 
     let n = distance.nrows();
-    let mut clusters: Vec<Cluster> =
-        (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
+    let mut clusters: Vec<Cluster> = (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
     let mut next_id = n;
     let mut children = Vec::with_capacity(n.saturating_sub(1));
     let eps = 1e-12;
@@ -264,10 +262,7 @@ fn single_linkage_children(distance: &DMatrix<f64>) -> Vec<[usize; 2]> {
                         d = d.min(distance[(a, b)]);
                     }
                 }
-                let ids = (
-                    clusters[i].id.min(clusters[j].id),
-                    clusters[i].id.max(clusters[j].id),
-                );
+                let ids = (clusters[i].id.min(clusters[j].id), clusters[i].id.max(clusters[j].id));
                 if d + eps < best_d || ((d - best_d).abs() <= eps && ids < best_ids) {
                     best_i = i;
                     best_j = j;
@@ -290,7 +285,11 @@ fn single_linkage_children(distance: &DMatrix<f64>) -> Vec<[usize; 2]> {
     children
 }
 
-fn quasi_diagonalization(num_assets: usize, clusters: &[[usize; 2]], curr_index: usize) -> Vec<usize> {
+fn quasi_diagonalization(
+    num_assets: usize,
+    clusters: &[[usize; 2]],
+    curr_index: usize,
+) -> Vec<usize> {
     if curr_index < num_assets {
         return vec![curr_index];
     }

@@ -1,0 +1,69 @@
+name: notebooks-examples-smoke
+
+on:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "python/**"
+      - "notebooks/**"
+      - "experiments/**"
+      - ".github/workflows/notebooks-examples-smoke.yml"
+      - "pyproject.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "python/**"
+      - "notebooks/**"
+      - "experiments/**"
+      - ".github/workflows/notebooks-examples-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-notebooks-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Prepare Python env
+        run: |
+          uv venv --python 3.11 .venv
+          uv sync --group dev
+
+      - name: Build bindings
+        run: |
+          uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+
+      - name: Python notebook smoke (paired scripts)
+        run: |
+          uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+
+      - name: Experiment scaffold smoke
+        run: |
+          uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out /tmp/openquant-artifacts
+
+      - name: Rust companion smoke
+        run: |
+          cargo run -p openquant --example research_notebook_smoke

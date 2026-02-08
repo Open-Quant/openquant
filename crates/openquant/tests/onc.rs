@@ -5,13 +5,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 fn load_breast_cancer_correlation() -> DMatrix<f64> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/onc/breast_cancer.csv");
-    let mut rdr = ReaderBuilder::new()
-        .has_headers(false)
-        .flexible(true)
-        .from_path(path)
-        .unwrap();
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/onc/breast_cancer.csv");
+    let mut rdr = ReaderBuilder::new().has_headers(false).flexible(true).from_path(path).unwrap();
 
     let mut rows: Vec<Vec<f64>> = Vec::new();
     for (i, rec) in rdr.records().enumerate() {
@@ -22,11 +18,7 @@ fn load_breast_cancer_correlation() -> DMatrix<f64> {
         if row.len() < 30 {
             continue;
         }
-        let vals: Vec<f64> = row
-            .iter()
-            .take(30)
-            .map(|v| v.parse::<f64>().unwrap())
-            .collect();
+        let vals: Vec<f64> = row.iter().take(30).map(|v| v.parse::<f64>().unwrap()).collect();
         rows.push(vals);
     }
 
@@ -83,10 +75,7 @@ fn test_get_onc_clusters() {
 
     assert!(result.clusters.len() >= 5);
     assert!(contains_cluster(&result.clusters, &[11, 14, 18]));
-    assert!(contains_cluster(
-        &result.clusters,
-        &[0, 2, 3, 10, 12, 13, 20, 22, 23]
-    ));
+    assert!(contains_cluster(&result.clusters, &[0, 2, 3, 10, 12, 13, 20, 22, 23]));
     assert!(contains_cluster(&result.clusters, &[5, 6, 7, 25, 26, 27]));
 }
 

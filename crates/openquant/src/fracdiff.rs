@@ -1,4 +1,4 @@
-/// Fractional differentiation utilities (AFML chapter 5 style).
+//! Fractional differentiation utilities (AFML chapter 5 style).
 
 pub fn get_weights(diff_amt: f64, size: usize) -> Vec<f64> {
     if size == 0 {

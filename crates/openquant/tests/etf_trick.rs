@@ -20,14 +20,9 @@ fn test_etf_trick_costs_defined() {
     let costs_path = fixture_path("costs_df.csv");
     let rates_path = fixture_path("rates_df.csv");
 
-    let mut csv_etf_trick = EtfTrick::from_csv(
-        &open_path,
-        &close_path,
-        &alloc_path,
-        &costs_path,
-        Some(&rates_path),
-    )
-    .unwrap();
+    let mut csv_etf_trick =
+        EtfTrick::from_csv(&open_path, &close_path, &alloc_path, &costs_path, Some(&rates_path))
+            .unwrap();
     let in_memory_etf_trick = EtfTrick::from_tables(
         table("open_df.csv"),
         table("close_df.csv"),

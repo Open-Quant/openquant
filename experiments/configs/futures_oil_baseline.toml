@@ -1,0 +1,23 @@
+[meta]
+name = "futures_oil_baseline"
+seed = 7
+n_bars = 192
+
+[data]
+asset_names = ["CL", "NG", "RB", "GC"]
+
+[pipeline]
+cusum_threshold = 0.001
+num_classes = 2
+step_size = 0.1
+risk_free_rate = 0.0
+confidence_level = 0.05
+
+[costs]
+commission_bps = 1.5
+spread_bps = 2.0
+slippage_vol_mult = 8.0
+
+[gates]
+min_net_sharpe = 0.30
+min_realized_sharpe = 0.25

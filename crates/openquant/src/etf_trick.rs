@@ -29,26 +29,19 @@ impl Table {
             ));
         }
 
-        let columns = headers
-            .iter()
-            .skip(1)
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
+        let columns = headers.iter().skip(1).map(ToString::to_string).collect::<Vec<_>>();
         let mut index = Vec::new();
         let mut values = Vec::new();
 
         for rec in rdr.records() {
-            let record = rec.map_err(|e| format!("failed to read record {}: {e}", path.display()))?;
+            let record =
+                rec.map_err(|e| format!("failed to read record {}: {e}", path.display()))?;
             let (idx, row) = parse_row(&record, path)?;
             index.push(idx);
             values.push(row);
         }
 
-        Ok(Self {
-            index,
-            columns,
-            values,
-        })
+        Ok(Self { index, columns, values })
     }
 
     fn align_columns(&self, ordered_columns: &[String]) -> Result<Self, String> {
@@ -109,15 +102,7 @@ impl EtfTrick {
         rates: Option<Table>,
     ) -> Result<Self, String> {
         validate_shapes(&open, &close, &alloc, &costs, rates.as_ref())?;
-        Ok(Self {
-            source: Source::InMemory {
-                open,
-                close,
-                alloc,
-                costs,
-                rates,
-            },
-        })
+        Ok(Self { source: Source::InMemory { open, close, alloc, costs, rates } })
     }
 
     pub fn from_csv(
@@ -140,20 +125,10 @@ impl EtfTrick {
 
     pub fn get_etf_series(&self, batch_size: usize) -> Result<Vec<(String, f64)>, String> {
         match &self.source {
-            Source::InMemory {
-                open,
-                close,
-                alloc,
-                costs,
-                rates,
-            } => compute_etf_series(open, close, alloc, costs, rates.as_ref()),
-            Source::Csv {
-                open_path,
-                close_path,
-                alloc_path,
-                costs_path,
-                rates_path,
-            } => {
+            Source::InMemory { open, close, alloc, costs, rates } => {
+                compute_etf_series(open, close, alloc, costs, rates.as_ref())
+            }
+            Source::Csv { open_path, close_path, alloc_path, costs_path, rates_path } => {
                 if batch_size < 3 {
                     return Err("Batch size should be >= 3".to_string());
                 }
@@ -259,10 +234,7 @@ fn compute_etf_series(
     for i in 1..(n_rows - 1) {
         let weights = alloc.values[i].clone();
 
-        let allocs_change = !weights
-            .iter()
-            .zip(prev_allocs.iter())
-            .all(|(a, b)| a == b);
+        let allocs_change = !weights.iter().zip(prev_allocs.iter()).all(|(a, b)| a == b);
 
         let mut abs_w_sum = 0.0;
         for w in &weights {
@@ -282,11 +254,7 @@ fn compute_etf_series(
         for j in 0..n_cols {
             let close_open = close.values[i][j] - open.values[i][j];
             let price_diff = close.values[i][j] - close.values[i - 1][j];
-            delta[j] = if prev_allocs_change {
-                close_open
-            } else {
-                price_diff
-            };
+            delta[j] = if prev_allocs_change { close_open } else { price_diff };
         }
 
         if prev_h.is_none() {
@@ -334,11 +302,8 @@ pub fn get_futures_roll_series(
         return Ok(Vec::new());
     }
 
-    let mut filtered: Vec<FuturesRollRow> = rows
-        .iter()
-        .filter(|r| r.security == r.current_security)
-        .cloned()
-        .collect();
+    let mut filtered: Vec<FuturesRollRow> =
+        rows.iter().filter(|r| r.security == r.current_security).cloned().collect();
     filtered.sort_by_key(|r| r.date);
     if filtered.is_empty() {
         return Ok(Vec::new());

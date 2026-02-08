@@ -12,9 +12,7 @@ fn load_prices_and_names() -> (DMatrix<f64>, Vec<String>) {
     let mut rows: Vec<Vec<f64>> = Vec::new();
     for rec in rdr.records() {
         let row = rec.unwrap();
-        rows.push(
-            row.iter().skip(1).map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>(),
-        );
+        rows.push(row.iter().skip(1).map(|x| x.parse::<f64>().unwrap()).collect::<Vec<f64>>());
     }
     let nrows = rows.len();
     let ncols = rows[0].len();
@@ -138,8 +136,6 @@ fn test_value_error_for_incorrect_dimensions() {
     let (prices, names) = load_prices_and_names();
     let mut hrp = HierarchicalRiskParity::new();
     let bad_names = names[0..(names.len() - 1)].to_vec();
-    let err = hrp
-        .allocate(&bad_names, Some(&prices), None, None, None, false)
-        .unwrap_err();
+    let err = hrp.allocate(&bad_names, Some(&prices), None, None, None, false).unwrap_err();
     assert!(matches!(err, HrpError::DimensionMismatch(_)));
 }

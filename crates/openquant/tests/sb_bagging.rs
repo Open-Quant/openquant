@@ -158,10 +158,7 @@ fn test_value_error_raise() {
 
     let mut bagging_7 = SequentiallyBootstrappedBaggingClassifier::new(1);
     bagging_7.n_estimators = 0;
-    assert_eq!(
-        bagging_7.fit(&x, &y, &ind, None).unwrap_err(),
-        SbBaggingError::InvalidEstimators
-    );
+    assert_eq!(bagging_7.fit(&x, &y, &ind, None).unwrap_err(), SbBaggingError::InvalidEstimators);
 }
 
 #[test]
@@ -180,17 +177,14 @@ fn test_sb_classifier() {
 
     // indicator matrix needs the same number of labels as rows in train set
     let bar_index: Vec<usize> = (0..split).collect();
-    let t1: Vec<(usize, usize)> = (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
+    let t1: Vec<(usize, usize)> =
+        (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
     let ind_train = get_ind_matrix(&t1, &bar_index);
 
     sb.fit(&x_train, y_train, &ind_train, None).unwrap();
     let preds = sb.predict(&x_test).unwrap();
 
-    let acc = preds
-        .iter()
-        .zip(y_test.iter())
-        .filter(|(p, t)| **p == **t)
-        .count() as f64
+    let acc = preds.iter().zip(y_test.iter()).filter(|(p, t)| **p == **t).count() as f64
         / y_test.len() as f64;
 
     assert!(acc >= 0.55, "acc={acc}");
@@ -207,7 +201,8 @@ fn test_sb_regressor() {
     let y_test = &y[split..];
 
     let bar_index: Vec<usize> = (0..split).collect();
-    let t1: Vec<(usize, usize)> = (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
+    let t1: Vec<(usize, usize)> =
+        (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
     let ind_train = get_ind_matrix(&t1, &bar_index);
 
     let mut sb = SequentiallyBootstrappedBaggingRegressor::new(1);
@@ -226,11 +221,7 @@ fn test_sb_regressor() {
         })
         .sum::<f64>()
         / y_test.len() as f64;
-    let mae = preds
-        .iter()
-        .zip(y_test.iter())
-        .map(|(p, t)| (p - t).abs())
-        .sum::<f64>()
+    let mae = preds.iter().zip(y_test.iter()).map(|(p, t)| (p - t).abs()).sum::<f64>()
         / y_test.len() as f64;
 
     assert!(mse < 0.4, "mse={mse}");

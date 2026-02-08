@@ -12,10 +12,7 @@ struct LinearProbClassifier {
 
 impl LinearProbClassifier {
     fn new(n_features: usize) -> Self {
-        Self {
-            w: vec![0.0; n_features],
-            b: 0.0,
-        }
+        Self { w: vec![0.0; n_features], b: 0.0 }
     }
 }
 
@@ -56,12 +53,7 @@ impl SimpleClassifier for LinearProbClassifier {
     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
         x.iter()
             .map(|row| {
-                let z = row
-                    .iter()
-                    .zip(self.w.iter())
-                    .map(|(a, b)| a * b)
-                    .sum::<f64>()
-                    + self.b;
+                let z = row.iter().zip(self.w.iter()).map(|(a, b)| a * b).sum::<f64>() + self.b;
                 1.0 / (1.0 + (-z).exp())
             })
             .collect()
@@ -130,16 +122,8 @@ fn test_feature_importance_mdi_mda_sfi() {
     assert!(mdi["f1"].mean > mdi["f2"].mean);
 
     let mut clf = LinearProbClassifier::new(names.len());
-    let mda = mean_decrease_accuracy(
-        &mut clf,
-        &x,
-        &y,
-        &names,
-        &splits,
-        None,
-        Scoring::Accuracy,
-    )
-    .unwrap();
+    let mda =
+        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::Accuracy).unwrap();
     assert!(mda["f0"].mean > mda["f2"].mean);
 
     let mut clf2 = LinearProbClassifier::new(names.len());

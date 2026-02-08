@@ -15,10 +15,19 @@ def main():
     parser.add_argument("--latest", default="benchmarks/latest_benchmarks.json")
     parser.add_argument("--max-regression-pct", type=float, default=25.0)
     parser.add_argument("--min-baseline-ms", type=float, default=0.05)
+    parser.add_argument(
+        "--overrides",
+        default=None,
+        help=(
+            "Optional JSON file mapping benchmark name -> max regression percent override "
+            "(e.g. {\"synthetic_ticker_pipeline_end_to_end\": 50.0})"
+        ),
+    )
     args = parser.parse_args()
 
     baseline = load(Path(args.baseline))
     latest = load(Path(args.latest))
+    overrides = load(Path(args.overrides)) if args.overrides else {}
 
     base = baseline.get("benchmarks", {})
     curr = latest.get("benchmarks", {})
@@ -34,14 +43,18 @@ def main():
             continue
         checked += 1
         delta_pct = ((c_ms - b_ms) / b_ms) * 100.0
-        if delta_pct > args.max_regression_pct:
-            regressions.append((name, b_ms, c_ms, delta_pct))
+        threshold_pct = float(overrides.get(name, args.max_regression_pct))
+        if delta_pct > threshold_pct:
+            regressions.append((name, b_ms, c_ms, delta_pct, threshold_pct))
 
     print(f"checked {checked} benchmarks against baseline")
     if regressions:
         print("regressions above threshold:")
-        for name, b_ms, c_ms, d in regressions:
-            print(f"- {name}: baseline={b_ms:.3f}ms latest={c_ms:.3f}ms delta={d:.1f}%")
+        for name, b_ms, c_ms, d, t in regressions:
+            print(
+                f"- {name}: baseline={b_ms:.3f}ms latest={c_ms:.3f}ms "
+                f"delta={d:.1f}% threshold={t:.1f}%"
+            )
         return 1
 
     print("no benchmark regressions above threshold")

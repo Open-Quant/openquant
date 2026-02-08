@@ -51,9 +51,7 @@ fn test_variance_calculation() {
     let prices = load_prices();
     let cov = covariance(&prices);
     let weights = vec![1.0; prices.ncols()];
-    let variance = RiskMetrics
-        .calculate_variance(&cov, &weights)
-        .expect("variance should compute");
+    let variance = RiskMetrics.calculate_variance(&cov, &weights).expect("variance should compute");
     assert!(variance.is_finite());
 }
 
@@ -61,9 +59,8 @@ fn test_variance_calculation() {
 fn test_value_at_risk_calculation() {
     let prices = load_prices();
     let test_returns = first_col(&prices);
-    let value_at_risk = RiskMetrics
-        .calculate_value_at_risk(&test_returns, 0.05)
-        .expect("VaR should compute");
+    let value_at_risk =
+        RiskMetrics.calculate_value_at_risk(&test_returns, 0.05).expect("VaR should compute");
     assert!(value_at_risk.is_finite());
 }
 
@@ -71,9 +68,8 @@ fn test_value_at_risk_calculation() {
 fn test_expected_shortfall_calculation() {
     let prices = load_prices();
     let test_returns = first_col(&prices);
-    let expected_shortfall = RiskMetrics
-        .calculate_expected_shortfall(&test_returns, 0.05)
-        .expect("ES should compute");
+    let expected_shortfall =
+        RiskMetrics.calculate_expected_shortfall(&test_returns, 0.05).expect("ES should compute");
     assert!(expected_shortfall.is_finite() || expected_shortfall.is_nan());
 }
 

@@ -9,9 +9,7 @@ struct LinearRegModel {
 
 impl RegressionPredictor for LinearRegModel {
     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {
-        x.iter()
-            .map(|r| r.iter().zip(self.w.iter()).map(|(a, b)| a * b).sum::<f64>())
-            .collect()
+        x.iter().map(|r| r.iter().zip(self.w.iter()).map(|(a, b)| a * b).sum::<f64>()).collect()
     }
 }
 
@@ -19,9 +17,7 @@ struct NonLinearRegModel;
 
 impl RegressionPredictor for NonLinearRegModel {
     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {
-        x.iter()
-            .map(|r| 2.0 * r[0] + 0.6 * r[1] * r[1] + 1.1 * r[0] * r[2])
-            .collect()
+        x.iter().map(|r| 2.0 * r[0] + 0.6 * r[1] * r[1] + 1.1 * r[0] * r[2]).collect()
     }
 }
 
@@ -41,9 +37,7 @@ impl ClassificationPredictor for NonLinearClsModel {
 fn synthetic_x(n: usize, p: usize) -> Vec<Vec<f64>> {
     (0..n)
         .map(|i| {
-            (0..p)
-                .map(|j| ((i * (j + 3) + j * 7) % 31) as f64 / 31.0 - 0.5)
-                .collect::<Vec<_>>()
+            (0..p).map(|j| ((i * (j + 3) + j * 7) % 31) as f64 / 31.0 - 0.5).collect::<Vec<_>>()
         })
         .collect()
 }
@@ -59,9 +53,8 @@ fn test_linear_effect() {
     assert!(linear_effect.norm[&0] > 0.20);
     assert!(linear_effect.norm[&1] > 0.01);
 
-    let reg_linear = LinearRegModel {
-        w: vec![1.2, 0.0, 0.8, 0.0, 0.0, 2.4, 1.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9],
-    };
+    let reg_linear =
+        LinearRegModel { w: vec![1.2, 0.0, 0.8, 0.0, 0.0, 2.4, 1.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9] };
     fp.fit(&reg_linear, &x, 20, None).unwrap();
     let (linear_effect_linear, _, _) = fp.get_effects().unwrap();
     let linear_effect_linear_norm = linear_effect_linear.norm.clone();
@@ -86,9 +79,7 @@ fn test_non_linear_effect() {
     let (_, non_linear_effect, _) = fp.get_effects().unwrap();
     assert!(non_linear_effect.raw[&1] > 0.01);
 
-    let linear = LinearRegModel {
-        w: vec![1.0; 13],
-    };
+    let linear = LinearRegModel { w: vec![1.0; 13] };
     fp.fit(&linear, &x, 20, None).unwrap();
     let (_, non_linear_linear_model, _) = fp.get_effects().unwrap();
     let non_linear_linear_model_raw = non_linear_linear_model.raw.clone();
@@ -114,9 +105,7 @@ fn test_pairwise_effect() {
     let p = pairwise.unwrap();
     assert!(p.raw["(0, 2)"] > 0.01);
 
-    let linear = LinearRegModel {
-        w: vec![1.0; 13],
-    };
+    let linear = LinearRegModel { w: vec![1.0; 13] };
     fp.fit(&linear, &x, 20, Some(&pairs)).unwrap();
     let (_, _, pairwise_linear) = fp.get_effects().unwrap();
     let p_lin = pairwise_linear.unwrap();

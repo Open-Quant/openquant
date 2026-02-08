@@ -46,12 +46,8 @@ impl RegressionModelFingerprint {
         num_values: usize,
         pairwise_combinations: Option<&[(usize, usize)]>,
     ) -> Result<(), String> {
-        let (lin, nonlin, pair) = fit_impl(
-            |data| model.predict(data),
-            x,
-            num_values,
-            pairwise_combinations,
-        )?;
+        let (lin, nonlin, pair) =
+            fit_impl(|data| model.predict(data), x, num_values, pairwise_combinations)?;
         self.linear_effect = Some(lin);
         self.non_linear_effect = Some(nonlin);
         self.pair_wise_effect = pair;
@@ -95,12 +91,8 @@ impl ClassificationModelFingerprint {
         num_values: usize,
         pairwise_combinations: Option<&[(usize, usize)]>,
     ) -> Result<(), String> {
-        let (lin, nonlin, pair) = fit_impl(
-            |data| model.predict_proba(data),
-            x,
-            num_values,
-            pairwise_combinations,
-        )?;
+        let (lin, nonlin, pair) =
+            fit_impl(|data| model.predict_proba(data), x, num_values, pairwise_combinations)?;
         self.linear_effect = Some(lin);
         self.non_linear_effect = Some(nonlin);
         self.pair_wise_effect = pair;
@@ -159,21 +151,13 @@ where
     let partial_dep = get_individual_partial_dependence(&predictor, x, &feature_values);
     let linear_raw = get_linear_effect(&feature_values, &partial_dep);
     let nonlin_raw = get_non_linear_effect(&feature_values, &partial_dep);
-    let linear = Effect {
-        norm: normalize_usize_map(&linear_raw),
-        raw: linear_raw,
-    };
-    let non_linear = Effect {
-        norm: normalize_usize_map(&nonlin_raw),
-        raw: nonlin_raw,
-    };
+    let linear = Effect { norm: normalize_usize_map(&linear_raw), raw: linear_raw };
+    let non_linear = Effect { norm: normalize_usize_map(&nonlin_raw), raw: nonlin_raw };
 
     let pair = pairwise_combinations.map(|pairs| {
-        let raw = get_pairwise_effect(pairs, &predictor, x, num_values, &feature_values, &partial_dep);
-        PairwiseEffect {
-            norm: normalize_string_map(&raw),
-            raw,
-        }
+        let raw =
+            get_pairwise_effect(pairs, &predictor, x, num_values, &feature_values, &partial_dep);
+        PairwiseEffect { norm: normalize_string_map(&raw), raw }
     });
 
     Ok((linear, non_linear, pair))
@@ -185,10 +169,7 @@ fn get_feature_values(x: &[Vec<f64>], num_values: usize) -> Vec<Vec<f64>> {
     for j in 0..n_features {
         let mut col: Vec<f64> = x.iter().map(|r| r[j]).collect();
         col.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        for (k, q) in (0..num_values)
-            .map(|i| i as f64 / (num_values - 1) as f64)
-            .enumerate()
-        {
+        for (k, q) in (0..num_values).map(|i| i as f64 / (num_values - 1) as f64).enumerate() {
             out[j][k] = quantile_sorted(&col, q);
         }
     }
@@ -219,34 +200,32 @@ where
     out
 }
 
-fn get_linear_effect(feature_values: &[Vec<f64>], partial_dep: &[Vec<f64>]) -> BTreeMap<usize, f64> {
+fn get_linear_effect(
+    feature_values: &[Vec<f64>],
+    partial_dep: &[Vec<f64>],
+) -> BTreeMap<usize, f64> {
     let mut store = BTreeMap::new();
     for j in 0..feature_values.len() {
         let x = &feature_values[j];
         let y = &partial_dep[j];
         let (a, b) = ols_line(x, y);
         let y_mean = y.iter().sum::<f64>() / y.len() as f64;
-        let effect = x
-            .iter()
-            .map(|v| (a + b * *v - y_mean).abs())
-            .sum::<f64>()
-            / x.len() as f64;
+        let effect = x.iter().map(|v| (a + b * *v - y_mean).abs()).sum::<f64>() / x.len() as f64;
         store.insert(j, effect);
     }
     store
 }
 
-fn get_non_linear_effect(feature_values: &[Vec<f64>], partial_dep: &[Vec<f64>]) -> BTreeMap<usize, f64> {
+fn get_non_linear_effect(
+    feature_values: &[Vec<f64>],
+    partial_dep: &[Vec<f64>],
+) -> BTreeMap<usize, f64> {
     let mut store = BTreeMap::new();
     for j in 0..feature_values.len() {
         let x = &feature_values[j];
         let y = &partial_dep[j];
         let (a, b) = ols_line(x, y);
-        let effect = x
-            .iter()
-            .zip(y.iter())
-            .map(|(vx, vy)| (a + b * *vx - *vy).abs())
-            .sum::<f64>()
+        let effect = x.iter().zip(y.iter()).map(|(vx, vy)| (a + b * *vx - *vy).abs()).sum::<f64>()
             / x.len() as f64;
         store.insert(j, effect);
     }

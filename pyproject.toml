@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "openquant"
+version = "0.1.0"
+description = "Python bindings for openquant-rs"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "OpenQuant contributors" }]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+dependencies = ["polars>=1.0,<2", "pyarrow>=15,<20"]
+
+[tool.maturin]
+manifest-path = "crates/pyopenquant/Cargo.toml"
+python-source = "python"
+module-name = "openquant._core"
+features = []
+
+[dependency-groups]
+dev = ["maturin>=1.7,<2.0", "pytest>=8,<9"]
