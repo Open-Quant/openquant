@@ -24,4 +24,4 @@ module-name = "openquant._core"
 features = []
 
 [dependency-groups]
-dev = ["maturin>=1.7,<2.0", "pytest>=8,<9"]
+dev = ["maturin>=1.7,<2.0", "pytest>=8,<9", "matplotlib>=3.8,<4"]
