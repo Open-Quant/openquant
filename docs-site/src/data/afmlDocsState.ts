@@ -171,6 +171,34 @@ export const afmlDocsState = {
       ]
     },
     {
+      "chapter": "CHAPTER 11",
+      "theme": "Backtest logic and pitfalls",
+      "status": "done",
+      "chunkCount": 24,
+      "sections": [
+        {
+          "id": "chapter-11-backtesting_engine",
+          "module": "backtesting_engine",
+          "slug": "backtesting-engine",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "chapter": "CHAPTER 12",
+      "theme": "Walk-forward and CPCV",
+      "status": "done",
+      "chunkCount": 28,
+      "sections": [
+        {
+          "id": "chapter-12-backtesting_engine",
+          "module": "backtesting_engine",
+          "slug": "backtesting-engine",
+          "status": "done"
+        }
+      ]
+    },
+    {
       "chapter": "CHAPTER 14",
       "theme": "Backtest diagnostics",
       "status": "done",
