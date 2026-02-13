@@ -25,4 +25,5 @@ pub mod sample_weights;
 pub mod sampling;
 pub mod sb_bagging;
 pub mod structural_breaks;
+pub mod synthetic_backtesting;
 pub mod util;

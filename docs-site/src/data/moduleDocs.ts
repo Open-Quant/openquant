@@ -707,6 +707,47 @@ export const moduleDocs: ModuleDoc[] = [
     notes: ["Sequential bootstrap improves diversity under event overlap.", "Tune max_samples/max_features with out-of-sample monitoring."],
   },
   {
+    slug: "synthetic-backtesting",
+    module: "synthetic_backtesting",
+    subject: "Sampling, Validation and ML Diagnostics",
+    summary: "Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.",
+    whyItExists:
+      "AFML Chapter 13 shows that selecting PT/SL rules on a single historical path is prone to overfitting; synthetic path ensembles let us evaluate rule robustness under calibrated process dynamics.",
+    keyApis: [
+      "calibrate_ou_params",
+      "generate_ou_paths",
+      "evaluate_rule_on_paths",
+      "search_optimal_trading_rule",
+      "detect_no_stable_optimum",
+      "run_synthetic_otr_workflow",
+    ],
+    formulas: [
+      {
+        label: "Discrete O-U (AR(1))",
+        latex: "P_t=\\alpha+\\phi P_{t-1}+\\sigma\\epsilon_t,\\quad \\epsilon_t\\sim\\mathcal N(0,1)",
+      },
+      {
+        label: "Equilibrium Level",
+        latex: "\\bar P=\\frac{\\alpha}{1-\\phi}",
+      },
+      {
+        label: "OTR Objective over Rule Mesh",
+        latex: "R^*=\\arg\\max_{R\\in\\Omega}\\frac{\\mathbb E[\\pi\\mid R]}{\\sigma[\\pi\\mid R]}",
+      },
+    ],
+    examples: [
+      {
+        title: "End-to-end synthetic OTR workflow",
+        language: "rust",
+        code: `use openquant::synthetic_backtesting::{run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig};\n\nlet cfg = SyntheticBacktestConfig {\n  initial_price: historical_prices[historical_prices.len() - 1],\n  n_paths: 10_000,\n  horizon: 128,\n  seed: 42,\n  profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n  stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n  max_holding_steps: 64,\n  annualization_factor: 1.0,\n  stability_criteria: StabilityCriteria::default(),\n};\n\nlet out = run_synthetic_otr_workflow(&historical_prices, &cfg)?;\nif out.diagnostics.no_stable_optimum {\n  println!(\"Skip OTR optimization: {}\", out.diagnostics.reason);\n} else {\n  println!(\"Best PT/SL: {:?}\", out.best_rule);\n}`,
+      },
+    ],
+    notes: [
+      "Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample.",
+      "Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization.",
+    ],
+  },
+  {
     slug: "structural-breaks",
     module: "structural_breaks",
     subject: "Market Microstructure, Dependence and Regime Detection",

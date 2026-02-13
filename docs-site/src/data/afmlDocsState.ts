@@ -199,6 +199,20 @@ export const afmlDocsState = {
       ]
     },
     {
+      "chapter": "CHAPTER 13",
+      "theme": "Synthetic backtesting and OTR",
+      "status": "done",
+      "chunkCount": 25,
+      "sections": [
+        {
+          "id": "chapter-13-synthetic_backtesting",
+          "module": "synthetic_backtesting",
+          "slug": "synthetic-backtesting",
+          "status": "done"
+        }
+      ]
+    },
+    {
       "chapter": "CHAPTER 14",
       "theme": "Backtest diagnostics",
       "status": "done",
