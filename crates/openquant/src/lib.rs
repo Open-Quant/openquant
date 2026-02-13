@@ -5,6 +5,7 @@ pub mod codependence;
 pub mod cross_validation;
 pub mod data_structures;
 pub mod ef3m;
+pub mod ensemble_methods;
 pub mod etf_trick;
 pub mod feature_importance;
 pub mod filters;
