@@ -182,6 +182,49 @@ export const moduleDocs: ModuleDoc[] = [
     notes: ["Threshold selection controls bar frequency and noise level.", "Keep OHLCV semantics consistent across downstream features."],
   },
   {
+    slug: "hyperparameter-tuning",
+    module: "hyperparameter_tuning",
+    subject: "Sampling, Validation and ML Diagnostics",
+    summary: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.",
+    whyItExists:
+      "AFML Chapter 9 recommends tuning under PurgedKFold, using randomized search for large spaces, and scoring with metrics aligned to trading objectives.",
+    keyApis: [
+      "grid_search",
+      "randomized_search",
+      "expand_param_grid",
+      "sample_log_uniform",
+      "classification_score",
+      "SearchScoring",
+      "RandomParamDistribution",
+    ],
+    formulas: [
+      {
+        label: "Purged CV Objective",
+        latex: "\\hat\\theta=\\arg\\max_{\\theta\\in\\Theta}\\frac{1}{K}\\sum_{k=1}^{K}\\mathrm{Score}(f_\\theta,\\mathcal T_k^{train},\\mathcal T_k^{test})",
+      },
+      {
+        label: "Log-Uniform Draw",
+        latex: "\\log x\\sim U(\\log a,\\log b),\\; a>0,\\;x\\in(a,b)",
+      },
+      {
+        label: "Weighted Neg Log Loss",
+        latex: "-\\frac{1}{\\sum_i w_i}\\sum_i w_i\\left[y_i\\log p_i + (1-y_i)\\log(1-p_i)\\right]",
+      },
+    ],
+    examples: [
+      {
+        title: "Randomized search with PurgedKFold semantics",
+        language: "rust",
+        code: `use std::collections::BTreeMap;\nuse openquant::hyperparameter_tuning::{\n  randomized_search, RandomParamDistribution, SearchData, SearchScoring,\n};\n\nlet mut space = BTreeMap::new();\nspace.insert(\"C\".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });\nspace.insert(\"gamma\".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });\n\nlet result = randomized_search(\n  build_model,\n  &space,\n  25,\n  42,\n  SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },\n  5,\n  0.01,\n  SearchScoring::NegLogLoss,\n)?;\nprintln!(\"best score = {}\", result.best_score);`,
+      },
+    ],
+    notes: [
+      "Use Accuracy only when each prediction has similar economic value (equal bet sizing).",
+      "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.",
+      "BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.",
+    ],
+  },
+  {
     slug: "ef3m",
     module: "ef3m",
     subject: "Sampling, Validation and ML Diagnostics",

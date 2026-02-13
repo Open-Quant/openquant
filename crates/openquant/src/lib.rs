@@ -13,6 +13,7 @@ pub mod fingerprint;
 pub mod fracdiff;
 pub mod hcaa;
 pub mod hrp;
+pub mod hyperparameter_tuning;
 pub mod labeling;
 pub mod microstructural_features;
 pub mod onc;

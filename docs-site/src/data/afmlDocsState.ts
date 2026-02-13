@@ -143,6 +143,20 @@ export const afmlDocsState = {
       ]
     },
     {
+      "chapter": "CHAPTER 9",
+      "theme": "Hyper-parameter tuning",
+      "status": "done",
+      "chunkCount": 17,
+      "sections": [
+        {
+          "id": "chapter-9-hyperparameter_tuning",
+          "module": "hyperparameter_tuning",
+          "slug": "hyperparameter-tuning",
+          "status": "done"
+        }
+      ]
+    },
+    {
       "chapter": "CHAPTER 10",
       "theme": "Position sizing",
       "status": "done",
