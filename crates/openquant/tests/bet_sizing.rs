@@ -200,6 +200,18 @@ fn test_confirm_and_cast_to_df_one_series_broadcast() {
 }
 
 #[test]
+fn test_confirm_and_cast_to_df_checked_shape_mismatch_error() {
+    let pos = [25.0, 35.0, 45.0];
+    let max_pos = [55.0, 56.0];
+    let m_p = [75.0];
+    let f = [80.0];
+    let err = confirm_and_cast_to_df_checked(&pos, &max_pos, &m_p, &f)
+        .expect_err("shape mismatch should return typed error");
+    assert_eq!(err, BetSizingError::ShapeMismatch { name: "max_pos", len: 2, expected: 3 });
+    assert!(err.to_string().contains("expected 1 or 3"));
+}
+
+#[test]
 fn test_cdf_mixture_and_single_above_zero() {
     let fit = [0.0, 1.0, 1.0, 2.0, 0.5];
     let cdf = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.5);

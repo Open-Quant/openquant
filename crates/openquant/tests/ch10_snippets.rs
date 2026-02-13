@@ -175,6 +175,16 @@ fn test_bet_size_key_error() {
 }
 
 #[test]
+fn test_bet_size_checked_invalid_function_error() {
+    let err = bet_size_checked(2.0, 0.4, "NotAFunction").expect_err("should return typed error");
+    assert_eq!(
+        err,
+        BetSizingError::InvalidFunction { context: "bet size", func: "NotAFunction".to_string() }
+    );
+    assert!(err.to_string().contains("invalid bet size function"));
+}
+
+#[test]
 fn test_get_target_pos_sigmoid() {
     let f_i: f64 = 34.6;
     let m_p: f64 = 21.9;
@@ -228,6 +238,20 @@ fn test_get_target_pos_key_error() {
 }
 
 #[test]
+fn test_get_target_pos_checked_invalid_function_error() {
+    let err = get_target_pos_checked(1.0, 2.0, 1.0, 5.0, "NotAFunction")
+        .expect_err("should return typed error");
+    assert_eq!(
+        err,
+        BetSizingError::InvalidFunction {
+            context: "get_target_pos",
+            func: "NotAFunction".to_string()
+        }
+    );
+    assert!(err.to_string().contains("invalid get_target_pos function"));
+}
+
+#[test]
 fn test_get_w_sigmoid() {
     let x_sig: f64 = 24.2;
     let m_sig: f64 = 0.98;
@@ -249,6 +273,13 @@ fn test_get_w_power() {
 #[should_panic]
 fn test_get_w_power_value_error() {
     let _ = get_w_power(1.2, 0.8);
+}
+
+#[test]
+fn test_get_w_power_checked_range_error() {
+    let err = get_w_power_checked(1.2, 0.8).expect_err("should return typed error");
+    assert_eq!(err, BetSizingError::PriceDivergenceOutOfRange { value: 1.2 });
+    assert!(err.to_string().contains("price divergence"));
 }
 
 #[test]
@@ -308,6 +339,17 @@ fn test_inv_price_key_error() {
 }
 
 #[test]
+fn test_inv_price_checked_invalid_function_error() {
+    let err =
+        inv_price_checked(12.0, 1.5, 0.7, "NotAFunction").expect_err("should return typed error");
+    assert_eq!(
+        err,
+        BetSizingError::InvalidFunction { context: "inv_price", func: "NotAFunction".to_string() }
+    );
+    assert!(err.to_string().contains("invalid inv_price function"));
+}
+
+#[test]
 fn test_limit_price_sigmoid() {
     let t_pos: f64 = 124.0;
     let pos: f64 = 112.0;
@@ -355,4 +397,18 @@ fn test_limit_price_power() {
 #[should_panic]
 fn test_limit_price_key_error() {
     let _ = limit_price(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction");
+}
+
+#[test]
+fn test_limit_price_checked_invalid_function_error() {
+    let err = limit_price_checked(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction")
+        .expect_err("should return typed error");
+    assert_eq!(
+        err,
+        BetSizingError::InvalidFunction {
+            context: "limit_price",
+            func: "NotAFunction".to_string()
+        }
+    );
+    assert!(err.to_string().contains("invalid limit_price function"));
 }
