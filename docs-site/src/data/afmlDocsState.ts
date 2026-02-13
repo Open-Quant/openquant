@@ -89,6 +89,26 @@ export const afmlDocsState = {
       ]
     },
     {
+      "chapter": "CHAPTER 6",
+      "theme": "Ensemble methods",
+      "status": "done",
+      "chunkCount": 7,
+      "sections": [
+        {
+          "id": "chapter-6-ensemble_methods",
+          "module": "ensemble_methods",
+          "slug": "ensemble-methods",
+          "status": "done"
+        },
+        {
+          "id": "chapter-6-sb_bagging",
+          "module": "sb_bagging",
+          "slug": "sb-bagging",
+          "status": "done"
+        }
+      ]
+    },
+    {
       "chapter": "CHAPTER 7",
       "theme": "Leakage-aware validation",
       "status": "done",

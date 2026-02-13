@@ -202,6 +202,56 @@ export const moduleDocs: ModuleDoc[] = [
     notes: ["Use as initialization for more expensive optimizers.", "Sensitive to higher-moment estimation noise."],
   },
   {
+    slug: "ensemble-methods",
+    module: "ensemble_methods",
+    subject: "Sampling, Validation and ML Diagnostics",
+    summary: "Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.",
+    whyItExists:
+      "AFML Chapter 6 emphasizes that ensemble gains depend on error decomposition and forecast dependence, not just estimator count.",
+    keyApis: [
+      "bias_variance_noise",
+      "bootstrap_sample_indices",
+      "sequential_bootstrap_sample_indices",
+      "aggregate_classification_vote",
+      "aggregate_classification_probability_mean",
+      "average_pairwise_prediction_correlation",
+      "bagging_ensemble_variance",
+      "recommend_bagging_vs_boosting",
+    ],
+    formulas: [
+      {
+        label: "Error Decomposition",
+        latex: "\\operatorname{MSE}=\\operatorname{Bias}^2+\\operatorname{Var}+\\operatorname{Noise}",
+      },
+      {
+        label: "Bagging Variance Under Average Correlation",
+        latex: "\\sigma^2_{bag}=\\sigma^2\\left(\\rho+\\frac{1-\\rho}{N}\\right)",
+      },
+      {
+        label: "Majority Vote and Mean Probability",
+        latex:
+          "\\hat y=\\mathbf 1\\left(\\frac{1}{N}\\sum_{m=1}^N \\hat p_m \\ge \\tau\\right),\\quad \\hat p=\\frac{1}{N}\\sum_{m=1}^N \\hat p_m",
+      },
+    ],
+    examples: [
+      {
+        title: "Assess Ensemble Variance and Recommendation",
+        language: "rust",
+        code: `use openquant::ensemble_methods::{\n  average_pairwise_prediction_correlation,\n  bagging_ensemble_variance,\n  recommend_bagging_vs_boosting,\n};\n\nlet preds = vec![\n  vec![0.51, 0.49, 0.52, 0.50],\n  vec![0.50, 0.48, 0.53, 0.49],\n  vec![0.52, 0.50, 0.51, 0.50],\n];\n\nlet rho = average_pairwise_prediction_correlation(&preds)?;\nlet bag_var = bagging_ensemble_variance(1.0, rho, 20)?;\nlet decision = recommend_bagging_vs_boosting(0.54, rho, 0.75, 1.0, 20)?;\n\nprintln!(\"rho={rho:.3}, var={bag_var:.3}, rec={:?}\", decision.recommended);`,
+      },
+      {
+        title: "Aggregate Bagged Classifier Outputs",
+        language: "rust",
+        code: `use openquant::ensemble_methods::{\n  aggregate_classification_vote,\n  aggregate_classification_probability_mean,\n};\n\nlet vote = aggregate_classification_vote(&[\n  vec![1, 0, 1],\n  vec![1, 1, 0],\n  vec![0, 1, 1],\n])?;\n\nlet (mean_prob, labels) = aggregate_classification_probability_mean(&[\n  vec![0.9, 0.2, 0.6],\n  vec![0.8, 0.3, 0.5],\n  vec![0.7, 0.4, 0.4],\n], 0.5)?;\n\nassert_eq!(vote, vec![1, 1, 1]);\nassert_eq!(labels, vec![1, 0, 1]);\nassert_eq!(mean_prob.len(), 3);`,
+      },
+    ],
+    notes: [
+      "If base learners are highly correlated, bagging variance reduction is minimal even with many estimators.",
+      "Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations.",
+      "Boosting is usually preferable for weak learners (bias reduction); bagging is usually preferable for unstable learners (variance reduction).",
+    ],
+  },
+  {
     slug: "etf-trick",
     module: "etf_trick",
     subject: "Position Sizing and Trade Construction",
