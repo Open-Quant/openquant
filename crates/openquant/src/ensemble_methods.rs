@@ -80,12 +80,7 @@ pub fn bias_variance_noise(
     let mse = mse_sum / (n_samples * n_models);
     let noise = (mse - bias_sq - variance).max(0.0);
 
-    Ok(BiasVarianceNoise {
-        bias_sq,
-        variance,
-        noise,
-        mse,
-    })
+    Ok(BiasVarianceNoise { bias_sq, variance, noise, mse })
 }
 
 pub fn bootstrap_sample_indices(
@@ -157,22 +152,14 @@ pub fn aggregate_classification_vote(per_model_predictions: &[Vec<u8>]) -> Resul
     if per_model_predictions.iter().any(|row| row.len() != n) {
         return Err("prediction length mismatch".to_string());
     }
-    if per_model_predictions
-        .iter()
-        .flat_map(|row| row.iter())
-        .any(|label| *label > 1)
-    {
+    if per_model_predictions.iter().flat_map(|row| row.iter()).any(|label| *label > 1) {
         return Err("classification vote expects binary labels in {0,1}".to_string());
     }
 
     let mut out = vec![0u8; n];
     for i in 0..n {
         let votes = per_model_predictions.iter().map(|row| row[i] as usize).sum::<usize>();
-        out[i] = if votes * 2 >= per_model_predictions.len() {
-            1
-        } else {
-            0
-        };
+        out[i] = if votes * 2 >= per_model_predictions.len() { 1 } else { 0 };
     }
     Ok(out)
 }
@@ -192,7 +179,9 @@ pub fn aggregate_classification_probability_mean(
     Ok((probs, labels))
 }
 
-pub fn average_pairwise_prediction_correlation(per_model_predictions: &[Vec<f64>]) -> Result<f64, String> {
+pub fn average_pairwise_prediction_correlation(
+    per_model_predictions: &[Vec<f64>],
+) -> Result<f64, String> {
     if per_model_predictions.len() < 2 {
         return Err("at least two model prediction rows are required".to_string());
     }
@@ -248,8 +237,11 @@ pub fn recommend_bagging_vs_boosting(
     if !(0.0..=1.0).contains(&label_redundancy) {
         return Err("label_redundancy must be in [0,1]".to_string());
     }
-    let bag_var =
-        bagging_ensemble_variance(single_estimator_variance, average_prediction_correlation, n_estimators)?;
+    let bag_var = bagging_ensemble_variance(
+        single_estimator_variance,
+        average_prediction_correlation,
+        n_estimators,
+    )?;
     let expected_reduction = (single_estimator_variance - bag_var).max(0.0);
 
     // Heuristic criteria:

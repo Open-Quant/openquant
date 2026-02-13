@@ -1,18 +1,14 @@
 use openquant::ensemble_methods::{
-    aggregate_classification_probability_mean, aggregate_classification_vote, aggregate_regression_mean,
-    average_pairwise_prediction_correlation, bagging_ensemble_variance, bias_variance_noise,
-    bootstrap_sample_indices, recommend_bagging_vs_boosting, sequential_bootstrap_sample_indices,
-    EnsembleMethod,
+    aggregate_classification_probability_mean, aggregate_classification_vote,
+    aggregate_regression_mean, average_pairwise_prediction_correlation, bagging_ensemble_variance,
+    bias_variance_noise, bootstrap_sample_indices, recommend_bagging_vs_boosting,
+    sequential_bootstrap_sample_indices, EnsembleMethod,
 };
 
 #[test]
 fn test_bias_variance_noise_decomposition() {
     let y = vec![1.0, 0.0, 1.0, 0.0];
-    let preds = vec![
-        vec![0.9, 0.1, 0.8, 0.2],
-        vec![0.8, 0.2, 0.7, 0.3],
-        vec![1.0, 0.0, 0.9, 0.1],
-    ];
+    let preds = vec![vec![0.9, 0.1, 0.8, 0.2], vec![0.8, 0.2, 0.7, 0.3], vec![1.0, 0.0, 0.9, 0.1]];
 
     let out = bias_variance_noise(&y, &preds).unwrap();
     assert!(out.bias_sq >= 0.0);
@@ -41,11 +37,15 @@ fn test_aggregation_helpers() {
     let reg = aggregate_regression_mean(&[vec![1.0, 3.0], vec![3.0, 1.0]]).unwrap();
     assert_eq!(reg, vec![2.0, 2.0]);
 
-    let vote = aggregate_classification_vote(&[vec![1, 0, 1], vec![1, 1, 0], vec![0, 1, 1]]).unwrap();
+    let vote =
+        aggregate_classification_vote(&[vec![1, 0, 1], vec![1, 1, 0], vec![0, 1, 1]]).unwrap();
     assert_eq!(vote, vec![1, 1, 1]);
 
-    let (prob, labels) =
-        aggregate_classification_probability_mean(&[vec![0.9, 0.2], vec![0.7, 0.4], vec![0.8, 0.3]], 0.5).unwrap();
+    let (prob, labels) = aggregate_classification_probability_mean(
+        &[vec![0.9, 0.2], vec![0.7, 0.4], vec![0.8, 0.3]],
+        0.5,
+    )
+    .unwrap();
     assert!((prob[0] - 0.8).abs() < 1e-12);
     assert!((prob[1] - 0.3).abs() < 1e-12);
     assert_eq!(labels, vec![1, 0]);
