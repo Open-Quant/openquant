@@ -1,4 +1,5 @@
 pub mod backtest_statistics;
+pub mod backtesting_engine;
 pub mod bet_sizing;
 pub mod cla;
 pub mod codependence;

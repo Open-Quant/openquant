@@ -52,6 +52,52 @@ export const moduleDocs: ModuleDoc[] = [
     ],
   },
   {
+    slug: "backtesting-engine",
+    module: "backtesting_engine",
+    subject: "Sampling, Validation and ML Diagnostics",
+    summary: "Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.",
+    whyItExists:
+      "AFML Chapters 11-12 require scenario-based validation with explicit anti-leakage controls, split provenance, and path-wise uncertainty rather than single-score reporting.",
+    keyApis: [
+      "run_walk_forward",
+      "run_cross_validation",
+      "run_cpcv",
+      "cpcv_path_count",
+      "BacktestRunConfig",
+      "BacktestSafeguards",
+      "WalkForwardConfig",
+      "CrossValidationConfig",
+      "CpcvConfig",
+    ],
+    formulas: [
+      {
+        label: "CPCV Path Count",
+        latex: "\\phi[N,k]=\\binom{N}{k}\\frac{k}{N}=\\binom{N-1}{k-1}",
+      },
+      {
+        label: "Purge + Embargo Train Set",
+        latex:
+          "\\mathcal T_{train}^{*}=\\mathcal T_{train}\\setminus\\{i: \\exists j\\in\\mathcal T_{test},\\;I_i\\cap I_j\\neq\\varnothing\\}\\setminus\\mathcal E(\\mathcal T_{test},p)",
+      },
+      {
+        label: "Per-Path Sharpe",
+        latex: "S_{path}=\\frac{\\bar r_{path}}{\\sigma_{path}}\\sqrt{T_{path}}",
+      },
+    ],
+    examples: [
+      {
+        title: "Run CPCV and inspect Sharpe distribution",
+        language: "rust",
+        code: `use openquant::backtesting_engine::{\n  run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,\n};\n\nlet result = run_cpcv(\n  &data,\n  &BacktestRunConfig {\n    mode_provenance: \"research_v3_with_costs\".to_string(),\n    trials_count: 24,\n    safeguards: BacktestSafeguards {\n      survivorship_bias_control: \"point-in-time universe\".to_string(),\n      look_ahead_control: \"lagged features\".to_string(),\n      data_mining_control: \"frozen split protocol\".to_string(),\n      cost_assumption: \"spread + slippage\".to_string(),\n      multiple_testing_control: \"trial count logged\".to_string(),\n    },\n  },\n  &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },\n  |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),\n)?;\n\nprintln!(\"phi = {}\", result.path_count);\nprintln!(\"path sharpe count = {}\", result.path_distribution.len());`,
+      },
+    ],
+    notes: [
+      "Chapter 11: a backtest is a scenario sanity check; keep safeguards and assumptions attached to every run.",
+      "Chapter 12: compare WF/CV/CPCV results by mode rather than averaging them into one statistic.",
+      "CPCV output is a path distribution, enabling robust Sharpe diagnostics (e.g., quantiles) instead of point estimates.",
+    ],
+  },
+  {
     slug: "bet-sizing",
     module: "bet_sizing",
     subject: "Position Sizing and Trade Construction",
