@@ -23,6 +23,7 @@ pub enum StandardBarType {
 /// Bar output with OHLCV-like fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StandardBar {
+    pub start_timestamp: NaiveDateTime,
     pub timestamp: NaiveDateTime,
     pub open: f64,
     pub high: f64,
@@ -211,6 +212,7 @@ fn build_bar(trades: &[Trade]) -> StandardBar {
 
     let open = trades.first().expect("non-empty slice").price;
     let close = trades.last().expect("non-empty slice").price;
+    let start_timestamp = trades.first().expect("non-empty slice").timestamp;
     let timestamp = trades.last().expect("non-empty slice").timestamp;
     let (high, low) = trades.iter().fold((f64::NEG_INFINITY, f64::INFINITY), |(h, l), trade| {
         (h.max(trade.price), l.min(trade.price))
@@ -222,6 +224,7 @@ fn build_bar(trades: &[Trade]) -> StandardBar {
     });
 
     StandardBar {
+        start_timestamp,
         timestamp,
         open,
         high,

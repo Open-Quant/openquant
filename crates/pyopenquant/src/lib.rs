@@ -1,4 +1,5 @@
 use nalgebra::DMatrix;
+use openquant::data_structures::{standard_bars, time_bars, StandardBarType, Trade};
 use openquant::filters::Threshold;
 use openquant::pipeline::{
     run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
@@ -48,6 +49,61 @@ fn parse_naive_datetimes(values: Vec<String>) -> PyResult<Vec<chrono::NaiveDateT
 
 fn format_naive_datetimes(values: Vec<chrono::NaiveDateTime>) -> Vec<String> {
     values.into_iter().map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()).collect()
+}
+
+fn parse_one_naive_datetime(value: &str) -> PyResult<chrono::NaiveDateTime> {
+    chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
+        .or_else(|_| {
+            chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .map(|d| d.and_hms_opt(0, 0, 0).expect("valid fixed midnight"))
+        })
+        .map_err(|e| {
+            PyValueError::new_err(format!(
+                "invalid datetime '{value}' (expected '%Y-%m-%d %H:%M:%S' or '%Y-%m-%d'): {e}"
+            ))
+        })
+}
+
+fn build_trades(
+    timestamps: Vec<String>,
+    prices: Vec<f64>,
+    volumes: Vec<f64>,
+) -> PyResult<Vec<Trade>> {
+    if timestamps.len() != prices.len() || prices.len() != volumes.len() {
+        return Err(PyValueError::new_err(format!(
+            "timestamps/prices/volumes length mismatch: {} / {} / {}",
+            timestamps.len(),
+            prices.len(),
+            volumes.len()
+        )));
+    }
+    let mut trades = Vec::with_capacity(prices.len());
+    for i in 0..prices.len() {
+        trades.push(Trade {
+            timestamp: parse_one_naive_datetime(&timestamps[i])?,
+            price: prices[i],
+            volume: volumes[i],
+        });
+    }
+    Ok(trades)
+}
+
+fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)> {
+    bars.into_iter()
+        .map(|b| {
+            (
+                b.start_timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                b.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                b.open,
+                b.high,
+                b.low,
+                b.close,
+                b.volume,
+                b.dollar_value,
+                b.tick_count,
+            )
+        })
+        .collect()
 }
 
 #[pyfunction(name = "calculate_value_at_risk")]
@@ -152,6 +208,66 @@ fn sampling_seq_bootstrap(
     warmup_samples: Option<Vec<usize>>,
 ) -> Vec<usize> {
     openquant::sampling::seq_bootstrap(&ind_mat, sample_length, warmup_samples)
+}
+
+#[pyfunction(name = "build_time_bars")]
+fn bars_build_time_bars(
+    timestamps: Vec<String>,
+    prices: Vec<f64>,
+    volumes: Vec<f64>,
+    interval_seconds: i64,
+) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+    if interval_seconds <= 0 {
+        return Err(PyValueError::new_err("interval_seconds must be > 0"));
+    }
+    let trades = build_trades(timestamps, prices, volumes)?;
+    let bars = time_bars(&trades, chrono::Duration::seconds(interval_seconds));
+    Ok(bars_to_rows(bars))
+}
+
+#[pyfunction(name = "build_tick_bars")]
+fn bars_build_tick_bars(
+    timestamps: Vec<String>,
+    prices: Vec<f64>,
+    volumes: Vec<f64>,
+    ticks_per_bar: usize,
+) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+    if ticks_per_bar == 0 {
+        return Err(PyValueError::new_err("ticks_per_bar must be > 0"));
+    }
+    let trades = build_trades(timestamps, prices, volumes)?;
+    let bars = standard_bars(&trades, ticks_per_bar as f64, StandardBarType::Tick);
+    Ok(bars_to_rows(bars))
+}
+
+#[pyfunction(name = "build_volume_bars")]
+fn bars_build_volume_bars(
+    timestamps: Vec<String>,
+    prices: Vec<f64>,
+    volumes: Vec<f64>,
+    volume_per_bar: f64,
+) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+    if !volume_per_bar.is_finite() || volume_per_bar <= 0.0 {
+        return Err(PyValueError::new_err("volume_per_bar must be > 0"));
+    }
+    let trades = build_trades(timestamps, prices, volumes)?;
+    let bars = standard_bars(&trades, volume_per_bar, StandardBarType::Volume);
+    Ok(bars_to_rows(bars))
+}
+
+#[pyfunction(name = "build_dollar_bars")]
+fn bars_build_dollar_bars(
+    timestamps: Vec<String>,
+    prices: Vec<f64>,
+    volumes: Vec<f64>,
+    dollar_value_per_bar: f64,
+) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+    if !dollar_value_per_bar.is_finite() || dollar_value_per_bar <= 0.0 {
+        return Err(PyValueError::new_err("dollar_value_per_bar must be > 0"));
+    }
+    let trades = build_trades(timestamps, prices, volumes)?;
+    let bars = standard_bars(&trades, dollar_value_per_bar, StandardBarType::Dollar);
+    Ok(bars_to_rows(bars))
 }
 
 #[pyfunction(name = "get_signal")]
@@ -324,6 +440,14 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     sampling.add_function(wrap_pyfunction!(sampling_seq_bootstrap, &sampling)?)?;
     m.add_submodule(&sampling)?;
     m.add("sampling", sampling)?;
+
+    let bars = PyModule::new_bound(py, "bars")?;
+    bars.add_function(wrap_pyfunction!(bars_build_time_bars, &bars)?)?;
+    bars.add_function(wrap_pyfunction!(bars_build_tick_bars, &bars)?)?;
+    bars.add_function(wrap_pyfunction!(bars_build_volume_bars, &bars)?)?;
+    bars.add_function(wrap_pyfunction!(bars_build_dollar_bars, &bars)?)?;
+    m.add_submodule(&bars)?;
+    m.add("bars", bars)?;
 
     let bet_sizing = PyModule::new_bound(py, "bet_sizing")?;
     bet_sizing.add_function(wrap_pyfunction!(bet_sizing_get_signal, &bet_sizing)?)?;

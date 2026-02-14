@@ -52,7 +52,7 @@ Input conventions:
 - `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`
 - timestamp variants require `len(close) == len(timestamps)`
 
-### `openquant.bars` (AFML Ch.2 event-driven bars)
+### `openquant.bars` (AFML Ch.2 event-driven bars; Rust core via PyO3)
 - `build_time_bars(df, interval="1d")`
 - `build_tick_bars(df, ticks_per_bar=50)`
 - `build_volume_bars(df, volume_per_bar=100_000.0)`

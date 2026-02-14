@@ -1,35 +1,62 @@
 from __future__ import annotations
 
 import math
+from typing import Callable
 
 import polars as pl
 
+from . import _core
 from . import data
 
 
-def _prepare(df: pl.DataFrame) -> pl.DataFrame:
-    return data.clean_ohlcv(df)
+def _interval_to_seconds(interval: str) -> int:
+    s = interval.strip().lower()
+    if s.endswith("d"):
+        return int(s[:-1]) * 24 * 3600
+    if s.endswith("h"):
+        return int(s[:-1]) * 3600
+    if s.endswith("m"):
+        return int(s[:-1]) * 60
+    if s.endswith("s"):
+        return int(s[:-1])
+    raise ValueError(f"unsupported interval format: {interval}")
 
 
-def _aggregate(df: pl.DataFrame) -> pl.DataFrame:
-    out = (
-        df.group_by(["symbol", "bar_id"])
-        .agg(
-            pl.col("ts").min().alias("start_ts"),
-            pl.col("ts").max().alias("end_ts"),
-            pl.col("open").first().alias("open"),
-            pl.col("high").max().alias("high"),
-            pl.col("low").min().alias("low"),
-            pl.col("close").last().alias("close"),
-            pl.col("adj_close").last().alias("adj_close"),
-            pl.col("volume").sum().alias("volume"),
-            pl.len().alias("n_obs"),
+def _rows_to_frame(symbol: str, rows: list[tuple[str, str, float, float, float, float, float, float, int]]) -> pl.DataFrame:
+    if not rows:
+        return pl.DataFrame(
+            {
+                "ts": [],
+                "symbol": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "adj_close": [],
+                "start_ts": [],
+                "n_obs": [],
+                "dollar_value": [],
+            }
         )
-        .sort(["symbol", "end_ts", "bar_id"])
-        .drop("bar_id")
-        .rename({"end_ts": "ts"})
-    )
-    return out.select(
+    return pl.DataFrame(
+        {
+            "start_ts": [r[0] for r in rows],
+            "ts": [r[1] for r in rows],
+            "open": [r[2] for r in rows],
+            "high": [r[3] for r in rows],
+            "low": [r[4] for r in rows],
+            "close": [r[5] for r in rows],
+            "volume": [r[6] for r in rows],
+            "dollar_value": [r[7] for r in rows],
+            "n_obs": [r[8] for r in rows],
+        }
+    ).with_columns(
+        pl.lit(symbol).alias("symbol"),
+        pl.col("start_ts").str.strptime(pl.Datetime, strict=False),
+        pl.col("ts").str.strptime(pl.Datetime, strict=False),
+        pl.col("close").alias("adj_close"),
+    ).select(
         [
             "ts",
             "symbol",
@@ -41,44 +68,46 @@ def _aggregate(df: pl.DataFrame) -> pl.DataFrame:
             "adj_close",
             "start_ts",
             "n_obs",
+            "dollar_value",
         ]
     )
 
 
+def _build_by_symbol(
+    df: pl.DataFrame,
+    rust_builder: Callable[[list[str], list[float], list[float], float | int], list[tuple[str, str, float, float, float, float, float, float, int]]],
+    param: float | int,
+) -> pl.DataFrame:
+    clean = data.clean_ohlcv(df).sort(["symbol", "ts"])
+    out_frames: list[pl.DataFrame] = []
+    for symbol in clean["symbol"].unique().to_list():
+        sdf = clean.filter(pl.col("symbol") == symbol).sort("ts")
+        rows = rust_builder(
+            [str(x) for x in sdf["ts"].to_list()],
+            [float(x) for x in sdf["close"].to_list()],
+            [float(x) for x in sdf["volume"].to_list()],
+            param,
+        )
+        out_frames.append(_rows_to_frame(symbol, rows))
+    if not out_frames:
+        return _rows_to_frame("", [])
+    return pl.concat(out_frames, how="vertical").sort(["symbol", "ts"])
+
+
 def build_time_bars(df: pl.DataFrame, *, interval: str = "1d") -> pl.DataFrame:
-    clean = _prepare(df)
-    grouped = clean.with_columns(pl.col("ts").dt.truncate(interval).alias("bar_id"))
-    return _aggregate(grouped)
+    return _build_by_symbol(df, _core.bars.build_time_bars, _interval_to_seconds(interval))
 
 
 def build_tick_bars(df: pl.DataFrame, *, ticks_per_bar: int = 50) -> pl.DataFrame:
     if ticks_per_bar <= 0:
         raise ValueError("ticks_per_bar must be > 0")
-    clean = _prepare(df)
-    grouped = clean.with_columns(
-        (pl.int_range(0, pl.len()).over("symbol") // ticks_per_bar)
-        .cast(pl.Int64)
-        .alias("bar_id")
-    )
-    return _aggregate(grouped)
+    return _build_by_symbol(df, _core.bars.build_tick_bars, ticks_per_bar)
 
 
 def build_volume_bars(df: pl.DataFrame, *, volume_per_bar: float = 100_000.0) -> pl.DataFrame:
     if volume_per_bar <= 0:
         raise ValueError("volume_per_bar must be > 0")
-    clean = _prepare(df)
-    eps = volume_per_bar * 1e-9
-    grouped = (
-        clean.with_columns(pl.col("volume").cum_sum().over("symbol").alias("cum_volume"))
-        .with_columns(
-            (((pl.col("cum_volume") - eps).clip(lower_bound=0.0)) / volume_per_bar)
-            .floor()
-            .cast(pl.Int64)
-            .alias("bar_id")
-        )
-        .drop("cum_volume")
-    )
-    return _aggregate(grouped)
+    return _build_by_symbol(df, _core.bars.build_volume_bars, volume_per_bar)
 
 
 def build_dollar_bars(
@@ -88,20 +117,7 @@ def build_dollar_bars(
 ) -> pl.DataFrame:
     if dollar_value_per_bar <= 0:
         raise ValueError("dollar_value_per_bar must be > 0")
-    clean = _prepare(df)
-    eps = dollar_value_per_bar * 1e-9
-    grouped = (
-        clean.with_columns((pl.col("close") * pl.col("volume")).alias("dollar_value"))
-        .with_columns(pl.col("dollar_value").cum_sum().over("symbol").alias("cum_dollar"))
-        .with_columns(
-            (((pl.col("cum_dollar") - eps).clip(lower_bound=0.0)) / dollar_value_per_bar)
-            .floor()
-            .cast(pl.Int64)
-            .alias("bar_id")
-        )
-        .drop(["dollar_value", "cum_dollar"])
-    )
-    return _aggregate(grouped)
+    return _build_by_symbol(df, _core.bars.build_dollar_bars, dollar_value_per_bar)
 
 
 def _lag1_autocorr(values: list[float]) -> float:
@@ -120,7 +136,7 @@ def _lag1_autocorr(values: list[float]) -> float:
 
 
 def bar_diagnostics(df: pl.DataFrame) -> dict[str, float]:
-    clean = _prepare(df).sort(["symbol", "ts"])
+    clean = data.clean_ohlcv(df).sort(["symbol", "ts"])
     returns = (
         clean.with_columns(
             (
