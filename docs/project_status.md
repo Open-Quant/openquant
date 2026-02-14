@@ -1,29 +1,25 @@
 # Project Status
 
-## Migration status
-- Python-to-Rust module test parity is complete for the tracked mlfinlab suite.
-- Source of truth: `openquant-rs/tests/crosswalk.md`.
-- Roadmap remaining list is empty.
+## Current delivery state (2026-02-13)
+- AFML gap modules tracked in epic `OQ-mef` are implemented in `crates/openquant/src/`:
+  `ensemble_methods`, `hyperparameter_tuning`, `backtesting_engine`, `synthetic_backtesting`,
+  `strategy_risk`, `hpc_parallel`, `combinatorial_optimization`, and `streaming_hpc`.
+- Panic-based public API paths were migrated to typed errors under `OQ-mef.6`.
+- Notebook-first platform artifacts are present:
+  Python bindings (`crates/pyopenquant`), Python API package (`python/openquant`),
+  notebook starter packs (`notebooks/python`, `notebooks/rust`), experiment scaffold (`experiments/`),
+  and CI smoke workflows (`.github/workflows/python-bindings.yml`,
+  `.github/workflows/notebooks-examples-smoke.yml`).
 
-## Do we still need mlfinlab repo locally?
-Short answer: not required for day-to-day OpenQuant usage, still useful for maintenance.
+## Reconciliation status
+- Reconciliation source of truth: `docs/reconciliation_closure_history.md`.
+- Most previously closed deliverables are now present on `main`.
+- Two acceptance-criteria mismatches remain tracked as open follow-ups:
+  - `OQ-ojp`: docs-site notebook workflow page + navigation links.
+  - `OQ-det`: experiment plot artifact outputs and tests.
 
-Keep mlfinlab if you want to:
-- add new parity modules/tests in the future,
-- re-generate fixtures from Python behavior,
-- validate behavior drift against upstream changes.
-
-You can archive/remove mlfinlab locally if you are:
-- focused only on OpenQuant runtime/library usage,
-- not planning additional parity backports,
-- comfortable relying on existing fixtures + Rust tests only.
-
-## Functional status
-OpenQuant is functional for the migrated tracked package scope, with:
-- passing fast/full Rust test sweeps (except intentionally isolated long SADF run in default fast path),
-- benchmark baselines and regression checks,
-- release-readiness CI workflow.
-
-## Known caveats
-- `test_sadf_test` is intentionally excluded from fast CI and run in dedicated slow/nightly path.
-- Performance thresholds are now wired but should be tightened over time as variance stabilizes.
+## Quality and CI posture
+- Core CI workflows are present for lint/test, benchmark regression, release checks, bindings smoke,
+  and notebook/example smoke.
+- Remaining work is focused on documentation-site parity and experiment artifact completeness
+  (tracked by `OQ-ojp` and `OQ-det`).
