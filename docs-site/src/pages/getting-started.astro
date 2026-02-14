@@ -1,5 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
 ---
 <Layout title="Getting Started • OpenQuant-rs">
   <section class="hero">
@@ -57,6 +60,10 @@ cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored</co
   </table>
 
   <h2>First Quant Workflow</h2>
+  <p>
+    For notebook-first strategy research and promotion criteria, see
+    <a href={`${base}/notebook-research-workflow`}>Notebook-First Research Workflow</a>.
+  </p>
   <pre><code class="language-rust">use openquant::risk_metrics::RiskMetrics;
 
 let returns = vec![-0.02, 0.01, 0.015, -0.01, 0.005];

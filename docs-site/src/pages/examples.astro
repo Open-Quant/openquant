@@ -1,10 +1,17 @@
 ---
 import Layout from "../layouts/Layout.astro";
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
 ---
 <Layout title="Examples • OpenQuant-rs" description="Practical OpenQuant-rs examples for quant workflows.">
   <section class="hero">
     <h1>Examples by Subject</h1>
     <p class="muted">Examples follow the same five subject dividers used in the index, subjects, and API pages.</p>
+    <p>
+      Promotion path and controls:
+      <a href={`${base}/notebook-research-workflow`}>Notebook-First Research Workflow</a>.
+    </p>
   </section>
 
   <h2>1. Event-Driven Data and Labeling</h2>
