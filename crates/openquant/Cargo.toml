@@ -39,3 +39,7 @@ harness = false
 [[bench]]
 name = "hpc_parallel_scaling"
 harness = false
+
+[[bench]]
+name = "streaming_hpc_scaling"
+harness = false

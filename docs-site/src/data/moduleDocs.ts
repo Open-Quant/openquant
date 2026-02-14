@@ -784,6 +784,52 @@ export const moduleDocs: ModuleDoc[] = [
     ],
   },
   {
+    slug: "streaming-hpc",
+    module: "streaming_hpc",
+    subject: "Scaling, HPC and Infrastructure",
+    summary:
+      "AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.",
+    whyItExists:
+      "Streaming decisions are turnaround-time constrained; this module maintains VPIN/HHI-style indicators incrementally and supports multi-stream scaling across cores/chunk sizes.",
+    keyApis: [
+      "StreamEvent",
+      "VpinState",
+      "HhiState",
+      "StreamingEarlyWarningEngine",
+      "run_streaming_pipeline",
+      "run_streaming_pipeline_parallel",
+      "generate_synthetic_flash_crash_stream",
+      "StreamingPipelineConfig",
+      "StreamingRunMetrics",
+    ],
+    formulas: [
+      {
+        label: "VPIN (Rolling Buckets)",
+        latex: "\\mathrm{VPIN}_t=\\frac{1}{N}\\sum_{i=t-N+1}^{t}\\frac{|V_i^B-V_i^S|}{V_i}",
+      },
+      {
+        label: "Market Fragmentation HHI",
+        latex: "\\mathrm{HHI}_t=\\sum_{v=1}^{K}\\left(\\frac{n_{v,t}}{\\sum_j n_{j,t}}\\right)^2",
+      },
+      {
+        label: "Streaming Throughput",
+        latex: "\\mathrm{throughput}=\\frac{\\#\\mathrm{events\\ processed}}{\\mathrm{runtime\\ seconds}}",
+      },
+    ],
+    examples: [
+      {
+        title: "Incremental early-warning pipeline on streaming trades",
+        language: "rust",
+        code: `use openquant::hpc_parallel::{ExecutionMode, HpcParallelConfig, PartitionStrategy};\nuse openquant::streaming_hpc::{\n  run_streaming_pipeline_parallel, AlertThresholds, HhiConfig, StreamingPipelineConfig,\n  SyntheticStreamConfig, VpinConfig, generate_synthetic_flash_crash_stream,\n};\n\nlet streams: Vec<_> = (0..16)\n  .map(|k| generate_synthetic_flash_crash_stream(SyntheticStreamConfig {\n    events: 2_000,\n    crash_start_fraction: 0.7,\n    calm_venues: 8,\n    shock_venue: k % 2,\n  }))\n  .collect::<Result<Vec<_>, _>>()?;\n\nlet report = run_streaming_pipeline_parallel(\n  &streams,\n  StreamingPipelineConfig {\n    vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20 },\n    hhi: HhiConfig { lookback_events: 200 },\n    thresholds: AlertThresholds { vpin: 0.45, hhi: 0.30 },\n  },\n  HpcParallelConfig {\n    mode: ExecutionMode::Threaded { num_threads: 8 },\n    partition: PartitionStrategy::Linear,\n    mp_batches: 4,\n    progress_every: 8,\n  },\n)?;\n\nprintln!(\"streams={} molecules={} events/s={:.0}\",\n  report.stream_summaries.len(),\n  report.parallel_metrics.molecules_total,\n  report.parallel_metrics.throughput_atoms_per_sec\n);`,
+      },
+    ],
+    notes: [
+      "Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth.",
+      "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality.",
+      "Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives.",
+    ],
+  },
+  {
     slug: "sample-weights",
     module: "sample_weights",
     subject: "Event-Driven Data and Labeling",

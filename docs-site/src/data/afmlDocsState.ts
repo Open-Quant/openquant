@@ -359,6 +359,20 @@ export const afmlDocsState = {
           "status": "done"
         }
       ]
+    },
+    {
+      "chapter": "CHAPTER 22",
+      "theme": "High-performance computing for streaming analytics",
+      "status": "done",
+      "chunkCount": 0,
+      "sections": [
+        {
+          "id": "chapter-22-streaming_hpc",
+          "module": "streaming_hpc",
+          "slug": "streaming-hpc",
+          "status": "done"
+        }
+      ]
     }
   ]
 } as const;
