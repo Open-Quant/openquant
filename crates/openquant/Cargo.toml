@@ -35,3 +35,7 @@ harness = false
 [[bench]]
 name = "synthetic_ticker_pipeline"
 harness = false
+
+[[bench]]
+name = "hpc_parallel_scaling"
+harness = false
