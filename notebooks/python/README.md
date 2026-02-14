@@ -14,7 +14,7 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 ## Run setup
 
 ```bash
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 ```
@@ -32,3 +32,16 @@ Execute the real-data notebook cells non-interactively:
 ```bash
 uv run --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells.py notebooks/python/06_afml_real_data_end_to_end.ipynb
 ```
+
+## Bar diagnostics (AFML Ch.2)
+
+Compare time/tick/volume/dollar bar families with simple serial-dependence and heteroskedasticity proxies:
+
+```bash
+uv run --python .venv/bin/python python notebooks/python/scripts/bar_diagnostics.py
+```
+
+The script prints:
+- `lag1_return_autocorr` (serial dependence proxy)
+- `lag1_sq_return_autocorr` (heteroskedasticity proxy)
+- `return_std` and number of bars per family

@@ -5,6 +5,7 @@ pub mod cla;
 pub mod codependence;
 pub mod combinatorial_optimization;
 pub mod cross_validation;
+pub mod data_processing;
 pub mod data_structures;
 pub mod ef3m;
 pub mod ensemble_methods;

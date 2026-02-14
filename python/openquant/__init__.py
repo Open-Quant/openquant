@@ -1,5 +1,7 @@
 from . import _core
 from . import adapters
+from . import bars
+from . import data
 from . import pipeline
 from . import research
 from . import viz
@@ -16,6 +18,8 @@ __all__ = [
     "sampling",
     "bet_sizing",
     "portfolio",
+    "bars",
+    "data",
     "pipeline",
     "research",
     "adapters",

@@ -11,11 +11,17 @@ Prerequisites:
 From repo root:
 
 ```bash
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 uv run --python .venv/bin/python python -c "import openquant; print('openquant import ok')"
 uv run --python .venv/bin/python pytest python/tests -q
+```
+
+Quick performance showcase:
+
+```bash
+uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
 ```
 
 Build a wheel:
@@ -45,6 +51,26 @@ Input conventions:
 - `close`: list of floats
 - `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`
 - timestamp variants require `len(close) == len(timestamps)`
+
+### `openquant.bars` (AFML Ch.2 event-driven bars; Rust core via PyO3)
+- `build_time_bars(df, interval="1d")`
+- `build_tick_bars(df, ticks_per_bar=50)`
+- `build_volume_bars(df, volume_per_bar=100_000.0)`
+- `build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)`
+- `bar_diagnostics(df)`
+
+Input conventions:
+- `df`: polars DataFrame with canonical OHLCV columns (`ts,symbol,open,high,low,close,volume,adj_close`)
+
+### `openquant.data` (canonicalization + Rust-backed processing via PyO3)
+- `load_ohlcv(path, symbol=None, return_report=False)`
+- `clean_ohlcv(df, dedupe_keep="last", return_report=False)`
+- `data_quality_report(df)`
+- `align_calendar(df, interval="1d")`
+
+Notes:
+- File IO and column alias canonicalization happen in Python for ergonomics.
+- Core cleaning, deduplication, quality reporting, and calendar alignment are executed in Rust through `_core.data`.
 
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`

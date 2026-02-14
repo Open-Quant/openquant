@@ -41,7 +41,7 @@ python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchma
 ## Research Flywheel (Python + Rust)
 ```bash
 # Python env + bindings
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 
@@ -51,6 +51,9 @@ uv run --python .venv/bin/python python experiments/run_pipeline.py --config exp
 
 # Rust notebook-companion smoke
 cargo run -p openquant --example research_notebook_smoke
+
+# Python pipeline micro-benchmark (for speed demos)
+uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
 ```
 
 ## Crate Layout

@@ -59,8 +59,11 @@ py-test:
     uv run --python .venv/bin/python pytest python/tests -q
 
 py-setup:
-    uv venv --python 3.11 .venv
+    uv venv --python 3.13 .venv
     uv sync --group dev
+
+py-bench:
+    uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
 
 exp-run:
     uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
