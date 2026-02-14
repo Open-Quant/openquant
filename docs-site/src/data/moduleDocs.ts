@@ -647,6 +647,51 @@ export const moduleDocs: ModuleDoc[] = [
     notes: ["Non-parametric estimates need enough tail observations.", "Use matrix variants for multi-asset return panels."],
   },
   {
+    slug: "strategy-risk",
+    module: "strategy_risk",
+    subject: "Portfolio Construction and Risk",
+    summary: "AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.",
+    whyItExists:
+      "Strategy risk is the probability that a process fails to achieve a Sharpe objective over time; it is distinct from holdings/portfolio variance risk and should be monitored separately.",
+    keyApis: [
+      "sharpe_symmetric",
+      "implied_precision_symmetric",
+      "implied_frequency_symmetric",
+      "sharpe_asymmetric",
+      "implied_precision_asymmetric",
+      "implied_frequency_asymmetric",
+      "estimate_strategy_failure_probability",
+      "StrategyRiskConfig",
+      "StrategyRiskReport",
+    ],
+    formulas: [
+      {
+        label: "Symmetric Sharpe",
+        latex: "\\theta=\\frac{2p-1}{2\\sqrt{p(1-p)}}\\sqrt{n}",
+      },
+      {
+        label: "Asymmetric Sharpe",
+        latex:
+          "\\theta=\\frac{(\\pi_+-\\pi_-)p+\\pi_-}{(\\pi_+-\\pi_-)\\sqrt{p(1-p)}}\\sqrt{n}",
+      },
+      {
+        label: "Strategy Failure Probability",
+        latex: "P_{fail}=\\Pr[p\\le p^*],\\quad p^*=\\text{impliedPrecision}(\\theta^*,\\pi_+,\\pi_-,n)",
+      },
+    ],
+    examples: [
+      {
+        title: "Estimate strategy-failure probability from realized bets",
+        language: "rust",
+        code: `use openquant::strategy_risk::{estimate_strategy_failure_probability, StrategyRiskConfig};\n\nlet outcomes = vec![0.005, -0.01, 0.005, 0.005, -0.01, 0.005, 0.005, -0.01];\nlet report = estimate_strategy_failure_probability(\n  &outcomes,\n  StrategyRiskConfig {\n    years_elapsed: 2.0,\n    target_sharpe: 2.0,\n    investor_horizon_years: 2.0,\n    bootstrap_iterations: 10_000,\n    seed: 7,\n    kde_bandwidth: None,\n  },\n)?;\n\nprintln!(\"p*: {:.4}\", report.implied_precision_threshold);\nprintln!(\"failure (KDE): {:.2}%\", 100.0 * report.kde_failure_probability);`,
+      },
+    ],
+    notes: [
+      "Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p.",
+      "Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk.",
+    ],
+  },
+  {
     slug: "sample-weights",
     module: "sample_weights",
     subject: "Event-Driven Data and Labeling",

@@ -233,6 +233,20 @@ export const afmlDocsState = {
       ]
     },
     {
+      "chapter": "CHAPTER 15",
+      "theme": "Strategy risk",
+      "status": "done",
+      "chunkCount": 16,
+      "sections": [
+        {
+          "id": "chapter-15-strategy_risk",
+          "module": "strategy_risk",
+          "slug": "strategy-risk",
+          "status": "done"
+        }
+      ]
+    },
+    {
       "chapter": "CHAPTER 16",
       "theme": "Portfolio construction",
       "status": "done",
