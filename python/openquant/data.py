@@ -5,8 +5,6 @@ from typing import Any
 
 import polars as pl
 
-from . import _core
-
 
 CANONICAL_OHLCV_COLUMNS = [
     "ts",
@@ -39,6 +37,17 @@ _COLUMN_ALIASES = {
     "adj close": "adj_close",
 }
 
+_ZERO_NULL_COUNTS = {
+    "ts": 0,
+    "symbol": 0,
+    "open": 0,
+    "high": 0,
+    "low": 0,
+    "close": 0,
+    "volume": 0,
+    "adj_close": 0,
+}
+
 
 def _normalize_column_name(name: str) -> str:
     return name.strip().lower().replace("-", "_")
@@ -67,8 +76,11 @@ def _validate_required_columns(df: pl.DataFrame) -> None:
         raise ValueError(f"missing required OHLCV columns: {', '.join(missing)}")
 
 
-def _cast_and_order(df: pl.DataFrame) -> pl.DataFrame:
-    casted = df.with_columns(
+def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
+    frame = _canonicalize_columns(df)
+    _validate_required_columns(frame)
+
+    lf = frame.lazy().with_columns(
         pl.col("ts").cast(pl.Utf8).str.strptime(pl.Datetime, strict=False),
         pl.col("symbol").cast(pl.Utf8),
         pl.col("open").cast(pl.Float64),
@@ -77,52 +89,69 @@ def _cast_and_order(df: pl.DataFrame) -> pl.DataFrame:
         pl.col("close").cast(pl.Float64),
         pl.col("volume").cast(pl.Float64),
     )
-    if "adj_close" in casted.columns:
-        casted = casted.with_columns(pl.col("adj_close").cast(pl.Float64))
+    if "adj_close" in frame.columns:
+        lf = lf.with_columns(pl.col("adj_close").cast(pl.Float64))
     else:
-        casted = casted.with_columns(pl.col("close").alias("adj_close"))
-    return casted.select(CANONICAL_OHLCV_COLUMNS)
+        lf = lf.with_columns(pl.col("close").alias("adj_close"))
+    return lf.select(CANONICAL_OHLCV_COLUMNS).drop_nulls(CANONICAL_OHLCV_COLUMNS)
 
 
-def _to_core_vectors(df: pl.DataFrame) -> tuple[list[str], list[str], list[float], list[float], list[float], list[float], list[float], list[float]]:
+def _format_ts(v: Any) -> str | None:
+    if v is None:
+        return None
+    if hasattr(v, "strftime"):
+        return v.strftime("%Y-%m-%d %H:%M:%S")
+    return str(v)
+
+
+def _gap_expr(symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600) -> pl.Expr:
+    threshold_us = int(threshold_seconds) * 1_000_000
     return (
-        [str(x) for x in df["ts"].to_list()],
-        [str(x) for x in df["symbol"].to_list()],
-        [float(x) for x in df["open"].to_list()],
-        [float(x) for x in df["high"].to_list()],
-        [float(x) for x in df["low"].to_list()],
-        [float(x) for x in df["close"].to_list()],
-        [float(x) for x in df["volume"].to_list()],
-        [float(x) for x in df["adj_close"].to_list()],
+        (symbol_expr == symbol_expr.shift(1))
+        & ((ts_us_expr - ts_us_expr.shift(1)) > threshold_us)
     )
 
 
-def _rows_to_frame(rows: list[tuple[str, str, float, float, float, float, float, float]]) -> pl.DataFrame:
-    if not rows:
-        return pl.DataFrame(
-            {
-                "ts": [],
-                "symbol": [],
-                "open": [],
-                "high": [],
-                "low": [],
-                "close": [],
-                "volume": [],
-                "adj_close": [],
-            }
-        )
-    return pl.DataFrame(
-        {
-            "ts": [r[0] for r in rows],
-            "symbol": [r[1] for r in rows],
-            "open": [r[2] for r in rows],
-            "high": [r[3] for r in rows],
-            "low": [r[4] for r in rows],
-            "close": [r[5] for r in rows],
-            "volume": [r[6] for r in rows],
-            "adj_close": [r[7] for r in rows],
+def _build_quality_report(sorted_df: pl.DataFrame, rows_removed_by_deduplication: int) -> dict[str, Any]:
+    if sorted_df.height == 0:
+        return {
+            "row_count": 0,
+            "symbol_count": 0,
+            "duplicate_key_count": 0,
+            "gap_interval_count": 0,
+            "ts_min": None,
+            "ts_max": None,
+            "rows_removed_by_deduplication": rows_removed_by_deduplication,
+            "null_counts": dict(_ZERO_NULL_COUNTS),
         }
-    ).with_columns(pl.col("ts").str.strptime(pl.Datetime, strict=False))
+
+    summary = (
+        sorted_df.lazy()
+        .select(
+            pl.len().alias("row_count"),
+            pl.col("symbol").n_unique().alias("symbol_count"),
+            (
+                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                .cast(pl.UInt32)
+                .sum()
+            ).alias("duplicate_key_count"),
+            _gap_expr(pl.col("symbol"), pl.col("ts_us")).cast(pl.UInt32).sum().alias("gap_interval_count"),
+            pl.col("ts").min().alias("ts_min"),
+            pl.col("ts").max().alias("ts_max"),
+        )
+        .collect()
+        .row(0, named=True)
+    )
+    return {
+        "row_count": int(summary["row_count"]),
+        "symbol_count": int(summary["symbol_count"]),
+        "duplicate_key_count": int(summary["duplicate_key_count"]),
+        "gap_interval_count": int(summary["gap_interval_count"]),
+        "ts_min": _format_ts(summary["ts_min"]),
+        "ts_max": _format_ts(summary["ts_max"]),
+        "rows_removed_by_deduplication": rows_removed_by_deduplication,
+        "null_counts": dict(_ZERO_NULL_COUNTS),
+    }
 
 
 def _interval_to_seconds(interval: str) -> int:
@@ -144,66 +173,52 @@ def clean_ohlcv(
     dedupe_keep: str = "last",
     return_report: bool = False,
 ) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
-    out = _canonicalize_columns(df)
-    _validate_required_columns(out)
-    out = _cast_and_order(out)
-    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(out)
-    rows, report = _core.data.clean_ohlcv(
-        ts,
-        symbol,
-        open_,
-        high,
-        low,
-        close,
-        volume,
-        adj_close,
-        dedupe_keep == "last",
+    if dedupe_keep not in {"first", "last"}:
+        raise ValueError("dedupe_keep must be 'first' or 'last'")
+
+    base_lf = _prepare_ohlcv_lf(df).with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
+    sorted_lf = base_lf.sort(["symbol", "ts_us"])
+
+    duplicate_key_count = int(
+        sorted_lf
+        .select(
+            (
+                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                .cast(pl.UInt32)
+                .sum()
+            ).alias("duplicate_key_count")
+        )
+        .collect()
+        .item(0, 0)
     )
-    frame = _rows_to_frame(rows).sort(["symbol", "ts"])
-    report = dict(report)
-    report["null_counts"] = {
-        "ts": 0,
-        "symbol": 0,
-        "open": 0,
-        "high": 0,
-        "low": 0,
-        "close": 0,
-        "volume": 0,
-        "adj_close": 0,
-    }
-    if return_report:
-        return frame, report
-    return frame
+
+    cleaned = (
+        sorted_lf.unique(
+            subset=["symbol", "ts_us"],
+            keep=dedupe_keep,
+            maintain_order=True,
+        )
+        .sort(["symbol", "ts"])
+        .collect()
+    )
+
+    frame = cleaned.select(CANONICAL_OHLCV_COLUMNS)
+    if not return_report:
+        return frame
+
+    report = _build_quality_report(cleaned, rows_removed_by_deduplication=duplicate_key_count)
+    report["duplicate_key_count"] = 0
+    return frame, report
 
 
 def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
-    out = _canonicalize_columns(df)
-    _validate_required_columns(out)
-    out = _cast_and_order(out).sort(["symbol", "ts"])
-    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(out)
-    report = dict(
-        _core.data.quality_report(
-            ts,
-            symbol,
-            open_,
-            high,
-            low,
-            close,
-            volume,
-            adj_close,
-        )
+    sorted_df = (
+        _prepare_ohlcv_lf(df)
+        .with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
+        .sort(["symbol", "ts_us"])
+        .collect()
     )
-    report["null_counts"] = {
-        "ts": 0,
-        "symbol": 0,
-        "open": 0,
-        "high": 0,
-        "low": 0,
-        "close": 0,
-        "volume": 0,
-        "adj_close": 0,
-    }
-    return report
+    return _build_quality_report(sorted_df, rows_removed_by_deduplication=0)
 
 
 def load_ohlcv(
@@ -236,45 +251,33 @@ def align_calendar(
     *,
     interval: str = "1d",
 ) -> pl.DataFrame:
-    clean = clean_ohlcv(df)
-    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(clean)
-    rows = _core.data.align_calendar(
-        ts,
-        symbol,
-        open_,
-        high,
-        low,
-        close,
-        volume,
-        adj_close,
-        _interval_to_seconds(interval),
+    interval_seconds = _interval_to_seconds(interval)
+    if interval_seconds <= 0:
+        raise ValueError("interval_seconds must be > 0")
+
+    clean = clean_ohlcv(df).lazy()
+    bounds = clean.group_by("symbol").agg(
+        pl.col("ts").min().alias("ts_min"),
+        pl.col("ts").max().alias("ts_max"),
     )
-    if not rows:
-        return pl.DataFrame(
-            {
-                "ts": [],
-                "symbol": [],
-                "open": [],
-                "high": [],
-                "low": [],
-                "close": [],
-                "volume": [],
-                "adj_close": [],
-                "is_missing_bar": [],
-            }
+    calendar = (
+        bounds.with_columns(
+            pl.datetime_ranges(
+                "ts_min",
+                "ts_max",
+                interval=f"{interval_seconds}s",
+                closed="both",
+            ).alias("ts")
         )
-    return pl.DataFrame(
-        {
-            "ts": [r[0] for r in rows],
-            "symbol": [r[1] for r in rows],
-            "open": [r[2] for r in rows],
-            "high": [r[3] for r in rows],
-            "low": [r[4] for r in rows],
-            "close": [r[5] for r in rows],
-            "volume": [r[6] for r in rows],
-            "adj_close": [r[7] for r in rows],
-            "is_missing_bar": [r[8] for r in rows],
-        }
-    ).with_columns(
-        pl.col("ts").str.strptime(pl.Datetime, strict=False),
-    ).sort(["symbol", "ts"])
+        .explode("ts")
+        .select(["symbol", "ts"])
+    )
+
+    out = (
+        calendar.join(clean, on=["symbol", "ts"], how="left")
+        .with_columns(pl.col("open").is_null().alias("is_missing_bar"))
+        .select(CANONICAL_OHLCV_COLUMNS + ["is_missing_bar"])
+        .sort(["symbol", "ts"])
+        .collect()
+    )
+    return out

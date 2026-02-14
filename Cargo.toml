@@ -1,3 +1,6 @@
 [workspace]
 members = ["crates/openquant", "crates/pyopenquant"]
 resolver = "2"
+
+[patch.crates-io]
+pyo3-polars = { path = "vendor/pyo3-polars" }

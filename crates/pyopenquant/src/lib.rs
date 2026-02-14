@@ -1,5 +1,7 @@
 use nalgebra::DMatrix;
-use openquant::data_processing::{align_calendar_rows, clean_ohlcv_rows, quality_report, OhlcvRow};
+use openquant::data_processing::{
+    align_calendar_columns, clean_ohlcv_columns, quality_report_columns, OhlcvColumns,
+};
 use openquant::data_structures::{standard_bars, time_bars, StandardBarType, Trade};
 use openquant::filters::Threshold;
 use openquant::pipeline::{
@@ -9,11 +11,13 @@ use openquant::portfolio_optimization::{
     allocate_inverse_variance, allocate_max_sharpe, allocate_min_vol,
 };
 use openquant::risk_metrics::RiskMetrics;
+use polars::prelude::DataFrame;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::types::PyModule;
+use pyo3_polars::PyDataFrame;
 
 fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
     PyValueError::new_err(format!("{err:?}"))
@@ -89,7 +93,9 @@ fn build_trades(
     Ok(trades)
 }
 
-fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)> {
+fn bars_to_rows(
+    bars: Vec<openquant::data_structures::StandardBar>,
+) -> Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)> {
     bars.into_iter()
         .map(|b| {
             (
@@ -107,8 +113,8 @@ fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<(Stri
         .collect()
 }
 
-fn build_ohlcv_rows(
-    timestamps: Vec<String>,
+fn build_ohlcv_columns(
+    timestamps_us: Vec<i64>,
     symbols: Vec<String>,
     open: Vec<f64>,
     high: Vec<f64>,
@@ -116,8 +122,8 @@ fn build_ohlcv_rows(
     close: Vec<f64>,
     volume: Vec<f64>,
     adj_close: Vec<f64>,
-) -> PyResult<Vec<OhlcvRow>> {
-    let n = timestamps.len();
+) -> PyResult<OhlcvColumns> {
+    let n = timestamps_us.len();
     let lengths = [
         symbols.len(),
         open.len(),
@@ -139,20 +145,24 @@ fn build_ohlcv_rows(
             adj_close.len(),
         )));
     }
-    let mut rows = Vec::with_capacity(n);
-    for i in 0..n {
-        rows.push(OhlcvRow {
-            timestamp: parse_one_naive_datetime(&timestamps[i])?,
-            symbol: symbols[i].clone(),
-            open: open[i],
-            high: high[i],
-            low: low[i],
-            close: close[i],
-            volume: volume[i],
-            adj_close: adj_close[i],
-        });
-    }
-    Ok(rows)
+    Ok(OhlcvColumns { timestamps_us, symbols, open, high, low, close, volume, adj_close })
+}
+
+fn report_to_pydict(
+    py: Python<'_>,
+    report: openquant::data_processing::DataQualityReport,
+) -> PyResult<PyObject> {
+    let out_report = PyDict::new_bound(py);
+    out_report.set_item("row_count", report.row_count)?;
+    out_report.set_item("symbol_count", report.symbol_count)?;
+    out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
+    out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report
+        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report
+        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
+    Ok(out_report.into_py(py))
 }
 
 #[pyfunction(name = "calculate_value_at_risk")]
@@ -322,7 +332,7 @@ fn bars_build_dollar_bars(
 #[pyfunction(name = "clean_ohlcv")]
 fn data_clean_ohlcv(
     py: Python<'_>,
-    timestamps: Vec<String>,
+    timestamps_us: Vec<i64>,
     symbols: Vec<String>,
     open: Vec<f64>,
     high: Vec<f64>,
@@ -331,46 +341,48 @@ fn data_clean_ohlcv(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
     dedupe_keep_last: bool,
-) -> PyResult<(Vec<(String, String, f64, f64, f64, f64, f64, f64)>, PyObject)> {
-    let rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
-    let (clean, report) = clean_ohlcv_rows(&rows, dedupe_keep_last);
-    let out_rows = clean
-        .into_iter()
-        .map(|r| {
-            (
-                r.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                r.symbol,
-                r.open,
-                r.high,
-                r.low,
-                r.close,
-                r.volume,
-                r.adj_close,
-            )
-        })
-        .collect::<Vec<_>>();
+) -> PyResult<(
+    Vec<i64>,
+    Vec<String>,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<f64>,
+    Vec<f64>,
+    PyObject,
+)> {
+    let cols =
+        build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
+    let (clean, report) = clean_ohlcv_columns(&cols, dedupe_keep_last).map_err(to_py_err)?;
 
     let out_report = PyDict::new_bound(py);
     out_report.set_item("row_count", report.row_count)?;
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
-    out_report.set_item(
-        "ts_min",
-        report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
-    )?;
-    out_report.set_item(
-        "ts_max",
-        report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
-    )?;
+    out_report
+        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report
+        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
     out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
-    Ok((out_rows, out_report.into_py(py)))
+    Ok((
+        clean.timestamps_us,
+        clean.symbols,
+        clean.open,
+        clean.high,
+        clean.low,
+        clean.close,
+        clean.volume,
+        clean.adj_close,
+        out_report.into_py(py),
+    ))
 }
 
 #[pyfunction(name = "quality_report")]
 fn data_quality_report(
     py: Python<'_>,
-    timestamps: Vec<String>,
+    timestamps_us: Vec<i64>,
     symbols: Vec<String>,
     open: Vec<f64>,
     high: Vec<f64>,
@@ -379,29 +391,25 @@ fn data_quality_report(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
 ) -> PyResult<PyObject> {
-    let mut rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
-    rows.sort_by(|a, b| a.symbol.cmp(&b.symbol).then_with(|| a.timestamp.cmp(&b.timestamp)));
-    let report = quality_report(&rows, 0);
+    let cols =
+        build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
+    let report = quality_report_columns(&cols, 0).map_err(to_py_err)?;
     let out_report = PyDict::new_bound(py);
     out_report.set_item("row_count", report.row_count)?;
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
-    out_report.set_item(
-        "ts_min",
-        report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
-    )?;
-    out_report.set_item(
-        "ts_max",
-        report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
-    )?;
+    out_report
+        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report
+        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
     out_report.set_item("rows_removed_by_deduplication", 0)?;
     Ok(out_report.into_py(py))
 }
 
 #[pyfunction(name = "align_calendar")]
 fn data_align_calendar(
-    timestamps: Vec<String>,
+    timestamps_us: Vec<i64>,
     symbols: Vec<String>,
     open: Vec<f64>,
     high: Vec<f64>,
@@ -410,25 +418,59 @@ fn data_align_calendar(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
     interval_seconds: i64,
-) -> PyResult<Vec<(String, String, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, bool)>> {
-    let rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
-    let out = align_calendar_rows(&rows, interval_seconds).map_err(to_py_err)?;
-    Ok(out
-        .into_iter()
-        .map(|r| {
-            (
-                r.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                r.symbol,
-                r.open,
-                r.high,
-                r.low,
-                r.close,
-                r.volume,
-                r.adj_close,
-                r.is_missing_bar,
-            )
-        })
-        .collect())
+) -> PyResult<(
+    Vec<i64>,
+    Vec<String>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<bool>,
+)> {
+    let cols =
+        build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
+    let out = align_calendar_columns(&cols, interval_seconds).map_err(to_py_err)?;
+    Ok((
+        out.timestamps_us,
+        out.symbols,
+        out.open,
+        out.high,
+        out.low,
+        out.close,
+        out.volume,
+        out.adj_close,
+        out.is_missing_bar,
+    ))
+}
+
+#[pyfunction(name = "clean_ohlcv_df")]
+fn data_clean_ohlcv_df(
+    py: Python<'_>,
+    pydf: PyDataFrame,
+    dedupe_keep_last: bool,
+) -> PyResult<(PyDataFrame, PyObject)> {
+    let df: DataFrame = pydf.into();
+    let (out_df, report) =
+        openquant::data_processing::clean_ohlcv_df(&df, dedupe_keep_last).map_err(to_py_err)?;
+    let out_report = report_to_pydict(py, report)?;
+    Ok((PyDataFrame(out_df), out_report))
+}
+
+#[pyfunction(name = "quality_report_df")]
+fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObject> {
+    let df: DataFrame = pydf.into();
+    let report = openquant::data_processing::quality_report_df(&df, 0).map_err(to_py_err)?;
+    report_to_pydict(py, report)
+}
+
+#[pyfunction(name = "align_calendar_df")]
+fn data_align_calendar_df(pydf: PyDataFrame, interval_seconds: i64) -> PyResult<PyDataFrame> {
+    let df: DataFrame = pydf.into();
+    let out_df =
+        openquant::data_processing::align_calendar_df(&df, interval_seconds).map_err(to_py_err)?;
+    Ok(PyDataFrame(out_df))
 }
 
 #[pyfunction(name = "get_signal")]
@@ -614,6 +656,9 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     data.add_function(wrap_pyfunction!(data_clean_ohlcv, &data)?)?;
     data.add_function(wrap_pyfunction!(data_quality_report, &data)?)?;
     data.add_function(wrap_pyfunction!(data_align_calendar, &data)?)?;
+    data.add_function(wrap_pyfunction!(data_clean_ohlcv_df, &data)?)?;
+    data.add_function(wrap_pyfunction!(data_quality_report_df, &data)?)?;
+    data.add_function(wrap_pyfunction!(data_align_calendar_df, &data)?)?;
     m.add_submodule(&data)?;
     m.add("data", data)?;
 
