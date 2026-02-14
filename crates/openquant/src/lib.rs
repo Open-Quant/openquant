@@ -3,6 +3,7 @@ pub mod backtesting_engine;
 pub mod bet_sizing;
 pub mod cla;
 pub mod codependence;
+pub mod combinatorial_optimization;
 pub mod cross_validation;
 pub mod data_structures;
 pub mod ef3m;

@@ -345,6 +345,20 @@ export const afmlDocsState = {
           "status": "done"
         }
       ]
+    },
+    {
+      "chapter": "CHAPTER 21",
+      "theme": "Brute force and quantum computers",
+      "status": "done",
+      "chunkCount": 0,
+      "sections": [
+        {
+          "id": "chapter-21-combinatorial_optimization",
+          "module": "combinatorial_optimization",
+          "slug": "combinatorial-optimization",
+          "status": "done"
+        }
+      ]
     }
   ]
 } as const;

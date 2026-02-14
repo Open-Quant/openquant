@@ -735,6 +735,55 @@ export const moduleDocs: ModuleDoc[] = [
     ],
   },
   {
+    slug: "combinatorial-optimization",
+    module: "combinatorial_optimization",
+    subject: "Scaling, HPC and Infrastructure",
+    summary:
+      "AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.",
+    whyItExists:
+      "Many trading/search problems are discrete and path-dependent; this module keeps integer structure explicit and provides exact small-instance baselines before scaling to heuristics.",
+    keyApis: [
+      "DecisionSchema",
+      "IntegerVariable",
+      "IntegerObjective",
+      "solve_exact",
+      "SolverAdapter",
+      "solve_with_adapter",
+      "compare_exact_and_adapter",
+      "TradingTrajectorySchema",
+      "enumerate_trading_paths",
+      "evaluate_trading_path",
+      "solve_trading_trajectory_exact",
+    ],
+    formulas: [
+      {
+        label: "Finite Integer Program",
+        latex: "x^*=\\arg\\max_{x\\in\\mathcal X\\subset\\mathbb Z^d} f(x),\\quad |\\mathcal X|<\\infty",
+      },
+      {
+        label: "Path-Dependent Objective",
+        latex:
+          "J(\\tau)=\\sum_{t=1}^{T}\\left(q_t r_t-\\lambda q_t^2-c_t|\\Delta q_t|-\\kappa\\,\\mathbf 1_{\\Delta q_t\\ne0}\\right)-\\eta(q_T-q^*)^2",
+      },
+      {
+        label: "Adapter Gap vs Exact",
+        latex:
+          "\\Delta_{alg}=\\begin{cases}f(x^*)-f(\\hat x) & \\text{maximize}\\\\f(\\hat x)-f(x^*) & \\text{minimize}\\end{cases}",
+      },
+    ],
+    examples: [
+      {
+        title: "Exact trajectory search with fixed ticket costs",
+        language: "rust",
+        code: `use openquant::combinatorial_optimization::{\n  TradeBounds, TradingTrajectoryObjectiveConfig, TradingTrajectoryPath, TradingTrajectorySchema,\n  enumerate_trading_paths, evaluate_trading_path,\n};\n\nlet schema = TradingTrajectorySchema {\n  initial_inventory: 0,\n  inventory_min: -2,\n  inventory_max: 2,\n  step_trade_bounds: vec![\n    TradeBounds { min_trade: -1, max_trade: 1 },\n    TradeBounds { min_trade: -1, max_trade: 1 },\n    TradeBounds { min_trade: -1, max_trade: 1 },\n  ],\n  terminal_inventory: Some(0),\n  max_paths: 50_000,\n};\nlet cfg = TradingTrajectoryObjectiveConfig {\n  expected_returns: vec![0.01, -0.015, 0.012],\n  risk_aversion: 0.001,\n  impact_coefficients: vec![0.0005, 0.0005, 0.0005],\n  fixed_ticket_cost: 0.002,\n  terminal_inventory_target: 0,\n  terminal_inventory_penalty: 0.05,\n};\n\nlet best = enumerate_trading_paths(&schema)?\n  .into_iter()\n  .map(|path| {\n    let score = evaluate_trading_path(&path, &cfg)?;\n    Ok::<(TradingTrajectoryPath, f64), openquant::combinatorial_optimization::CombinatorialOptimizationError>((path, score))\n  })\n  .collect::<Result<Vec<_>, _>>()?\n  .into_iter()\n  .max_by(|a, b| a.1.total_cmp(&b.1))\n  .expect(\"at least one feasible path\");\n\nprintln!(\"best objective: {:.6}\", best.1);\nprintln!(\"trades: {:?}\", best.0.trades);`,
+      },
+    ],
+    notes: [
+      "Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle.",
+      "Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment.",
+    ],
+  },
+  {
     slug: "sample-weights",
     module: "sample_weights",
     subject: "Event-Driven Data and Labeling",
