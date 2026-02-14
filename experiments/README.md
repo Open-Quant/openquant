@@ -20,7 +20,12 @@ Each run writes a deterministic folder:
 - `signals.parquet` (signal timeline)
 - `weights.parquet` (portfolio weights)
 - `backtest.parquet` (equity/returns/position)
+- `equity_curve.svg` (deterministic equity line chart from `backtest.parquet`)
+- `drawdown.svg` (deterministic drawdown line chart from `backtest.parquet`)
 - `decision.md` (promotion verdict and rationale)
+
+Plot artifacts are generated on every run from the deterministic backtest frame using
+fixed-size SVG output (same config + seed -> same data + chart geometry).
 
 ## Notes
 

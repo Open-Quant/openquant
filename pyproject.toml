@@ -15,7 +15,11 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["polars>=1.0,<2", "pyarrow>=15,<20"]
+dependencies = [
+  "polars>=1.0,<2",
+  "pyarrow>=15,<20",
+  "tomli>=2,<3; python_version < '3.11'",
+]
 
 [tool.maturin]
 manifest-path = "crates/pyopenquant/Cargo.toml"

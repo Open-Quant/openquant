@@ -55,7 +55,16 @@ def test_experiment_runner_outputs_expected_artifacts():
         assert (run_dir / "signals.parquet").exists()
         assert (run_dir / "weights.parquet").exists()
         assert (run_dir / "backtest.parquet").exists()
+        assert (run_dir / "equity_curve.svg").exists()
+        assert (run_dir / "drawdown.svg").exists()
 
         metrics = pl.read_parquet(run_dir / "metrics.parquet")
         assert metrics.height == 1
         assert "net_sharpe" in metrics.columns
+
+        equity_svg = (run_dir / "equity_curve.svg").read_text(encoding="utf-8")
+        drawdown_svg = (run_dir / "drawdown.svg").read_text(encoding="utf-8")
+        assert "<svg" in equity_svg
+        assert "Equity Curve" in equity_svg
+        assert "<svg" in drawdown_svg
+        assert "Drawdown" in drawdown_svg

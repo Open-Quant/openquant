@@ -83,6 +83,7 @@ dependencies = [
     { name = "polars", version = "1.36.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "polars", version = "1.38.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pyarrow" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.dev-dependencies]
@@ -95,6 +96,7 @@ dev = [
 requires-dist = [
     { name = "polars", specifier = ">=1.0,<2" },
     { name = "pyarrow", specifier = ">=15,<20" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2,<3" },
 ]
 
 [package.metadata.requires-dev]
