@@ -52,6 +52,16 @@ Input conventions:
 - `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`
 - timestamp variants require `len(close) == len(timestamps)`
 
+### `openquant.bars` (AFML Ch.2 event-driven bars)
+- `build_time_bars(df, interval="1d")`
+- `build_tick_bars(df, ticks_per_bar=50)`
+- `build_volume_bars(df, volume_per_bar=100_000.0)`
+- `build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)`
+- `bar_diagnostics(df)`
+
+Input conventions:
+- `df`: polars DataFrame with canonical OHLCV columns (`ts,symbol,open,high,low,close,volume,adj_close`)
+
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`
 - `get_ind_mat_average_uniqueness(ind_mat)`
