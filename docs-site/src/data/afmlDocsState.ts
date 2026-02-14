@@ -331,6 +331,20 @@ export const afmlDocsState = {
           "status": "done"
         }
       ]
+    },
+    {
+      "chapter": "CHAPTER 20",
+      "theme": "Multiprocessing and vectorization",
+      "status": "done",
+      "chunkCount": 0,
+      "sections": [
+        {
+          "id": "chapter-20-hpc_parallel",
+          "module": "hpc_parallel",
+          "slug": "hpc-parallel",
+          "status": "done"
+        }
+      ]
     }
   ]
 } as const;

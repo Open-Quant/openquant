@@ -13,6 +13,7 @@ pub mod filters;
 pub mod fingerprint;
 pub mod fracdiff;
 pub mod hcaa;
+pub mod hpc_parallel;
 pub mod hrp;
 pub mod hyperparameter_tuning;
 pub mod labeling;

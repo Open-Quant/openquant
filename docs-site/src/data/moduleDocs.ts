@@ -692,6 +692,49 @@ export const moduleDocs: ModuleDoc[] = [
     ],
   },
   {
+    slug: "hpc-parallel",
+    module: "hpc_parallel",
+    subject: "Scaling, HPC and Infrastructure",
+    summary: "AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.",
+    whyItExists:
+      "Research pipelines bottleneck on repeated independent computations; this module exposes reproducible partitioning and dispatch controls to scale those workloads safely.",
+    keyApis: [
+      "partition_atoms",
+      "run_parallel",
+      "dispatch_async",
+      "ExecutionMode",
+      "PartitionStrategy",
+      "HpcParallelConfig",
+      "ParallelRunReport",
+      "HpcParallelMetrics",
+    ],
+    formulas: [
+      {
+        label: "Linear Partition Boundary",
+        latex: "b_i=\\left\\lfloor\\frac{iN}{M}\\right\\rfloor,\\;i=0,\\dots,M",
+      },
+      {
+        label: "Nested Partition Boundary",
+        latex: "b_i=\\left\\lfloor N\\sqrt{\\frac{i}{M}}\\right\\rfloor,\\;i=0,\\dots,M",
+      },
+      {
+        label: "Throughput",
+        latex: "\\text{throughput}=\\frac{\\text{atoms processed}}{\\text{runtime seconds}}",
+      },
+    ],
+    examples: [
+      {
+        title: "Run atom->molecule callback in threaded mode",
+        language: "rust",
+        code: `use openquant::hpc_parallel::{run_parallel, ExecutionMode, HpcParallelConfig, PartitionStrategy};\n\nlet atoms: Vec<f64> = (0..10_000).map(|i| i as f64).collect();\nlet report = run_parallel(\n  &atoms,\n  HpcParallelConfig {\n    mode: ExecutionMode::Threaded { num_threads: 8 },\n    partition: PartitionStrategy::Nested,\n    mp_batches: 4,\n    progress_every: 4,\n  },\n  |chunk| Ok::<f64, &'static str>(chunk.iter().map(|x| x.sqrt()).sum()),\n)?;\n\nprintln!(\"molecules={} atoms/s={:.0}\", report.metrics.molecules_total, report.metrics.throughput_atoms_per_sec);`,
+      },
+    ],
+    notes: [
+      "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics.",
+      "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking.",
+    ],
+  },
+  {
     slug: "sample-weights",
     module: "sample_weights",
     subject: "Event-Driven Data and Labeling",
