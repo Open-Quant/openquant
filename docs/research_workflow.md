@@ -20,7 +20,7 @@ This guide defines the promotion path from hypothesis to candidate strategy in O
 
 ```bash
 # setup
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 

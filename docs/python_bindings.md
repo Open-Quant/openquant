@@ -11,11 +11,17 @@ Prerequisites:
 From repo root:
 
 ```bash
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 uv run --python .venv/bin/python python -c "import openquant; print('openquant import ok')"
 uv run --python .venv/bin/python pytest python/tests -q
+```
+
+Quick performance showcase:
+
+```bash
+uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
 ```
 
 Build a wheel:

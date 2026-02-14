@@ -13,6 +13,7 @@ authors = [{ name = "OpenQuant contributors" }]
 classifiers = [
   "Programming Language :: Rust",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
 ]
 dependencies = ["polars>=1.0,<2", "pyarrow>=15,<20"]

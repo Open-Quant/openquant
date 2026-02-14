@@ -14,7 +14,7 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 ## Run setup
 
 ```bash
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 ```
