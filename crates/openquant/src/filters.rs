@@ -4,6 +4,31 @@
 //! (including rolling std with ddof=1).
 
 use chrono::NaiveDateTime;
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FilterError {
+    MissingDynamicThreshold { index: usize, available: usize },
+    TimestampIndexOutOfBounds { index: usize, available: usize },
+}
+
+impl fmt::Display for FilterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FilterError::MissingDynamicThreshold { index, available } => {
+                write!(
+                    f,
+                    "dynamic threshold missing value at index {index} (available={available})"
+                )
+            }
+            FilterError::TimestampIndexOutOfBounds { index, available } => {
+                write!(f, "timestamp index {index} out of bounds for length {available}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FilterError {}
 
 /// Threshold type for CUSUM filter.
 pub enum Threshold {
@@ -11,21 +36,30 @@ pub enum Threshold {
     Dynamic(Vec<f64>),
 }
 
-fn threshold_at(threshold: &Threshold, idx: usize) -> f64 {
+fn threshold_at_checked(threshold: &Threshold, idx: usize) -> Result<f64, FilterError> {
     match threshold {
-        Threshold::Scalar(v) => *v,
+        Threshold::Scalar(v) => Ok(*v),
         Threshold::Dynamic(v) => v
             .get(idx)
             .copied()
-            .unwrap_or_else(|| panic!("dynamic threshold missing value at {idx}")),
+            .ok_or(FilterError::MissingDynamicThreshold { index: idx, available: v.len() }),
     }
 }
 
 /// CUSUM filter returning indices of events (0-based positions in the input).
 pub fn cusum_filter_indices(close: &[f64], threshold: Threshold) -> Vec<usize> {
+    cusum_filter_indices_checked(close, threshold)
+        .expect("invalid threshold in cusum_filter_indices")
+}
+
+/// CUSUM filter returning indices of events (0-based positions in the input).
+pub fn cusum_filter_indices_checked(
+    close: &[f64],
+    threshold: Threshold,
+) -> Result<Vec<usize>, FilterError> {
     let mut events = Vec::new();
     if close.len() < 2 {
-        return events;
+        return Ok(events);
     }
 
     let mut s_pos = 0.0_f64;
@@ -33,7 +67,7 @@ pub fn cusum_filter_indices(close: &[f64], threshold: Threshold) -> Vec<usize> {
 
     for i in 1..close.len() {
         let log_ret = (close[i] / close[i - 1]).ln();
-        let thresh = threshold_at(&threshold, i);
+        let thresh = threshold_at_checked(&threshold, i)?;
 
         let pos = s_pos + log_ret;
         let neg = s_neg + log_ret;
@@ -49,7 +83,7 @@ pub fn cusum_filter_indices(close: &[f64], threshold: Threshold) -> Vec<usize> {
         }
     }
 
-    events
+    Ok(events)
 }
 
 /// CUSUM filter returning timestamps of events.
@@ -58,8 +92,26 @@ pub fn cusum_filter_timestamps(
     timestamps: &[NaiveDateTime],
     threshold: Threshold,
 ) -> Vec<NaiveDateTime> {
-    let indices = cusum_filter_indices(close, threshold);
-    indices.into_iter().map(|i| timestamps.get(i).copied().expect("timestamp index")).collect()
+    cusum_filter_timestamps_checked(close, timestamps, threshold)
+        .expect("timestamp index out of bounds in cusum_filter_timestamps")
+}
+
+/// CUSUM filter returning timestamps of events.
+pub fn cusum_filter_timestamps_checked(
+    close: &[f64],
+    timestamps: &[NaiveDateTime],
+    threshold: Threshold,
+) -> Result<Vec<NaiveDateTime>, FilterError> {
+    let indices = cusum_filter_indices_checked(close, threshold)?;
+    indices
+        .into_iter()
+        .map(|i| {
+            timestamps.get(i).copied().ok_or(FilterError::TimestampIndexOutOfBounds {
+                index: i,
+                available: timestamps.len(),
+            })
+        })
+        .collect()
 }
 
 fn rolling_mean_std(window: &[f64]) -> (f64, f64) {
@@ -120,6 +172,26 @@ pub fn z_score_filter_timestamps(
     std_window: usize,
     threshold: f64,
 ) -> Vec<NaiveDateTime> {
+    z_score_filter_timestamps_checked(close, timestamps, mean_window, std_window, threshold)
+        .expect("timestamp index out of bounds in z_score_filter_timestamps")
+}
+
+/// Z-score filter returning timestamps of events.
+pub fn z_score_filter_timestamps_checked(
+    close: &[f64],
+    timestamps: &[NaiveDateTime],
+    mean_window: usize,
+    std_window: usize,
+    threshold: f64,
+) -> Result<Vec<NaiveDateTime>, FilterError> {
     let indices = z_score_filter_indices(close, mean_window, std_window, threshold);
-    indices.into_iter().map(|i| timestamps.get(i).copied().expect("timestamp index")).collect()
+    indices
+        .into_iter()
+        .map(|i| {
+            timestamps.get(i).copied().ok_or(FilterError::TimestampIndexOutOfBounds {
+                index: i,
+                available: timestamps.len(),
+            })
+        })
+        .collect()
 }
