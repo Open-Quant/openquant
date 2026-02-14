@@ -1,4 +1,5 @@
 use nalgebra::DMatrix;
+use openquant::data_processing::{align_calendar_rows, clean_ohlcv_rows, quality_report, OhlcvRow};
 use openquant::data_structures::{standard_bars, time_bars, StandardBarType, Trade};
 use openquant::filters::Threshold;
 use openquant::pipeline::{
@@ -104,6 +105,54 @@ fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<(Stri
             )
         })
         .collect()
+}
+
+fn build_ohlcv_rows(
+    timestamps: Vec<String>,
+    symbols: Vec<String>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    adj_close: Vec<f64>,
+) -> PyResult<Vec<OhlcvRow>> {
+    let n = timestamps.len();
+    let lengths = [
+        symbols.len(),
+        open.len(),
+        high.len(),
+        low.len(),
+        close.len(),
+        volume.len(),
+        adj_close.len(),
+    ];
+    if lengths.iter().any(|&len| len != n) {
+        return Err(PyValueError::new_err(format!(
+            "ohlcv vector length mismatch: ts={n}, symbol={}, open={}, high={}, low={}, close={}, volume={}, adj_close={}",
+            symbols.len(),
+            open.len(),
+            high.len(),
+            low.len(),
+            close.len(),
+            volume.len(),
+            adj_close.len(),
+        )));
+    }
+    let mut rows = Vec::with_capacity(n);
+    for i in 0..n {
+        rows.push(OhlcvRow {
+            timestamp: parse_one_naive_datetime(&timestamps[i])?,
+            symbol: symbols[i].clone(),
+            open: open[i],
+            high: high[i],
+            low: low[i],
+            close: close[i],
+            volume: volume[i],
+            adj_close: adj_close[i],
+        });
+    }
+    Ok(rows)
 }
 
 #[pyfunction(name = "calculate_value_at_risk")]
@@ -268,6 +317,118 @@ fn bars_build_dollar_bars(
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars = standard_bars(&trades, dollar_value_per_bar, StandardBarType::Dollar);
     Ok(bars_to_rows(bars))
+}
+
+#[pyfunction(name = "clean_ohlcv")]
+fn data_clean_ohlcv(
+    py: Python<'_>,
+    timestamps: Vec<String>,
+    symbols: Vec<String>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    adj_close: Vec<f64>,
+    dedupe_keep_last: bool,
+) -> PyResult<(Vec<(String, String, f64, f64, f64, f64, f64, f64)>, PyObject)> {
+    let rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
+    let (clean, report) = clean_ohlcv_rows(&rows, dedupe_keep_last);
+    let out_rows = clean
+        .into_iter()
+        .map(|r| {
+            (
+                r.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                r.symbol,
+                r.open,
+                r.high,
+                r.low,
+                r.close,
+                r.volume,
+                r.adj_close,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let out_report = PyDict::new_bound(py);
+    out_report.set_item("row_count", report.row_count)?;
+    out_report.set_item("symbol_count", report.symbol_count)?;
+    out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
+    out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report.set_item(
+        "ts_min",
+        report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+    )?;
+    out_report.set_item(
+        "ts_max",
+        report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+    )?;
+    out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
+    Ok((out_rows, out_report.into_py(py)))
+}
+
+#[pyfunction(name = "quality_report")]
+fn data_quality_report(
+    py: Python<'_>,
+    timestamps: Vec<String>,
+    symbols: Vec<String>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    adj_close: Vec<f64>,
+) -> PyResult<PyObject> {
+    let mut rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
+    rows.sort_by(|a, b| a.symbol.cmp(&b.symbol).then_with(|| a.timestamp.cmp(&b.timestamp)));
+    let report = quality_report(&rows, 0);
+    let out_report = PyDict::new_bound(py);
+    out_report.set_item("row_count", report.row_count)?;
+    out_report.set_item("symbol_count", report.symbol_count)?;
+    out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
+    out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report.set_item(
+        "ts_min",
+        report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+    )?;
+    out_report.set_item(
+        "ts_max",
+        report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+    )?;
+    out_report.set_item("rows_removed_by_deduplication", 0)?;
+    Ok(out_report.into_py(py))
+}
+
+#[pyfunction(name = "align_calendar")]
+fn data_align_calendar(
+    timestamps: Vec<String>,
+    symbols: Vec<String>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    adj_close: Vec<f64>,
+    interval_seconds: i64,
+) -> PyResult<Vec<(String, String, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, bool)>> {
+    let rows = build_ohlcv_rows(timestamps, symbols, open, high, low, close, volume, adj_close)?;
+    let out = align_calendar_rows(&rows, interval_seconds).map_err(to_py_err)?;
+    Ok(out
+        .into_iter()
+        .map(|r| {
+            (
+                r.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                r.symbol,
+                r.open,
+                r.high,
+                r.low,
+                r.close,
+                r.volume,
+                r.adj_close,
+                r.is_missing_bar,
+            )
+        })
+        .collect())
 }
 
 #[pyfunction(name = "get_signal")]
@@ -448,6 +609,13 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     bars.add_function(wrap_pyfunction!(bars_build_dollar_bars, &bars)?)?;
     m.add_submodule(&bars)?;
     m.add("bars", bars)?;
+
+    let data = PyModule::new_bound(py, "data")?;
+    data.add_function(wrap_pyfunction!(data_clean_ohlcv, &data)?)?;
+    data.add_function(wrap_pyfunction!(data_quality_report, &data)?)?;
+    data.add_function(wrap_pyfunction!(data_align_calendar, &data)?)?;
+    m.add_submodule(&data)?;
+    m.add("data", data)?;
 
     let bet_sizing = PyModule::new_bound(py, "bet_sizing")?;
     bet_sizing.add_function(wrap_pyfunction!(bet_sizing_get_signal, &bet_sizing)?)?;

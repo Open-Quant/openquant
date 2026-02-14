@@ -62,6 +62,16 @@ Input conventions:
 Input conventions:
 - `df`: polars DataFrame with canonical OHLCV columns (`ts,symbol,open,high,low,close,volume,adj_close`)
 
+### `openquant.data` (canonicalization + Rust-backed processing via PyO3)
+- `load_ohlcv(path, symbol=None, return_report=False)`
+- `clean_ohlcv(df, dedupe_keep="last", return_report=False)`
+- `data_quality_report(df)`
+- `align_calendar(df, interval="1d")`
+
+Notes:
+- File IO and column alias canonicalization happen in Python for ergonomics.
+- Core cleaning, deduplication, quality reporting, and calendar alignment are executed in Rust through `_core.data`.
+
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`
 - `get_ind_mat_average_uniqueness(ind_mat)`

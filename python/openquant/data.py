@@ -5,6 +5,8 @@ from typing import Any
 
 import polars as pl
 
+from . import _core
+
 
 CANONICAL_OHLCV_COLUMNS = [
     "ts",
@@ -82,45 +84,58 @@ def _cast_and_order(df: pl.DataFrame) -> pl.DataFrame:
     return casted.select(CANONICAL_OHLCV_COLUMNS)
 
 
-def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
-    _validate_required_columns(df)
-    key_cols = ["symbol", "ts"]
-    row_count = df.height
-    duplicate_keys = (
-        df.group_by(key_cols)
-        .len()
-        .filter(pl.col("len") > 1)
-        .height
+def _to_core_vectors(df: pl.DataFrame) -> tuple[list[str], list[str], list[float], list[float], list[float], list[float], list[float], list[float]]:
+    return (
+        [str(x) for x in df["ts"].to_list()],
+        [str(x) for x in df["symbol"].to_list()],
+        [float(x) for x in df["open"].to_list()],
+        [float(x) for x in df["high"].to_list()],
+        [float(x) for x in df["low"].to_list()],
+        [float(x) for x in df["close"].to_list()],
+        [float(x) for x in df["volume"].to_list()],
+        [float(x) for x in df["adj_close"].to_list()],
     )
-    gap_count = 0
-    for sym in df["symbol"].unique().to_list():
-        ts_values = (
-            df.filter(pl.col("symbol") == sym)
-            .sort("ts")
-            .select("ts")
-            .to_series()
-            .to_list()
-        )
-        for prev, cur in zip(ts_values, ts_values[1:]):
-            if prev is None or cur is None:
-                continue
-            if (cur - prev).total_seconds() > 24 * 3600:
-                gap_count += 1
 
-    report = {
-        "row_count": row_count,
-        "symbol_count": int(df.select(pl.col("symbol").n_unique()).item()),
-        "duplicate_key_count": duplicate_keys,
-        "gap_interval_count": gap_count,
-        "null_counts": {
-            col: int(df.select(pl.col(col).null_count()).item())
-            for col in CANONICAL_OHLCV_COLUMNS
-            if col in df.columns
-        },
-        "ts_min": str(df.select(pl.col("ts").min()).item()),
-        "ts_max": str(df.select(pl.col("ts").max()).item()),
-    }
-    return report
+
+def _rows_to_frame(rows: list[tuple[str, str, float, float, float, float, float, float]]) -> pl.DataFrame:
+    if not rows:
+        return pl.DataFrame(
+            {
+                "ts": [],
+                "symbol": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "adj_close": [],
+            }
+        )
+    return pl.DataFrame(
+        {
+            "ts": [r[0] for r in rows],
+            "symbol": [r[1] for r in rows],
+            "open": [r[2] for r in rows],
+            "high": [r[3] for r in rows],
+            "low": [r[4] for r in rows],
+            "close": [r[5] for r in rows],
+            "volume": [r[6] for r in rows],
+            "adj_close": [r[7] for r in rows],
+        }
+    ).with_columns(pl.col("ts").str.strptime(pl.Datetime, strict=False))
+
+
+def _interval_to_seconds(interval: str) -> int:
+    s = interval.strip().lower()
+    if s.endswith("d"):
+        return int(s[:-1]) * 24 * 3600
+    if s.endswith("h"):
+        return int(s[:-1]) * 3600
+    if s.endswith("m"):
+        return int(s[:-1]) * 60
+    if s.endswith("s"):
+        return int(s[:-1])
+    raise ValueError(f"unsupported interval format: {interval}")
 
 
 def clean_ohlcv(
@@ -132,15 +147,63 @@ def clean_ohlcv(
     out = _canonicalize_columns(df)
     _validate_required_columns(out)
     out = _cast_and_order(out)
-    out = out.drop_nulls(subset=["ts", "symbol"])
-    pre_rows = out.height
-    out = out.unique(subset=["symbol", "ts"], keep=dedupe_keep).sort(["symbol", "ts"])
-    removed = pre_rows - out.height
-    report = data_quality_report(out)
-    report["rows_removed_by_deduplication"] = removed
+    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(out)
+    rows, report = _core.data.clean_ohlcv(
+        ts,
+        symbol,
+        open_,
+        high,
+        low,
+        close,
+        volume,
+        adj_close,
+        dedupe_keep == "last",
+    )
+    frame = _rows_to_frame(rows).sort(["symbol", "ts"])
+    report = dict(report)
+    report["null_counts"] = {
+        "ts": 0,
+        "symbol": 0,
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "close": 0,
+        "volume": 0,
+        "adj_close": 0,
+    }
     if return_report:
-        return out, report
-    return out
+        return frame, report
+    return frame
+
+
+def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
+    out = _canonicalize_columns(df)
+    _validate_required_columns(out)
+    out = _cast_and_order(out).sort(["symbol", "ts"])
+    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(out)
+    report = dict(
+        _core.data.quality_report(
+            ts,
+            symbol,
+            open_,
+            high,
+            low,
+            close,
+            volume,
+            adj_close,
+        )
+    )
+    report["null_counts"] = {
+        "ts": 0,
+        "symbol": 0,
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "close": 0,
+        "volume": 0,
+        "adj_close": 0,
+    }
+    return report
 
 
 def load_ohlcv(
@@ -165,8 +228,7 @@ def load_ohlcv(
         if symbol is None:
             raise ValueError("symbol column missing and no symbol argument provided")
         raw = raw.with_columns(pl.lit(symbol).alias("symbol"))
-    out = clean_ohlcv(raw, return_report=return_report)
-    return out
+    return clean_ohlcv(raw, return_report=return_report)
 
 
 def align_calendar(
@@ -175,19 +237,44 @@ def align_calendar(
     interval: str = "1d",
 ) -> pl.DataFrame:
     clean = clean_ohlcv(df)
-    symbols = clean["symbol"].unique().to_list()
-    aligned: list[pl.DataFrame] = []
-    for sym in symbols:
-        sdf = clean.filter(pl.col("symbol") == sym).sort("ts")
-        start = sdf.select(pl.col("ts").min()).item()
-        end = sdf.select(pl.col("ts").max()).item()
-        calendar = pl.DataFrame(
-            {"ts": pl.datetime_range(start, end, interval=interval, eager=True)}
-        ).with_columns(pl.lit(sym).alias("symbol"))
-        merged = calendar.join(sdf, on=["symbol", "ts"], how="left")
-        merged = merged.with_columns(
-            pl.col("open").is_null().alias("is_missing_bar"),
-            pl.col("adj_close").fill_null(pl.col("close")),
+    ts, symbol, open_, high, low, close, volume, adj_close = _to_core_vectors(clean)
+    rows = _core.data.align_calendar(
+        ts,
+        symbol,
+        open_,
+        high,
+        low,
+        close,
+        volume,
+        adj_close,
+        _interval_to_seconds(interval),
+    )
+    if not rows:
+        return pl.DataFrame(
+            {
+                "ts": [],
+                "symbol": [],
+                "open": [],
+                "high": [],
+                "low": [],
+                "close": [],
+                "volume": [],
+                "adj_close": [],
+                "is_missing_bar": [],
+            }
         )
-        aligned.append(merged)
-    return pl.concat(aligned, how="vertical").sort(["symbol", "ts"])
+    return pl.DataFrame(
+        {
+            "ts": [r[0] for r in rows],
+            "symbol": [r[1] for r in rows],
+            "open": [r[2] for r in rows],
+            "high": [r[3] for r in rows],
+            "low": [r[4] for r in rows],
+            "close": [r[5] for r in rows],
+            "volume": [r[6] for r in rows],
+            "adj_close": [r[7] for r in rows],
+            "is_missing_bar": [r[8] for r in rows],
+        }
+    ).with_columns(
+        pl.col("ts").str.strptime(pl.Datetime, strict=False),
+    ).sort(["symbol", "ts"])
