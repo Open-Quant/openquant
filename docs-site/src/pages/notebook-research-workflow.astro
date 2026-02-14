@@ -1,0 +1,70 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+<Layout
+  title="Notebook Research Workflow • OpenQuant-rs"
+  description="Notebook-first research workflow for OpenQuant-rs with reproducibility and leakage controls."
+>
+  <section class="hero">
+    <h1>Notebook-First Research Workflow</h1>
+    <p class="muted">
+      Promotion path from exploratory notebook to reproducible candidate strategy,
+      aligned with <code>docs/research_workflow.md</code>.
+    </p>
+  </section>
+
+  <h2>Promotion Path</h2>
+  <ol>
+    <li>Exploratory notebook in <code>notebooks/python/*.ipynb</code>.</li>
+    <li>
+      Scripted experiment in <code>experiments/run_pipeline.py</code> with a TOML
+      config.
+    </li>
+    <li>
+      Artifact and parity checks in <code>python/tests/test_experiment_scaffold.py</code>.
+    </li>
+    <li>
+      Candidate decision recorded as <code>decision.md</code> in the run artifact
+      directory.
+    </li>
+  </ol>
+
+  <h2>Local Commands</h2>
+  <pre><code class="language-bash"># setup
+uv venv --python 3.11 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+
+# notebook logic smoke
+uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+
+# reproducible experiment run
+uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
+
+# parity + scaffold tests
+uv run --python .venv/bin/python pytest python/tests/test_experiment_scaffold.py -q</code></pre>
+
+  <h2>Leakage and Reproducibility Checklist</h2>
+  <ul>
+    <li>Use event-based sampling and leakage-safe validation paths.</li>
+    <li>Keep deterministic seeds and config-hashed run directories.</li>
+    <li>Report gross and net metrics with turnover and cost estimates.</li>
+    <li>Require statistical and economic gates before promotion.</li>
+    <li>
+      Confirm leakage checks pass: <code>inputs_aligned</code> and
+      <code>event_indices_sorted</code>.
+    </li>
+    <li>
+      Artifact bundle includes <code>manifest.json</code>, parquet outputs, and
+      <code>decision.md</code>.
+    </li>
+  </ul>
+
+  <h2>Anti-Patterns</h2>
+  <ul>
+    <li>Random CV splits on overlapping financial labels.</li>
+    <li>Promoting on gross-only metrics without cost accounting.</li>
+    <li>Notebook-only logic that cannot be reproduced from config.</li>
+    <li>Hidden mutable state across notebook cells.</li>
+  </ul>
+</Layout>
