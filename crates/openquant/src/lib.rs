@@ -20,6 +20,7 @@ pub mod hrp;
 pub mod hyperparameter_tuning;
 pub mod labeling;
 pub mod microstructural_features;
+pub mod notebook_modeling;
 pub mod onc;
 pub mod pipeline;
 pub mod portfolio_optimization;

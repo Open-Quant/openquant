@@ -178,10 +178,11 @@ impl SequentiallyBootstrappedBaggingClassifier {
         for _ in 0..(n_more as usize) {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
+            let warmup_len = (max_samples / 10).max(1).min(5);
             let warmup = warmup_indices(
                 &mut rng,
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
-                max_samples,
+                warmup_len,
             );
             let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
 
@@ -231,10 +232,15 @@ impl SequentiallyBootstrappedBaggingClassifier {
     }
 
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<u8>, SbBaggingError> {
+        let probs = self.predict_proba(x)?;
+        Ok(probs.into_iter().map(|p| if p >= 0.5 { 1 } else { 0 }).collect())
+    }
+
+    pub fn predict_proba(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
         if self.estimators.is_empty() {
             return Err(SbBaggingError::EmptyInput);
         }
-        let mut out = vec![0u8; x.nrows()];
+        let mut out = vec![0.0; x.nrows()];
         for r in 0..x.nrows() {
             let mut votes = 0usize;
             for est in &self.estimators {
@@ -244,7 +250,7 @@ impl SequentiallyBootstrappedBaggingClassifier {
                     votes += 1;
                 }
             }
-            out[r] = if votes * 2 >= self.estimators.len() { 1 } else { 0 };
+            out[r] = votes as f64 / self.estimators.len() as f64;
         }
         Ok(out)
     }
@@ -326,10 +332,11 @@ impl SequentiallyBootstrappedBaggingRegressor {
         for _ in 0..(n_more as usize) {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
+            let warmup_len = (max_samples / 10).max(1).min(5);
             let warmup = warmup_indices(
                 &mut rng,
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
-                max_samples,
+                warmup_len,
             );
             let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
 
