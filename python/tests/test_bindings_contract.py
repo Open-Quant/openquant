@@ -72,6 +72,67 @@ def test_sampling_contracts():
     assert all(0 <= i < len(label_endtime) for i in samples)
 
 
+def test_labeling_contracts():
+    close_timestamps = [
+        "2024-01-01 09:30:00",
+        "2024-01-01 09:31:00",
+        "2024-01-01 09:32:00",
+        "2024-01-01 09:33:00",
+        "2024-01-01 09:34:00",
+    ]
+    close_prices = [100.0, 100.4, 100.1, 100.7, 100.2]
+    t_events = close_timestamps[:-1]
+    target_timestamps = t_events
+    target_values = [0.01, 0.012, 0.011, 0.013]
+    vertical_barriers = [(ts, close_timestamps[i + 1]) for i, ts in enumerate(t_events)]
+    side_prediction = [(ts, 1.0 if i % 2 == 0 else -1.0) for i, ts in enumerate(t_events)]
+
+    events = openquant.labeling.triple_barrier_events(
+        close_timestamps=close_timestamps,
+        close_prices=close_prices,
+        t_events=t_events,
+        target_timestamps=target_timestamps,
+        target_values=target_values,
+        pt=1.0,
+        sl=1.0,
+        min_ret=0.0,
+        vertical_barrier_times=vertical_barriers,
+    )
+    labels = openquant.labeling.triple_barrier_labels(
+        close_timestamps=close_timestamps,
+        close_prices=close_prices,
+        t_events=t_events,
+        target_timestamps=target_timestamps,
+        target_values=target_values,
+        pt=0.0,
+        sl=0.0,
+        min_ret=0.0,
+        vertical_barrier_times=vertical_barriers,
+    )
+    meta = openquant.labeling.meta_labels(
+        close_timestamps=close_timestamps,
+        close_prices=close_prices,
+        t_events=t_events,
+        target_timestamps=target_timestamps,
+        target_values=target_values,
+        side_prediction=side_prediction,
+        pt=2.0,
+        sl=0.5,
+        min_ret=0.0,
+        vertical_barrier_times=vertical_barriers,
+    )
+
+    assert len(events) > 0
+    assert all(isinstance(row[0], str) for row in events)
+    assert all(row[1] is None or isinstance(row[1], str) for row in events)
+
+    assert len(labels) > 0
+    assert all(lbl in (-1, 0, 1) for (_, _, _, lbl, _) in labels)
+
+    assert len(meta) > 0
+    assert all(lbl in (0, 1) for (_, _, _, lbl, _) in meta)
+
+
 def test_bet_sizing_contracts():
     signal = openquant.bet_sizing.get_signal([0.55, 0.6, 0.4], 2, [1.0, -1.0, 1.0])
     disc = openquant.bet_sizing.discrete_signal(signal, 0.1)

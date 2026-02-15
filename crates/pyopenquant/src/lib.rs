@@ -4,6 +4,7 @@ use openquant::data_processing::{
 };
 use openquant::data_structures::{standard_bars, time_bars, StandardBarType, Trade};
 use openquant::filters::Threshold;
+use openquant::labeling::{meta_labels, triple_barrier_events, triple_barrier_labels, TripleBarrierConfig};
 use openquant::pipeline::{
     run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
 };
@@ -54,6 +55,85 @@ fn parse_naive_datetimes(values: Vec<String>) -> PyResult<Vec<chrono::NaiveDateT
 
 fn format_naive_datetimes(values: Vec<chrono::NaiveDateTime>) -> Vec<String> {
     values.into_iter().map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()).collect()
+}
+
+fn pair_timestamps_values(
+    timestamps: Vec<String>,
+    values: Vec<f64>,
+    left_name: &str,
+    right_name: &str,
+) -> PyResult<Vec<(chrono::NaiveDateTime, f64)>> {
+    let ts = parse_naive_datetimes(timestamps)?;
+    if ts.len() != values.len() {
+        return Err(PyValueError::new_err(format!(
+            "{left_name}/{right_name} length mismatch: {} vs {}",
+            ts.len(),
+            values.len()
+        )));
+    }
+    Ok(ts.into_iter().zip(values).collect())
+}
+
+fn parse_vertical_barriers(
+    values: Option<Vec<(String, String)>>,
+) -> PyResult<Option<Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)>>> {
+    let Some(values) = values else {
+        return Ok(None);
+    };
+
+    let mut out = Vec::with_capacity(values.len());
+    for (start, end) in values {
+        let start_ts = chrono::NaiveDateTime::parse_from_str(&start, "%Y-%m-%d %H:%M:%S")
+            .map_err(|e| PyValueError::new_err(format!("invalid start barrier datetime '{start}': {e}")))?;
+        let end_ts = chrono::NaiveDateTime::parse_from_str(&end, "%Y-%m-%d %H:%M:%S")
+            .map_err(|e| PyValueError::new_err(format!("invalid end barrier datetime '{end}': {e}")))?;
+        out.push((start_ts, end_ts));
+    }
+    Ok(Some(out))
+}
+
+fn build_labeling_events(
+    close_timestamps: Vec<String>,
+    close_prices: Vec<f64>,
+    t_events: Vec<String>,
+    target_timestamps: Vec<String>,
+    target_values: Vec<f64>,
+    pt: f64,
+    sl: f64,
+    min_ret: f64,
+    vertical_barrier_times: Option<Vec<(String, String)>>,
+    side_prediction: Option<Vec<(String, f64)>>,
+) -> PyResult<(Vec<(chrono::NaiveDateTime, f64)>, Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>)> {
+    let close = pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
+    let t_events = parse_naive_datetimes(t_events)?;
+    let target = pair_timestamps_values(
+        target_timestamps,
+        target_values,
+        "target_timestamps",
+        "target_values",
+    )?;
+    let vbars = parse_vertical_barriers(vertical_barrier_times)?;
+
+    let side_storage: Option<Vec<(chrono::NaiveDateTime, f64)>> = if let Some(side) = side_prediction {
+        let (timestamps, values): (Vec<String>, Vec<f64>) = side.into_iter().unzip();
+        Some(pair_timestamps_values(timestamps, values, "side timestamps", "side values")?)
+    } else {
+        None
+    };
+
+    let events = triple_barrier_events(
+        &close,
+        &t_events,
+        &target,
+        TripleBarrierConfig {
+            pt,
+            sl,
+            min_ret,
+            vertical_barrier_times: vbars.as_deref(),
+        },
+        side_storage.as_deref(),
+    );
+    Ok((close, events))
 }
 
 fn parse_one_naive_datetime(value: &str) -> PyResult<chrono::NaiveDateTime> {
@@ -267,6 +347,158 @@ fn sampling_seq_bootstrap(
     warmup_samples: Option<Vec<usize>>,
 ) -> Vec<usize> {
     openquant::sampling::seq_bootstrap(&ind_mat, sample_length, warmup_samples)
+}
+
+#[pyfunction(name = "triple_barrier_events")]
+#[pyo3(signature = (
+    close_timestamps,
+    close_prices,
+    t_events,
+    target_timestamps,
+    target_values,
+    pt=1.0,
+    sl=1.0,
+    min_ret=0.0,
+    vertical_barrier_times=None,
+    side_prediction=None
+))]
+fn labeling_triple_barrier_events(
+    close_timestamps: Vec<String>,
+    close_prices: Vec<f64>,
+    t_events: Vec<String>,
+    target_timestamps: Vec<String>,
+    target_values: Vec<f64>,
+    pt: f64,
+    sl: f64,
+    min_ret: f64,
+    vertical_barrier_times: Option<Vec<(String, String)>>,
+    side_prediction: Option<Vec<(String, f64)>>,
+) -> PyResult<Vec<(String, Option<String>, f64, Option<f64>, f64, f64)>> {
+    let (_, events) = build_labeling_events(
+        close_timestamps,
+        close_prices,
+        t_events,
+        target_timestamps,
+        target_values,
+        pt,
+        sl,
+        min_ret,
+        vertical_barrier_times,
+        side_prediction,
+    )?;
+    Ok(events
+        .into_iter()
+        .map(|(ts, ev)| {
+            (
+                ts.format("%Y-%m-%d %H:%M:%S").to_string(),
+                ev.t1.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+                ev.trgt,
+                ev.side,
+                ev.pt,
+                ev.sl,
+            )
+        })
+        .collect())
+}
+
+#[pyfunction(name = "triple_barrier_labels")]
+#[pyo3(signature = (
+    close_timestamps,
+    close_prices,
+    t_events,
+    target_timestamps,
+    target_values,
+    pt=1.0,
+    sl=1.0,
+    min_ret=0.0,
+    vertical_barrier_times=None
+))]
+fn labeling_triple_barrier_labels(
+    close_timestamps: Vec<String>,
+    close_prices: Vec<f64>,
+    t_events: Vec<String>,
+    target_timestamps: Vec<String>,
+    target_values: Vec<f64>,
+    pt: f64,
+    sl: f64,
+    min_ret: f64,
+    vertical_barrier_times: Option<Vec<(String, String)>>,
+) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
+    let (close, events) = build_labeling_events(
+        close_timestamps,
+        close_prices,
+        t_events,
+        target_timestamps,
+        target_values,
+        pt,
+        sl,
+        min_ret,
+        vertical_barrier_times,
+        None,
+    )?;
+    Ok(triple_barrier_labels(&events, &close)
+        .into_iter()
+        .map(|row| {
+            (
+                row.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                row.ret,
+                row.trgt,
+                row.label,
+                row.side,
+            )
+        })
+        .collect())
+}
+
+#[pyfunction(name = "meta_labels")]
+#[pyo3(signature = (
+    close_timestamps,
+    close_prices,
+    t_events,
+    target_timestamps,
+    target_values,
+    side_prediction,
+    pt=1.0,
+    sl=1.0,
+    min_ret=0.0,
+    vertical_barrier_times=None
+))]
+fn labeling_meta_labels(
+    close_timestamps: Vec<String>,
+    close_prices: Vec<f64>,
+    t_events: Vec<String>,
+    target_timestamps: Vec<String>,
+    target_values: Vec<f64>,
+    side_prediction: Vec<(String, f64)>,
+    pt: f64,
+    sl: f64,
+    min_ret: f64,
+    vertical_barrier_times: Option<Vec<(String, String)>>,
+) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
+    let (close, events) = build_labeling_events(
+        close_timestamps,
+        close_prices,
+        t_events,
+        target_timestamps,
+        target_values,
+        pt,
+        sl,
+        min_ret,
+        vertical_barrier_times,
+        Some(side_prediction),
+    )?;
+    Ok(meta_labels(&events, &close)
+        .into_iter()
+        .map(|row| {
+            (
+                row.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                row.ret,
+                row.trgt,
+                row.label,
+                row.side,
+            )
+        })
+        .collect())
 }
 
 #[pyfunction(name = "build_time_bars")]
@@ -643,6 +875,13 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     sampling.add_function(wrap_pyfunction!(sampling_seq_bootstrap, &sampling)?)?;
     m.add_submodule(&sampling)?;
     m.add("sampling", sampling)?;
+
+    let labeling = PyModule::new_bound(py, "labeling")?;
+    labeling.add_function(wrap_pyfunction!(labeling_triple_barrier_events, &labeling)?)?;
+    labeling.add_function(wrap_pyfunction!(labeling_triple_barrier_labels, &labeling)?)?;
+    labeling.add_function(wrap_pyfunction!(labeling_meta_labels, &labeling)?)?;
+    m.add_submodule(&labeling)?;
+    m.add("labeling", labeling)?;
 
     let bars = PyModule::new_bound(py, "bars")?;
     bars.add_function(wrap_pyfunction!(bars_build_time_bars, &bars)?)?;

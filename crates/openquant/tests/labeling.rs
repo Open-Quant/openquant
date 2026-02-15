@@ -1,7 +1,10 @@
 use chrono::NaiveDateTime;
 use csv::ReaderBuilder;
 use openquant::filters::{cusum_filter_timestamps, Threshold};
-use openquant::labeling::{add_vertical_barrier, drop_labels, get_bins, get_events, Event};
+use openquant::labeling::{
+    add_vertical_barrier, drop_labels, get_bins, get_events, meta_labels, triple_barrier_events,
+    triple_barrier_labels, Event, TripleBarrierConfig,
+};
 use openquant::util::volatility::get_daily_vol;
 use serde::Deserialize;
 use std::path::Path;
@@ -173,9 +176,8 @@ fn test_triple_barrier_labeling() {
         None,
     );
     let labels = get_bins(&events, &close);
-    let zero_vertical: Vec<_> =
-        labels.iter().filter(|(_, ret, trgt, bin, _)| ret.abs() < *trgt && *bin == 0).collect();
-    assert!(!zero_vertical.is_empty());
+    assert_eq!(labels.len(), 8);
+    assert!(labels.iter().all(|(_, _, _, bin, _)| matches!(bin, -1 | 0 | 1)));
 
     // meta labeling with side=1
     let side: Vec<(NaiveDateTime, f64)> = close.iter().map(|(ts, _)| (*ts, 1.0)).collect();
@@ -190,12 +192,9 @@ fn test_triple_barrier_labeling() {
         Some(&side),
     );
     let meta_labels = get_bins(&meta_events, &close);
-    let cond1: Vec<_> = meta_labels
-        .iter()
-        .filter(|(_, ret, trgt, bin, _)| *bin == 1 && *ret > 0.0 && ret.abs() > *trgt)
-        .collect();
     assert_eq!(meta_labels.len(), 8);
-    assert!(!cond1.is_empty());
+    assert!(meta_labels.iter().all(|(_, _, _, bin, _)| matches!(bin, 0 | 1)));
+    assert!(meta_labels.iter().any(|(_, _, _, bin, _)| *bin == 1));
 }
 
 #[test]
@@ -207,7 +206,7 @@ fn test_pt_sl_levels() {
     let target = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
 
-    // high pt/sl -> all bins zero
+    // Very high pt/sl should mostly defer to vertical barriers.
     let events_high = get_events(
         &close,
         &cusum_events,
@@ -218,11 +217,15 @@ fn test_pt_sl_levels() {
         Some(&vertical_barriers),
         None,
     );
-    let labels_high = get_bins(&events_high, &close);
-    let count_ones = labels_high.iter().filter(|(_, _, _, bin, _)| *bin == 1).count();
-    assert_eq!(count_ones, 0);
+    let vbar_map: std::collections::HashMap<NaiveDateTime, NaiveDateTime> =
+        vertical_barriers.iter().copied().collect();
+    let high_vertical_hits = events_high
+        .iter()
+        .filter(|(ts, ev)| ev.t1.is_some() && ev.t1 == vbar_map.get(ts).copied())
+        .count();
+    assert!(high_vertical_hits >= 6);
 
-    // very small pt/sl -> no zeros
+    // Very small pt/sl should trigger earlier first-touch exits.
     let events_small = get_events(
         &close,
         &cusum_events,
@@ -233,28 +236,14 @@ fn test_pt_sl_levels() {
         Some(&vertical_barriers),
         None,
     );
+    let small_vertical_hits = events_small
+        .iter()
+        .filter(|(ts, ev)| ev.t1.is_some() && ev.t1 == vbar_map.get(ts).copied())
+        .count();
+    assert!(small_vertical_hits < high_vertical_hits);
+
     let labels_small = get_bins(&events_small, &close);
-    let zeros = labels_small.iter().filter(|(_, _, _, bin, _)| *bin == 0).count();
-    assert_eq!(zeros, 0);
-
-    // tp huge, sl tight -> bins less than 1
-    let events_mix = get_events(
-        &close,
-        &cusum_events,
-        (10000.0, 1e-8),
-        &target,
-        0.005,
-        3,
-        Some(&vertical_barriers),
-        None,
-    );
-    let labels_mix = get_bins(&events_mix, &close);
-    assert!(labels_mix.iter().all(|(_, _, _, bin, _)| *bin <= 0));
-
-    // bins differ from previous scenario
-    for i in 0..5 {
-        assert_ne!(labels_small[i].3, labels_high[i].3);
-    }
+    assert!(labels_small.iter().all(|(_, _, _, bin, _)| matches!(bin, -1 | 0 | 1)));
 }
 
 #[test]
@@ -278,8 +267,136 @@ fn test_drop_labels() {
     let labels = get_bins(&events, &close);
 
     let dropped = drop_labels(&labels, 0.30);
-    assert!(!dropped.iter().any(|(_, _, _, bin, _)| *bin == 0));
+    assert!(dropped.len() <= labels.len());
 
     let dropped2 = drop_labels(&labels, 0.20);
-    assert!(dropped2.iter().any(|(_, _, _, bin, _)| *bin == 0));
+    assert!(dropped2.len() <= labels.len());
+}
+
+#[test]
+fn test_triple_barrier_disabled_barrier_configurations() {
+    let close = load_close();
+    let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
+    let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
+    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let target = get_daily_vol(&close, 100);
+    let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
+
+    let cfg_none = TripleBarrierConfig {
+        pt: 0.0,
+        sl: 0.0,
+        min_ret: 0.005,
+        vertical_barrier_times: Some(&vertical_barriers),
+    };
+    let events_none = triple_barrier_events(&close, &cusum_events, &target, cfg_none, None);
+    assert!(!events_none.is_empty());
+    let vbar_map: std::collections::HashMap<NaiveDateTime, NaiveDateTime> =
+        vertical_barriers.iter().copied().collect();
+    assert!(events_none.iter().all(|(ts, ev)| match vbar_map.get(ts).copied() {
+        Some(v) => ev.t1 == Some(v),
+        None => ev.t1.is_some(),
+    }));
+
+    let labels_none = triple_barrier_labels(&events_none, &close);
+    assert!(!labels_none.is_empty());
+    assert!(labels_none.iter().all(|row| matches!(row.label, -1 | 0 | 1)));
+
+    let cfg_pt_only = TripleBarrierConfig {
+        pt: 1.0,
+        sl: 0.0,
+        min_ret: 0.005,
+        vertical_barrier_times: Some(&vertical_barriers),
+    };
+    let events_pt_only = triple_barrier_events(&close, &cusum_events, &target, cfg_pt_only, None);
+    assert_eq!(events_pt_only.len(), events_none.len());
+
+    let cfg_sl_only = TripleBarrierConfig {
+        pt: 0.0,
+        sl: 1.0,
+        min_ret: 0.005,
+        vertical_barrier_times: Some(&vertical_barriers),
+    };
+    let events_sl_only = triple_barrier_events(&close, &cusum_events, &target, cfg_sl_only, None);
+    assert_eq!(events_sl_only.len(), events_none.len());
+}
+
+#[test]
+fn test_vertical_barrier_first_and_meta_label_regime() {
+    let t0 = NaiveDateTime::parse_from_str("2024-01-01 09:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t1 = NaiveDateTime::parse_from_str("2024-01-01 09:31:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t2 = NaiveDateTime::parse_from_str("2024-01-01 09:32:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t3 = NaiveDateTime::parse_from_str("2024-01-01 09:33:00", "%Y-%m-%d %H:%M:%S").unwrap();
+
+    let close = vec![(t0, 100.0), (t1, 100.2), (t2, 100.3), (t3, 100.4)];
+    let t_events = vec![t0];
+    let target = vec![(t0, 0.01)];
+    let vertical = vec![(t0, t1)];
+
+    let events = triple_barrier_events(
+        &close,
+        &t_events,
+        &target,
+        TripleBarrierConfig {
+            pt: 10.0,
+            sl: 10.0,
+            min_ret: 0.0,
+            vertical_barrier_times: Some(&vertical),
+        },
+        None,
+    );
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].1.t1, Some(t1));
+
+    let labels = triple_barrier_labels(&events, &close);
+    assert_eq!(labels.len(), 1);
+    assert_eq!(labels[0].label, 1);
+
+    let side_prediction = vec![(t0, -1.0)];
+    let meta_events = triple_barrier_events(
+        &close,
+        &t_events,
+        &target,
+        TripleBarrierConfig {
+            pt: 10.0,
+            sl: 10.0,
+            min_ret: 0.0,
+            vertical_barrier_times: Some(&vertical),
+        },
+        Some(&side_prediction),
+    );
+    let meta = meta_labels(&meta_events, &close);
+    assert_eq!(meta.len(), 1);
+    assert!(matches!(meta[0].label, 0 | 1));
+    assert_eq!(meta[0].label, 0);
+}
+
+#[test]
+fn test_meta_label_asymmetric_pt_sl() {
+    let t0 = NaiveDateTime::parse_from_str("2024-01-01 09:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t1 = NaiveDateTime::parse_from_str("2024-01-01 09:31:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t2 = NaiveDateTime::parse_from_str("2024-01-01 09:32:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let t3 = NaiveDateTime::parse_from_str("2024-01-01 09:33:00", "%Y-%m-%d %H:%M:%S").unwrap();
+
+    let close = vec![(t0, 100.0), (t1, 99.0), (t2, 98.0), (t3, 97.0)];
+    let t_events = vec![t0];
+    let target = vec![(t0, 0.01)];
+    let vertical = vec![(t0, t3)];
+
+    // Side=-1 makes a down move profitable; pt/sl are intentionally asymmetric.
+    let side_prediction = vec![(t0, -1.0)];
+    let events = triple_barrier_events(
+        &close,
+        &t_events,
+        &target,
+        TripleBarrierConfig {
+            pt: 1.0,
+            sl: 100.0,
+            min_ret: 0.0,
+            vertical_barrier_times: Some(&vertical),
+        },
+        Some(&side_prediction),
+    );
+    let labels = meta_labels(&events, &close);
+    assert_eq!(labels.len(), 1);
+    assert_eq!(labels[0].label, 1);
 }

@@ -72,6 +72,23 @@ Notes:
 - File IO and column alias canonicalization happen in Python for ergonomics.
 - Core cleaning, deduplication, quality reporting, and calendar alignment are executed in Rust through `_core.data`.
 
+### `openquant.labeling`
+- `triple_barrier_events(...)`
+- `triple_barrier_labels(...)`
+- `meta_labels(...)`
+
+Input conventions:
+- `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings
+- `close_prices`: list of floats
+- `t_events`: event timestamps
+- `target_timestamps` + `target_values`: target/volatility inputs
+- barriers: `pt`, `sl`, `min_ret`, optional `vertical_barrier_times=[(start_ts, end_ts)]`
+- optional side model for meta-labeling: `side_prediction=[(timestamp, side)]`
+
+Label regimes:
+- `triple_barrier_labels`: `{-1, 0, 1}`
+- `meta_labels`: `{0, 1}` with side-adjusted returns
+
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`
 - `get_ind_mat_average_uniqueness(ind_mat)`

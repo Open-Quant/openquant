@@ -1,4 +1,6 @@
 use chrono::{Duration, NaiveDateTime};
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub struct Event {
     pub t1: Option<NaiveDateTime>,
@@ -6,6 +8,23 @@ pub struct Event {
     pub side: Option<f64>,
     pub pt: f64,
     pub sl: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TripleBarrierConfig<'a> {
+    pub pt: f64,
+    pub sl: f64,
+    pub min_ret: f64,
+    pub vertical_barrier_times: Option<&'a [(NaiveDateTime, NaiveDateTime)]>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabeledEvent {
+    pub timestamp: NaiveDateTime,
+    pub ret: f64,
+    pub trgt: f64,
+    pub label: i8,
+    pub side: Option<f64>,
 }
 
 /// Add vertical barrier for each event by shifting timestamp forward.
@@ -32,47 +51,163 @@ pub fn add_vertical_barrier(
     out
 }
 
-fn apply_pt_sl_on_t1(
-    close: &[(NaiveDateTime, f64)],
-    events: &[(NaiveDateTime, Event)],
-    pt_sl: (f64, f64),
-    molecule: &[NaiveDateTime],
-) -> Vec<(NaiveDateTime, Option<NaiveDateTime>, Option<NaiveDateTime>)> {
-    let mut out = Vec::new();
-    for &loc in molecule {
-        let ev = events.iter().find(|(ts, _)| *ts == loc).expect("event");
-        let side = ev.1.side.unwrap_or(1.0);
-        let profit_taking = if pt_sl.0 > 0.0 { pt_sl.0 * ev.1.trgt } else { f64::NAN };
-        let stop_loss = if pt_sl.1 > 0.0 { -pt_sl.1 * ev.1.trgt } else { f64::NAN };
-        let last_ts = close.last().map(|(ts, _)| *ts).expect("close empty");
-        let end_ts = ev.1.t1.unwrap_or(last_ts);
+fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTime, Event)]) {
+    if close.is_empty() {
+        return;
+    }
 
-        let start_idx = close.iter().position(|(ts, _)| *ts == loc).expect("loc in close");
-        let end_idx = close.iter().position(|(ts, _)| *ts == end_ts).unwrap_or(close.len() - 1);
+    let last_ts = close.last().map(|(ts, _)| *ts).expect("non-empty close");
+    let close_index: HashMap<NaiveDateTime, usize> =
+        close.iter().enumerate().map(|(i, (ts, _))| (*ts, i)).collect();
+
+    for (loc, ev) in events.iter_mut() {
+        let Some(&start_idx) = close_index.get(loc) else {
+            continue;
+        };
+        let end_ts = ev.t1.unwrap_or(last_ts);
+        let end_idx = close_index.get(&end_ts).copied().unwrap_or(close.len() - 1);
+        if end_idx <= start_idx {
+            ev.t1 = Some(end_ts);
+            continue;
+        }
 
         let start_price = close[start_idx].1;
-        let mut sl_ts: Option<NaiveDateTime> = None;
-        let mut pt_ts: Option<NaiveDateTime> = None;
+        let side = ev.side.unwrap_or(1.0);
+        let pt_level = if ev.pt > 0.0 { ev.pt * ev.trgt } else { f64::INFINITY };
+        let sl_level = if ev.sl > 0.0 { -ev.sl * ev.trgt } else { f64::NEG_INFINITY };
 
-        for &(ts, price) in &close[start_idx..=end_idx] {
+        let mut first_touch = None;
+        for &(ts, price) in &close[(start_idx + 1)..=end_idx] {
             let ret = (price / start_price - 1.0) * side;
-            if profit_taking.is_finite() && pt_ts.is_none() && ret > profit_taking {
-                pt_ts = Some(ts);
-            }
-            if stop_loss.is_finite() && sl_ts.is_none() && ret < stop_loss {
-                sl_ts = Some(ts);
-            }
-            if pt_ts.is_some() || sl_ts.is_some() {
+            if ret >= pt_level || ret <= sl_level {
+                first_touch = Some(ts);
                 break;
             }
         }
 
-        out.push((loc, sl_ts, pt_ts));
+        let resolved = match (ev.t1, first_touch) {
+            (Some(vertical), Some(touched)) => Some(vertical.min(touched)),
+            (Some(vertical), None) => Some(vertical),
+            (None, Some(touched)) => Some(touched),
+            (None, None) => Some(end_ts),
+        };
+        ev.t1 = resolved;
+    }
+}
+
+/// Construct triple-barrier events.
+pub fn triple_barrier_events(
+    close: &[(NaiveDateTime, f64)],
+    t_events: &[NaiveDateTime],
+    target: &[(NaiveDateTime, f64)],
+    config: TripleBarrierConfig<'_>,
+    side_prediction: Option<&[(NaiveDateTime, f64)]>,
+) -> Vec<(NaiveDateTime, Event)> {
+    if close.is_empty() {
+        return Vec::new();
+    }
+
+    let close_index: HashMap<NaiveDateTime, usize> =
+        close.iter().enumerate().map(|(i, (ts, _))| (*ts, i)).collect();
+    let target_map: HashMap<NaiveDateTime, f64> = target.iter().copied().collect();
+    let side_map: HashMap<NaiveDateTime, f64> =
+        side_prediction.unwrap_or(&[]).iter().copied().collect();
+    let vbar_map: HashMap<NaiveDateTime, NaiveDateTime> =
+        config.vertical_barrier_times.unwrap_or(&[]).iter().copied().collect();
+
+    let mut events = Vec::new();
+    for &ts in t_events {
+        if !close_index.contains_key(&ts) {
+            continue;
+        }
+        let Some(&trgt) = target_map.get(&ts) else {
+            continue;
+        };
+        if trgt <= config.min_ret {
+            continue;
+        }
+
+        let side = if side_prediction.is_some() { side_map.get(&ts).copied() } else { None };
+        if side_prediction.is_some() && side.is_none() {
+            continue;
+        }
+
+        events.push((
+            ts,
+            Event { t1: vbar_map.get(&ts).copied(), trgt, side, pt: config.pt, sl: config.sl },
+        ));
+    }
+
+    apply_pt_sl_on_t1(close, &mut events);
+    events
+}
+
+/// Label triple-barrier outcomes.
+///
+/// Label regime:
+/// - `{-1, 0, 1}` when `side` is absent (standard triple-barrier labels)
+/// - `{0, 1}` when `side` is present (meta-labeling)
+pub fn triple_barrier_labels(
+    events: &[(NaiveDateTime, Event)],
+    close: &[(NaiveDateTime, f64)],
+) -> Vec<LabeledEvent> {
+    if close.is_empty() {
+        return Vec::new();
+    }
+
+    let close_price: HashMap<NaiveDateTime, f64> = close.iter().copied().collect();
+    let mut out = Vec::new();
+    for (start, ev) in events {
+        let t1 = match ev.t1 {
+            Some(ts) => ts,
+            None => continue,
+        };
+        let start_price = close_price.get(start).copied();
+        let end_price = close_price.get(&t1).copied();
+        if let (Some(p0), Some(p1)) = (start_price, end_price) {
+            let ret = p1 / p0 - 1.0;
+            let mut signed_ret = ret;
+            if let Some(side) = ev.side {
+                signed_ret *= side;
+            }
+
+            let label = if ev.side.is_some() {
+                if signed_ret > 0.0 {
+                    1
+                } else {
+                    0
+                }
+            } else if signed_ret > 0.0 {
+                1
+            } else if signed_ret < 0.0 {
+                -1
+            } else {
+                0
+            };
+
+            out.push(LabeledEvent {
+                timestamp: *start,
+                ret: signed_ret,
+                trgt: ev.trgt,
+                label,
+                side: ev.side,
+            });
+        }
     }
     out
 }
 
-/// Get events for triple barrier method.
+/// Label outcomes in meta-labeling mode (`{0, 1}` labels).
+pub fn meta_labels(
+    events: &[(NaiveDateTime, Event)],
+    close: &[(NaiveDateTime, f64)],
+) -> Vec<LabeledEvent> {
+    let with_side: Vec<(NaiveDateTime, Event)> =
+        events.iter().filter(|(_, ev)| ev.side.is_some()).cloned().collect();
+    triple_barrier_labels(&with_side, close)
+}
+
+/// Backward-compatible triple-barrier API.
 pub fn get_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
@@ -84,109 +219,24 @@ pub fn get_events(
     side_prediction: Option<&[(NaiveDateTime, f64)]>,
 ) -> Vec<(NaiveDateTime, Event)> {
     let _ = num_threads;
-    // map target to t_events and filter
-    let mut target_map = Vec::new();
-    for &te in t_events {
-        if let Some((_, val)) = target.iter().find(|(ts, _)| *ts == te) {
-            if *val > min_ret {
-                target_map.push((te, *val));
-            }
-        }
-    }
-
-    // vertical barriers map
-    let mut vbar_map: Vec<(NaiveDateTime, Option<NaiveDateTime>)> =
-        target_map.iter().map(|(ts, _)| (*ts, None)).collect();
-    if let Some(vbars) = vertical_barrier_times {
-        for (start, end) in vbars {
-            if let Some(item) = vbar_map.iter_mut().find(|(ts, _)| ts == start) {
-                item.1 = Some(*end);
-            }
-        }
-    }
-
-    // side
-    let side_map: Vec<(NaiveDateTime, f64)> = if let Some(side) = side_prediction {
-        side.iter().map(|(ts, val)| (*ts, *val)).collect()
-    } else {
-        target_map.iter().map(|(ts, _)| (*ts, 1.0)).collect()
-    };
-
-    let mut events: Vec<(NaiveDateTime, Event)> = target_map
-        .iter()
-        .map(|(ts, trgt)| {
-            let t1 = vbar_map.iter().find(|(t, _)| t == ts).and_then(|(_, v)| *v);
-            let side = side_map.iter().find(|(t, _)| t == ts).map(|(_, s)| *s);
-            (*ts, Event { t1, trgt: *trgt, side, pt: pt_sl.0, sl: pt_sl.1 })
-        })
-        .collect();
-
-    // apply barriers
-    let molecule: Vec<NaiveDateTime> = events.iter().map(|(ts, _)| *ts).collect();
-    let first_touch = apply_pt_sl_on_t1(close, &events, pt_sl, &molecule);
-    for (loc, sl_ts, pt_ts) in first_touch {
-        if let Some(event) = events.iter_mut().find(|(ts, _)| *ts == loc) {
-            let mut candidates = Vec::new();
-            if let Some(ts) = event.1.t1 {
-                candidates.push(ts);
-            }
-            if let Some(ts) = sl_ts {
-                candidates.push(ts);
-            }
-            if let Some(ts) = pt_ts {
-                candidates.push(ts);
-            }
-            if let Some(min_ts) = candidates.into_iter().min() {
-                event.1.t1 = Some(min_ts);
-            }
-            if side_prediction.is_none() {
-                event.1.side = None;
-            }
-        }
-    }
-
-    events
+    triple_barrier_events(
+        close,
+        t_events,
+        target,
+        TripleBarrierConfig { pt: pt_sl.0, sl: pt_sl.1, min_ret, vertical_barrier_times },
+        side_prediction,
+    )
 }
 
-/// Label outcomes given events and close prices.
+/// Backward-compatible label API.
 pub fn get_bins(
     events: &[(NaiveDateTime, Event)],
     close: &[(NaiveDateTime, f64)],
 ) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
-    let mut out = Vec::new();
-    for (start, ev) in events {
-        let t1 = match ev.t1 {
-            Some(ts) => ts,
-            None => continue,
-        };
-        let start_price = close.iter().find(|(ts, _)| *ts == *start).map(|(_, p)| *p);
-        let end_price = close.iter().find(|(ts, _)| *ts == t1).map(|(_, p)| *p);
-        if let (Some(p0), Some(p1)) = (start_price, end_price) {
-            let mut ret = p1.ln() - p0.ln();
-            if let Some(side) = ev.side {
-                ret *= side;
-            }
-            let mut bin = barrier_touched(ret, ev.trgt, ev.pt, ev.sl);
-            if ev.side.is_some() && ret <= 0.0 {
-                bin = 0;
-            }
-            let ret_norm = ret.exp() - 1.0;
-            out.push((*start, ret_norm, ev.trgt, bin, ev.side));
-        }
-    }
-    out
-}
-
-fn barrier_touched(ret: f64, trgt: f64, pt: f64, sl: f64) -> i8 {
-    let pt_level = pt * trgt;
-    let sl_level = -sl * trgt;
-    if ret > 0.0 && pt > 0.0 && ret > pt_level {
-        1
-    } else if ret < 0.0 && sl > 0.0 && ret < sl_level {
-        -1
-    } else {
-        0
-    }
+    triple_barrier_labels(events, close)
+        .into_iter()
+        .map(|row| (row.timestamp, row.ret, row.trgt, row.label, row.side))
+        .collect()
 }
 
 /// Drop labels whose frequency is below `min_pct`.
