@@ -1,6 +1,6 @@
 ---
 title: Notebook Research Workflow
-description: Notebook-first research path with leakage controls and promotion discipline.
+description: Notebook-first research flow with promotion controls for institutional settings.
 status: in_review
 last_validated: '2026-03-02'
 audience:
@@ -10,8 +10,19 @@ sidebar:
   order: 3
 ---
 
-This workflow aligns with the `OQ-nbr` issue track for research promotion.
+## Scope
 
-- Use event-based sampling and leakage-safe validation.
-- Record trial metadata for strategy selection and DSR context.
-- Preserve deterministic artifacts before promotion decisions.
+This workflow complements the `OQ-nbr` track and defines notebook behavior expected before experiment promotion.
+
+## Required Controls
+
+- Leakage-safe splits for overlapping labels.
+- Explicit trial registry for multiple-testing awareness.
+- Deterministic artifact bundle per run.
+
+## Promotion Baseline
+
+A notebook result is promotion-eligible only when:
+- assumptions and costs are disclosed,
+- split and embargo controls are documented,
+- strategy diagnostics include stability evidence beyond a single Sharpe estimate.

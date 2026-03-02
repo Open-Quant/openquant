@@ -1,7 +1,7 @@
 ---
 title: Versioning and Release Policy
-description: Release baseline for docs, APIs, and benchmark disclosures.
-status: in_review
+description: Release and documentation versioning policy for OpenQuant.
+status: validated
 last_validated: '2026-03-02'
 audience:
   - quant-dev
@@ -10,6 +10,14 @@ sidebar:
   order: 4
 ---
 
-- Keep docs updates aligned with API and behavior changes.
-- Publish benchmark deltas and known caveats with release notes.
-- Avoid unversioned operational runbooks.
+## Policy
+
+- Documentation changes ship alongside API or behavior changes.
+- Breaking behavior changes require explicit migration notes.
+- Benchmark and risk-method changes are called out in release notes.
+
+## Release Readiness Gates
+
+- tests and docs quality gates pass,
+- critical module docs updated,
+- benchmark regression policy evaluated.

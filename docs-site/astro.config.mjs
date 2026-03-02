@@ -34,7 +34,12 @@ export default defineConfig({
         },
         {
           label: 'Module Reference',
-          autogenerate: { directory: 'module-reference' },
+          items: [
+            { slug: 'module-reference/api-surfaces' },
+            { slug: 'module-reference/by-afml-chapter' },
+            { slug: 'module-reference/indexing-and-discovery' },
+            { label: 'All Modules', link: '/modules/' },
+          ],
         },
         {
           label: 'Examples',
@@ -45,7 +50,6 @@ export default defineConfig({
           autogenerate: { directory: 'governance' },
         },
         { label: 'Coverage Dashboard', link: '/coverage/' },
-        { label: 'Module Pages', link: '/module/' },
       ],
     }),
   ],
@@ -62,5 +66,6 @@ export default defineConfig({
     '/performance': '/governance/benchmark-policy/',
     '/contributing': '/governance/support-and-escalation/',
     '/faq': '/governance/methodology-and-leakage-controls/',
+    '/module': '/modules/',
   },
 });

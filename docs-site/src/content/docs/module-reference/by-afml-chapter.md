@@ -1,6 +1,6 @@
 ---
 title: By AFML Chapter
-description: Module discovery map aligned to AFML chapters.
+description: Map AFML concepts to concrete OpenQuant modules and workflows.
 status: validated
 last_validated: '2026-03-02'
 audience:
@@ -10,10 +10,69 @@ sidebar:
   order: 2
 ---
 
-- Chapter 2-3: `data_structures`, `filters`, `labeling`, `bet_sizing`
-- Chapter 4/6/8/9: `sampling`, `sample_weights`, `ensemble_methods`, `feature_importance`, `hyperparameter_tuning`
-- Chapter 7/11/12: `cross_validation`, `backtesting_engine`
-- Chapter 13/14/15: `synthetic_backtesting`, `backtest_statistics`, `risk_metrics`, `strategy_risk`
-- Chapter 16: `hrp`, `hcaa`, `onc`, `portfolio_optimization`
+## Chapter-to-Module Mapping
 
-Coverage detail: [Coverage Dashboard](/coverage/)
+### Chapter 2: Financial Data Structures
+
+- `data_structures`
+- `filters`
+- `etf_trick`
+
+### Chapter 3: Labeling
+
+- `labeling`
+- `bet_sizing`
+
+### Chapter 4: Sample Weights and Uniqueness
+
+- `sampling`
+- `sample_weights`
+- `sb_bagging`
+
+### Chapter 5: Fractional Differentiation
+
+- `fracdiff`
+
+### Chapter 6: Ensemble Methods
+
+- `ensemble_methods`
+- `sb_bagging`
+
+### Chapter 7: Cross Validation in Finance
+
+- `cross_validation`
+- `backtesting_engine`
+
+### Chapter 8: Feature Importance
+
+- `feature_importance`
+- `fingerprint`
+
+### Chapter 9: Hyper-parameter Tuning
+
+- `hyperparameter_tuning`
+
+### Chapters 10-12: Position Sizing and Robust Backtesting
+
+- `bet_sizing`
+- `backtesting_engine`
+
+### Chapter 13: Synthetic Backtesting
+
+- `synthetic_backtesting`
+
+### Chapters 14-15: Diagnostics and Strategy Risk
+
+- `backtest_statistics`
+- `risk_metrics`
+- `strategy_risk`
+
+### Chapter 16: Portfolio Construction
+
+- `hrp`
+- `hcaa`
+- `onc`
+- `portfolio_optimization`
+- `cla`
+
+See full per-module detail in [Module Reference Index](/modules/).

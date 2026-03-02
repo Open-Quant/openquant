@@ -1,75 +1,25 @@
 ---
-import Layout from "../../layouts/Layout.astro";
 import { moduleDocs } from "../../data/moduleDocs";
-import type { ModuleDoc } from "../../data/moduleDocs";
-import { getRelatedSections, getSectionsByModule } from "../../data/afmlDocs";
 
 export function getStaticPaths() {
-  return moduleDocs.map((doc) => ({
-    params: { slug: doc.slug },
-    props: { doc },
-  }));
+  return moduleDocs.map((doc) => ({ params: { slug: doc.slug } }));
 }
 
-const { doc } = Astro.props;
-const base = import.meta.env.BASE_URL.endsWith("/")
+const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL.slice(0, -1)
   : import.meta.env.BASE_URL;
-const sections = getSectionsByModule(doc.module);
-const chapterTags = sections.map((section) => `${section.chapter} (${section.status})`);
-const related = getRelatedSections(doc.module);
-const relatedDocs = related
-  .map((item) => moduleDocs.find((candidate) => candidate.module === item.module))
-  .filter((item): item is ModuleDoc => Boolean(item));
+const target = `${base}/modules/${Astro.params.slug ?? ''}`;
 ---
-<Layout title={`${doc.module} • OpenQuant-rs Docs`} description={doc.summary}>
-  <section class="hero">
-    <h1>{doc.module}</h1>
-    <p class="muted">{doc.subject}</p>
-    {chapterTags.length > 0 && <p class="muted">{chapterTags.join(" • ")}</p>}
-    <p>{doc.summary}</p>
-  </section>
-
-  <h2>Why This Module Exists</h2>
-  <p>{doc.whyItExists}</p>
-
-  <h2>Key Public APIs</h2>
-  <ul>
-    {doc.keyApis.map((api: string) => <li><code>{api}</code></li>)}
-  </ul>
-
-  <h2>Core Math</h2>
-  {doc.formulas.map((f: { label: string; latex: string }) => (
-    <div class="card">
-      <h3>{f.label}</h3>
-      <p class="math">\[{f.latex}\]</p>
-    </div>
-  ))}
-
-  <h2>Code Examples</h2>
-  {doc.examples.map((ex: { title: string; language: string; code: string }) => (
-    <article class="card">
-      <h3>{ex.title}</h3>
-      <pre><code class={`language-${ex.language}`}>{ex.code}</code></pre>
-    </article>
-  ))}
-
-  <h2>Implementation Notes</h2>
-  <ul>
-    {doc.notes.map((n: string) => <li>{n}</li>)}
-  </ul>
-
-  {relatedDocs.length > 0 && (
-    <>
-      <h2>Related Modules In Chapter</h2>
-      <div class="grid">
-        {relatedDocs.map((relatedDoc) => (
-          <article class="card">
-            <h3><a href={`${base}/module/${relatedDoc.slug}`}>{relatedDoc.module}</a></h3>
-            <p class="muted">{relatedDoc.summary}</p>
-          </article>
-        ))}
-      </div>
-    </>
-  )}
-</Layout>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirecting…</title>
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+  </head>
+  <body>
+    <p>Redirecting to <a href={target}>{target}</a>...</p>
+  </body>
+</html>
