@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "check:links": "node scripts/check-links.mjs",
+    "check:api-drift": "python3 ../scripts/generate_api_inventory.py --check"
   },
   "devDependencies": {
     "astro": "^4.16.18"

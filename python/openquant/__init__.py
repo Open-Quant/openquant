@@ -2,6 +2,7 @@ from . import _core
 from . import adapters
 from . import bars
 from . import data
+from . import feature_diagnostics
 from . import pipeline
 from . import research
 from . import viz
@@ -22,6 +23,7 @@ __all__ = [
     "portfolio",
     "bars",
     "data",
+    "feature_diagnostics",
     "pipeline",
     "research",
     "adapters",

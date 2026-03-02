@@ -163,6 +163,19 @@ Input conventions:
 - `prepare_regime_payload(...)`
 - `prepare_frontier_payload(...)`
 - `prepare_cluster_payload(...)`
+- `prepare_feature_importance_comparison_payload(...)`
+
+### `openquant.feature_diagnostics` (AFML Ch.8 diagnostics with leakage-safe defaults)
+- `mdi_importance(...)`
+- `mda_importance(...)`
+- `sfi_importance(...)`
+- `orthogonalize_features_pca(...)`
+- `substitution_effect_report(...)`
+
+Default behavior:
+- Purged K-Fold + embargo defaults for MDA/SFI (`n_splits=5`, `pct_embargo=0.01`)
+- configurable scoring: `neg_log_loss`, `accuracy`, `f1`
+- notebook-ready outputs: polars tables + viz payload dictionaries
 
 Example:
 

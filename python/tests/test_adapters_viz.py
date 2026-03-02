@@ -79,6 +79,11 @@ def test_viz_payloads():
     assert frontier["chart"] == "scatter"
     assert frontier["color"] == [0.8, 0.6]
 
+    comparison = openquant.viz.prepare_feature_importance_comparison_payload(
+        ["f1", "f2"], [0.6, 0.4], ["pc1", "pc2"], [0.55, 0.45]
+    )
+    assert comparison["chart"] == "grouped_bar"
+
     cluster = openquant.viz.prepare_cluster_payload(["n1", "n2"], [None, "n1"], height=[0.0, 1.2])
     assert cluster["chart"] == "tree"
     assert cluster["height"] == [0.0, 1.2]

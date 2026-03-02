@@ -130,3 +130,18 @@ fn test_ml_cross_val_score_neg_log_loss() {
         assert!(s.is_finite());
     }
 }
+
+#[test]
+fn test_ml_cross_val_score_f1() {
+    let x: Vec<Vec<f64>> = (0..24).map(|i| vec![i as f64]).collect();
+    let y: Vec<f64> = (0..24).map(|i| if i % 3 == 0 { 1.0 } else { 0.0 }).collect();
+    let info_sets = make_series("2019-01-01 00:00:00", 24, 1);
+    let pkf = PurgedKFold::new(4, info_sets, 0.0).unwrap();
+    let splits = pkf.split(x.len()).unwrap();
+    let mut clf = MajorityClassifier { prob: 0.5 };
+    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::F1);
+    assert_eq!(scores.len(), 4);
+    for s in scores {
+        assert!((0.0..=1.0).contains(&s));
+    }
+}

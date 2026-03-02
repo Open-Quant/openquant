@@ -31,7 +31,7 @@ import Layout from "../layouts/Layout.astro";
 
   <h2>Local Commands</h2>
   <pre><code class="language-bash"># setup
-uv venv --python 3.11 .venv
+uv venv --python 3.13 .venv
 uv sync --group dev
 uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 

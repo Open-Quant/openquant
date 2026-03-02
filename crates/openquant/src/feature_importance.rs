@@ -93,7 +93,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
                         (base - perm) / (-perm)
                     }
                 }
-                Scoring::Accuracy => {
+                Scoring::Accuracy | Scoring::F1 => {
                     if (1.0 - perm).abs() < 1e-12 {
                         0.0
                     } else {
@@ -307,6 +307,31 @@ fn score_model<C: SimpleClassifier>(
             }
             if den > 0.0 {
                 -(loss / den)
+            } else {
+                0.0
+            }
+        }
+        Scoring::F1 => {
+            let pred = model.predict(x_test);
+            let mut tp = 0.0;
+            let mut fp = 0.0;
+            let mut fnn = 0.0;
+            for i in 0..y_test.len() {
+                let w = sample_weight.map(|sw| sw[i]).unwrap_or(1.0);
+                let p_pos = pred[i] > 0.5;
+                let y_pos = y_test[i] > 0.5;
+                if p_pos && y_pos {
+                    tp += w;
+                } else if p_pos && !y_pos {
+                    fp += w;
+                } else if !p_pos && y_pos {
+                    fnn += w;
+                }
+            }
+            let precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
+            let recall = if tp + fnn > 0.0 { tp / (tp + fnn) } else { 0.0 };
+            if precision + recall > 0.0 {
+                2.0 * precision * recall / (precision + recall)
             } else {
                 0.0
             }

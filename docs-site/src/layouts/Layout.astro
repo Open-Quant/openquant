@@ -9,8 +9,12 @@ const base = import.meta.env.BASE_URL.endsWith("/")
   : import.meta.env.BASE_URL;
 const nav = [
   { href: `${base}/`, label: "Overview" },
-  { href: `${base}/getting-started`, label: "Getting Started" },
-  { href: `${base}/modules`, label: "Subjects (AFML)" },
+  { href: `${base}/quickstart`, label: "Quickstart" },
+  { href: `${base}/tutorials`, label: "Tutorials" },
+  { href: `${base}/guides`, label: "Guides" },
+  { href: `${base}/getting-started`, label: "Environment Setup" },
+  { href: `${base}/search`, label: "Search" },
+  { href: `${base}/modules`, label: "AFML Subjects" },
   { href: `${base}/module`, label: "Module Pages" },
   { href: `${base}/api-reference`, label: "API by Subject" },
   { href: `${base}/examples`, label: "Examples by Subject" },
@@ -153,6 +157,33 @@ const canonical = Astro.site
         font-size: 13px;
       }
 
+      .topbar-search {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .topbar-search input {
+        min-width: 220px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--text);
+        background: #0b1220;
+      }
+
+      .topbar-search button {
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: #102037;
+        color: var(--text);
+        font-family: "IBM Plex Mono", monospace;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+
       .brand-icon {
         width: 24px;
         height: 24px;
@@ -185,6 +216,20 @@ const canonical = Astro.site
         margin: 0;
         display: grid;
         gap: 6px;
+      }
+
+      .nav-toggle {
+        display: none;
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        padding: 8px 10px;
+        margin-bottom: 10px;
+        text-align: left;
+        background: #102037;
+        color: var(--text);
+        font-family: "IBM Plex Mono", monospace;
+        cursor: pointer;
       }
 
       .nav-list a {
@@ -340,11 +385,48 @@ const canonical = Astro.site
           border-bottom: 1px solid var(--line);
         }
 
+        .nav-toggle {
+          display: inline-block;
+        }
+
         .nav-list {
+          display: none;
           grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .sidebar.nav-open .nav-list {
+          display: grid;
+        }
+
+        .topbar {
+          flex-wrap: wrap;
+        }
+
+        .topbar-search {
+          margin-left: 0;
+          width: 100%;
+        }
+
+        .topbar-search input {
+          min-width: 0;
+          width: 100%;
         }
       }
     </style>
+    <script is:inline>
+      document.addEventListener("DOMContentLoaded", () => {
+        const toggles = Array.from(document.querySelectorAll(".nav-toggle"));
+        for (const toggle of toggles) {
+          toggle.addEventListener("click", () => {
+            const sidebar = toggle.closest(".sidebar");
+            if (!sidebar) return;
+            sidebar.classList.toggle("nav-open");
+            const expanded = sidebar.classList.contains("nav-open");
+            toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+          });
+        }
+      });
+    </script>
   </head>
   <body>
     <div class="shell">
@@ -358,11 +440,28 @@ const canonical = Astro.site
           <span class="dot" style="background:#7dc2ff"></span>
           <span class="dot" style="background:#9de07a"></span>
           <span class="brand">openquant-rs / documentation terminal</span>
+          <form class="topbar-search" method="get" action={`${base}/search`}>
+            <input
+              name="q"
+              type="search"
+              placeholder="Search modules, guides, APIs"
+              aria-label="Search docs"
+            />
+            <button type="submit">Search</button>
+          </form>
         </div>
         <div class="layout">
           <aside class="sidebar">
             <h2>Documentation</h2>
-            <ul class="nav-list">
+            <button
+              class="nav-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="doc-nav"
+            >
+              Toggle navigation
+            </button>
+            <ul class="nav-list" id="doc-nav">
               {
                 nav.map((item) => {
                   const hrefPath = item.href.endsWith("/") ? item.href : `${item.href}/`;

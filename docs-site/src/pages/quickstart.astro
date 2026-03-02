@@ -1,0 +1,30 @@
+---
+import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+---
+<Layout title="Quickstart • OpenQuant-rs" description="Fastest path to run OpenQuant-rs and validate your setup.">
+  <section class="hero">
+    <h1>Quickstart</h1>
+    <p class="muted">Fast path for first run: compile, test, and open the key docs pages.</p>
+  </section>
+
+  <h2>1. Clone and Validate Rust Core</h2>
+  <pre><code class="language-bash">git clone https://github.com/Open-Quant/openquant.git
+cd openquant
+cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</code></pre>
+
+  <h2>2. Python Bindings + Notebook Helpers</h2>
+  <pre><code class="language-bash">uv venv --python 3.13 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv run --python .venv/bin/python pytest python/tests -q</code></pre>
+
+  <h2>3. Next Reading</h2>
+  <ul>
+    <li><a href={`${base}/tutorials`}>Tutorials</a> for step-by-step workflows.</li>
+    <li><a href={`${base}/api-reference`}>API by Subject</a> for callable surfaces.</li>
+    <li><a href={`${base}/modules`}>AFML Subjects</a> for chapter-oriented mapping.</li>
+  </ul>
+</Layout>

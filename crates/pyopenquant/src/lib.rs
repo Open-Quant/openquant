@@ -4,7 +4,9 @@ use openquant::data_processing::{
 };
 use openquant::data_structures::{standard_bars, time_bars, StandardBarType, Trade};
 use openquant::filters::Threshold;
-use openquant::labeling::{meta_labels, triple_barrier_events, triple_barrier_labels, TripleBarrierConfig};
+use openquant::labeling::{
+    meta_labels, triple_barrier_events, triple_barrier_labels, TripleBarrierConfig,
+};
 use openquant::pipeline::{
     run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
 };
@@ -83,10 +85,14 @@ fn parse_vertical_barriers(
 
     let mut out = Vec::with_capacity(values.len());
     for (start, end) in values {
-        let start_ts = chrono::NaiveDateTime::parse_from_str(&start, "%Y-%m-%d %H:%M:%S")
-            .map_err(|e| PyValueError::new_err(format!("invalid start barrier datetime '{start}': {e}")))?;
-        let end_ts = chrono::NaiveDateTime::parse_from_str(&end, "%Y-%m-%d %H:%M:%S")
-            .map_err(|e| PyValueError::new_err(format!("invalid end barrier datetime '{end}': {e}")))?;
+        let start_ts =
+            chrono::NaiveDateTime::parse_from_str(&start, "%Y-%m-%d %H:%M:%S").map_err(|e| {
+                PyValueError::new_err(format!("invalid start barrier datetime '{start}': {e}"))
+            })?;
+        let end_ts =
+            chrono::NaiveDateTime::parse_from_str(&end, "%Y-%m-%d %H:%M:%S").map_err(|e| {
+                PyValueError::new_err(format!("invalid end barrier datetime '{end}': {e}"))
+            })?;
         out.push((start_ts, end_ts));
     }
     Ok(Some(out))
@@ -103,8 +109,12 @@ fn build_labeling_events(
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<(Vec<(chrono::NaiveDateTime, f64)>, Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>)> {
-    let close = pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
+) -> PyResult<(
+    Vec<(chrono::NaiveDateTime, f64)>,
+    Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>,
+)> {
+    let close =
+        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_events = parse_naive_datetimes(t_events)?;
     let target = pair_timestamps_values(
         target_timestamps,
@@ -114,23 +124,19 @@ fn build_labeling_events(
     )?;
     let vbars = parse_vertical_barriers(vertical_barrier_times)?;
 
-    let side_storage: Option<Vec<(chrono::NaiveDateTime, f64)>> = if let Some(side) = side_prediction {
-        let (timestamps, values): (Vec<String>, Vec<f64>) = side.into_iter().unzip();
-        Some(pair_timestamps_values(timestamps, values, "side timestamps", "side values")?)
-    } else {
-        None
-    };
+    let side_storage: Option<Vec<(chrono::NaiveDateTime, f64)>> =
+        if let Some(side) = side_prediction {
+            let (timestamps, values): (Vec<String>, Vec<f64>) = side.into_iter().unzip();
+            Some(pair_timestamps_values(timestamps, values, "side timestamps", "side values")?)
+        } else {
+            None
+        };
 
     let events = triple_barrier_events(
         &close,
         &t_events,
         &target,
-        TripleBarrierConfig {
-            pt,
-            sl,
-            min_ret,
-            vertical_barrier_times: vbars.as_deref(),
-        },
+        TripleBarrierConfig { pt, sl, min_ret, vertical_barrier_times: vbars.as_deref() },
         side_storage.as_deref(),
     );
     Ok((close, events))

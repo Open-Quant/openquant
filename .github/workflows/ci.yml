@@ -21,3 +21,25 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious
       - name: Tests (fast)
         run: cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+
+  docs-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Install docs dependencies
+        run: npm ci
+        working-directory: docs-site
+      - name: Build docs
+        run: npm run build
+        working-directory: docs-site
+      - name: Check API inventory drift
+        run: npm run check:api-drift
+        working-directory: docs-site
+      - name: Check internal links
+        run: npm run check:links
+        working-directory: docs-site

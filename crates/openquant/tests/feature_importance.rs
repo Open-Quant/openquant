@@ -125,12 +125,18 @@ fn test_feature_importance_mdi_mda_sfi() {
     let mda =
         mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::Accuracy).unwrap();
     assert!(mda["f0"].mean > mda["f2"].mean);
+    let mda_f1 =
+        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::F1).unwrap();
+    assert!(mda_f1["f0"].mean > mda_f1["f2"].mean);
 
     let mut clf2 = LinearProbClassifier::new(names.len());
     let sfi =
         single_feature_importance(&mut clf2, &x, &y, &names, &splits, None, Scoring::Accuracy)
             .unwrap();
     assert!(sfi["f0"].mean >= sfi["f2"].mean);
+    let sfi_f1 =
+        single_feature_importance(&mut clf2, &x, &y, &names, &splits, None, Scoring::F1).unwrap();
+    assert!(sfi_f1["f0"].mean >= sfi_f1["f2"].mean);
 }
 
 #[test]

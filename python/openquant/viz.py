@@ -34,6 +34,25 @@ def prepare_feature_importance_payload(
     return payload
 
 
+def prepare_feature_importance_comparison_payload(
+    left_labels: Sequence[str],
+    left_values: Sequence[float],
+    right_labels: Sequence[str],
+    right_values: Sequence[float],
+    left_name: str = "left",
+    right_name: str = "right",
+) -> dict[str, object]:
+    if len(left_labels) != len(left_values):
+        raise ValueError("left_labels/left_values length mismatch")
+    if len(right_labels) != len(right_values):
+        raise ValueError("right_labels/right_values length mismatch")
+    return {
+        "chart": "grouped_bar",
+        "left": {"name": left_name, "labels": list(left_labels), "values": list(left_values)},
+        "right": {"name": right_name, "labels": list(right_labels), "values": list(right_values)},
+    }
+
+
 def prepare_drawdown_payload(timestamps: Sequence[str], equity_curve: Sequence[float]) -> dict[str, object]:
     if len(timestamps) != len(equity_curve):
         raise ValueError("timestamps/equity_curve length mismatch")

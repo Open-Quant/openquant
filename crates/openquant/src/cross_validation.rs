@@ -13,6 +13,7 @@ pub trait SimpleClassifier {
 pub enum Scoring {
     Accuracy,
     NegLogLoss,
+    F1,
 }
 
 pub fn ml_cross_val_score<C: SimpleClassifier>(
@@ -53,6 +54,29 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
                     loss += -(*y_true * p_clip.ln() + (1.0 - *y_true) * (1.0 - p_clip).ln());
                 }
                 -(loss / y_test.len() as f64)
+            }
+            Scoring::F1 => {
+                let mut tp = 0.0;
+                let mut fp = 0.0;
+                let mut fnn = 0.0;
+                for (p, y_true) in preds.iter().zip(y_test.iter()) {
+                    let p_pos = *p > 0.5;
+                    let y_pos = *y_true > 0.5;
+                    if p_pos && y_pos {
+                        tp += 1.0;
+                    } else if p_pos && !y_pos {
+                        fp += 1.0;
+                    } else if !p_pos && y_pos {
+                        fnn += 1.0;
+                    }
+                }
+                let precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
+                let recall = if tp + fnn > 0.0 { tp / (tp + fnn) } else { 0.0 };
+                if precision + recall > 0.0 {
+                    2.0 * precision * recall / (precision + recall)
+                } else {
+                    0.0
+                }
             }
         };
         scores.push(score);
