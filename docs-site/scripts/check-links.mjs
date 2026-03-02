@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = path.resolve(process.cwd(), 'dist');
 if (!fs.existsSync(root)) {
-  console.error('dist/ not found. Run npm run build first.');
+  console.error('dist/ not found. Run bun run build first.');
   process.exit(1);
 }
 

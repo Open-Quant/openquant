@@ -8,9 +8,14 @@
     "build": "astro build",
     "preview": "astro preview",
     "check:links": "node scripts/check-links.mjs",
-    "check:api-drift": "python3 ../scripts/generate_api_inventory.py --check"
+    "check:api-drift": "python3 ../scripts/generate_api_inventory.py --check",
+    "check:content-schema": "node scripts/check-content-schema.mjs",
+    "check:docs": "bun run build && bun run check:links && bun run check:api-drift && bun run check:content-schema"
   },
   "devDependencies": {
-    "astro": "^4.16.18"
+    "astro": "4.16.19"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.37.6"
   }
 }

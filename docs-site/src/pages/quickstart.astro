@@ -1,30 +1,28 @@
 ---
-import Layout from '../layouts/Layout.astro';
-const base = import.meta.env.BASE_URL.endsWith("/")
+const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL.slice(0, -1)
   : import.meta.env.BASE_URL;
 ---
-<Layout title="Quickstart • OpenQuant-rs" description="Fastest path to run OpenQuant-rs and validate your setup.">
-  <section class="hero">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quickstart • OpenQuant</title>
+    <meta name="description" content="First-run OpenQuant validation commands and next steps." />
+    <style>
+      body { font-family: ui-monospace, Menlo, Consolas, monospace; margin: 2rem auto; max-width: 900px; line-height: 1.5; }
+      pre { background: #0e1726; color: #e9f1ff; padding: 1rem; overflow-x: auto; border-radius: 8px; }
+      a { color: #0e5aa7; }
+    </style>
+  </head>
+  <body>
     <h1>Quickstart</h1>
-    <p class="muted">Fast path for first run: compile, test, and open the key docs pages.</p>
-  </section>
-
-  <h2>1. Clone and Validate Rust Core</h2>
-  <pre><code class="language-bash">git clone https://github.com/Open-Quant/openquant.git
-cd openquant
-cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test</code></pre>
-
-  <h2>2. Python Bindings + Notebook Helpers</h2>
-  <pre><code class="language-bash">uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-uv run --python .venv/bin/python pytest python/tests -q</code></pre>
-
-  <h2>3. Next Reading</h2>
-  <ul>
-    <li><a href={`${base}/tutorials`}>Tutorials</a> for step-by-step workflows.</li>
-    <li><a href={`${base}/api-reference`}>API by Subject</a> for callable surfaces.</li>
-    <li><a href={`${base}/modules`}>AFML Subjects</a> for chapter-oriented mapping.</li>
-  </ul>
-</Layout>
+    <p>Run the baseline validation path before deeper workflow docs.</p>
+    <pre><code>cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
+cd docs-site
+bun run check:docs</code></pre>
+    <p>Next: <a href={`${base}/getting-started`}>Environment Setup</a> and <a href={`${base}/module`}>Module Pages</a>.</p>
+  </body>
+</html>

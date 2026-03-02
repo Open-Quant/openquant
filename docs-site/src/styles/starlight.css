@@ -1,0 +1,21 @@
+:root {
+  --sl-color-accent-low: #142838;
+  --sl-color-accent: #2b6ca3;
+  --sl-color-accent-high: #d8eeff;
+  --sl-color-bg: #f7f9fc;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f2f6fb;
+  --sl-color-text: #112433;
+  --sl-color-text-accent: #1d4f78;
+  --sl-color-text-invert: #f7fbff;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #173553;
+  --sl-color-accent: #5faeea;
+  --sl-color-accent-high: #def1ff;
+}
+
+.hero {
+  border-radius: 12px;
+}
