@@ -7,10 +7,10 @@ hero:
   tagline: Institutional-grade quantitative research documentation aligned to AFML chapters and production deployment controls.
   actions:
     - text: Start With Quickstart
-      link: /quickstart/
+      link: /openquant/quickstart/
       icon: right-arrow
     - text: Browse Modules
-      link: /modules/
+      link: /openquant/modules/
       variant: minimal
 status: validated
 last_validated: '2026-03-02'

@@ -1,9 +1,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
 
 export default defineConfig({
   base: '/openquant',
   output: 'static',
+  markdown: {
+    remarkPlugins: [remarkBaseUrl({ base: '/openquant' })],
+  },
   integrations: [
     starlight({
       title: 'OpenQuant Documentation',
