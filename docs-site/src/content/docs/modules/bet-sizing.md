@@ -31,17 +31,7 @@ sidebar:
 
 A model signal is not tradable until converted into bounded, discrete, and risk-aware position sizes.
 
-## Key Public APIs
-
-- `bet_size_probability`
-- `bet_size_dynamic`
-- `bet_size_budget`
-- `bet_size_reserve`
-- `bet_size_reserve_full`
-- `get_target_pos`
-- `limit_price`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### From Classification Probability to Signed Bet
 
@@ -55,9 +45,11 @@ $$\begin{aligned}w&=\frac{x^2(1-m^2)}{m^2}\quad (x=f-m_p)\\m(x)&=\frac{x}{\sqrt{
 
 $$\begin{aligned}b_t^{budget}&=\frac{L_t}{\max_s L_s}-\frac{S_t}{\max_s S_s}\\c_t&=L_t-S_t\\b_t^{reserve}&=\frac{F(c_t)-F(0)}{1-F(0)}\;\mathbf 1_{c_t\ge0}+\frac{F(c_t)-F(0)}{F(0)}\;\mathbf 1_{c_t<0}\end{aligned}$$
 
-## Implementation Examples
+## Usage Examples
 
-### End-to-end: Probability Forecasts -> Discrete Executable Bet Sizes
+### Rust
+
+#### End-to-end: Probability Forecasts -> Discrete Executable Bet Sizes
 
 ```rust
 use chrono::{Duration, NaiveDateTime};
@@ -79,7 +71,7 @@ let sizes = bet_size_probability(&events, 2, 0.1, true);
 assert!(!sizes.is_empty());
 ```
 
-### End-to-end: Dynamic + Reserve Sizing for Execution and Inventory Control
+#### End-to-end: Dynamic + Reserve Sizing for Execution and Inventory Control
 
 ```rust
 use chrono::{Duration, NaiveDateTime};
@@ -108,6 +100,18 @@ assert_eq!(dynamic.len(), 5);
 assert!(fit.is_some());
 assert!(!reserve.is_empty());
 ```
+
+## API Reference
+
+### Rust API
+
+- `bet_size_probability`
+- `bet_size_dynamic`
+- `bet_size_budget`
+- `bet_size_reserve`
+- `bet_size_reserve_full`
+- `get_target_pos`
+- `limit_price`
 
 ## Implementation Notes
 

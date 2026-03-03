@@ -32,18 +32,7 @@ sidebar:
 
 AFML Chapter 6 emphasizes that ensemble gains depend on error decomposition and forecast dependence, not just estimator count.
 
-## Key Public APIs
-
-- `bias_variance_noise`
-- `bootstrap_sample_indices`
-- `sequential_bootstrap_sample_indices`
-- `aggregate_classification_vote`
-- `aggregate_classification_probability_mean`
-- `average_pairwise_prediction_correlation`
-- `bagging_ensemble_variance`
-- `recommend_bagging_vs_boosting`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Error Decomposition
 
@@ -57,9 +46,11 @@ $$\sigma^2_{bag}=\sigma^2\left(\rho+\frac{1-\rho}{N}\right)$$
 
 $$\hat y=\mathbf 1\left(\frac{1}{N}\sum_{m=1}^N \hat p_m \ge \tau\right),\quad \hat p=\frac{1}{N}\sum_{m=1}^N \hat p_m$$
 
-## Implementation Examples
+## Usage Examples
 
-### Assess Ensemble Variance and Recommendation
+### Rust
+
+#### Assess Ensemble Variance and Recommendation
 
 ```rust
 use openquant::ensemble_methods::{
@@ -81,7 +72,7 @@ let decision = recommend_bagging_vs_boosting(0.54, rho, 0.75, 1.0, 20)?;
 println!("rho={rho:.3}, var={bag_var:.3}, rec={:?}", decision.recommended);
 ```
 
-### Aggregate Bagged Classifier Outputs
+#### Aggregate Bagged Classifier Outputs
 
 ```rust
 use openquant::ensemble_methods::{
@@ -105,6 +96,19 @@ assert_eq!(vote, vec![1, 1, 1]);
 assert_eq!(labels, vec![1, 0, 1]);
 assert_eq!(mean_prob.len(), 3);
 ```
+
+## API Reference
+
+### Rust API
+
+- `bias_variance_noise`
+- `bootstrap_sample_indices`
+- `sequential_bootstrap_sample_indices`
+- `aggregate_classification_vote`
+- `aggregate_classification_probability_mean`
+- `average_pairwise_prediction_correlation`
+- `bagging_ensemble_variance`
+- `recommend_bagging_vs_boosting`
 
 ## Implementation Notes
 

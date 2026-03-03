@@ -27,14 +27,7 @@ sidebar:
 
 Improves model interpretability and helps remove unstable or redundant features.
 
-## Key Public APIs
-
-- `mean_decrease_impurity`
-- `mean_decrease_accuracy`
-- `single_feature_importance`
-- `feature_pca_analysis`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### MDI
 
@@ -44,9 +37,11 @@ $$I_j=\sum_{t\in T_j} p(t)\Delta i(t)$$
 
 $$I_j=Score(X)-Score(X_{perm(j)})$$
 
-## Implementation Examples
+## Usage Examples
 
-### Run MDA with classifier
+### Rust
+
+#### Run MDA with classifier
 
 ```rust
 use openquant::feature_importance::mean_decrease_accuracy;
@@ -54,6 +49,15 @@ use openquant::feature_importance::mean_decrease_accuracy;
 // Plug in your classifier implementing SimpleClassifier
 let importance = mean_decrease_accuracy(&clf, &x, &y, 5)?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `mean_decrease_impurity`
+- `mean_decrease_accuracy`
+- `single_feature_importance`
+- `feature_pca_analysis`
 
 ## Implementation Notes
 

@@ -25,12 +25,7 @@ sidebar:
 
 Produces stable allocations without matrix inversion required by classic Markowitz.
 
-## Key Public APIs
-
-- `HierarchicalRiskParity`
-- `HrpDendrogram`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### IVP Weight
 
@@ -40,9 +35,11 @@ $$w_i\propto\frac{1}{\sigma_i^2}$$
 
 $$\alpha=1-\frac{\sigma_{left}^2}{\sigma_{left}^2+\sigma_{right}^2}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Allocate with HRP
+### Rust
+
+#### Allocate with HRP
 
 ```rust
 use openquant::hrp::HierarchicalRiskParity;
@@ -50,6 +47,13 @@ use openquant::hrp::HierarchicalRiskParity;
 let mut hrp = HierarchicalRiskParity::new();
 let weights = hrp.allocate(&prices)?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `HierarchicalRiskParity`
+- `HrpDendrogram`
 
 ## Implementation Notes
 

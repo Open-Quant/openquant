@@ -27,14 +27,7 @@ sidebar:
 
 Risk budgets and guardrails require coherent downside metrics beyond variance.
 
-## Key Public APIs
-
-- `RiskMetrics::calculate_value_at_risk`
-- `RiskMetrics::calculate_expected_shortfall`
-- `RiskMetrics::calculate_conditional_drawdown_risk`
-- `RiskMetrics::calculate_variance`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### VaR
 
@@ -44,9 +37,11 @@ $$VaR_\alpha = -Q_\alpha(R)$$
 
 $$ES_\alpha = -E[R \mid R \le Q_\alpha(R)]$$
 
-## Implementation Examples
+## Usage Examples
 
-### Compute VaR and ES
+### Rust
+
+#### Compute VaR and ES
 
 ```rust
 use openquant::risk_metrics::RiskMetrics;
@@ -55,6 +50,15 @@ let r = vec![-0.02, 0.01, -0.005, 0.003, 0.004];
 let var95 = RiskMetrics::calculate_value_at_risk(&r, 0.05)?;
 let es95 = RiskMetrics::calculate_expected_shortfall(&r, 0.05)?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `RiskMetrics::calculate_value_at_risk`
+- `RiskMetrics::calculate_expected_shortfall`
+- `RiskMetrics::calculate_conditional_drawdown_risk`
+- `RiskMetrics::calculate_variance`
 
 ## Implementation Notes
 

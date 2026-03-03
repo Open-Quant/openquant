@@ -49,7 +49,27 @@ bun run check:docs
 Expected result:
 - `build`, `check:links`, `check:api-drift`, and `check:content-schema` all pass.
 
-## Step 5: Continue to workflow docs
+## Step 5: Run your first research workflow
+
+```python
+from openquant.research import make_synthetic_futures_dataset, run_flywheel_iteration
+
+# Generate deterministic synthetic multi-asset futures data
+dataset = make_synthetic_futures_dataset(n_bars=192, seed=7)
+
+# Run a complete AFML pipeline: events → labels → sizing → portfolio → risk
+result = run_flywheel_iteration(dataset)
+
+# Inspect key metrics
+print(result["summary"])
+# portfolio_sharpe | realized_sharpe | value_at_risk | net_sharpe | turnover
+
+# Check promotion gates (is this strategy viable?)
+print(result["promotion"])
+# {'passed_net_sharpe': True, 'promote_candidate': True, ...}
+```
+
+## Step 6: Continue to workflow docs
 
 - [Rust Core Workflow](/workflows/rust-core-workflow/)
 - [Python Core Workflow](/workflows/python-core-workflow/)

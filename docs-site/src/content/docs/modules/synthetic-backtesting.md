@@ -29,16 +29,7 @@ sidebar:
 
 AFML Chapter 13 shows that selecting PT/SL rules on a single historical path is prone to overfitting; synthetic path ensembles let us evaluate rule robustness under calibrated process dynamics.
 
-## Key Public APIs
-
-- `calibrate_ou_params`
-- `generate_ou_paths`
-- `evaluate_rule_on_paths`
-- `search_optimal_trading_rule`
-- `detect_no_stable_optimum`
-- `run_synthetic_otr_workflow`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Discrete O-U (AR(1))
 
@@ -52,9 +43,11 @@ $$\bar P=\frac{\alpha}{1-\phi}$$
 
 $$R^*=\arg\max_{R\in\Omega}\frac{\mathbb E[\pi\mid R]}{\sigma[\pi\mid R]}$$
 
-## Implementation Examples
+## Usage Examples
 
-### End-to-end synthetic OTR workflow
+### Rust
+
+#### End-to-end synthetic OTR workflow
 
 ```rust
 use openquant::synthetic_backtesting::{run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig};
@@ -78,6 +71,17 @@ if out.diagnostics.no_stable_optimum {
   println!("Best PT/SL: {:?}", out.best_rule);
 }
 ```
+
+## API Reference
+
+### Rust API
+
+- `calibrate_ou_params`
+- `generate_ou_paths`
+- `evaluate_rule_on_paths`
+- `search_optimal_trading_rule`
+- `detect_no_stable_optimum`
+- `run_synthetic_otr_workflow`
 
 ## Implementation Notes
 

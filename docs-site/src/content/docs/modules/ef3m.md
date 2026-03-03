@@ -27,14 +27,7 @@ sidebar:
 
 Provides robust parameter estimation for bimodal return mixtures when full MLE is heavy.
 
-## Key Public APIs
-
-- `M2N`
-- `centered_moment`
-- `raw_moment`
-- `most_likely_parameters`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Raw Moment
 
@@ -44,9 +37,11 @@ $$m_k=E[X^k]$$
 
 $$\mu=p\mu_1+(1-p)\mu_2$$
 
-## Implementation Examples
+## Usage Examples
 
-### Estimate moments
+### Rust
+
+#### Estimate moments
 
 ```rust
 use openquant::ef3m::centered_moment;
@@ -54,6 +49,15 @@ use openquant::ef3m::centered_moment;
 let moments = vec![0.0, 1.0, 0.1, 3.0];
 let m3 = centered_moment(&moments, 3);
 ```
+
+## API Reference
+
+### Rust API
+
+- `M2N`
+- `centered_moment`
+- `raw_moment`
+- `most_likely_parameters`
 
 ## Implementation Notes
 

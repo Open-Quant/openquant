@@ -29,15 +29,7 @@ sidebar:
 
 Microstructure features capture liquidity and order-flow dynamics not visible in OHLC bars alone.
 
-## Key Public APIs
-
-- `get_roll_measure`
-- `get_corwin_schultz_estimator`
-- `get_bar_based_kyle_lambda`
-- `get_vpin`
-- `MicrostructuralFeaturesGenerator`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Kyle / Amihud / Hasbrouck Impact Families
 
@@ -51,9 +43,11 @@ $$\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1}
 
 $$\mathrm{VPIN}_t=\frac{1}{n}\sum_{i=t-n+1}^{t}\frac{|V_i^b-V_i^s|}{V_i},\qquad H=-\sum_j p_j\log p_j$$
 
-## Implementation Examples
+## Usage Examples
 
-### End-to-end: Build Core Liquidity Feature Panel
+### Rust
+
+#### End-to-end: Build Core Liquidity Feature Panel
 
 ```rust
 use openquant::microstructural_features::{
@@ -84,7 +78,7 @@ assert_eq!(roll.len(), close.len());
 assert_eq!(vpin.len(), close.len());
 ```
 
-### From Encoded Tick Signs to Entropy Features
+#### From Encoded Tick Signs to Entropy Features
 
 ```rust
 use openquant::microstructural_features::{
@@ -105,6 +99,16 @@ assert!(h_shannon.is_finite());
 assert!(h_lz.is_finite());
 assert!(h_plugin.is_finite());
 ```
+
+## API Reference
+
+### Rust API
+
+- `get_roll_measure`
+- `get_corwin_schultz_estimator`
+- `get_bar_based_kyle_lambda`
+- `get_vpin`
+- `MicrostructuralFeaturesGenerator`
 
 ## Implementation Notes
 

@@ -27,14 +27,7 @@ sidebar:
 
 Financial relationships are often non-linear and regime-dependent; correlation alone is insufficient.
 
-## Key Public APIs
-
-- `distance_correlation`
-- `get_mutual_info`
-- `variation_of_information_score`
-- `angular_distance`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Mutual Information
 
@@ -44,9 +37,11 @@ $$I(X;Y)=\sum_{x,y}p(x,y)\log\frac{p(x,y)}{p(x)p(y)}$$
 
 $$VI(X,Y)=H(X)+H(Y)-2I(X;Y)$$
 
-## Implementation Examples
+## Usage Examples
 
-### Distance correlation between series
+### Rust
+
+#### Distance correlation between series
 
 ```rust
 use openquant::codependence::distance_correlation;
@@ -55,6 +50,15 @@ let x = vec![1.0, 2.0, 3.0, 4.0];
 let y = vec![1.1, 1.9, 3.2, 3.8];
 let dcor = distance_correlation(&x, &y)?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `distance_correlation`
+- `get_mutual_info`
+- `variation_of_information_score`
+- `angular_distance`
 
 ## Implementation Notes
 

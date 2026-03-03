@@ -33,19 +33,7 @@ sidebar:
 
 AFML Chapters 11-12 require scenario-based validation with explicit anti-leakage controls, split provenance, and path-wise uncertainty rather than single-score reporting.
 
-## Key Public APIs
-
-- `run_walk_forward`
-- `run_cross_validation`
-- `run_cpcv`
-- `cpcv_path_count`
-- `BacktestRunConfig`
-- `BacktestSafeguards`
-- `WalkForwardConfig`
-- `CrossValidationConfig`
-- `CpcvConfig`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### CPCV Path Count
 
@@ -59,9 +47,11 @@ $$\mathcal T_{train}^{*}=\mathcal T_{train}\setminus\{i: \exists j\in\mathcal T_
 
 $$S_{path}=\frac{\bar r_{path}}{\sigma_{path}}\sqrt{T_{path}}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Run CPCV and inspect Sharpe distribution
+### Rust
+
+#### Run CPCV and inspect Sharpe distribution
 
 ```rust
 use openquant::backtesting_engine::{
@@ -88,6 +78,20 @@ let result = run_cpcv(
 println!("phi = {}", result.path_count);
 println!("path sharpe count = {}", result.path_distribution.len());
 ```
+
+## API Reference
+
+### Rust API
+
+- `run_walk_forward`
+- `run_cross_validation`
+- `run_cpcv`
+- `cpcv_path_count`
+- `BacktestRunConfig`
+- `BacktestSafeguards`
+- `WalkForwardConfig`
+- `CrossValidationConfig`
+- `CpcvConfig`
 
 ## Implementation Notes
 

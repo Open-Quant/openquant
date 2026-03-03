@@ -26,13 +26,7 @@ sidebar:
 
 Backtests must include financing, carry, and contract-roll mechanics to avoid optimistic bias.
 
-## Key Public APIs
-
-- `EtfTrick`
-- `get_futures_roll_series`
-- `FuturesRollRow`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### ETF NAV Update
 
@@ -42,15 +36,25 @@ $$NAV_t=NAV_{t-1}(1+r_t-c_t)$$
 
 $$r^{roll}_t=\frac{F^{near}_t-F^{far}_t}{F^{far}_t}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Compute futures roll series
+### Rust
+
+#### Compute futures roll series
 
 ```rust
 use openquant::etf_trick::get_futures_roll_series;
 
 let roll = get_futures_roll_series(/* input tables */);
 ```
+
+## API Reference
+
+### Rust API
+
+- `EtfTrick`
+- `get_futures_roll_series`
+- `FuturesRollRow`
 
 ## Implementation Notes
 

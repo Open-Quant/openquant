@@ -26,13 +26,7 @@ sidebar:
 
 CLA solves constrained Markowitz problems efficiently with active-set style line updates.
 
-## Key Public APIs
-
-- `CLA`
-- `covariance`
-- `ReturnsEstimation`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### MVO Objective
 
@@ -42,9 +36,11 @@ $$\min_w\;\frac{1}{2}w^T\Sigma w-\lambda\mu^T w$$
 
 $$\mathbf{1}^T w=1$$
 
-## Implementation Examples
+## Usage Examples
 
-### Prepare covariance for CLA
+### Rust
+
+#### Prepare covariance for CLA
 
 ```rust
 use nalgebra::DMatrix;
@@ -53,6 +49,14 @@ use openquant::cla::covariance;
 let returns = DMatrix::from_row_slice(3, 2, &[0.01, 0.02, -0.01, 0.01, 0.015, 0.03]);
 let sigma = covariance(&returns);
 ```
+
+## API Reference
+
+### Rust API
+
+- `CLA`
+- `covariance`
+- `ReturnsEstimation`
 
 ## Implementation Notes
 

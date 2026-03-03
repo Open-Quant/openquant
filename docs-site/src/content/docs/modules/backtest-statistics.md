@@ -28,15 +28,7 @@ sidebar:
 
 Turns raw PnL/returns into risk-adjusted diagnostics used in model selection and production monitoring.
 
-## Key Public APIs
-
-- `sharpe_ratio`
-- `deflated_sharpe_ratio`
-- `probabilistic_sharpe_ratio`
-- `drawdown_and_time_under_water`
-- `average_holding_period`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Sharpe
 
@@ -46,9 +38,11 @@ $$S=\frac{\mu-r_f}{\sigma}$$
 
 $$IR=\frac{\mu-r_b}{\sigma_{(r-r_b)}}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Compute Sharpe and drawdown
+### Rust
+
+#### Compute Sharpe and drawdown
 
 ```rust
 use openquant::backtest_statistics::{sharpe_ratio, drawdown_and_time_under_water};
@@ -58,6 +52,16 @@ let sr = sharpe_ratio(&returns, 252.0, 0.0);
 let (dd, tuw) = drawdown_and_time_under_water(&returns);
 println!("{sr} {dd:?} {tuw:?}");
 ```
+
+## API Reference
+
+### Rust API
+
+- `sharpe_ratio`
+- `deflated_sharpe_ratio`
+- `probabilistic_sharpe_ratio`
+- `drawdown_and_time_under_water`
+- `average_holding_period`
 
 ## Implementation Notes
 

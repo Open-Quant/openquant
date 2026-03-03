@@ -33,19 +33,7 @@ sidebar:
 
 Streaming decisions are turnaround-time constrained; this module maintains VPIN/HHI-style indicators incrementally and supports multi-stream scaling across cores/chunk sizes.
 
-## Key Public APIs
-
-- `StreamEvent`
-- `VpinState`
-- `HhiState`
-- `StreamingEarlyWarningEngine`
-- `run_streaming_pipeline`
-- `run_streaming_pipeline_parallel`
-- `generate_synthetic_flash_crash_stream`
-- `StreamingPipelineConfig`
-- `StreamingRunMetrics`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### VPIN (Rolling Buckets)
 
@@ -59,9 +47,11 @@ $$\mathrm{HHI}_t=\sum_{v=1}^{K}\left(\frac{n_{v,t}}{\sum_j n_{j,t}}\right)^2$$
 
 $$\mathrm{throughput}=\frac{\#\mathrm{events\ processed}}{\mathrm{runtime\ seconds}}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Incremental early-warning pipeline on streaming trades
+### Rust
+
+#### Incremental early-warning pipeline on streaming trades
 
 ```rust
 use openquant::hpc_parallel::{ExecutionMode, HpcParallelConfig, PartitionStrategy};
@@ -100,6 +90,20 @@ println!("streams={} molecules={} events/s={:.0}",
   report.parallel_metrics.throughput_atoms_per_sec
 );
 ```
+
+## API Reference
+
+### Rust API
+
+- `StreamEvent`
+- `VpinState`
+- `HhiState`
+- `StreamingEarlyWarningEngine`
+- `run_streaming_pipeline`
+- `run_streaming_pipeline_parallel`
+- `generate_synthetic_flash_crash_stream`
+- `StreamingPipelineConfig`
+- `StreamingRunMetrics`
 
 ## Implementation Notes
 

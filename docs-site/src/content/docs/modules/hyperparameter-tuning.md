@@ -31,17 +31,7 @@ sidebar:
 
 AFML Chapter 9 recommends tuning under PurgedKFold, using randomized search for large spaces, and scoring with metrics aligned to trading objectives.
 
-## Key Public APIs
-
-- `grid_search`
-- `randomized_search`
-- `expand_param_grid`
-- `sample_log_uniform`
-- `classification_score`
-- `SearchScoring`
-- `RandomParamDistribution`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Purged CV Objective
 
@@ -55,9 +45,11 @@ $$\log x\sim U(\log a,\log b),\; a>0,\;x\in(a,b)$$
 
 $$-\frac{1}{\sum_i w_i}\sum_i w_i\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]$$
 
-## Implementation Examples
+## Usage Examples
 
-### Randomized search with PurgedKFold semantics
+### Rust
+
+#### Randomized search with PurgedKFold semantics
 
 ```rust
 use std::collections::BTreeMap;
@@ -81,6 +73,18 @@ let result = randomized_search(
 )?;
 println!("best score = {}", result.best_score);
 ```
+
+## API Reference
+
+### Rust API
+
+- `grid_search`
+- `randomized_search`
+- `expand_param_grid`
+- `sample_log_uniform`
+- `classification_score`
+- `SearchScoring`
+- `RandomParamDistribution`
 
 ## Implementation Notes
 

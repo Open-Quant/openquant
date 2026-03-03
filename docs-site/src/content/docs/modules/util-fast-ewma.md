@@ -24,11 +24,7 @@ sidebar:
 
 Provides performant smoothing for repeated rolling computations.
 
-## Key Public APIs
-
-- `ewma`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### EWMA
 
@@ -38,9 +34,11 @@ $$m_t=\alpha x_t + (1-\alpha)m_{t-1}$$
 
 $$\alpha=\frac{2}{w+1}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Compute EWMA vector
+### Rust
+
+#### Compute EWMA vector
 
 ```rust
 use openquant::util::fast_ewma::ewma;
@@ -48,6 +46,12 @@ use openquant::util::fast_ewma::ewma;
 let x = vec![1.0, 2.0, 3.0, 4.0];
 let y = ewma(&x, 3);
 ```
+
+## API Reference
+
+### Rust API
+
+- `ewma`
 
 ## Implementation Notes
 

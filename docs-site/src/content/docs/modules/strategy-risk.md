@@ -32,19 +32,7 @@ sidebar:
 
 Strategy risk is the probability that a process fails to achieve a Sharpe objective over time; it is distinct from holdings/portfolio variance risk and should be monitored separately.
 
-## Key Public APIs
-
-- `sharpe_symmetric`
-- `implied_precision_symmetric`
-- `implied_frequency_symmetric`
-- `sharpe_asymmetric`
-- `implied_precision_asymmetric`
-- `implied_frequency_asymmetric`
-- `estimate_strategy_failure_probability`
-- `StrategyRiskConfig`
-- `StrategyRiskReport`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Symmetric Sharpe
 
@@ -58,9 +46,11 @@ $$\theta=\frac{(\pi_+-\pi_-)p+\pi_-}{(\pi_+-\pi_-)\sqrt{p(1-p)}}\sqrt{n}$$
 
 $$P_{fail}=\Pr[p\le p^*],\quad p^*=\text{impliedPrecision}(\theta^*,\pi_+,\pi_-,n)$$
 
-## Implementation Examples
+## Usage Examples
 
-### Estimate strategy-failure probability from realized bets
+### Rust
+
+#### Estimate strategy-failure probability from realized bets
 
 ```rust
 use openquant::strategy_risk::{estimate_strategy_failure_probability, StrategyRiskConfig};
@@ -81,6 +71,20 @@ let report = estimate_strategy_failure_probability(
 println!("p*: {:.4}", report.implied_precision_threshold);
 println!("failure (KDE): {:.2}%", 100.0 * report.kde_failure_probability);
 ```
+
+## API Reference
+
+### Rust API
+
+- `sharpe_symmetric`
+- `implied_precision_symmetric`
+- `implied_frequency_symmetric`
+- `sharpe_asymmetric`
+- `implied_precision_asymmetric`
+- `implied_frequency_asymmetric`
+- `estimate_strategy_failure_probability`
+- `StrategyRiskConfig`
+- `StrategyRiskReport`
 
 ## Implementation Notes
 

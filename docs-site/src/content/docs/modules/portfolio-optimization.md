@@ -29,15 +29,7 @@ sidebar:
 
 Provides production-ready portfolio construction primitives with explicit options and constraints.
 
-## Key Public APIs
-
-- `allocate_inverse_variance`
-- `allocate_min_vol`
-- `allocate_max_sharpe`
-- `allocate_efficient_risk`
-- `AllocationOptions`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Constrained Mean-Variance Program
 
@@ -51,9 +43,11 @@ $$\begin{aligned}w_{MV}&=\arg\min_w\;w^T\Sigma w\\w_{MSR}&=\arg\max_w\;\frac{w^T
 
 $$\mu_t=\frac{\sum_{k=0}^{T-1}(1-\alpha)^k r_{t-k}}{\sum_{k=0}^{T-1}(1-\alpha)^k},\qquad \alpha=\frac{2}{\text{span}+1}$$
 
-## Implementation Examples
+## Usage Examples
 
-### End-to-end: Compute and Compare Core Allocators
+### Rust
+
+#### End-to-end: Compute and Compare Core Allocators
 
 ```rust
 use nalgebra::DMatrix;
@@ -78,7 +72,7 @@ assert!((msr.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
 assert!((er.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
 ```
 
-### End-to-end: Constrained Allocation with Exponential Returns and Resampling
+#### End-to-end: Constrained Allocation with Exponential Returns and Resampling
 
 ```rust
 use std::collections::HashMap;
@@ -104,6 +98,16 @@ let opts = AllocationOptions {
 let constrained = allocate_max_sharpe_with(&prices, &opts)?;
 assert!(constrained.weights.iter().all(|w| *w >= -1e-10));
 ```
+
+## API Reference
+
+### Rust API
+
+- `allocate_inverse_variance`
+- `allocate_min_vol`
+- `allocate_max_sharpe`
+- `allocate_efficient_risk`
+- `AllocationOptions`
 
 ## Implementation Notes
 

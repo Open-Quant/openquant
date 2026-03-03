@@ -31,18 +31,7 @@ sidebar:
 
 Research pipelines bottleneck on repeated independent computations; this module exposes reproducible partitioning and dispatch controls to scale those workloads safely.
 
-## Key Public APIs
-
-- `partition_atoms`
-- `run_parallel`
-- `dispatch_async`
-- `ExecutionMode`
-- `PartitionStrategy`
-- `HpcParallelConfig`
-- `ParallelRunReport`
-- `HpcParallelMetrics`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Linear Partition Boundary
 
@@ -56,9 +45,11 @@ $$b_i=\left\lfloor N\sqrt{\frac{i}{M}}\right\rfloor,\;i=0,\dots,M$$
 
 $$\text{throughput}=\frac{\text{atoms processed}}{\text{runtime seconds}}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Run atom->molecule callback in threaded mode
+### Rust
+
+#### Run atom->molecule callback in threaded mode
 
 ```rust
 use openquant::hpc_parallel::{run_parallel, ExecutionMode, HpcParallelConfig, PartitionStrategy};
@@ -77,6 +68,19 @@ let report = run_parallel(
 
 println!("molecules={} atoms/s={:.0}", report.metrics.molecules_total, report.metrics.throughput_atoms_per_sec);
 ```
+
+## API Reference
+
+### Rust API
+
+- `partition_atoms`
+- `run_parallel`
+- `dispatch_async`
+- `ExecutionMode`
+- `PartitionStrategy`
+- `HpcParallelConfig`
+- `ParallelRunReport`
+- `HpcParallelMetrics`
 
 ## Implementation Notes
 

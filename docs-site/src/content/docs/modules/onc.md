@@ -26,13 +26,7 @@ sidebar:
 
 Cluster count selection is a key source of model risk in hierarchical portfolio methods.
 
-## Key Public APIs
-
-- `get_onc_clusters`
-- `check_improve_clusters`
-- `OncResult`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Cluster Score
 
@@ -42,9 +36,11 @@ $$J(k)=\text{intra}(k)-\text{inter}(k)$$
 
 $$k^*=\arg\min_k J(k)$$
 
-## Implementation Examples
+## Usage Examples
 
-### Infer cluster structure
+### Rust
+
+#### Infer cluster structure
 
 ```rust
 use openquant::onc::get_onc_clusters;
@@ -52,6 +48,14 @@ use openquant::onc::get_onc_clusters;
 let out = get_onc_clusters(&corr, 20)?;
 println!("{}", out.clusters.len());
 ```
+
+## API Reference
+
+### Rust API
+
+- `get_onc_clusters`
+- `check_improve_clusters`
+- `OncResult`
 
 ## Implementation Notes
 

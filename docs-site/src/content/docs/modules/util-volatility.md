@@ -27,14 +27,7 @@ sidebar:
 
 Volatility is a foundational scaling target for barriers, sizing, and risk controls.
 
-## Key Public APIs
-
-- `get_daily_vol`
-- `get_parksinson_vol`
-- `get_garman_class_vol`
-- `get_yang_zhang_vol`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Parkinson
 
@@ -44,9 +37,11 @@ $$\sigma_P^2=\frac{1}{4\ln 2}\frac{1}{n}\sum (\ln(H_t/L_t))^2$$
 
 $$\sigma_{YZ}^2=\sigma_o^2+k\sigma_c^2+(1-k)\sigma_{rs}^2$$
 
-## Implementation Examples
+## Usage Examples
 
-### Compute daily and range-based volatility
+### Rust
+
+#### Compute daily and range-based volatility
 
 ```rust
 use openquant::util::volatility::{get_daily_vol, get_parksinson_vol};
@@ -54,6 +49,15 @@ use openquant::util::volatility::{get_daily_vol, get_parksinson_vol};
 let dv = get_daily_vol(&close, 100);
 let pv = get_parksinson_vol(&high, &low, 20);
 ```
+
+## API Reference
+
+### Rust API
+
+- `get_daily_vol`
+- `get_parksinson_vol`
+- `get_garman_class_vol`
+- `get_yang_zhang_vol`
 
 ## Implementation Notes
 

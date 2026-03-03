@@ -25,12 +25,7 @@ sidebar:
 
 Allocates capital by hierarchy to reduce concentration and covariance-estimation fragility.
 
-## Key Public APIs
-
-- `HierarchicalClusteringAssetAllocation`
-- `HcaaError`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Cluster Variance
 
@@ -40,9 +35,11 @@ $$\sigma_C^2=w_C^T\Sigma_C w_C$$
 
 $$w_{left},w_{right}\propto\frac{1}{\sigma_{left}^2},\frac{1}{\sigma_{right}^2}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Fit HCAA allocator
+### Rust
+
+#### Fit HCAA allocator
 
 ```rust
 use openquant::hcaa::HierarchicalClusteringAssetAllocation;
@@ -50,6 +47,13 @@ use openquant::hcaa::HierarchicalClusteringAssetAllocation;
 let mut hcaa = HierarchicalClusteringAssetAllocation::new();
 let w = hcaa.allocate(&prices)?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `HierarchicalClusteringAssetAllocation`
+- `HcaaError`
 
 ## Implementation Notes
 

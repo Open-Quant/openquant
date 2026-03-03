@@ -27,14 +27,7 @@ sidebar:
 
 Time-dependent labels violate IID assumptions; purging/embargoing reduces leakage bias.
 
-## Key Public APIs
-
-- `ml_cross_val_score`
-- `ml_get_train_times`
-- `PurgedKFold`
-- `Scoring`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Purged Train Set
 
@@ -44,15 +37,26 @@ $$\mathcal{T}_{train}=\mathcal{T}\setminus(\mathcal{T}_{test}\oplus e)$$
 
 $$e=\lfloor p\cdot T\rfloor$$
 
-## Implementation Examples
+## Usage Examples
 
-### Configure PurgedKFold
+### Rust
+
+#### Configure PurgedKFold
 
 ```rust
 use openquant::cross_validation::PurgedKFold;
 
 let cv = PurgedKFold::new(5, 0.01);
 ```
+
+## API Reference
+
+### Rust API
+
+- `ml_cross_val_score`
+- `ml_get_train_times`
+- `PurgedKFold`
+- `Scoring`
 
 ## Implementation Notes
 

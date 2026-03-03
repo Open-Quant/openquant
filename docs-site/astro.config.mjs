@@ -32,8 +32,125 @@ export default defineConfig({
           label: 'Core Workflows',
           autogenerate: { directory: 'workflows' },
         },
+        // ── AFML Chapter-based module groups ──
         {
-          label: 'Module Reference',
+          label: 'Ch 2: Data Structures',
+          items: [
+            { slug: 'modules/data-structures' },
+            { slug: 'modules/filters' },
+            { slug: 'modules/etf-trick' },
+          ],
+        },
+        {
+          label: 'Ch 3: Labeling',
+          items: [
+            { slug: 'modules/labeling' },
+            { slug: 'modules/bet-sizing' },
+          ],
+        },
+        {
+          label: 'Ch 4: Sample Weights',
+          items: [
+            { slug: 'modules/sampling' },
+            { slug: 'modules/sample-weights' },
+            { slug: 'modules/sb-bagging' },
+          ],
+        },
+        {
+          label: 'Ch 5: Fractional Differentiation',
+          items: [
+            { slug: 'modules/fracdiff' },
+          ],
+        },
+        {
+          label: 'Ch 6: Ensemble Methods',
+          items: [
+            { slug: 'modules/ensemble-methods' },
+          ],
+        },
+        {
+          label: 'Ch 7: Cross-Validation',
+          items: [
+            { slug: 'modules/cross-validation' },
+          ],
+        },
+        {
+          label: 'Ch 8: Feature Importance',
+          items: [
+            { slug: 'modules/feature-importance' },
+            { slug: 'modules/fingerprint' },
+          ],
+        },
+        {
+          label: 'Ch 9: Hyperparameter Tuning',
+          items: [
+            { slug: 'modules/hyperparameter-tuning' },
+          ],
+        },
+        {
+          label: 'Ch 10–12: Backtesting',
+          items: [
+            { slug: 'modules/backtesting-engine' },
+            { slug: 'modules/synthetic-backtesting' },
+          ],
+        },
+        {
+          label: 'Ch 14–15: Diagnostics & Risk',
+          items: [
+            { slug: 'modules/backtest-statistics' },
+            { slug: 'modules/risk-metrics' },
+            { slug: 'modules/strategy-risk' },
+          ],
+        },
+        {
+          label: 'Ch 16: Portfolio Construction',
+          items: [
+            { slug: 'modules/hrp' },
+            { slug: 'modules/hcaa' },
+            { slug: 'modules/onc' },
+            { slug: 'modules/cla' },
+            { slug: 'modules/portfolio-optimization' },
+          ],
+        },
+        {
+          label: 'Ch 17–19: Microstructure & Regimes',
+          items: [
+            { slug: 'modules/structural-breaks' },
+            { slug: 'modules/microstructural-features' },
+            { slug: 'modules/codependence' },
+          ],
+        },
+        {
+          label: 'Ch 20–22: HPC & Advanced',
+          items: [
+            { slug: 'modules/hpc-parallel' },
+            { slug: 'modules/combinatorial-optimization' },
+            { slug: 'modules/streaming-hpc' },
+          ],
+        },
+        {
+          label: 'Shared Utilities',
+          items: [
+            { slug: 'modules/ef3m' },
+            { slug: 'modules/util-fast-ewma' },
+            { slug: 'modules/util-volatility' },
+          ],
+        },
+        // ── Python-only modules ──
+        {
+          label: 'Python Modules',
+          items: [
+            { slug: 'modules/data' },
+            { slug: 'modules/feature-diagnostics' },
+            { slug: 'modules/pipeline' },
+            { slug: 'modules/research' },
+            { slug: 'modules/adapters' },
+            { slug: 'modules/viz' },
+          ],
+        },
+        // ── Reference ──
+        {
+          label: 'Reference',
           items: [
             { slug: 'module-reference/api-surfaces' },
             { slug: 'module-reference/by-afml-chapter' },

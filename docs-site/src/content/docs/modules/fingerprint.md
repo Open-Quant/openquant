@@ -27,14 +27,7 @@ sidebar:
 
 Quantifies behavior of fitted models beyond scalar accuracy metrics.
 
-## Key Public APIs
-
-- `RegressionModelFingerprint`
-- `ClassificationModelFingerprint`
-- `Effect`
-- `PairwiseEffect`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Partial Effect
 
@@ -44,9 +37,11 @@ $$f_j(x_j)=E_{X_{-j}}[f(X)|X_j=x_j]$$
 
 $$I_{ij}=f(x_i,x_j)-f_i(x_i)-f_j(x_j)$$
 
-## Implementation Examples
+## Usage Examples
 
-### Create regression fingerprint
+### Rust
+
+#### Create regression fingerprint
 
 ```rust
 use openquant::fingerprint::RegressionModelFingerprint;
@@ -54,6 +49,15 @@ use openquant::fingerprint::RegressionModelFingerprint;
 let fp = RegressionModelFingerprint::new(&model, &x);
 let effects = fp.linear_effects()?;
 ```
+
+## API Reference
+
+### Rust API
+
+- `RegressionModelFingerprint`
+- `ClassificationModelFingerprint`
+- `Effect`
+- `PairwiseEffect`
 
 ## Implementation Notes
 

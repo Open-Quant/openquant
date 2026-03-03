@@ -34,21 +34,7 @@ sidebar:
 
 Many trading/search problems are discrete and path-dependent; this module keeps integer structure explicit and provides exact small-instance baselines before scaling to heuristics.
 
-## Key Public APIs
-
-- `DecisionSchema`
-- `IntegerVariable`
-- `IntegerObjective`
-- `solve_exact`
-- `SolverAdapter`
-- `solve_with_adapter`
-- `compare_exact_and_adapter`
-- `TradingTrajectorySchema`
-- `enumerate_trading_paths`
-- `evaluate_trading_path`
-- `solve_trading_trajectory_exact`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Finite Integer Program
 
@@ -62,9 +48,11 @@ $$J(\tau)=\sum_{t=1}^{T}\left(q_t r_t-\lambda q_t^2-c_t|\Delta q_t|-\kappa\,\mat
 
 $$\Delta_{alg}=\begin{cases}f(x^*)-f(\hat x) & \text{maximize}\\f(\hat x)-f(x^*) & \text{minimize}\end{cases}$$
 
-## Implementation Examples
+## Usage Examples
 
-### Exact trajectory search with fixed ticket costs
+### Rust
+
+#### Exact trajectory search with fixed ticket costs
 
 ```rust
 use openquant::combinatorial_optimization::{
@@ -107,6 +95,22 @@ let best = enumerate_trading_paths(&schema)?
 println!("best objective: {:.6}", best.1);
 println!("trades: {:?}", best.0.trades);
 ```
+
+## API Reference
+
+### Rust API
+
+- `DecisionSchema`
+- `IntegerVariable`
+- `IntegerObjective`
+- `solve_exact`
+- `SolverAdapter`
+- `solve_with_adapter`
+- `compare_exact_and_adapter`
+- `TradingTrajectorySchema`
+- `enumerate_trading_paths`
+- `evaluate_trading_path`
+- `solve_trading_trajectory_exact`
 
 ## Implementation Notes
 

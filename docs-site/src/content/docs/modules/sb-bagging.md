@@ -27,14 +27,7 @@ sidebar:
 
 Combines ensemble variance reduction with overlap-aware sampling.
 
-## Key Public APIs
-
-- `SequentiallyBootstrappedBaggingClassifier`
-- `SequentiallyBootstrappedBaggingRegressor`
-- `MaxSamples`
-- `MaxFeatures`
-
-## Mathematical Definitions
+## Mathematical Foundations
 
 ### Bagging Predictor
 
@@ -44,15 +37,26 @@ $$\hat f(x)=\frac{1}{B}\sum_{b=1}^{B} f_b(x)$$
 
 $$S_b\sim P_{seq}(u)$$
 
-## Implementation Examples
+## Usage Examples
 
-### Instantiate SB bagging classifier
+### Rust
+
+#### Instantiate SB bagging classifier
 
 ```rust
 use openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier;
 
 let bag = SequentiallyBootstrappedBaggingClassifier::new(100);
 ```
+
+## API Reference
+
+### Rust API
+
+- `SequentiallyBootstrappedBaggingClassifier`
+- `SequentiallyBootstrappedBaggingRegressor`
+- `MaxSamples`
+- `MaxFeatures`
 
 ## Implementation Notes
 
