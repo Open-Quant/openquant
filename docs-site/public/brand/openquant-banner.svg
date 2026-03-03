@@ -31,9 +31,18 @@
 
   <g transform="translate(58 66)">
     <rect x="0" y="0" width="228" height="228" rx="44" fill="#0f1730" fill-opacity="0.78" stroke="#8ba7ff" stroke-opacity="0.42" stroke-width="4"/>
-    <path d="M52 156V76L84 122L116 76V156" fill="none" stroke="url(#oq-line)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="162" cy="116" r="30" fill="none" stroke="url(#oq-line)" stroke-width="13"/>
-    <path d="M177 131L195 150" stroke="url(#oq-line)" stroke-width="10" stroke-linecap="round"/>
+    <!-- Three-segment pinwheel: magenta, cyan, yellow -->
+    <g transform="translate(114 114)">
+      <filter id="pw-glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <g filter="url(#pw-glow)">
+        <path d="M6,-9 L20,-40 L46,-30 L40,-4 Z" fill="#e44de0"/>
+        <path d="M40,-4 L52,14 L34,26 L18,10 Z" fill="#d040cc"/>
+        <path d="M6,-9 L20,-40 L46,-30 L40,-4 Z" fill="#52c8f5" transform="rotate(120)"/>
+        <path d="M40,-4 L52,14 L34,26 L18,10 Z" fill="#42b8e8" transform="rotate(120)"/>
+        <path d="M6,-9 L20,-40 L46,-30 L40,-4 Z" fill="#f0e050" transform="rotate(240)"/>
+        <path d="M40,-4 L52,14 L34,26 L18,10 Z" fill="#e0d040" transform="rotate(240)"/>
+      </g>
+    </g>
   </g>
 
   <g transform="translate(338 78)">
