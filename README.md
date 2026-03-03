@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner_v3.svg" alt="OpenQuant-rs" width="100%" />
+  <img src="assets/banner_v4.svg" alt="OpenQuant" width="100%" />
 </p>
 
 <h1 align="center">openquant-rs</h1>
@@ -80,8 +80,8 @@ A modern docs site scaffold is included under `docs-site/`.
 
 ```bash
 cd docs-site
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.

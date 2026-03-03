@@ -1,0 +1,74 @@
+<svg width="1600" height="420" viewBox="0 0 1600 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">OpenQuant Banner</title>
+  <desc id="desc">Banner for OpenQuant — Rust-native quantitative finance toolkit</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b1648"/>
+      <stop offset="42%" stop-color="#2d1f6e"/>
+      <stop offset="100%" stop-color="#0d64c8"/>
+    </linearGradient>
+    <radialGradient id="glow-pink" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1400 60) rotate(160) scale(520 240)">
+      <stop stop-color="#ff7bd8" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ff7bd8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-teal" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(200 380) rotate(-20) scale(500 220)">
+      <stop stop-color="#6ff2de" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#6ff2de" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd0f9"/>
+      <stop offset="50%" stop-color="#9bd3ff"/>
+      <stop offset="100%" stop-color="#70f0de"/>
+    </linearGradient>
+    <linearGradient id="accent-h" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffd0f9"/>
+      <stop offset="50%" stop-color="#9bd3ff"/>
+      <stop offset="100%" stop-color="#70f0de"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="420" fill="url(#bg)"/>
+  <rect width="1600" height="420" fill="url(#glow-pink)"/>
+  <rect width="1600" height="420" fill="url(#glow-teal)"/>
+
+  <!-- Grid overlay -->
+  <g opacity="0.12" stroke="#c3d2ff" stroke-width="1">
+    <path d="M0 84H1600M0 168H1600M0 252H1600M0 336H1600"/>
+    <path d="M160 0V420M320 0V420M480 0V420M640 0V420M800 0V420M960 0V420M1120 0V420M1280 0V420M1440 0V420"/>
+  </g>
+
+  <!-- Icon -->
+  <g transform="translate(100 86)">
+    <rect x="0" y="0" width="248" height="248" rx="48" fill="#0f1730" fill-opacity="0.72" stroke="#8ba7ff" stroke-opacity="0.38" stroke-width="4"/>
+    <path d="M56 172V76L92 130L128 76V172" fill="none" stroke="url(#accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="176" cy="124" r="34" fill="none" stroke="url(#accent)" stroke-width="14"/>
+    <path d="M193 141L214 164" stroke="url(#accent)" stroke-width="11" stroke-linecap="round"/>
+  </g>
+
+  <!-- Text -->
+  <text x="400" y="145" font-family="'Space Grotesk','IBM Plex Sans','Segoe UI',system-ui,sans-serif" font-size="80" fill="#f5f8ff" font-weight="700" letter-spacing="-1">OpenQuant</text>
+  <text x="400" y="200" font-family="'IBM Plex Mono','JetBrains Mono','Fira Code',monospace" font-size="28" fill="#cdd9ff" letter-spacing="1">Rust-native quantitative finance toolkit</text>
+
+  <!-- Accent line -->
+  <rect x="400" y="224" width="780" height="4" rx="2" fill="url(#accent-h)"/>
+
+  <!-- Tags -->
+  <g font-family="'IBM Plex Mono','JetBrains Mono',monospace" font-size="18">
+    <rect x="400" y="252" width="180" height="40" rx="10" fill="#1a1252" fill-opacity="0.65" stroke="#8ba7ff" stroke-opacity="0.35"/>
+    <text x="420" y="278" fill="#9bd3ff">AFML-aligned</text>
+
+    <rect x="600" y="252" width="190" height="40" rx="10" fill="#1a1252" fill-opacity="0.65" stroke="#8ba7ff" stroke-opacity="0.35"/>
+    <text x="620" y="278" fill="#9bd3ff">Python + Rust</text>
+
+    <rect x="810" y="252" width="230" height="40" rx="10" fill="#1a1252" fill-opacity="0.65" stroke="#8ba7ff" stroke-opacity="0.35"/>
+    <text x="830" y="278" fill="#9bd3ff">Production-ready</text>
+  </g>
+
+  <!-- Command line -->
+  <g transform="translate(400 310)">
+    <rect x="0" y="0" width="740" height="42" rx="10" fill="#0d1928" fill-opacity="0.7" stroke="#35536d" stroke-opacity="0.5"/>
+    <text x="16" y="28" font-family="'IBM Plex Mono','JetBrains Mono',monospace" font-size="17" fill="#70f0de">$</text>
+    <text x="36" y="28" font-family="'IBM Plex Mono','JetBrains Mono',monospace" font-size="17" fill="#a8c8e8">cargo test --workspace --all-features</text>
+  </g>
+</svg>
