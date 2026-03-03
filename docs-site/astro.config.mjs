@@ -19,6 +19,30 @@ export default defineConfig({
         src: './src/assets/openquant-icon.svg',
         alt: 'OpenQuant',
       },
+      head: [
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preconnect',
+            href: 'https://fonts.googleapis.com',
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preconnect',
+            href: 'https://fonts.gstatic.com',
+            crossorigin: true,
+          },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap',
+          },
+        },
+      ],
       customCss: [
         'katex/dist/katex.min.css',
         './src/styles/starlight.css',
