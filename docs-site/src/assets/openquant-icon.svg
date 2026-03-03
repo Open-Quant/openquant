@@ -1,22 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OpenQuant icon">
   <defs>
-    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#6de5ff"/>
-      <stop offset="100%" stop-color="#6dffcb"/>
+    <linearGradient id="oq-icon-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1f1a4f"/>
+      <stop offset="55%" stop-color="#3f2f8c"/>
+      <stop offset="100%" stop-color="#0d64c8"/>
     </linearGradient>
-    <linearGradient id="g2" x1="0" x2="1" y1="1" y2="0">
-      <stop offset="0%" stop-color="#6de5ff"/>
-      <stop offset="100%" stop-color="#a78bfa"/>
+    <linearGradient id="oq-icon-line" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd0f9"/>
+      <stop offset="50%" stop-color="#9bd3ff"/>
+      <stop offset="100%" stop-color="#70f0de"/>
     </linearGradient>
   </defs>
-  <!-- Background -->
-  <rect x="4" y="4" width="120" height="120" rx="26" fill="#0c1220" stroke="#1e3a5f" stroke-width="3"/>
-  <!-- Stylized candlestick / bar chart: 3 ascending bars -->
-  <rect x="24" y="68" width="12" height="32" rx="3" fill="url(#g1)" opacity="0.7"/>
-  <rect x="44" y="48" width="12" height="52" rx="3" fill="url(#g1)" opacity="0.85"/>
-  <rect x="64" y="28" width="12" height="72" rx="3" fill="url(#g1)"/>
-  <!-- Q arc: open circle representing the "Q" in Quant -->
-  <path d="M 98 44 A 20 20 0 1 1 98 84" fill="none" stroke="url(#g2)" stroke-width="7" stroke-linecap="round"/>
-  <!-- Q tail: diagonal slash -->
-  <line x1="105" y1="76" x2="118" y2="96" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
+
+  <rect x="6" y="6" width="116" height="116" rx="24" fill="url(#oq-icon-bg)" stroke="#8ba7ff" stroke-opacity="0.45" stroke-width="3"/>
+  <path d="M28 84V44L48 72L68 44V84" fill="none" stroke="url(#oq-icon-line)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="92" cy="64" r="17" fill="none" stroke="url(#oq-icon-line)" stroke-width="9"/>
+  <path d="M102 74L112 86" stroke="url(#oq-icon-line)" stroke-width="7" stroke-linecap="round"/>
 </svg>

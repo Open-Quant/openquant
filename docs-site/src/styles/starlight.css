@@ -79,12 +79,37 @@ h1 {
 .hero {
   border: 1px solid var(--sl-color-hairline);
   border-radius: 16px;
-  padding: 1rem 1.1rem;
+  padding: 2rem 2.5rem;
   background: linear-gradient(165deg, #ffffffcc, #eaf2fb7f);
 }
 
 :root[data-theme='dark'] .hero {
   background: linear-gradient(165deg, #132135d6, #0f1a2aab);
+}
+
+.hero img {
+  max-width: 180px;
+  filter: drop-shadow(0 4px 24px rgba(15, 95, 154, 0.18));
+}
+
+:root[data-theme='dark'] .hero img {
+  filter: drop-shadow(0 4px 24px rgba(105, 183, 239, 0.25));
+}
+
+/* Top banner bar */
+.sl-banner {
+  background: linear-gradient(90deg, #1b1648, #36257b, #0d64c8) !important;
+  border-bottom: none !important;
+}
+
+.sl-banner a {
+  color: #e6f0fb !important;
+  text-decoration: none !important;
+  font-weight: 600;
+}
+
+.sl-banner a:hover {
+  color: #9bd3ff !important;
 }
 
 .sl-markdown-content blockquote {

@@ -13,11 +13,18 @@ afml_chapters:
 risk_notes:
   - "Calibrate thresholds to target event frequency, not just sensitivity."
   - "Use identical filtering in train and live pipelines."
+  - "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold."
+  - "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions."
 rust_api:
   - "cusum_filter_indices"
   - "cusum_filter_timestamps"
+  - "cusum_filter_indices_checked"
+  - "cusum_filter_timestamps_checked"
   - "z_score_filter_indices"
+  - "z_score_filter_timestamps"
+  - "z_score_filter_timestamps_checked"
   - "Threshold"
+  - "FilterError"
 sidebar:
   badge: Module
 ---
@@ -54,37 +61,56 @@ $$z_t=\frac{x_t-\mu_t}{\sigma_t}$$
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `threshold (h)` | `f64 | Threshold` | CUSUM trigger level; controls event frequency. Scalar for constant threshold, or dynamic for volatility-scaled | — |
+| `close` | `list[float]` | Input price series (close prices) | — |
+| `threshold` | `float` | CUSUM trigger level; controls event frequency (Python: scalar only) | — |
+| `threshold` | `Threshold` | CUSUM trigger: Threshold::Scalar(f64) or Threshold::Dynamic(Vec<f64>) (Rust) | — |
+| `mean_window` | `int` | Rolling mean lookback for z-score filter | — |
+| `std_window` | `int` | Rolling std lookback for z-score filter | — |
+| `timestamps` | `list[str]` | Optional timestamps; use _timestamps variants to get event times instead of indices | — |
 
 ## Usage Examples
 
 ### Python
 
-#### Detect structural price events with CUSUM
+#### CUSUM and z-score event detection
 
 ```python
-from openquant._core import filters
+import openquant
 
 close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-timestamps = ["2024-01-02T09:30:00", "2024-01-02T09:31:00", ...]
+timestamps = [
+    "2024-01-02T09:30:00", "2024-01-02T09:31:00",
+    "2024-01-02T09:32:00", "2024-01-02T09:33:00",
+    "2024-01-02T09:34:00", "2024-01-02T09:35:00",
+    "2024-01-02T09:36:00", "2024-01-02T09:37:00",
+]
 
 # CUSUM filter: fires when cumulative deviation exceeds threshold
-event_indices = filters.cusum_filter_indices(close, 0.02)
-# Returns indices where the filter triggered
+event_indices = openquant.filters.cusum_filter_indices(close, 0.02)
 
 # With timestamps: returns event timestamps directly
-event_ts = filters.cusum_filter_timestamps(close, timestamps, 0.02)
+event_ts = openquant.filters.cusum_filter_timestamps(close, timestamps, 0.02)
+
+# Z-score filter: fires when z-score exceeds threshold
+z_indices = openquant.filters.z_score_filter_indices(close, mean_window=20, std_window=20, threshold=2.0)
+z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_window=20, std_window=20, threshold=2.0)
 ```
 
 ### Rust
 
-#### Run CUSUM over closes
+#### CUSUM with static and dynamic thresholds
 
 ```rust
-use openquant::filters::{cusum_filter_indices, Threshold};
+use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};
 
 let close = vec![100.0, 100.1, 99.9, 100.2];
+
+// Static threshold
 let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));
+
+// Dynamic threshold (e.g. volatility-scaled per bar)
+let dynamic_h = vec![0.02, 0.025, 0.018, 0.022];
+let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();
 ```
 
 ## Common Pitfalls
@@ -92,6 +118,7 @@ let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));
 - Setting the CUSUM threshold too tight in volatile regimes — you get too many events and labels become noisy. Scale h by recent volatility.
 - Using different thresholds in training vs live inference — the event distribution shifts and the model sees a different regime.
 - Applying CUSUM to non-stationary raw prices instead of returns or log-returns — the filter becomes meaningless as the price drifts.
+- Python bindings only support scalar thresholds — use the Rust API directly if you need dynamic (per-bar) thresholds.
 
 ## API Reference
 
@@ -100,18 +127,26 @@ let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));
 - `filters.cusum_filter_indices`
 - `filters.cusum_filter_timestamps`
 - `filters.z_score_filter_indices`
+- `filters.z_score_filter_timestamps`
 
 ### Rust API
 
 - `cusum_filter_indices`
 - `cusum_filter_timestamps`
+- `cusum_filter_indices_checked`
+- `cusum_filter_timestamps_checked`
 - `z_score_filter_indices`
+- `z_score_filter_timestamps`
+- `z_score_filter_timestamps_checked`
 - `Threshold`
+- `FilterError`
 
 ## Implementation Notes
 
 - Calibrate thresholds to target event frequency, not just sensitivity.
 - Use identical filtering in train and live pipelines.
+- Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.
+- Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.
 
 ## Related Modules
 

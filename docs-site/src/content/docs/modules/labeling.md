@@ -16,6 +16,8 @@ risk_notes:
   - "In meta-labeling, side alignment and timestamp joins are a frequent hidden bug source."
 rust_api:
   - "add_vertical_barrier"
+  - "triple_barrier_events"
+  - "triple_barrier_labels"
   - "get_events"
   - "get_bins"
   - "drop_labels"
@@ -184,9 +186,13 @@ assert!(!meta_bins.is_empty());
 
 ### Python API
 
-- `labeling.triple_barrier_labels`
+- `labeling.add_vertical_barrier`
 - `labeling.triple_barrier_events`
+- `labeling.triple_barrier_labels`
 - `labeling.meta_labels`
+- `labeling.get_events`
+- `labeling.get_bins`
+- `labeling.drop_labels`
 
 ### Rust API
 

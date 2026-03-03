@@ -7,13 +7,19 @@ audience:
   - quant-dev
   - platform-engineering
 module: "etf_trick"
+api_surface: "rust-only"
 risk_notes:
   - "Verify contract calendar assumptions."
   - "Costs and rates should come from the same clock as price data."
+  - "This module is Rust-only — no Python bindings are currently exposed."
 rust_api:
   - "EtfTrick"
+  - "EtfTrick::from_tables"
+  - "EtfTrick::from_csv"
+  - "EtfTrick::get_etf_series"
   - "get_futures_roll_series"
   - "FuturesRollRow"
+  - "Table"
 sidebar:
   badge: Module
 ---
@@ -40,12 +46,28 @@ $$r^{roll}_t=\frac{F^{near}_t-F^{far}_t}{F^{far}_t}$$
 
 ### Rust
 
-#### Compute futures roll series
+#### Construct synthetic ETF series
 
 ```rust
-use openquant::etf_trick::get_futures_roll_series;
+use openquant::etf_trick::{EtfTrick, Table};
 
-let roll = get_futures_roll_series(/* input tables */);
+// Load open/close/allocation/cost tables from CSV
+let etf = EtfTrick::from_csv(
+    "open.csv", "close.csv", "alloc.csv", "costs.csv", Some("rates.csv"),
+).unwrap();
+
+// Generate synthetic ETF NAV series
+let series = etf.get_etf_series(252).unwrap();
+// Returns Vec<(date_string, nav_value)>
+```
+
+#### Compute futures roll-adjusted series
+
+```rust
+use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};
+
+let rows: Vec<FuturesRollRow> = vec![/* ... */];
+let adjusted = get_futures_roll_series(&rows, "backward", true).unwrap();
 ```
 
 ## API Reference
@@ -53,10 +75,15 @@ let roll = get_futures_roll_series(/* input tables */);
 ### Rust API
 
 - `EtfTrick`
+- `EtfTrick::from_tables`
+- `EtfTrick::from_csv`
+- `EtfTrick::get_etf_series`
 - `get_futures_roll_series`
 - `FuturesRollRow`
+- `Table`
 
 ## Implementation Notes
 
 - Verify contract calendar assumptions.
 - Costs and rates should come from the same clock as price data.
+- This module is Rust-only — no Python bindings are currently exposed.

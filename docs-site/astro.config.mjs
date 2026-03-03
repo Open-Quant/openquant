@@ -1,12 +1,15 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
 
 export default defineConfig({
   base: '/openquant',
   output: 'static',
   markdown: {
-    remarkPlugins: [remarkBaseUrl({ base: '/openquant' })],
+    remarkPlugins: [remarkMath, remarkBaseUrl({ base: '/openquant' })],
+    rehypePlugins: [rehypeKatex],
   },
   integrations: [
     starlight({
@@ -16,7 +19,10 @@ export default defineConfig({
         src: './src/assets/openquant-icon.svg',
         alt: 'OpenQuant',
       },
-      customCss: ['./src/styles/starlight.css'],
+      customCss: [
+        'katex/dist/katex.min.css',
+        './src/styles/starlight.css',
+      ],
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/Open-Quant/openquant' },
       ],

@@ -13,9 +13,11 @@
     "check:docs": "bun run build && bun run check:links && bun run check:api-drift && bun run check:content-schema"
   },
   "devDependencies": {
-    "astro": "4.16.19"
+    "astro": "^5.5.0"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.6"
+    "@astrojs/starlight": "^0.37.6",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
   }
 }

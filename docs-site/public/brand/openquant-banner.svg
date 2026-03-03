@@ -1,27 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 360" role="img" aria-label="OpenQuant Docs Banner">
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#0b1222"/>
-      <stop offset="100%" stop-color="#111f37"/>
+    <linearGradient id="oq-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b1648"/>
+      <stop offset="42%" stop-color="#36257b"/>
+      <stop offset="100%" stop-color="#0d64c8"/>
     </linearGradient>
-    <linearGradient id="line" x1="0" x2="1" y1="0" y2="0">
-      <stop offset="0%" stop-color="#66d6ff"/>
-      <stop offset="100%" stop-color="#7dffc8"/>
+    <radialGradient id="oq-glow-a" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1450 52) rotate(160) scale(520 220)">
+      <stop stop-color="#ff7bd8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ff7bd8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="oq-glow-b" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 334) rotate(-20) scale(500 220)">
+      <stop stop-color="#6ff2de" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#6ff2de" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="oq-line" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd0f9"/>
+      <stop offset="50%" stop-color="#9bd3ff"/>
+      <stop offset="100%" stop-color="#70f0de"/>
     </linearGradient>
   </defs>
-  <rect width="1600" height="360" rx="24" fill="url(#bg)"/>
-  <g opacity="0.25" stroke="#4f7ec2" stroke-width="2" fill="none">
-    <path d="M0 280C180 250 260 120 420 142S640 292 820 260s260-190 430-178 220 120 350 96"/>
-    <path d="M0 316C170 286 290 188 430 208s250 140 400 122 250-134 380-126 230 92 390 78"/>
+
+  <rect width="1600" height="360" rx="24" fill="url(#oq-bg)"/>
+  <rect width="1600" height="360" rx="24" fill="url(#oq-glow-a)"/>
+  <rect width="1600" height="360" rx="24" fill="url(#oq-glow-b)"/>
+
+  <g opacity="0.2" stroke="#c3d2ff" stroke-width="1">
+    <path d="M0 76H1600M0 136H1600M0 196H1600M0 256H1600M0 316H1600"/>
+    <path d="M140 0V360M320 0V360M500 0V360M680 0V360M860 0V360M1040 0V360M1220 0V360M1400 0V360"/>
   </g>
-  <g transform="translate(72 68)">
-    <rect x="0" y="0" width="228" height="228" rx="44" fill="#0d172c" stroke="#395a92" stroke-width="4"/>
-    <path d="M46 156V72l38 58 38-58v84" fill="none" stroke="url(#line)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="170" cy="114" r="28" fill="none" stroke="url(#line)" stroke-width="14"/>
+
+  <g transform="translate(58 66)">
+    <rect x="0" y="0" width="228" height="228" rx="44" fill="#0f1730" fill-opacity="0.78" stroke="#8ba7ff" stroke-opacity="0.42" stroke-width="4"/>
+    <path d="M52 156V76L84 122L116 76V156" fill="none" stroke="url(#oq-line)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="162" cy="116" r="30" fill="none" stroke="url(#oq-line)" stroke-width="13"/>
+    <path d="M177 131L195 150" stroke="url(#oq-line)" stroke-width="10" stroke-linecap="round"/>
   </g>
-  <g transform="translate(356 98)">
-    <text x="0" y="72" font-family="'Space Grotesk', sans-serif" font-size="86" fill="#e9f1ff" font-weight="700">OpenQuant-rs Docs</text>
-    <text x="0" y="126" font-family="'IBM Plex Mono', monospace" font-size="30" fill="#9db7df">Rust-native financial machine learning toolkit</text>
-    <rect x="0" y="162" width="940" height="4" rx="2" fill="url(#line)"/>
+
+  <g transform="translate(338 78)">
+    <text x="0" y="34" font-family="'IBM Plex Mono', monospace" font-size="23" fill="#d0ddff" letter-spacing="4">OPENQUANT DOCUMENTATION</text>
+    <text x="0" y="116" font-family="'Space Grotesk', sans-serif" font-size="88" fill="#f5f8ff" font-weight="700">Ship Smarter</text>
+    <text x="0" y="162" font-family="'IBM Plex Mono', monospace" font-size="30" fill="#cdd9ff">Astro-native docs for quantitative ML systems</text>
+    <rect x="0" y="194" width="896" height="4" rx="2" fill="url(#oq-line)"/>
+  </g>
+
+  <g transform="translate(1248 82)">
+    <rect x="0" y="0" width="270" height="64" rx="12" fill="#102247" fill-opacity="0.65" stroke="#c8d5ff" stroke-opacity="0.4"/>
+    <text x="30" y="41" font-family="'IBM Plex Mono', monospace" font-size="24" fill="#eaf0ff">QUICKSTART</text>
+    <rect x="0" y="84" width="270" height="64" rx="12" fill="#102247" fill-opacity="0.65" stroke="#c8d5ff" stroke-opacity="0.4"/>
+    <text x="30" y="125" font-family="'IBM Plex Mono', monospace" font-size="24" fill="#eaf0ff">MODULES</text>
   </g>
 </svg>

@@ -13,6 +13,8 @@ afml_chapters:
 risk_notes:
   - "Threshold selection controls bar frequency and noise level."
   - "Keep OHLCV semantics consistent across downstream features."
+  - "Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars."
+  - "`bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction."
 rust_api:
   - "standard_bars"
   - "time_bars"
@@ -20,6 +22,8 @@ rust_api:
   - "imbalance_bars"
   - "Trade"
   - "StandardBar"
+  - "StandardBarType"
+  - "ImbalanceBarType"
 sidebar:
   badge: Module
 ---
@@ -56,41 +60,69 @@ $$\left|\sum b_i\right| \ge E[|\sum b_i|]$$
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `threshold` | `f64` | Bar trigger threshold; interpretation depends on bar type (dollar notional, volume, tick count) | — |
-| `trades` | `Vec<Trade>` | Input trade stream with timestamp, price, volume, and optional side | — |
+| `dollar_value_per_bar` | `float` | Dollar notional threshold for dollar bars (Python) | 5_000_000.0 |
+| `volume_per_bar` | `float` | Cumulative volume threshold for volume bars (Python) | 100_000.0 |
+| `ticks_per_bar` | `int` | Trade count threshold for tick bars (Python) | 50 |
+| `interval` | `str` | Time interval for time bars, e.g. '1d', '5m', '1h' (Python) | '1d' |
+| `threshold` | `f64` | Bar trigger threshold for standard_bars, run_bars, imbalance_bars (Rust) | — |
+| `bar_type` | `StandardBarType` | Tick, Volume, or Dollar — selects accumulation metric (Rust) | — |
 
 ## Usage Examples
 
 ### Python
 
-#### Build dollar bars from Python
+#### Build dollar bars from a Polars DataFrame
 
 ```python
-from openquant._core import data_structures
+from openquant.bars import build_dollar_bars, bar_diagnostics
+import polars as pl
 
-# Trade data: list of (timestamp_str, price, volume, side)
-trades = [
-    ("2024-01-02T09:30:00", 100.0, 150.0, 1),
-    ("2024-01-02T09:30:01", 100.1, 200.0, 1),
-    ("2024-01-02T09:30:02", 99.9, 300.0, -1),
-    # ... more trades
-]
+# Input: Polars DataFrame with ts, symbol, open, high, low, close, volume columns
+df = pl.read_parquet("trades.parquet")
 
-# Dollar bars: each bar aggregates ~$50k of notional
-bars = data_structures.dollar_bars(trades, threshold=50_000.0)
-# Each bar: (timestamp, open, high, low, close, volume, dollar_volume)
+# Dollar bars: each bar aggregates ~$5M of notional
+bars = build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)
+# Returns: Polars DataFrame with ts, symbol, open, high, low, close, volume, adj_close, start_ts, n_obs, dollar_value
+
+# Check bar quality: low autocorrelation = good
+diag = bar_diagnostics(bars)
+print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}
+```
+
+#### Build tick and volume bars
+
+```python
+from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
+
+tick_bars = build_tick_bars(df, ticks_per_bar=50)
+vol_bars = build_volume_bars(df, volume_per_bar=100_000.0)
+time_bars = build_time_bars(df, interval="5m")
 ```
 
 ### Rust
 
-#### Build time bars
+#### Build bars from Rust
 
 ```rust
 use chrono::Duration;
-use openquant::data_structures::{time_bars, Trade};
+use openquant::data_structures::{
+    standard_bars, time_bars, run_bars, imbalance_bars,
+    Trade, StandardBarType, ImbalanceBarType,
+};
 
 let trades: Vec<Trade> = vec![];
-let bars = time_bars(&trades, Duration::minutes(5));
+
+// Fixed-time bars
+let t_bars = time_bars(&trades, Duration::minutes(5));
+
+// Dollar bars via standard_bars
+let d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);
+
+// Run bars
+let r_bars = run_bars(&trades, 100);
+
+// Tick imbalance bars
+let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 ```
 
 ## Common Pitfalls
@@ -99,17 +131,19 @@ let bars = time_bars(&trades, Duration::minutes(5));
 - Setting the threshold too low, creating extremely noisy high-frequency bars, or too high, losing intraday resolution.
 - Forgetting to assign trade direction (buy/sell sign) before constructing imbalance or run bars — these require signed volume.
 - Mixing bar types across train and inference: if you train on dollar bars, your live pipeline must also use dollar bars with the same threshold.
+- Run bars and imbalance bars are available in Python via `bars.build_run_bars` and `bars.build_imbalance_bars`.
 
 ## API Reference
 
 ### Python API
 
-- `data_structures.dollar_bars`
-- `data_structures.volume_bars`
-- `data_structures.tick_bars`
-- `data_structures.imbalance_bars`
-- `data_structures.run_bars`
-- `data_structures.time_bars`
+- `bars.build_time_bars`
+- `bars.build_tick_bars`
+- `bars.build_volume_bars`
+- `bars.build_dollar_bars`
+- `bars.build_run_bars`
+- `bars.build_imbalance_bars`
+- `bars.bar_diagnostics`
 
 ### Rust API
 
@@ -119,11 +153,15 @@ let bars = time_bars(&trades, Duration::minutes(5));
 - `imbalance_bars`
 - `Trade`
 - `StandardBar`
+- `StandardBarType`
+- `ImbalanceBarType`
 
 ## Implementation Notes
 
 - Threshold selection controls bar frequency and noise level.
 - Keep OHLCV semantics consistent across downstream features.
+- Run bars and imbalance bars are available via `bars.build_run_bars` and `bars.build_imbalance_bars`.
+- `bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction.
 
 ## Related Modules
 

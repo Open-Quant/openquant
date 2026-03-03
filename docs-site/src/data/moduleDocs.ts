@@ -65,6 +65,8 @@ export const moduleDocs: ModuleDoc[] = [
       "Use annualization constants consistent with your bar frequency.",
       "Deflated Sharpe is useful when strategy mining many variants.",
     ],
+    apiSurface: "both",
+    pythonApis: ["backtest_stats.sharpe_ratio", "backtest_stats.information_ratio", "backtest_stats.probabilistic_sharpe_ratio", "backtest_stats.deflated_sharpe_ratio", "backtest_stats.minimum_track_record_length", "backtest_stats.timing_of_flattening_and_flips", "backtest_stats.average_holding_period", "backtest_stats.bets_concentration", "backtest_stats.all_bets_concentration", "backtest_stats.drawdown_and_time_under_water"],
   },
   {
     slug: "backtesting-engine",
@@ -161,6 +163,8 @@ export const moduleDocs: ModuleDoc[] = [
       "Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure.",
       "Calibrate step_size to real execution granularity (lots/contracts), not arbitrary decimals.",
     ],
+    apiSurface: "both",
+    pythonApis: ["bet_sizing.get_signal", "bet_sizing.discrete_signal", "bet_sizing.bet_size", "bet_sizing.bet_size_sigmoid", "bet_sizing.bet_size_power", "bet_sizing.inv_price", "bet_sizing.inv_price_sigmoid", "bet_sizing.inv_price_power", "bet_sizing.get_w", "bet_sizing.get_w_sigmoid", "bet_sizing.get_w_power", "bet_sizing.get_target_pos", "bet_sizing.get_target_pos_sigmoid", "bet_sizing.get_target_pos_power", "bet_sizing.limit_price", "bet_sizing.limit_price_sigmoid", "bet_sizing.limit_price_power", "bet_sizing.avg_active_signals", "bet_sizing.bet_size_dynamic", "bet_sizing.cdf_mixture", "bet_sizing.single_bet_size_mixed", "bet_sizing.get_concurrent_sides", "bet_sizing.bet_size_budget", "bet_sizing.bet_size_probability", "bet_sizing.mp_avg_active_signals", "bet_sizing.bet_size_reserve", "bet_sizing.bet_size_reserve_with_fit", "bet_sizing.bet_size_reserve_full"],
   },
   {
     slug: "cla",
@@ -181,6 +185,8 @@ export const moduleDocs: ModuleDoc[] = [
       },
     ],
     notes: ["CLA behavior depends on weight bounds and return estimates.", "Use robust covariance estimators when sample size is small."],
+    apiSurface: "both",
+    pythonApis: ["cla.allocate_cla"],
   },
   {
     slug: "codependence",
@@ -201,6 +207,8 @@ export const moduleDocs: ModuleDoc[] = [
       },
     ],
     notes: ["Use with clustering and feature pruning workflows.", "Bin selection materially impacts MI estimates."],
+    apiSurface: "both",
+    pythonApis: ["codependence.angular_distance", "codependence.absolute_angular_distance", "codependence.squared_angular_distance", "codependence.distance_correlation", "codependence.get_optimal_number_of_bins", "codependence.get_mutual_info", "codependence.variation_of_information_score"],
   },
   {
     slug: "cross-validation",
@@ -221,6 +229,7 @@ export const moduleDocs: ModuleDoc[] = [
       },
     ],
     notes: ["Always align event end-times when purging.", "Report variance across folds, not only mean score."],
+    apiSurface: "rust-only",
   },
   {
     slug: "data-structures",
@@ -228,36 +237,50 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Event-Driven Data and Labeling",
     summary: "Constructs standard/time/run/imbalance bars from trade streams.",
     whyItExists: "Event-based bars reduce heteroskedasticity and improve stationarity versus fixed-time sampling.",
-    keyApis: ["standard_bars", "time_bars", "run_bars", "imbalance_bars", "Trade", "StandardBar"],
+    keyApis: ["standard_bars", "time_bars", "run_bars", "imbalance_bars", "Trade", "StandardBar", "StandardBarType", "ImbalanceBarType"],
     formulas: [
       { label: "Dollar Bar Trigger", latex: "\\sum_{i=t_0}^{t} p_i v_i \\ge \\theta" },
       { label: "Imbalance Trigger", latex: "\\left|\\sum b_i\\right| \\ge E[|\\sum b_i|]" },
     ],
     examples: [
       {
-        title: "Build dollar bars from Python",
+        title: "Build dollar bars from a Polars DataFrame",
         language: "python",
-        code: `from openquant._core import data_structures
+        code: `from openquant.bars import build_dollar_bars, bar_diagnostics
+import polars as pl
 
-# Trade data: list of (timestamp_str, price, volume, side)
-trades = [
-    ("2024-01-02T09:30:00", 100.0, 150.0, 1),
-    ("2024-01-02T09:30:01", 100.1, 200.0, 1),
-    ("2024-01-02T09:30:02", 99.9, 300.0, -1),
-    # ... more trades
-]
+# Input: Polars DataFrame with ts, symbol, open, high, low, close, volume columns
+df = pl.read_parquet("trades.parquet")
 
-# Dollar bars: each bar aggregates ~$50k of notional
-bars = data_structures.dollar_bars(trades, threshold=50_000.0)
-# Each bar: (timestamp, open, high, low, close, volume, dollar_volume)`,
+# Dollar bars: each bar aggregates ~$5M of notional
+bars = build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)
+# Returns: Polars DataFrame with ts, symbol, open, high, low, close, volume, adj_close, start_ts, n_obs, dollar_value
+
+# Check bar quality: low autocorrelation = good
+diag = bar_diagnostics(bars)
+print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}`,
       },
       {
-        title: "Build time bars",
+        title: "Build tick and volume bars",
+        language: "python",
+        code: `from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
+
+tick_bars = build_tick_bars(df, ticks_per_bar=50)
+vol_bars = build_volume_bars(df, volume_per_bar=100_000.0)
+time_bars = build_time_bars(df, interval="5m")`,
+      },
+      {
+        title: "Build bars from Rust",
         language: "rust",
-        code: `use chrono::Duration;\nuse openquant::data_structures::{time_bars, Trade};\n\nlet trades: Vec<Trade> = vec![];\nlet bars = time_bars(&trades, Duration::minutes(5));`,
+        code: `use chrono::Duration;\nuse openquant::data_structures::{\n    standard_bars, time_bars, run_bars, imbalance_bars,\n    Trade, StandardBarType, ImbalanceBarType,\n};\n\nlet trades: Vec<Trade> = vec![];\n\n// Fixed-time bars\nlet t_bars = time_bars(&trades, Duration::minutes(5));\n\n// Dollar bars via standard_bars\nlet d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);\n\n// Run bars (Rust-only)\nlet r_bars = run_bars(&trades, 100);\n\n// Tick imbalance bars (Rust-only)\nlet ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);`,
       },
     ],
-    notes: ["Threshold selection controls bar frequency and noise level.", "Keep OHLCV semantics consistent across downstream features."],
+    notes: [
+      "Threshold selection controls bar frequency and noise level.",
+      "Keep OHLCV semantics consistent across downstream features.",
+      "Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars.",
+      "`bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction.",
+    ],
     conceptOverview: `Traditional financial data uses fixed-time bars (1-minute, daily), but these sample uniformly regardless of market activity. During quiet periods you get noise; during volatile periods you under-sample important information.
 
 Information-driven bars (AFML Chapter 2) sample based on market activity instead of clock time. **Dollar bars** trigger a new bar when cumulative traded dollar volume reaches a threshold, producing roughly equal-information observations. **Volume bars** trigger on cumulative share volume. **Tick bars** trigger on trade count.
@@ -271,19 +294,24 @@ The key insight is that information-driven bars produce returns that are closer 
 
 **Alternatives**: Standard time bars if your data is already aggregated. For pre-aggregated OHLCV data, use the \`data\` module's \`load_ohlcv\` and \`clean_ohlcv\` functions instead.`,
     keyParameters: [
-      { name: "threshold", type: "f64", description: "Bar trigger threshold; interpretation depends on bar type (dollar notional, volume, tick count)", default: "—" },
-      { name: "trades", type: "Vec<Trade>", description: "Input trade stream with timestamp, price, volume, and optional side", default: "—" },
+      { name: "dollar_value_per_bar", type: "float", description: "Dollar notional threshold for dollar bars (Python)", default: "5_000_000.0" },
+      { name: "volume_per_bar", type: "float", description: "Cumulative volume threshold for volume bars (Python)", default: "100_000.0" },
+      { name: "ticks_per_bar", type: "int", description: "Trade count threshold for tick bars (Python)", default: "50" },
+      { name: "interval", type: "str", description: "Time interval for time bars, e.g. '1d', '5m', '1h' (Python)", default: "'1d'" },
+      { name: "threshold", type: "f64", description: "Bar trigger threshold for standard_bars, run_bars, imbalance_bars (Rust)", default: "—" },
+      { name: "bar_type", type: "StandardBarType", description: "Tick, Volume, or Dollar — selects accumulation metric (Rust)", default: "—" },
     ],
     commonPitfalls: [
       "Using time bars when your data has highly variable activity — dollar or volume bars will produce more stationary returns.",
       "Setting the threshold too low, creating extremely noisy high-frequency bars, or too high, losing intraday resolution.",
       "Forgetting to assign trade direction (buy/sell sign) before constructing imbalance or run bars — these require signed volume.",
       "Mixing bar types across train and inference: if you train on dollar bars, your live pipeline must also use dollar bars with the same threshold.",
+      "Run bars and imbalance bars are available in Python via bars.build_run_bars and bars.build_imbalance_bars.",
     ],
     relatedModules: ["filters", "labeling", "fracdiff"],
     afmlChapters: [2],
     apiSurface: "both",
-    pythonApis: ["data_structures.dollar_bars", "data_structures.volume_bars", "data_structures.tick_bars", "data_structures.imbalance_bars", "data_structures.run_bars", "data_structures.time_bars"],
+    pythonApis: ["bars.build_time_bars", "bars.build_tick_bars", "bars.build_volume_bars", "bars.build_dollar_bars", "bars.build_run_bars", "bars.build_imbalance_bars"],
   },
   {
     slug: "hyperparameter-tuning",
@@ -327,6 +355,7 @@ The key insight is that information-driven bars produce returns that are closer 
       "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.",
       "BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.",
     ],
+    apiSurface: "rust-only",
   },
   {
     slug: "ef3m",
@@ -347,6 +376,8 @@ The key insight is that information-driven bars produce returns that are closer 
       },
     ],
     notes: ["Use as initialization for more expensive optimizers.", "Sensitive to higher-moment estimation noise."],
+    apiSurface: "both",
+    pythonApis: ["ef3m.centered_moment", "ef3m.raw_moment", "ef3m.most_likely_parameters", "ef3m.fit_m2n"],
   },
   {
     slug: "ensemble-methods",
@@ -397,6 +428,8 @@ The key insight is that information-driven bars produce returns that are closer 
       "Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations.",
       "Boosting is usually preferable for weak learners (bias reduction); bagging is usually preferable for unstable learners (variance reduction).",
     ],
+    apiSurface: "both",
+    pythonApis: ["ensemble.bias_variance_noise", "ensemble.bootstrap_sample_indices", "ensemble.sequential_bootstrap_sample_indices", "ensemble.aggregate_regression_mean", "ensemble.aggregate_classification_vote", "ensemble.aggregate_classification_probability_mean", "ensemble.average_pairwise_prediction_correlation", "ensemble.bagging_ensemble_variance", "ensemble.recommend_bagging_vs_boosting"],
   },
   {
     slug: "etf-trick",
@@ -404,19 +437,29 @@ The key insight is that information-driven bars produce returns that are closer 
     subject: "Position Sizing and Trade Construction",
     summary: "Synthetic ETF and futures roll utilities for realistic PnL path construction.",
     whyItExists: "Backtests must include financing, carry, and contract-roll mechanics to avoid optimistic bias.",
-    keyApis: ["EtfTrick", "get_futures_roll_series", "FuturesRollRow"],
+    keyApis: ["EtfTrick", "EtfTrick::from_tables", "EtfTrick::from_csv", "EtfTrick::get_etf_series", "get_futures_roll_series", "FuturesRollRow", "Table"],
     formulas: [
       { label: "ETF NAV Update", latex: "NAV_t=NAV_{t-1}(1+r_t-c_t)" },
       { label: "Roll Return", latex: "r^{roll}_t=\\frac{F^{near}_t-F^{far}_t}{F^{far}_t}" },
     ],
     examples: [
       {
-        title: "Compute futures roll series",
+        title: "Construct synthetic ETF series",
         language: "rust",
-        code: `use openquant::etf_trick::get_futures_roll_series;\n\nlet roll = get_futures_roll_series(/* input tables */);`,
+        code: `use openquant::etf_trick::{EtfTrick, Table};\n\n// Load open/close/allocation/cost tables from CSV\nlet etf = EtfTrick::from_csv(\n    "open.csv", "close.csv", "alloc.csv", "costs.csv", Some("rates.csv"),\n).unwrap();\n\n// Generate synthetic ETF NAV series\nlet series = etf.get_etf_series(252).unwrap();\n// Returns Vec<(date_string, nav_value)>`,
+      },
+      {
+        title: "Compute futures roll-adjusted series",
+        language: "rust",
+        code: `use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};\n\nlet rows: Vec<FuturesRollRow> = vec![/* ... */];\nlet adjusted = get_futures_roll_series(&rows, "backward", true).unwrap();`,
       },
     ],
-    notes: ["Verify contract calendar assumptions.", "Costs and rates should come from the same clock as price data."],
+    notes: [
+      "Verify contract calendar assumptions.",
+      "Costs and rates should come from the same clock as price data.",
+      "This module is Rust-only — no Python bindings are currently exposed.",
+    ],
+    apiSurface: "rust-only",
   },
   {
     slug: "feature-importance",
@@ -437,6 +480,7 @@ The key insight is that information-driven bars produce returns that are closer 
       },
     ],
     notes: ["Cross-validated MDA is preferred when leakage risk is high.", "Compare ranking stability across folds/time windows."],
+    apiSurface: "rust-only",
   },
   {
     slug: "filters",
@@ -444,34 +488,47 @@ The key insight is that information-driven bars produce returns that are closer 
     subject: "Event-Driven Data and Labeling",
     summary: "CUSUM and z-score event filters for event-driven sampling.",
     whyItExists: "Extracts informative events from noisy high-frequency sequences.",
-    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "z_score_filter_indices", "Threshold"],
+    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "cusum_filter_indices_checked", "cusum_filter_timestamps_checked", "z_score_filter_indices", "z_score_filter_timestamps", "z_score_filter_timestamps_checked", "Threshold", "FilterError"],
     formulas: [
       { label: "CUSUM", latex: "S_t=\\max(0, S_{t-1}+r_t),\\; trigger\\;if\\;|S_t|>h" },
       { label: "Z-score", latex: "z_t=\\frac{x_t-\\mu_t}{\\sigma_t}" },
     ],
     examples: [
       {
-        title: "Detect structural price events with CUSUM",
+        title: "CUSUM and z-score event detection",
         language: "python",
-        code: `from openquant._core import filters
+        code: `import openquant
 
 close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-timestamps = ["2024-01-02T09:30:00", "2024-01-02T09:31:00", ...]
+timestamps = [
+    "2024-01-02T09:30:00", "2024-01-02T09:31:00",
+    "2024-01-02T09:32:00", "2024-01-02T09:33:00",
+    "2024-01-02T09:34:00", "2024-01-02T09:35:00",
+    "2024-01-02T09:36:00", "2024-01-02T09:37:00",
+]
 
 # CUSUM filter: fires when cumulative deviation exceeds threshold
-event_indices = filters.cusum_filter_indices(close, 0.02)
-# Returns indices where the filter triggered
+event_indices = openquant.filters.cusum_filter_indices(close, 0.02)
 
 # With timestamps: returns event timestamps directly
-event_ts = filters.cusum_filter_timestamps(close, timestamps, 0.02)`,
+event_ts = openquant.filters.cusum_filter_timestamps(close, timestamps, 0.02)
+
+# Z-score filter: fires when z-score exceeds threshold
+z_indices = openquant.filters.z_score_filter_indices(close, mean_window=20, std_window=20, threshold=2.0)
+z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_window=20, std_window=20, threshold=2.0)`,
       },
       {
-        title: "Run CUSUM over closes",
+        title: "CUSUM with static and dynamic thresholds",
         language: "rust",
-        code: `use openquant::filters::{cusum_filter_indices, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));`,
+        code: `use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\n\n// Static threshold\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));\n\n// Dynamic threshold (e.g. volatility-scaled per bar)\nlet dynamic_h = vec![0.02, 0.025, 0.018, 0.022];\nlet idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();`,
       },
     ],
-    notes: ["Calibrate thresholds to target event frequency, not just sensitivity.", "Use identical filtering in train and live pipelines."],
+    notes: [
+      "Calibrate thresholds to target event frequency, not just sensitivity.",
+      "Use identical filtering in train and live pipelines.",
+      "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.",
+      "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.",
+    ],
     conceptOverview: `Instead of sampling at fixed intervals, AFML Chapter 2 uses structural event filters to detect when something meaningful happens in the price process. This produces training examples that correspond to real market inflection points rather than arbitrary calendar dates.
 
 The **CUSUM filter** tracks a cumulative sum of returns (or price changes). It resets to zero when the cumulative deviation exceeds a threshold h, and the reset point becomes an event. This captures points where the price has moved "enough" since the last event. The filter is directional: it tracks both positive and negative cumulative deviations separately.
@@ -485,17 +542,23 @@ Both filters replace the naive approach of labeling every bar, which creates hig
 
 **Alternatives**: Fixed-interval sampling (simpler but creates redundant events), or custom event logic for strategy-specific triggers.`,
     keyParameters: [
-      { name: "threshold (h)", type: "f64 | Threshold", description: "CUSUM trigger level; controls event frequency. Scalar for constant threshold, or dynamic for volatility-scaled", default: "—" },
+      { name: "close", type: "list[float]", description: "Input price series (close prices)", default: "—" },
+      { name: "threshold", type: "float", description: "CUSUM trigger level; controls event frequency (Python: scalar only)", default: "—" },
+      { name: "threshold", type: "Threshold", description: "CUSUM trigger: Threshold::Scalar(f64) or Threshold::Dynamic(Vec<f64>) (Rust)", default: "—" },
+      { name: "mean_window", type: "int", description: "Rolling mean lookback for z-score filter", default: "—" },
+      { name: "std_window", type: "int", description: "Rolling std lookback for z-score filter", default: "—" },
+      { name: "timestamps", type: "list[str]", description: "Optional timestamps; use _timestamps variants to get event times instead of indices", default: "—" },
     ],
     commonPitfalls: [
       "Setting the CUSUM threshold too tight in volatile regimes — you get too many events and labels become noisy. Scale h by recent volatility.",
       "Using different thresholds in training vs live inference — the event distribution shifts and the model sees a different regime.",
       "Applying CUSUM to non-stationary raw prices instead of returns or log-returns — the filter becomes meaningless as the price drifts.",
+      "Python bindings only support scalar thresholds — use the Rust API directly if you need dynamic (per-bar) thresholds.",
     ],
     relatedModules: ["data-structures", "labeling", "sample-weights"],
     afmlChapters: [2],
     apiSurface: "both",
-    pythonApis: ["filters.cusum_filter_indices", "filters.cusum_filter_timestamps", "filters.z_score_filter_indices"],
+    pythonApis: ["filters.cusum_filter_indices", "filters.cusum_filter_timestamps", "filters.z_score_filter_indices", "filters.z_score_filter_timestamps"],
   },
   {
     slug: "fingerprint",
@@ -516,6 +579,7 @@ Both filters replace the naive approach of labeling every bar, which creates hig
       },
     ],
     notes: ["Compare fingerprints across retrains for drift detection.", "Use pairwise effects to detect hidden interaction risk."],
+    apiSurface: "rust-only",
   },
   {
     slug: "fracdiff",
@@ -572,7 +636,7 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
     relatedModules: ["data-structures", "filters"],
     afmlChapters: [5],
     apiSurface: "both",
-    pythonApis: ["fracdiff.frac_diff_ffd", "fracdiff.frac_diff", "fracdiff.get_weights_ffd", "fracdiff.get_weights"],
+    pythonApis: ["fracdiff.get_weights", "fracdiff.get_weights_ffd", "fracdiff.frac_diff", "fracdiff.frac_diff_ffd"],
   },
   {
     slug: "hcaa",
@@ -593,6 +657,8 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
       },
     ],
     notes: ["Cluster linkage choices influence allocations.", "Use with robust codependence distances when possible."],
+    apiSurface: "both",
+    pythonApis: ["hcaa.allocate_hcaa"],
   },
   {
     slug: "hrp",
@@ -613,6 +679,8 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
       },
     ],
     notes: ["HRP is often more robust under unstable covariance estimates.", "Ensure input asset order tracks produced dendrogram order."],
+    apiSurface: "both",
+    pythonApis: ["hrp.allocate_hrp"],
   },
   {
     slug: "labeling",
@@ -726,7 +794,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
     ],
     relatedModules: ["filters", "sample-weights", "sampling", "bet-sizing"],
     afmlChapters: [3],
-    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels"],
+    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels", "labeling.add_vertical_barrier", "labeling.get_events", "labeling.get_bins", "labeling.drop_labels"],
     apiSurface: "both",
   },
   {
@@ -770,6 +838,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "Use shared bar definitions between training and live pipelines, otherwise feature drift is structural.",
       "Entropy features are sensitive to encoding; freeze symbol maps in production.",
     ],
+    apiSurface: "both",
+    pythonApis: ["microstructural.get_roll_measure", "microstructural.get_roll_impact", "microstructural.get_corwin_schultz_estimator", "microstructural.get_bekker_parkinson_vol", "microstructural.get_bar_based_kyle_lambda", "microstructural.get_bar_based_amihud_lambda", "microstructural.get_bar_based_hasbrouck_lambda", "microstructural.get_trades_based_kyle_lambda", "microstructural.get_trades_based_amihud_lambda", "microstructural.get_trades_based_hasbrouck_lambda", "microstructural.vwap", "microstructural.get_avg_tick_size", "microstructural.get_vpin", "microstructural.get_bvc_buy_volume", "microstructural.encode_tick_rule_array", "microstructural.quantile_mapping", "microstructural.sigma_mapping", "microstructural.encode_array", "microstructural.get_shannon_entropy", "microstructural.get_lempel_ziv_entropy", "microstructural.get_plug_in_entropy", "microstructural.get_konto_entropy"],
   },
   {
     slug: "onc",
@@ -790,6 +860,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       },
     ],
     notes: ["Run with repeated seeds/restarts for robust k selection.", "Use correlation cleaning before clustering unstable universes."],
+    apiSurface: "both",
+    pythonApis: ["onc.get_onc_clusters"],
   },
   {
     slug: "portfolio-optimization",
@@ -832,6 +904,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks.",
       "Track turnover, realized slippage, and drift between target and filled weights in production.",
     ],
+    apiSurface: "both",
+    pythonApis: ["portfolio.allocate_inverse_variance", "portfolio.allocate_min_vol", "portfolio.allocate_max_sharpe", "portfolio.allocate_efficient_risk", "portfolio.allocate_with_solution", "portfolio.allocate_from_inputs"],
   },
   {
     slug: "risk-metrics",
@@ -852,6 +926,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       },
     ],
     notes: ["Non-parametric estimates need enough tail observations.", "Use matrix variants for multi-asset return panels."],
+    apiSurface: "both",
+    pythonApis: ["risk.calculate_value_at_risk", "risk.calculate_expected_shortfall", "risk.calculate_conditional_drawdown_risk", "risk.calculate_variance", "risk.calculate_value_at_risk_from_matrix", "risk.calculate_expected_shortfall_from_matrix", "risk.calculate_conditional_drawdown_risk_from_matrix"],
   },
   {
     slug: "strategy-risk",
@@ -897,6 +973,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p.",
       "Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk.",
     ],
+    apiSurface: "both",
+    pythonApis: ["strategy_risk.sharpe_symmetric", "strategy_risk.implied_precision_symmetric", "strategy_risk.implied_frequency_symmetric", "strategy_risk.sharpe_asymmetric", "strategy_risk.implied_precision_asymmetric", "strategy_risk.implied_frequency_asymmetric", "strategy_risk.estimate_strategy_failure_probability"],
   },
   {
     slug: "hpc-parallel",
@@ -940,6 +1018,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics.",
       "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking.",
     ],
+    apiSurface: "rust-only",
   },
   {
     slug: "combinatorial-optimization",
@@ -989,6 +1068,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle.",
       "Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment.",
     ],
+    apiSurface: "rust-only",
   },
   {
     slug: "streaming-hpc",
@@ -1035,6 +1115,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality.",
       "Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives.",
     ],
+    apiSurface: "both",
+    pythonApis: ["streaming_hpc.run_streaming_pipeline", "streaming_hpc.generate_synthetic_flash_crash_stream"],
   },
   {
     slug: "sample-weights",
@@ -1165,7 +1247,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
     relatedModules: ["sample-weights", "sb-bagging", "labeling"],
     afmlChapters: [4],
     apiSurface: "both",
-    pythonApis: ["sampling.get_ind_matrix", "sampling.seq_bootstrap", "sampling.get_ind_mat_average_uniqueness", "sampling.num_concurrent_events"],
+    pythonApis: ["sampling.get_ind_matrix", "sampling.seq_bootstrap", "sampling.get_ind_mat_average_uniqueness", "sampling.get_ind_mat_label_uniqueness", "sampling.bootstrap_loop_run", "sampling.get_av_uniqueness_from_triple_barrier", "sampling.num_concurrent_events"],
   },
   {
     slug: "sb-bagging",
@@ -1186,6 +1268,8 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       },
     ],
     notes: ["Sequential bootstrap improves diversity under event overlap.", "Tune max_samples/max_features with out-of-sample monitoring."],
+    apiSurface: "both",
+    pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor"],
   },
   {
     slug: "synthetic-backtesting",
@@ -1227,6 +1311,8 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       "Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample.",
       "Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization.",
     ],
+    apiSurface: "both",
+    pythonApis: ["synthetic_bt.calibrate_ou_params", "synthetic_bt.generate_ou_paths", "synthetic_bt.evaluate_rule_on_paths", "synthetic_bt.detect_no_stable_optimum", "synthetic_bt.run_synthetic_otr_workflow", "synthetic_bt.search_optimal_trading_rule"],
   },
   {
     slug: "structural-breaks",
@@ -1247,6 +1333,8 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       },
     ],
     notes: ["SADF can be computationally expensive on long windows.", "Use dedicated slow/nightly test paths for heavy scenarios."],
+    apiSurface: "both",
+    pythonApis: ["structural_breaks.get_chow_type_stat", "structural_breaks.get_chu_stinchcombe_white_statistics", "structural_breaks.get_sadf"],
   },
   {
     slug: "util-fast-ewma",
@@ -1267,6 +1355,8 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       },
     ],
     notes: ["Window length controls responsiveness vs smoothness.", "Prefer this helper over ad-hoc loops for consistency."],
+    apiSurface: "both",
+    pythonApis: ["fast_ewma.ewma"],
   },
   {
     slug: "util-volatility",
@@ -1287,6 +1377,8 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       },
     ],
     notes: ["Choose estimator based on available fields and microstructure noise.", "Daily-vol lookback should be matched to event horizon."],
+    apiSurface: "both",
+    pythonApis: ["volatility.get_daily_vol", "volatility.get_parksinson_vol", "volatility.get_garman_class_vol", "volatility.get_yang_zhang_vol"],
   },
   // ── Python-only modules ──────────────────────────────────────────────
   {
@@ -1341,8 +1433,8 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
       "Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.",
     ],
     relatedModules: ["data-structures"],
-    apiSurface: "python-only",
-    pythonApis: ["data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report"],
+    apiSurface: "both",
+    pythonApis: ["data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report", "data.clean_ohlcv_df", "data.quality_report_df", "data.align_calendar_df"],
   },
   {
     slug: "feature-diagnostics",
@@ -1490,7 +1582,7 @@ This is designed for rapid research iteration — change a parameter, re-run the
       "Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.",
     ],
     relatedModules: ["filters", "labeling", "bet-sizing", "backtest-statistics", "risk-metrics"],
-    apiSurface: "python-only",
+    apiSurface: "both",
     pythonApis: ["pipeline.run_mid_frequency_pipeline", "pipeline.run_mid_frequency_pipeline_frames", "pipeline.summarize_pipeline"],
   },
   {
