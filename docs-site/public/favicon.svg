@@ -1,11 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OpenQuant icon">
   <defs>
-    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#6de5ff"/>
-      <stop offset="100%" stop-color="#6dffcb"/>
+    <linearGradient id="oq-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e2230"/>
+      <stop offset="100%" stop-color="#282d3c"/>
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <rect x="8" y="8" width="112" height="112" rx="24" fill="#0e1628" stroke="#2f4f86" stroke-width="4"/>
-  <path d="M28 82V46l18 26 18-26v36" fill="none" stroke="url(#g1)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="94" cy="64" r="14" fill="none" stroke="url(#g1)" stroke-width="8"/>
+
+  <rect width="128" height="128" rx="24" fill="url(#oq-bg)"/>
+
+  <g transform="translate(64 64)" filter="url(#glow)">
+    <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#e44de0"/>
+    <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#52c8f5" transform="rotate(120)"/>
+    <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#f0e050" transform="rotate(240)"/>
+  </g>
 </svg>
