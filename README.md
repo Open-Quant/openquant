@@ -54,6 +54,9 @@ cargo run -p openquant --example research_notebook_smoke
 
 # Python pipeline micro-benchmark (for speed demos)
 uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
+
+# Python data-processing benchmark (per-function throughput/latency + JSON output)
+uv run --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
 ```
 
 ## Crate Layout

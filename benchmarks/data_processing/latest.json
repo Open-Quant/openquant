@@ -1,0 +1,75 @@
+{
+  "dataset": {
+    "rows_per_symbol": 100000,
+    "symbols": 4,
+    "total_rows": 400000,
+    "estimated_bytes": 20800000
+  },
+  "iterations": 5,
+  "functions": [
+    {
+      "name": "clean_ohlcv",
+      "rows": 400000,
+      "bytes_estimate": 20800000,
+      "iterations": 5,
+      "mean_ms": 431.8176897984813,
+      "p50_ms": 427.49624899443006,
+      "p95_ms": 430.2287489990704,
+      "std_ms": 8.461222812078079,
+      "rows_per_sec": 926316.8449321059,
+      "mb_per_sec": 48.168475936469505
+    },
+    {
+      "name": "data_quality_report",
+      "rows": 400000,
+      "bytes_estimate": 20800000,
+      "iterations": 5,
+      "mean_ms": 202.2392454004148,
+      "p50_ms": 202.07314000435872,
+      "p95_ms": 205.02412800124148,
+      "std_ms": 2.602492864446543,
+      "rows_per_sec": 1977855.481056792,
+      "mb_per_sec": 102.84848501495318
+    },
+    {
+      "name": "align_calendar",
+      "rows": 400000,
+      "bytes_estimate": 24000000,
+      "iterations": 5,
+      "mean_ms": 487.6979159977054,
+      "p50_ms": 484.19221499352716,
+      "p95_ms": 485.0531679985579,
+      "std_ms": 8.35346004858996,
+      "rows_per_sec": 820179.8426423499,
+      "mb_per_sec": 49.21079055854099
+    },
+    {
+      "name": "load_ohlcv_csv",
+      "rows": 400000,
+      "bytes_estimate": 28228821,
+      "iterations": 5,
+      "mean_ms": 234.64987420011312,
+      "p50_ms": 232.7873370013549,
+      "p95_ms": 235.60187700059032,
+      "std_ms": 6.00703020230825,
+      "rows_per_sec": 1704667.4385125546,
+      "mb_per_sec": 120.30187996574853
+    },
+    {
+      "name": "load_ohlcv_parquet",
+      "rows": 400000,
+      "bytes_estimate": 2243334,
+      "iterations": 5,
+      "mean_ms": 458.6696180005674,
+      "p50_ms": 461.2510000006296,
+      "p95_ms": 468.5403839976061,
+      "std_ms": 11.962792657264071,
+      "rows_per_sec": 872087.4117271599,
+      "mb_per_sec": 4.890958354248841
+    }
+  ],
+  "tables": {
+    "core": "name                          rows     mean_ms      p95_ms        rows/s        MB/s\n------------------------------------------------------------------------------------\nclean_ohlcv                400,000      431.82      430.23     926.32K/s        48.2\ndata_quality_report        400,000      202.24      205.02       1.98M/s       102.8\nalign_calendar             400,000      487.70      485.05     820.18K/s        49.2",
+    "io": "name                          rows     mean_ms      p95_ms        rows/s        MB/s\n------------------------------------------------------------------------------------\nload_ohlcv_csv             400,000      234.65      235.60       1.70M/s       120.3\nload_ohlcv_parquet         400,000      458.67      468.54     872.09K/s         4.9"
+  }
+}
