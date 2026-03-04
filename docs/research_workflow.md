@@ -30,6 +30,9 @@ uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
 # reproducible experiment run
 uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
 
+# reproducible parameter wheel (grid run)
+uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --grid-config experiments/configs/futures_oil_grid.toml --out experiments/artifacts
+
 # parity + scaffold tests
 uv run --python .venv/bin/python pytest python/tests/test_experiment_scaffold.py -q
 ```

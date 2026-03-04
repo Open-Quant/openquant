@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import hashlib
+import json
 from math import sin
 import random
 from typing import Any
@@ -19,6 +21,22 @@ class ResearchDataset:
     model_sides: list[float]
     asset_prices: list[list[float]]
     asset_names: list[str]
+
+
+def research_run_manifest(
+    config: dict[str, Any],
+    dataset_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build deterministic run metadata for notebook/script parity."""
+    payload = json.dumps(config, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()[:12]
+    meta: dict[str, Any] = {
+        "config_digest": digest,
+        "config": config,
+    }
+    if dataset_meta is not None:
+        meta["dataset"] = dataset_meta
+    return meta
 
 
 def make_synthetic_futures_dataset(
@@ -164,6 +182,59 @@ def run_flywheel_iteration(
     out["promotion"] = promotion
     out["summary"] = summary
     return out
+
+
+def run_flywheel_grid(
+    dataset: ResearchDataset,
+    configs: list[dict[str, Any]],
+    *,
+    run_names: list[str] | None = None,
+) -> dict[str, Any]:
+    """Execute multiple flywheel configs and return a ranked leaderboard."""
+    if not configs:
+        raise ValueError("configs cannot be empty")
+    if run_names is not None and len(run_names) != len(configs):
+        raise ValueError("run_names/configs length mismatch")
+
+    rows: list[dict[str, Any]] = []
+    runs: list[dict[str, Any]] = []
+
+    for idx, cfg in enumerate(configs):
+        run_name = run_names[idx] if run_names is not None else f"run_{idx:02d}"
+        out = run_flywheel_iteration(dataset, config=cfg)
+        summary = out["summary"].row(0, named=True)
+        promotion = out["promotion"]
+        costs = out["costs"]
+
+        row = {
+            "run_name": run_name,
+            "run_index": idx,
+            "config_digest": research_run_manifest(cfg)["config_digest"],
+            "portfolio_sharpe": float(summary["portfolio_sharpe"]),
+            "realized_sharpe": float(summary["realized_sharpe"]),
+            "net_sharpe": float(summary["net_sharpe"]),
+            "gross_total_return": float(costs["gross_total_return"]),
+            "net_total_return": float(costs["net_total_return"]),
+            "turnover": float(costs["turnover"]),
+            "estimated_cost": float(costs["estimated_total_cost"]),
+            "passed_realized_sharpe": bool(promotion["passed_realized_sharpe"]),
+            "passed_net_sharpe": bool(promotion["passed_net_sharpe"]),
+            "passed_alignment_guard": bool(promotion["passed_alignment_guard"]),
+            "passed_event_order_guard": bool(promotion["passed_event_order_guard"]),
+            "promote_candidate": bool(promotion["promote_candidate"]),
+        }
+        rows.append(row)
+        runs.append({"run_name": run_name, "config": cfg, "output": out})
+
+    leaderboard = pl.DataFrame(rows).sort(
+        by=["promote_candidate", "net_sharpe", "realized_sharpe", "run_index"],
+        descending=[True, True, True, False],
+    )
+    return {
+        "leaderboard": leaderboard,
+        "records": leaderboard.to_dicts(),
+        "runs": runs,
+    }
 
 
 def _turnover(positions: list[float]) -> float:

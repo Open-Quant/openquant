@@ -8,10 +8,12 @@ import traceback
 from pathlib import Path
 
 
-def execute_notebook(path: Path) -> None:
+def execute_notebook(path: Path, out_path: Path | None = None) -> None:
     nb = json.loads(path.read_text(encoding="utf-8"))
     g: dict[str, object] = {"__name__": "__main__"}
     exec_count = 1
+    destination = out_path or path
+    destination.parent.mkdir(parents=True, exist_ok=True)
 
     for idx, cell in enumerate(nb.get("cells", [])):
         if cell.get("cell_type") != "code":
@@ -32,7 +34,7 @@ def execute_notebook(path: Path) -> None:
             })
             cell["execution_count"] = exec_count
             cell["outputs"] = outputs
-            path.write_text(json.dumps(nb, indent=1), encoding="utf-8")
+            destination.write_text(json.dumps(nb, indent=1), encoding="utf-8")
             raise RuntimeError(f"Notebook execution failed at cell {idx}\n{tb}")
 
         text = stdout.getvalue()
@@ -42,15 +44,21 @@ def execute_notebook(path: Path) -> None:
         cell["outputs"] = outputs
         exec_count += 1
 
-    path.write_text(json.dumps(nb, indent=1), encoding="utf-8")
+    destination.write_text(json.dumps(nb, indent=1), encoding="utf-8")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Execute code cells in a .ipynb via plain Python exec")
     parser.add_argument("notebook", type=Path)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Optional output notebook path (default: execute in-place)",
+    )
     args = parser.parse_args()
-    execute_notebook(args.notebook)
-    print(f"executed: {args.notebook}")
+    execute_notebook(args.notebook, args.out)
+    print(f"executed: {args.notebook} -> {args.out or args.notebook}")
 
 
 if __name__ == "__main__":

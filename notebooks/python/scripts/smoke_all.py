@@ -30,6 +30,20 @@ def main() -> None:
     )
     assert payload["chart"] == "bar"
 
+    grid = openquant.research.run_flywheel_grid(
+        ds,
+        configs=[{"step_size": 0.05}, {"step_size": 0.1, "commission_bps": 2.5}],
+        run_names=["base", "alt"],
+    )
+    assert grid["leaderboard"].height == 2
+
+    screen = openquant.feature_diagnostics.feature_screen_report(
+        [[1.0, 1.01, 2.0], [2.0, 2.01, 2.0], [3.0, 3.01, 2.0], [4.0, 4.01, 2.0]],
+        min_coverage=1.0,
+        max_corr=0.95,
+    )
+    assert "table" in screen
+
     print("python notebook smoke: ok")
 
 

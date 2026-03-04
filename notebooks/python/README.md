@@ -10,6 +10,8 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 4. `04_portfolio_construction.ipynb`
 5. `05_risk_overlays_and_reality_check.ipynb`
 6. `06_afml_real_data_end_to_end.ipynb` (online ticker data + full flywheel analysis)
+7. `07_feature_engineering_discovery_loop.ipynb` (candidate feature generation + screening)
+8. `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
 
 ## Run setup
 
@@ -31,6 +33,14 @@ Execute the real-data notebook cells non-interactively:
 
 ```bash
 uv run --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells.py notebooks/python/06_afml_real_data_end_to_end.ipynb
+```
+
+Write executed outputs to a separate artifact path:
+
+```bash
+uv run --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells.py \
+  notebooks/python/08_algo_wheel_experiments.ipynb \
+  --out notebooks/python/_executed/08_algo_wheel_experiments.ipynb
 ```
 
 ## Bar diagnostics (AFML Ch.2)

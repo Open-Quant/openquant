@@ -1,0 +1,18 @@
+[[runs]]
+name = "baseline"
+
+[[runs]]
+name = "tighter_events"
+cusum_threshold = 0.0015
+step_size = 0.08
+
+[[runs]]
+name = "higher_costs"
+commission_bps = 2.5
+spread_bps = 3.5
+slippage_vol_mult = 10.0
+
+[[runs]]
+name = "stricter_gates"
+min_net_sharpe = 0.45
+min_realized_sharpe = 0.35

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil, exp, log, sqrt
+from math import ceil, exp, isfinite, log, sqrt
 from typing import Any, Sequence
 
 import polars as pl
@@ -704,3 +704,155 @@ def substitution_effect_report(
         )
 
     return out
+
+
+def feature_screen_report(
+    X: Sequence[Sequence[float]] | pl.DataFrame,
+    y: Sequence[float] | None = None,
+    *,
+    feature_names: Sequence[str] | None = None,
+    min_coverage: float = 0.95,
+    max_corr: float = 0.95,
+) -> dict[str, object]:
+    """Run lightweight feature QA checks for notebook discovery loops."""
+    if min_coverage <= 0.0 or min_coverage > 1.0:
+        raise ValueError("min_coverage must be in (0, 1]")
+    if max_corr <= 0.0 or max_corr >= 1.0:
+        raise ValueError("max_corr must be in (0, 1)")
+
+    if isinstance(X, pl.DataFrame):
+        if X.width == 0 or X.height == 0:
+            raise ValueError("X cannot be empty")
+        names = list(feature_names) if feature_names is not None else [str(c) for c in X.columns]
+        if feature_names is not None and len(names) != X.width:
+            raise ValueError(f"feature_names length mismatch: expected {X.width}, got {len(names)}")
+        rows = X.select([pl.col(c) for c in X.columns]).rows()
+    else:
+        rows = [list(r) for r in X]
+        if not rows:
+            raise ValueError("X cannot be empty")
+        width = len(rows[0])
+        if width == 0:
+            raise ValueError("X must contain at least one feature")
+        if any(len(r) != width for r in rows):
+            raise ValueError("X must be rectangular")
+        names = _feature_names(width, feature_names)
+
+    n_rows = len(rows)
+    n_features = len(names)
+    if y is not None:
+        y_vals = [float(v) for v in y]
+        if len(y_vals) != n_rows:
+            raise ValueError(f"y/X length mismatch: {len(y_vals)} vs {n_rows}")
+
+    per_feature_vals: list[list[float]] = []
+    coverage: list[float] = []
+    stds: list[float] = []
+    reasons: dict[str, list[str]] = {name: [] for name in names}
+
+    for j, name in enumerate(names):
+        vals = []
+        for i in range(n_rows):
+            v = rows[i][j]
+            if v is None:
+                continue
+            vv = float(v)
+            if not isfinite(vv):
+                continue
+            vals.append(vv)
+        per_feature_vals.append(vals)
+        cov = len(vals) / max(n_rows, 1)
+        coverage.append(cov)
+        sd = _std(vals)
+        stds.append(sd)
+        if cov < min_coverage:
+            reasons[name].append(f"low_coverage<{min_coverage:.2f}")
+        if sd <= _EPS:
+            reasons[name].append("constant_or_near_constant")
+
+    # Pairwise correlation with pairwise-valid rows only.
+    corr = [[0.0 for _ in range(n_features)] for _ in range(n_features)]
+    high_corr_pairs: list[tuple[int, int, float]] = []
+    for i in range(n_features):
+        corr[i][i] = 1.0
+        for j in range(i + 1, n_features):
+            pairs: list[tuple[float, float]] = []
+            for k in range(n_rows):
+                vi = rows[k][i]
+                vj = rows[k][j]
+                if vi is None or vj is None:
+                    continue
+                fi = float(vi)
+                fj = float(vj)
+                if isfinite(fi) and isfinite(fj):
+                    pairs.append((fi, fj))
+
+            if len(pairs) < 2:
+                c = 0.0
+            else:
+                ai = [p[0] for p in pairs]
+                aj = [p[1] for p in pairs]
+                mi = _mean(ai)
+                mj = _mean(aj)
+                sdi = _std(ai)
+                sdj = _std(aj)
+                if sdi <= _EPS or sdj <= _EPS:
+                    c = 0.0
+                else:
+                    cov = sum((u - mi) * (v - mj) for u, v in pairs) / (len(pairs) - 1)
+                    c = cov / (sdi * sdj)
+            corr[i][j] = c
+            corr[j][i] = c
+            if abs(c) > max_corr:
+                high_corr_pairs.append((i, j, c))
+
+    # Greedy correlated-feature rejection: drop weaker signal proxy first.
+    dropped: set[int] = set()
+    for i, j, c in sorted(high_corr_pairs, key=lambda t: abs(t[2]), reverse=True):
+        if i in dropped or j in dropped:
+            continue
+        score_i = (coverage[i], stds[i])
+        score_j = (coverage[j], stds[j])
+        drop = j if score_i >= score_j else i
+        keep = i if drop == j else j
+        dropped.add(drop)
+        reasons[names[drop]].append(f"high_corr>{max_corr:.2f}_with:{names[keep]}")
+
+    rows_out = []
+    selected_features: list[str] = []
+    rejected_features: list[str] = []
+    rejection_reasons: dict[str, list[str]] = {}
+    for idx, name in enumerate(names):
+        max_abs_corr = max(abs(corr[idx][j]) for j in range(n_features) if j != idx) if n_features > 1 else 0.0
+        rs = reasons[name]
+        status = "accepted" if not rs else "rejected"
+        rows_out.append(
+            {
+                "feature": name,
+                "status": status,
+                "coverage": coverage[idx],
+                "std": stds[idx],
+                "max_abs_corr": max_abs_corr,
+                "reasons": ",".join(rs),
+            }
+        )
+        if status == "accepted":
+            selected_features.append(name)
+        else:
+            rejected_features.append(name)
+            rejection_reasons[name] = rs
+
+    table = pl.DataFrame(rows_out).sort(["status", "coverage", "std"], descending=[False, True, True])
+    return {
+        "table": table,
+        "records": table.to_dicts(),
+        "selected_features": selected_features,
+        "rejected_features": rejected_features,
+        "rejection_reasons": rejection_reasons,
+        "meta": {
+            "n_rows": n_rows,
+            "n_features": n_features,
+            "min_coverage": min_coverage,
+            "max_corr": max_corr,
+        },
+    }

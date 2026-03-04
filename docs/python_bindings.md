@@ -152,11 +152,18 @@ Input conventions:
 ### `openquant.research` (flywheel iteration helpers)
 - `make_synthetic_futures_dataset(n_bars=..., seed=..., asset_names=...)`
 - `run_flywheel_iteration(dataset, config=...)`
+- `run_flywheel_grid(dataset, configs, run_names=None)`
+- `research_run_manifest(config, dataset_meta=None)`
 
 `run_flywheel_iteration` extends pipeline output with:
 - cost model summary (turnover + vol/spread proxy),
 - net/gross return and net Sharpe,
 - promotion decision gates (statistical + economic).
+
+`run_flywheel_grid` executes multiple configs and returns:
+- ranked `leaderboard` (polars DataFrame),
+- `records` for serialization,
+- per-run outputs in `runs` for drill-down notebooks.
 
 ### `openquant.viz` (backend-agnostic plotting payloads)
 - `prepare_feature_importance_payload(...)`
@@ -172,6 +179,7 @@ Input conventions:
 - `sfi_importance(...)`
 - `orthogonalize_features_pca(...)`
 - `substitution_effect_report(...)`
+- `feature_screen_report(...)`
 
 Default behavior:
 - Purged K-Fold + embargo defaults for MDA/SFI (`n_splits=5`, `pct_embargo=0.01`)

@@ -59,3 +59,27 @@ def test_experiment_runner_outputs_expected_artifacts():
         metrics = pl.read_parquet(run_dir / "metrics.parquet")
         assert metrics.height == 1
         assert "net_sharpe" in metrics.columns
+
+
+def test_experiment_runner_grid_outputs_leaderboard_and_subruns():
+    runner = _load_runner_module()
+    cfg = REPO_ROOT / "experiments" / "configs" / "futures_oil_baseline.toml"
+    grid_cfg = REPO_ROOT / "experiments" / "configs" / "futures_oil_grid.toml"
+
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = Path(td)
+        run_dir = runner.run_grid(cfg, grid_cfg, out_dir)
+
+        assert (run_dir / "run_manifest.json").exists()
+        assert (run_dir / "leaderboard.parquet").exists()
+
+        leaderboard = pl.read_parquet(run_dir / "leaderboard.parquet")
+        assert leaderboard.height >= 3
+        assert "run_name" in leaderboard.columns
+        assert "net_sharpe" in leaderboard.columns
+
+        per_run_dirs = [p for p in run_dir.iterdir() if p.is_dir()]
+        assert len(per_run_dirs) >= 3
+        for p in per_run_dirs:
+            assert (p / "metrics.parquet").exists()
+            assert (p / "run_manifest.json").exists()
