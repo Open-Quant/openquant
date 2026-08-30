@@ -8,12 +8,10 @@ fn volatility_get_daily_vol(
     close_prices: Vec<f64>,
     lookback: usize,
 ) -> PyResult<Vec<(String, f64)>> {
-    let close = pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
+    let close =
+        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let result = openquant::util::volatility::get_daily_vol(&close, lookback);
-    Ok(result
-        .into_iter()
-        .map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v))
-        .collect())
+    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
 }
 
 #[pyfunction(name = "get_parksinson_vol")]

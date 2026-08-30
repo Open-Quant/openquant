@@ -27,7 +27,8 @@ fn sb_fit_predict_classifier(
 ) -> PyResult<PyObject> {
     let x_mat = matrix_from_rows(x)?;
 
-    let mut clf = openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier::new(random_state);
+    let mut clf =
+        openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier::new(random_state);
     clf.n_estimators = n_estimators;
     clf.max_samples = openquant::sb_bagging::MaxSamples::Float(max_samples);
     clf.max_features = openquant::sb_bagging::MaxFeatures::Float(max_features);
@@ -66,7 +67,8 @@ fn sb_fit_predict_regressor(
 ) -> PyResult<PyObject> {
     let x_mat = matrix_from_rows(x)?;
 
-    let mut reg = openquant::sb_bagging::SequentiallyBootstrappedBaggingRegressor::new(random_state);
+    let mut reg =
+        openquant::sb_bagging::SequentiallyBootstrappedBaggingRegressor::new(random_state);
     reg.n_estimators = n_estimators;
     reg.max_samples = openquant::sb_bagging::MaxSamples::Float(max_samples);
     reg.max_features = openquant::sb_bagging::MaxFeatures::Float(max_features);

@@ -31,7 +31,8 @@ fn hcaa_allocate(
     let returns_m = asset_returns.map(matrix_from_rows).transpose()?;
     let cov_m = covariance_matrix.map(matrix_from_rows).transpose()?;
 
-    let mut hcaa = openquant::hcaa::HierarchicalClusteringAssetAllocation::new(calculate_expected_returns);
+    let mut hcaa =
+        openquant::hcaa::HierarchicalClusteringAssetAllocation::new(calculate_expected_returns);
     hcaa.allocate(
         &asset_names,
         prices_m.as_ref(),

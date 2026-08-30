@@ -19,10 +19,7 @@ fn sampling_get_ind_mat_label_uniqueness(ind_mat: Vec<Vec<u8>>) -> Vec<Vec<f64>>
 }
 
 #[pyfunction(name = "bootstrap_loop_run")]
-fn sampling_bootstrap_loop_run(
-    ind_mat: Vec<Vec<u8>>,
-    prev_concurrency: Vec<f64>,
-) -> Vec<f64> {
+fn sampling_bootstrap_loop_run(ind_mat: Vec<Vec<u8>>, prev_concurrency: Vec<f64>) -> Vec<f64> {
     openquant::sampling::bootstrap_loop_run(&ind_mat, &prev_concurrency)
 }
 

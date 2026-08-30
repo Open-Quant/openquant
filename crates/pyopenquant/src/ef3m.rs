@@ -1,7 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-
 #[pyfunction(name = "centered_moment")]
 fn ef3m_centered_moment(moments: Vec<f64>, order: usize) -> f64 {
     openquant::ef3m::centered_moment(&moments, order)
@@ -21,7 +20,12 @@ fn ef3m_most_likely_parameters(
     let rows: Vec<openquant::ef3m::FitResultRow> = data
         .into_iter()
         .map(|(mu_1, mu_2, sigma_1, sigma_2, p_1, error)| openquant::ef3m::FitResultRow {
-            mu_1, mu_2, sigma_1, sigma_2, p_1, error,
+            mu_1,
+            mu_2,
+            sigma_1,
+            sigma_2,
+            p_1,
+            error,
         })
         .collect();
     let result = openquant::ef3m::most_likely_parameters(&rows, None, res);

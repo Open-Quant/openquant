@@ -12,7 +12,8 @@ fn portfolio_allocate_inverse_variance(
     prices: Vec<Vec<f64>>,
 ) -> PyResult<(Vec<f64>, f64, f64, f64)> {
     let m = matrix_from_rows(prices)?;
-    let out = openquant::portfolio_optimization::allocate_inverse_variance(&m).map_err(to_py_err)?;
+    let out =
+        openquant::portfolio_optimization::allocate_inverse_variance(&m).map_err(to_py_err)?;
     Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
 }
 
@@ -24,7 +25,9 @@ fn portfolio_allocate_min_vol(
     tuple_bounds: Option<(f64, f64)>,
 ) -> PyResult<(Vec<f64>, f64, f64, f64)> {
     let m = matrix_from_rows(prices)?;
-    let out = openquant::portfolio_optimization::allocate_min_vol(&m, parse_bounds(bounds), tuple_bounds).map_err(to_py_err)?;
+    let out =
+        openquant::portfolio_optimization::allocate_min_vol(&m, parse_bounds(bounds), tuple_bounds)
+            .map_err(to_py_err)?;
     Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
 }
 
@@ -89,7 +92,9 @@ fn portfolio_allocate_with_solution(
 ) -> PyResult<(Vec<f64>, f64, f64, f64)> {
     let m = matrix_from_rows(prices)?;
     let rm = match returns_method {
-        Some(name) => openquant::portfolio_optimization::returns_method_from_str(&name).map_err(to_py_err)?,
+        Some(name) => {
+            openquant::portfolio_optimization::returns_method_from_str(&name).map_err(to_py_err)?
+        }
         None => openquant::portfolio_optimization::ReturnsMethod::Mean,
     };
     let opts = openquant::portfolio_optimization::AllocationOptions {
@@ -100,7 +105,8 @@ fn portfolio_allocate_with_solution(
         resample_by: resample_by.as_deref(),
         returns_method: rm,
     };
-    let out = openquant::portfolio_optimization::allocate_with_solution(&m, &solution, &opts).map_err(to_py_err)?;
+    let out = openquant::portfolio_optimization::allocate_with_solution(&m, &solution, &opts)
+        .map_err(to_py_err)?;
     Ok((out.weights, out.portfolio_risk, out.portfolio_return, out.portfolio_sharpe))
 }
 

@@ -1,4 +1,6 @@
-use openquant::data_structures::{imbalance_bars, run_bars, standard_bars, time_bars, ImbalanceBarType, StandardBarType};
+use openquant::data_structures::{
+    imbalance_bars, run_bars, standard_bars, time_bars, ImbalanceBarType, StandardBarType,
+};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 

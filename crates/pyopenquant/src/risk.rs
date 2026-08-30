@@ -18,16 +18,11 @@ fn risk_calculate_conditional_drawdown_risk(
     returns: Vec<f64>,
     confidence_level: f64,
 ) -> PyResult<f64> {
-    RiskMetrics
-        .calculate_conditional_drawdown_risk(&returns, confidence_level)
-        .map_err(to_py_err)
+    RiskMetrics.calculate_conditional_drawdown_risk(&returns, confidence_level).map_err(to_py_err)
 }
 
 #[pyfunction(name = "calculate_variance")]
-fn risk_calculate_variance(
-    covariance: Vec<Vec<f64>>,
-    weights: Vec<f64>,
-) -> PyResult<f64> {
+fn risk_calculate_variance(covariance: Vec<Vec<f64>>, weights: Vec<f64>) -> PyResult<f64> {
     let cov = matrix_from_rows(covariance)?;
     RiskMetrics.calculate_variance(&cov, &weights).map_err(to_py_err)
 }
