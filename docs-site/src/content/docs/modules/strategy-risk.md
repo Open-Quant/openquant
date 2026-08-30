@@ -1,12 +1,14 @@
 ---
 title: "strategy_risk"
 description: "AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "strategy_risk"
+api_surface: "both"
 risk_notes:
   - "Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p."
   - "Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk."
@@ -73,6 +75,16 @@ println!("failure (KDE): {:.2}%", 100.0 * report.kde_failure_probability);
 ```
 
 ## API Reference
+
+### Python API
+
+- `strategy_risk.sharpe_symmetric`
+- `strategy_risk.implied_precision_symmetric`
+- `strategy_risk.implied_frequency_symmetric`
+- `strategy_risk.sharpe_asymmetric`
+- `strategy_risk.implied_precision_asymmetric`
+- `strategy_risk.implied_frequency_asymmetric`
+- `strategy_risk.estimate_strategy_failure_probability`
 
 ### Rust API
 

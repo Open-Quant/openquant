@@ -1,12 +1,14 @@
 ---
 title: "cla"
 description: "Critical Line Algorithm implementation for constrained mean-variance optimization."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "cla"
+api_surface: "both"
 risk_notes:
   - "CLA behavior depends on weight bounds and return estimates."
   - "Use robust covariance estimators when sample size is small."
@@ -51,6 +53,10 @@ let sigma = covariance(&returns);
 ```
 
 ## API Reference
+
+### Python API
+
+- `cla.allocate_cla`
 
 ### Rust API
 

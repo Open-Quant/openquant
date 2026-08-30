@@ -1,12 +1,14 @@
 ---
 title: "portfolio_optimization"
 description: "Mean-variance and constrained allocation methods with ergonomic APIs."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "portfolio_optimization"
+api_surface: "both"
 risk_notes:
   - "Optimizer output is only as good as mean/covariance assumptions; stress-test inputs and rebalance frequency."
   - "Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks."
@@ -100,6 +102,15 @@ assert!(constrained.weights.iter().all(|w| *w >= -1e-10));
 ```
 
 ## API Reference
+
+### Python API
+
+- `portfolio.allocate_inverse_variance`
+- `portfolio.allocate_min_vol`
+- `portfolio.allocate_max_sharpe`
+- `portfolio.allocate_efficient_risk`
+- `portfolio.allocate_with_solution`
+- `portfolio.allocate_from_inputs`
 
 ### Rust API
 

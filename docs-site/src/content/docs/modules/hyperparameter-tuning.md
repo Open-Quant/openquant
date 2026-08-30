@@ -1,12 +1,14 @@
 ---
 title: "hyperparameter_tuning"
 description: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "hyperparameter_tuning"
+api_surface: "rust-only"
 risk_notes:
   - "Use Accuracy only when each prediction has similar economic value (equal bet sizing)."
   - "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude."

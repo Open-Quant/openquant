@@ -1,12 +1,14 @@
 ---
 title: "ef3m"
 description: "Moment-based mixture fitting utilities for two-normal components."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "ef3m"
+api_surface: "both"
 risk_notes:
   - "Use as initialization for more expensive optimizers."
   - "Sensitive to higher-moment estimation noise."
@@ -51,6 +53,13 @@ let m3 = centered_moment(&moments, 3);
 ```
 
 ## API Reference
+
+### Python API
+
+- `ef3m.centered_moment`
+- `ef3m.raw_moment`
+- `ef3m.most_likely_parameters`
+- `ef3m.fit_m2n`
 
 ### Rust API
 

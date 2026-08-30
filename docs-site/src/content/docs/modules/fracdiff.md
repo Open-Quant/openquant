@@ -1,8 +1,9 @@
 ---
 title: "fracdiff"
 description: "Fractional differentiation to improve stationarity while retaining memory."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -95,10 +96,10 @@ let out = frac_diff_ffd(&series, 0.4, 1e-4);
 
 ### Python API
 
-- `fracdiff.frac_diff_ffd`
-- `fracdiff.frac_diff`
-- `fracdiff.get_weights_ffd`
 - `fracdiff.get_weights`
+- `fracdiff.get_weights_ffd`
+- `fracdiff.frac_diff`
+- `fracdiff.frac_diff_ffd`
 
 ### Rust API
 

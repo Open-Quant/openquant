@@ -5,6 +5,13 @@ import { moduleDocs } from '../src/data/moduleDocs.ts';
 const outDir = path.resolve(process.cwd(), 'src/content/docs/modules');
 fs.mkdirSync(outDir, { recursive: true });
 
+// These pages are machine-emitted from src/data/moduleDocs.ts and have not been read
+// by a human, so they may only ever claim 'generated' — never 'reviewed' or 'validated'.
+// Those stronger statuses are reachable only by a person deliberately editing a page.
+// Date-only, so repeated runs on the same day are byte-identical (the generator must
+// stay idempotent) and so the stamp is comparable with the schema gate's mtime rule.
+const generatedOn = new Date().toISOString().slice(0, 10);
+
 const q = (value) => JSON.stringify(String(value));
 const toYamlList = (values) => values.map((v) => `  - ${q(v)}`).join('\n');
 
@@ -145,8 +152,9 @@ for (const doc of moduleDocs) {
   const content = `---
 title: ${q(doc.module)}
 description: ${q(doc.summary)}
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '${generatedOn}'
 audience:
   - quant-dev
   - platform-engineering
@@ -190,8 +198,9 @@ const groupedIndex = [...bySubject.entries()]
 const indexContent = `---
 title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '${generatedOn}'
 audience:
   - quant-dev
   - platform-engineering

@@ -1,12 +1,14 @@
 ---
 title: "fingerprint"
 description: "Model fingerprinting for linear, non-linear, and pairwise feature effects."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "fingerprint"
+api_surface: "rust-only"
 risk_notes:
   - "Compare fingerprints across retrains for drift detection."
   - "Use pairwise effects to detect hidden interaction risk."

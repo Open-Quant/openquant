@@ -1,8 +1,9 @@
 ---
 title: "research"
 description: "Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering

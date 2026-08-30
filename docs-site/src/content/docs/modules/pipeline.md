@@ -1,13 +1,14 @@
 ---
 title: "pipeline"
 description: "End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "pipeline"
-api_surface: "python-only"
+api_surface: "both"
 risk_notes:
   - "The pipeline enforces input alignment and event ordering as leakage guards."
   - "run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output."
@@ -87,7 +88,7 @@ print(summary)
 - `pipeline.run_mid_frequency_pipeline_frames`
 - `pipeline.summarize_pipeline`
 
-### Key Functions
+### Rust API
 
 - `run_mid_frequency_pipeline`
 - `run_mid_frequency_pipeline_frames`

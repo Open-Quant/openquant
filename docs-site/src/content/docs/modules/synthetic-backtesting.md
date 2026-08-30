@@ -1,12 +1,14 @@
 ---
 title: "synthetic_backtesting"
 description: "Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "synthetic_backtesting"
+api_surface: "both"
 risk_notes:
   - "Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample."
   - "Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization."
@@ -73,6 +75,15 @@ if out.diagnostics.no_stable_optimum {
 ```
 
 ## API Reference
+
+### Python API
+
+- `synthetic_bt.calibrate_ou_params`
+- `synthetic_bt.generate_ou_paths`
+- `synthetic_bt.evaluate_rule_on_paths`
+- `synthetic_bt.detect_no_stable_optimum`
+- `synthetic_bt.run_synthetic_otr_workflow`
+- `synthetic_bt.search_optimal_trading_rule`
 
 ### Rust API
 

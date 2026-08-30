@@ -1,12 +1,14 @@
 ---
 title: "hrp"
 description: "Hierarchical Risk Parity allocation with recursive bisection."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "hrp"
+api_surface: "both"
 risk_notes:
   - "HRP is often more robust under unstable covariance estimates."
   - "Ensure input asset order tracks produced dendrogram order."
@@ -49,6 +51,10 @@ let weights = hrp.allocate(&prices)?;
 ```
 
 ## API Reference
+
+### Python API
+
+- `hrp.allocate_hrp`
 
 ### Rust API
 

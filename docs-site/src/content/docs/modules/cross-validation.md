@@ -1,12 +1,14 @@
 ---
 title: "cross_validation"
 description: "Purged cross-validation utilities designed for label overlap and leakage control."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "cross_validation"
+api_surface: "rust-only"
 risk_notes:
   - "Always align event end-times when purging."
   - "Report variance across folds, not only mean score."

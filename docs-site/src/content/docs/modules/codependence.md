@@ -1,12 +1,14 @@
 ---
 title: "codependence"
 description: "Dependence metrics beyond linear correlation for feature and asset relationships."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "codependence"
+api_surface: "both"
 risk_notes:
   - "Use with clustering and feature pruning workflows."
   - "Bin selection materially impacts MI estimates."
@@ -52,6 +54,16 @@ let dcor = distance_correlation(&x, &y)?;
 ```
 
 ## API Reference
+
+### Python API
+
+- `codependence.angular_distance`
+- `codependence.absolute_angular_distance`
+- `codependence.squared_angular_distance`
+- `codependence.distance_correlation`
+- `codependence.get_optimal_number_of_bins`
+- `codependence.get_mutual_info`
+- `codependence.variation_of_information_score`
 
 ### Rust API
 

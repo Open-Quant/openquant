@@ -1,12 +1,14 @@
 ---
 title: "util::volatility"
 description: "Volatility estimators used across labeling and risk workflows."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "util::volatility"
+api_surface: "both"
 risk_notes:
   - "Choose estimator based on available fields and microstructure noise."
   - "Daily-vol lookback should be matched to event horizon."
@@ -51,6 +53,13 @@ let pv = get_parksinson_vol(&high, &low, 20);
 ```
 
 ## API Reference
+
+### Python API
+
+- `volatility.get_daily_vol`
+- `volatility.get_parksinson_vol`
+- `volatility.get_garman_class_vol`
+- `volatility.get_yang_zhang_vol`
 
 ### Rust API
 

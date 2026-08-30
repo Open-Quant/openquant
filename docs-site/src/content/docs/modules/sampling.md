@@ -1,8 +1,9 @@
 ---
 title: "sampling"
 description: "Indicator matrix and sequential bootstrap tooling."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -15,11 +16,8 @@ risk_notes:
   - "Use average uniqueness as a diagnostics KPI."
 rust_api:
   - "get_ind_matrix"
-  - "get_ind_mat_average_uniqueness"
-  - "get_ind_mat_label_uniqueness"
-  - "bootstrap_loop_run"
   - "seq_bootstrap"
-  - "get_av_uniqueness_from_triple_barrier"
+  - "get_ind_mat_average_uniqueness"
   - "num_concurrent_events"
 sidebar:
   badge: Module
@@ -110,21 +108,18 @@ let idx = seq_bootstrap(&ind, Some(3), None);
 ### Python API
 
 - `sampling.get_ind_matrix`
+- `sampling.seq_bootstrap`
 - `sampling.get_ind_mat_average_uniqueness`
 - `sampling.get_ind_mat_label_uniqueness`
 - `sampling.bootstrap_loop_run`
-- `sampling.seq_bootstrap`
 - `sampling.get_av_uniqueness_from_triple_barrier`
 - `sampling.num_concurrent_events`
 
 ### Rust API
 
 - `get_ind_matrix`
-- `get_ind_mat_average_uniqueness`
-- `get_ind_mat_label_uniqueness`
-- `bootstrap_loop_run`
 - `seq_bootstrap`
-- `get_av_uniqueness_from_triple_barrier`
+- `get_ind_mat_average_uniqueness`
 - `num_concurrent_events`
 
 ## Implementation Notes

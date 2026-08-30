@@ -1,12 +1,14 @@
 ---
 title: "structural_breaks"
 description: "Regime change and bubble diagnostics (Chow, CUSUM variants, SADF)."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "structural_breaks"
+api_surface: "both"
 risk_notes:
   - "SADF can be computationally expensive on long windows."
   - "Use dedicated slow/nightly test paths for heavy scenarios."
@@ -51,6 +53,12 @@ let sadf = get_sadf(&y, 3, SadfLags::Fixed(1))?;
 ```
 
 ## API Reference
+
+### Python API
+
+- `structural_breaks.get_chow_type_stat`
+- `structural_breaks.get_chu_stinchcombe_white_statistics`
+- `structural_breaks.get_sadf`
 
 ### Rust API
 

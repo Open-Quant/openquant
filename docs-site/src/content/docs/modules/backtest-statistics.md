@@ -1,12 +1,14 @@
 ---
 title: "backtest_statistics"
 description: "Performance diagnostics for strategy returns and position trajectories."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
 module: "backtest_statistics"
+api_surface: "both"
 risk_notes:
   - "Use annualization constants consistent with your bar frequency."
   - "Deflated Sharpe is useful when strategy mining many variants."
@@ -54,6 +56,19 @@ println!("{sr} {dd:?} {tuw:?}");
 ```
 
 ## API Reference
+
+### Python API
+
+- `backtest_stats.sharpe_ratio`
+- `backtest_stats.information_ratio`
+- `backtest_stats.probabilistic_sharpe_ratio`
+- `backtest_stats.deflated_sharpe_ratio`
+- `backtest_stats.minimum_track_record_length`
+- `backtest_stats.timing_of_flattening_and_flips`
+- `backtest_stats.average_holding_period`
+- `backtest_stats.bets_concentration`
+- `backtest_stats.all_bets_concentration`
+- `backtest_stats.drawdown_and_time_under_water`
 
 ### Rust API
 

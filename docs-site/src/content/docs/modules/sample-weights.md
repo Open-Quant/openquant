@@ -1,8 +1,9 @@
 ---
 title: "sample_weights"
 description: "Sample weighting utilities for overlapping event structure."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
