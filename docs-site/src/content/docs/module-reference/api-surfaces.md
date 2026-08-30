@@ -2,6 +2,8 @@
 title: API Surfaces
 description: High-level Rust and Python API surface map for core workflows.
 status: draft
+banner:
+  content: '<span class="doc-status doc-status--draft">Draft</span> This page is known to be incomplete. Treat its contents as provisional.'
 audience:
   - quant-dev
   - platform-engineering

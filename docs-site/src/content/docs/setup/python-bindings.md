@@ -2,6 +2,8 @@
 title: Python Bindings Setup
 description: Baseline guidance for Python package workflow integration.
 status: draft
+banner:
+  content: '<span class="doc-status doc-status--draft">Draft</span> This page is known to be incomplete. Treat its contents as provisional.'
 audience:
   - quant-dev
   - platform-engineering

@@ -80,8 +80,8 @@ function git(args, cwd) {
  * mtime. Uncommitted edits count: otherwise you could edit a page and keep a
  * stale stamp green right up until the moment you commit.
  *
- * Returns a Map of absolute path -> YYYY-MM-DD, or null if this is not a git
- * checkout (in which case freshness is checked against mtime alone).
+ * Returns a Map of absolute path -> YYYY-MM-DD. Outside a git checkout (a release
+ * tarball, say) freshness falls back to mtime alone.
  */
 function lastChangedDates(files) {
   const dates = new Map();
@@ -137,7 +137,9 @@ const errors = [];
 
 for (const file of files) {
   const rel = path.relative(process.cwd(), file);
-  const fm = parseFrontmatter(fs.readFileSync(file, 'utf8'));
+  const text = fs.readFileSync(file, 'utf8');
+  const frontmatter = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '';
+  const fm = parseFrontmatter(text);
   const fail = (msg) => errors.push(`${rel}: ${msg}`);
 
   for (const key of ['title', 'description', 'status']) {
@@ -155,6 +157,16 @@ for (const file of files) {
         `'validated' once it has also been checked against the code.`
     );
     continue;
+  }
+
+  // The reader-facing badge is rendered from the page's own banner frontmatter,
+  // so it can drift from `status` unless something checks. This is that check.
+  const badge = frontmatter.match(/doc-status--([a-z]+)/)?.[1];
+  if (badge && badge !== status) {
+    fail(
+      `status: ${status} but the reader-facing badge says '${badge}'. ` +
+        `Update the banner content so the badge matches the frontmatter status.`
+    );
   }
 
   // Every date present must be a real ISO date, whether or not this status needs it.

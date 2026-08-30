@@ -2,6 +2,8 @@
 title: Examples Catalog
 description: Example entry points grouped by workflow stage.
 status: draft
+banner:
+  content: '<span class="doc-status doc-status--draft">Draft</span> This page is known to be incomplete. Treat its contents as provisional.'
 audience:
   - quant-dev
   - platform-engineering

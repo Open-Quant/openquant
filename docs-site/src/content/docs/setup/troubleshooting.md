@@ -2,6 +2,8 @@
 title: Troubleshooting
 description: Common first-run failures and known fixes.
 status: draft
+banner:
+  content: '<span class="doc-status doc-status--draft">Draft</span> This page is known to be incomplete. Treat its contents as provisional.'
 audience:
   - quant-dev
   - platform-engineering

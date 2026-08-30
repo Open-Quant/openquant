@@ -2,6 +2,8 @@
 title: Rust Core Workflow
 description: Canonical Rust workflow from event sampling to portfolio/risk diagnostics.
 status: draft
+banner:
+  content: '<span class="doc-status doc-status--draft">Draft</span> This page is known to be incomplete. Treat its contents as provisional.'
 audience:
   - quant-dev
   - platform-engineering

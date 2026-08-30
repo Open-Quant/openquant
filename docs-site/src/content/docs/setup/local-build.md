@@ -3,6 +3,8 @@ title: Local Build Setup
 description: Deterministic local build and validation sequence.
 status: reviewed
 last_validated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> A human has read this page end to end. It has not been verified line by line against the code.'
 audience:
   - quant-dev
   - platform-engineering

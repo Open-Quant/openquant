@@ -4,6 +4,8 @@ description: "Hierarchical Clustering Asset Allocation variant with cluster-leve
 status: generated
 generated_from: src/data/moduleDocs.ts
 last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering

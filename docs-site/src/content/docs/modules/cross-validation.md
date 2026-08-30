@@ -4,6 +4,8 @@ description: "Purged cross-validation utilities designed for label overlap and l
 status: generated
 generated_from: src/data/moduleDocs.ts
 last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
