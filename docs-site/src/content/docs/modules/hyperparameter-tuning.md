@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "hyperparameter_tuning"
 api_surface: "rust-only"
-risk_notes:
-  - "Use Accuracy only when each prediction has similar economic value (equal bet sizing)."
-  - "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude."
-  - "BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters."
 rust_api:
   - "grid_search"
   - "randomized_search"
@@ -27,13 +23,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+Grid and randomized search that run under `PurgedKFold` rather than plain k-fold, so the tuning loop cannot buy its score with leakage. `randomized_search` samples from `RandomParamDistribution`, including log-uniform — the right prior for scale parameters such as C and gamma — and AFML Chapter 9's argument is that beyond a couple of dimensions random sampling dominates grid search per unit of compute. The scoring choice exposed by `SearchScoring` is an economic decision, not a statistical one.
 
-## Why This Module Exists
+## When to Use
 
-AFML Chapter 9 recommends tuning under PurgedKFold, using randomized search for large spaces, and scoring with metrics aligned to trading objectives.
+Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilities drive position size, since it penalises confident wrong answers the way a bet does; use `Accuracy` only when every prediction carries similar economic weight; use `BalancedAccuracy` for the severe class imbalance typical of meta-labelling, where recall of the positive class is what matters. Pass `sample_weight` from `sample_weights` — tuning on unweighted overlapping observations rewards the wrong model.
 
 ## Mathematical Foundations
 
@@ -113,8 +109,16 @@ println!("best score = {} with {:?}", result.best_score, result.best_params);
 - `SearchScoring`
 - `RandomParamDistribution`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use Accuracy only when each prediction has similar economic value (equal bet sizing).
 - Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.
 - BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.
+
+## Related Modules
+
+- [`cross-validation`](/modules/cross-validation/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`sb-bagging`](/modules/sb-bagging/)
+- [`ensemble-methods`](/modules/ensemble-methods/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

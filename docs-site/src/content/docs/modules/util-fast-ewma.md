@@ -11,22 +11,19 @@ audience:
   - platform-engineering
 module: "util::fast_ewma"
 api_surface: "both"
-risk_notes:
-  - "Window length controls responsiveness vs smoothness."
-  - "Prefer this helper over ad-hoc loops for consistency."
 rust_api:
   - "ewma"
 sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+One function: a single-pass exponentially weighted moving average with span-style decay, alpha = 2/(window+1), corrected by the accumulated weight so that early values are not dragged toward the seed. It mirrors `mlfinlab.util.fast_ewma` exactly, which is the point — it is what makes daily volatility and every EWMA-derived feature numerically comparable between this library and a pandas reference implementation.
 
-## Why This Module Exists
+## When to Use
 
-Provides performant smoothing for repeated rolling computations.
+Use it instead of writing a rolling loop, so that everything downstream — `util::volatility`'s daily vol, the microstructure feature panel, dynamic threshold series for `filters` — shares one decay convention. Remember that `window` is a span rather than a hard lookback: the weight on a point w bars back is (1-alpha)^w, not zero, so the estimate remembers further than the number suggests. Size the span longer than the horizon you are trying to smooth over.
 
 ## Mathematical Foundations
 
@@ -61,7 +58,14 @@ let y = ewma(&x, 3);
 
 - `ewma`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Window length controls responsiveness vs smoothness.
 - Prefer this helper over ad-hoc loops for consistency.
+
+## Related Modules
+
+- [`util-volatility`](/modules/util-volatility/)
+- [`filters`](/modules/filters/)
+- [`microstructural-features`](/modules/microstructural-features/)
+- [`labeling`](/modules/labeling/)

@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "fingerprint"
 api_surface: "rust-only"
-risk_notes:
-  - "Compare fingerprints across retrains for drift detection."
-  - "Use pairwise effects to detect hidden interaction risk."
 rust_api:
   - "RegressionModelFingerprint"
   - "ClassificationModelFingerprint"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+Model fingerprinting decomposes a fitted model's behaviour into a linear effect, a non-linear effect and pairwise interaction effects per feature, by sweeping each feature across a grid and measuring how the prediction moves. The result describes *what the model learned* rather than how well it scored — two models with identical accuracy can have entirely different fingerprints, and only one of them may be relying on something that will still be there next quarter.
 
-## Why This Module Exists
+## When to Use
 
-Quantifies behavior of fitted models beyond scalar accuracy metrics.
+Use it after fitting and before deploying, and again on every retrain: comparing fingerprints across retrains is a drift signal that accuracy metrics do not give you. Use the pairwise effects to find interaction risk, since a large pairwise term means the model's response to one feature depends on another, which makes its extrapolation fragile. It works with any model — implement `RegressionPredictor` or `ClassificationPredictor` and pass it to `fit`.
 
 ## Mathematical Foundations
 
@@ -87,7 +84,14 @@ println!("pairwise={:?}", pairwise.map(|p| p.norm.clone()));
 - `Effect`
 - `PairwiseEffect`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Compare fingerprints across retrains for drift detection.
 - Use pairwise effects to detect hidden interaction risk.
+
+## Related Modules
+
+- [`feature-importance`](/modules/feature-importance/)
+- [`feature-diagnostics`](/modules/feature-diagnostics/)
+- [`ensemble-methods`](/modules/ensemble-methods/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

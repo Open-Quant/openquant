@@ -13,9 +13,6 @@ module: "sampling"
 api_surface: "both"
 afml_chapters:
   - 4
-risk_notes:
-  - "Indicator matrix quality drives bootstrap quality."
-  - "Use average uniqueness as a diagnostics KPI."
 rust_api:
   - "get_ind_matrix"
   - "seq_bootstrap"
@@ -124,7 +121,7 @@ let idx = seq_bootstrap(&ind, Some(3), None);
 - `get_ind_mat_average_uniqueness`
 - `num_concurrent_events`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Indicator matrix quality drives bootstrap quality.
 - Use average uniqueness as a diagnostics KPI.

@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "cla"
 api_surface: "both"
-risk_notes:
-  - "CLA behavior depends on weight bounds and return estimates."
-  - "Use robust covariance estimators when sample size is small."
 rust_api:
   - "CLA"
   - "covariance"
@@ -22,13 +19,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Markowitz's Critical Line Algorithm in the Bailey-Lopez de Prado formulation: the exact solution to the constrained mean-variance problem with inequality bounds on every weight. Rather than calling a general quadratic solver it walks the efficient frontier from the maximum-return corner, computing each turning point where an asset enters or leaves the free set. That yields the whole frontier rather than one point on it, and it terminates — which quadratic solvers on near-singular covariance matrices frequently do not.
 
-## Why This Module Exists
+## When to Use
 
-CLA solves constrained Markowitz problems efficiently with active-set style line updates.
+Use it when you need the full efficient frontier, when weight bounds are binding, or when a general optimiser is returning unstable or non-converging weights on an ill-conditioned covariance. If you only want one portfolio and the covariance is well behaved, `portfolio_optimization` is the shorter path. If the covariance itself is the problem, prefer `hrp`, which never inverts it. CLA still needs expected returns, so it inherits their estimation error.
 
 ## Mathematical Foundations
 
@@ -66,7 +63,14 @@ let sigma = covariance(&returns);
 - `covariance`
 - `ReturnsEstimation`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - CLA behavior depends on weight bounds and return estimates.
 - Use robust covariance estimators when sample size is small.
+
+## Related Modules
+
+- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`hrp`](/modules/hrp/)
+- [`hcaa`](/modules/hcaa/)
+- [`risk-metrics`](/modules/risk-metrics/)

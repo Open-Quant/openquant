@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "feature_importance"
 api_surface: "rust-only"
-risk_notes:
-  - "Cross-validated MDA is preferred when leakage risk is high."
-  - "Compare ranking stability across folds/time windows."
 rust_api:
   - "mean_decrease_impurity"
   - "mean_decrease_accuracy"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+The three AFML Chapter 8 importance methods on the Rust side, each with a different blind spot. MDI is in-sample and tree-specific: it sums each feature's impurity decrease across splits, cheap but defeated by substitution, since two interchangeable features split the credit and both then look weak. MDA permutes a feature in the *test* fold and measures the score drop, so it is model-agnostic and out-of-sample but still substitution-prone. Single-feature importance trains on one feature at a time, immune to substitution but blind to interactions. `feature_pca_analysis` cross-checks the ranking against an unsupervised one.
 
-## Why This Module Exists
+## When to Use
 
-Improves model interpretability and helps remove unstable or redundant features.
+Run at least two of the three: agreement between MDI and MDA is evidence, MDI alone is not. Prefer MDA when leakage risk is high, since it is the only one scored out of sample — and give it purged splits from `cross_validation`, not a fold count. Compare rankings across time windows before trusting them; a feature that is important in only one regime is a feature that will fail in the next.
 
 ## Mathematical Foundations
 
@@ -103,7 +100,15 @@ println!("trend: mean={:.4} std={:.4}", importance["trend"].mean, importance["tr
 - `single_feature_importance`
 - `feature_pca_analysis`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Cross-validated MDA is preferred when leakage risk is high.
 - Compare ranking stability across folds/time windows.
+
+## Related Modules
+
+- [`feature-diagnostics`](/modules/feature-diagnostics/)
+- [`cross-validation`](/modules/cross-validation/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`codependence`](/modules/codependence/)
+- [`fingerprint`](/modules/fingerprint/)

@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "util::volatility"
 api_surface: "both"
-risk_notes:
-  - "Choose estimator based on available fields and microstructure noise."
-  - "Daily-vol lookback should be matched to event horizon."
 rust_api:
   - "get_daily_vol"
   - "get_parksinson_vol"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+Four volatility estimators with different data requirements and different blind spots. `get_daily_vol` is a close-to-close EWMA over a timestamped series — the estimator AFML uses to scale triple-barrier widths. Parkinson uses the high-low range and extracts far more information per observation, but ignores overnight gaps and assumes no drift. Garman-Klass adds the open and close. Yang-Zhang combines an overnight, an open-to-close and a Rogers-Satchell term under a variance-minimising weight, and is the only one of the four that handles both opening gaps and intraday drift.
 
-## Why This Module Exists
+## When to Use
 
-Volatility is a foundational scaling target for barriers, sizing, and risk controls.
+Use `get_daily_vol` whenever volatility is a scaling target for barriers or position sizes, and match its lookback to the event horizon — a 100-bar volatility scaling a 3-bar barrier is measuring the wrong thing. Use the range-based estimators when you have OHLC and want more precision from the same number of bars, preferring Yang-Zhang for instruments that gap. All range estimators degrade when quoted spreads are wide, because the recorded high and low then reflect microstructure noise rather than price.
 
 ## Mathematical Foundations
 
@@ -87,7 +84,15 @@ println!("parkinson vol tail = {:?}", parkinson.last());
 - `get_garman_class_vol`
 - `get_yang_zhang_vol`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Choose estimator based on available fields and microstructure noise.
 - Daily-vol lookback should be matched to event horizon.
+
+## Related Modules
+
+- [`labeling`](/modules/labeling/)
+- [`filters`](/modules/filters/)
+- [`util-fast-ewma`](/modules/util-fast-ewma/)
+- [`bet-sizing`](/modules/bet-sizing/)
+- [`microstructural-features`](/modules/microstructural-features/)

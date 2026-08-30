@@ -28,16 +28,29 @@ export type ModuleDoc = {
   module: string;
   subject: string;
   summary: string;
+  /**
+   * @deprecated Superseded by `conceptOverview`, which says the same thing
+   * with substance behind it. No longer rendered on any page; retained only
+   * so the 39 existing entries still type-check, and safe to delete once
+   * something has been done with the one-liners.
+   */
   whyItExists: string;
   keyApis: string[];
   formulas: Formula[];
   examples: ExampleBlock[];
   notes: string[];
-  conceptOverview?: string;
-  whenToUse?: string;
+  /**
+   * The three fields below are REQUIRED, and the generator asserts them.
+   * They used to be optional, and 27 of the 39 modules simply omitted them:
+   * the generator silently fell through to a `## Subject` heading skeleton,
+   * so a missing overview shipped as a 130-word page instead of failing the
+   * build. A new module with none of these is now a loud generator error.
+   */
+  conceptOverview: string;
+  whenToUse: string;
+  relatedModules: string[];
   keyParameters?: ParameterDoc[];
   commonPitfalls?: string[];
-  relatedModules?: string[];
   afmlChapters?: number[];
   pythonApis?: string[];
   apiSurface?: "rust-only" | "python-only" | "both";
@@ -46,6 +59,11 @@ export type ModuleDoc = {
 export const moduleDocs: ModuleDoc[] = [
   {
     slug: "backtest-statistics",
+    conceptOverview:
+      "Turns a return or equity series into the handful of statistics a strategy is actually judged on: annualised Sharpe, information ratio, the drawdown and time-under-water profile, average holding period, bet concentration, and the multiple-testing corrections — probabilistic and deflated Sharpe — that say whether a Sharpe is real. Those corrections are why this module exists rather than a two-line Sharpe helper: AFML Chapter 14's point is that a Sharpe reported without the number of trials behind it is uninterpretable.",
+    whenToUse:
+      "Reach for it after a backtest run, at model-selection time, and again in production monitoring. Use `deflated_sharpe_ratio` whenever the strategy is the survivor of a search — a grid, a parameter sweep, a family of variants — and pass the trial count honestly; `sharpe_ratio` alone flatters every one of them. Note that `drawdown_and_time_under_water` consumes a timestamped equity curve, not a return vector, and that every annualisation constant must match your bar frequency.",
+    relatedModules: ["backtesting-engine", "strategy-risk", "risk-metrics", "synthetic-backtesting"],
     module: "backtest_statistics",
     subject: "Portfolio Construction and Risk",
     summary: "Performance diagnostics for strategy returns and position trajectories.",
@@ -95,6 +113,11 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "backtesting-engine",
+    conceptOverview:
+      "Three validation modes over one data contract: walk-forward, purged k-fold cross-validation, and combinatorial purged CV. CPCV is the one that justifies the extra cost — instead of a single backtest path it produces phi[N,k] = C(N-1, k-1) paths, so the output is a *distribution* of per-path Sharpe ratios you can take quantiles of rather than a point estimate you can fool yourself with. Every run carries a `BacktestSafeguards` record (survivorship, look-ahead, data-mining, cost and multiple-testing controls) so the assumptions travel attached to the number.",
+    whenToUse:
+      "Use walk-forward when the question is \"would this have worked as deployed\"; use purged CV when you need many folds out of limited data; use CPCV when you are about to make a go/no-go decision and need to know how much of the reported Sharpe is path luck. All three require `label_spans` — the label lifetimes — not just observation timestamps, because that is what purging acts on. Compare the three modes against each other rather than averaging them into one statistic.",
+    relatedModules: ["cross-validation", "sample-weights", "backtest-statistics", "synthetic-backtesting", "hyperparameter-tuning"],
     module: "backtesting_engine",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.",
@@ -141,6 +164,11 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "bet-sizing",
+    conceptOverview:
+      "The layer between a model's confidence and an order. `bet_size_probability` maps class probabilities to a signed size in [-1, 1] through the t-statistic of the probability against the null of no edge, averages sizes across bets that are still active, and discretises to your execution granularity. `bet_size_dynamic` works from a price forecast instead: given the current and maximum position it returns the target position and the limit price at which that size is justified. `bet_size_reserve` sizes from a fitted mixture of long/short concurrency rather than from any model score.",
+    whenToUse:
+      "Between signal generation and execution, always — a raw model score is not a position. Use the probability path when a classifier emits calibrated probabilities, the dynamic path when you have a price forecast and want a limit-order boundary, and reserve sizing when overlapping books or stacked strategies can accumulate hidden gross exposure. Set `step_size` to real lot or contract granularity, not an arbitrary decimal, and treat the limit price as a decision boundary rather than a fill you will get.",
+    relatedModules: ["labeling", "sample-weights", "strategy-risk", "portfolio-optimization"],
     module: "bet_sizing",
     subject: "Position Sizing and Trade Construction",
     summary: "Transforms model confidence and constraints into executable position sizes.",
@@ -193,6 +221,11 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "cla",
+    conceptOverview:
+      "Markowitz's Critical Line Algorithm in the Bailey-Lopez de Prado formulation: the exact solution to the constrained mean-variance problem with inequality bounds on every weight. Rather than calling a general quadratic solver it walks the efficient frontier from the maximum-return corner, computing each turning point where an asset enters or leaves the free set. That yields the whole frontier rather than one point on it, and it terminates — which quadratic solvers on near-singular covariance matrices frequently do not.",
+    whenToUse:
+      "Use it when you need the full efficient frontier, when weight bounds are binding, or when a general optimiser is returning unstable or non-converging weights on an ill-conditioned covariance. If you only want one portfolio and the covariance is well behaved, `portfolio_optimization` is the shorter path. If the covariance itself is the problem, prefer `hrp`, which never inverts it. CLA still needs expected returns, so it inherits their estimation error.",
+    relatedModules: ["portfolio-optimization", "hrp", "hcaa", "risk-metrics"],
     module: "cla",
     subject: "Portfolio Construction and Risk",
     summary: "Critical Line Algorithm implementation for constrained mean-variance optimization.",
@@ -215,6 +248,11 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "codependence",
+    conceptOverview:
+      "Dependence measures that survive non-linearity, which Pearson correlation does not. Distance correlation is zero only under genuine independence. Mutual information and variation of information are information-theoretic and need a binning choice, which `get_optimal_number_of_bins` supplies. The angular distances turn a correlation into a proper metric — sqrt(2(1-rho)) and its absolute and squared variants — which is what hierarchical clustering needs in order to be well posed at all.",
+    whenToUse:
+      "Use it upstream of any clustering or feature-pruning step: `hrp`, `hcaa` and `onc` all consume a distance matrix, and feeding them raw correlation silently assumes the relationship is linear. Use distance correlation when you suspect a non-monotone relationship, and variation of information when you want a true metric on discrete variables. Bin selection materially changes mutual-information estimates, so fix it explicitly and record it alongside the result.",
+    relatedModules: ["hrp", "hcaa", "onc", "feature-importance", "microstructural-features"],
     module: "codependence",
     subject: "Market Microstructure, Dependence and Regime Detection",
     summary: "Dependence metrics beyond linear correlation for feature and asset relationships.",
@@ -237,6 +275,11 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "cross-validation",
+    conceptOverview:
+      "Standard k-fold leaks in finance because labels overlap: an observation's label is realised over a span of bars, and a training observation whose span touches a test observation's span has effectively seen the answer. `PurgedKFold` takes those spans as `samples_info_sets`, drops the overlapping training observations (purging), then drops a further `pct_embargo` fraction of observations immediately after each test fold to catch the serial correlation the spans do not literally share.",
+    whenToUse:
+      "Use it in place of plain k-fold for every model whose labels are event-based — which is every model built on `labeling`. `ml_cross_val_score` wraps it for scoring and `ml_get_train_times` exposes the purged training index if you are driving your own loop. Report fold-to-fold variance, not only the mean: a high mean with high variance across purged folds usually means the leakage moved rather than disappeared.",
+    relatedModules: ["labeling", "sample-weights", "backtesting-engine", "hyperparameter-tuning", "feature-importance"],
     module: "cross_validation",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Purged cross-validation utilities designed for label overlap and leakage control.",
@@ -348,6 +391,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "hyperparameter-tuning",
+    conceptOverview:
+      "Grid and randomized search that run under `PurgedKFold` rather than plain k-fold, so the tuning loop cannot buy its score with leakage. `randomized_search` samples from `RandomParamDistribution`, including log-uniform — the right prior for scale parameters such as C and gamma — and AFML Chapter 9's argument is that beyond a couple of dimensions random sampling dominates grid search per unit of compute. The scoring choice exposed by `SearchScoring` is an economic decision, not a statistical one.",
+    whenToUse:
+      "Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilities drive position size, since it penalises confident wrong answers the way a bet does; use `Accuracy` only when every prediction carries similar economic weight; use `BalancedAccuracy` for the severe class imbalance typical of meta-labelling, where recall of the positive class is what matters. Pass `sample_weight` from `sample_weights` — tuning on unweighted overlapping observations rewards the wrong model.",
+    relatedModules: ["cross-validation", "sample-weights", "sb-bagging", "ensemble-methods", "backtesting-engine"],
     module: "hyperparameter_tuning",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.",
@@ -392,6 +440,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "ef3m",
+    conceptOverview:
+      "Exact Fit of the first 3, 4 or 5 Moments: fits a mixture of two Gaussians by matching sample moments instead of by maximum likelihood. `M2N` takes the observed moments and searches over the second mean and the mixing probability, solving the remaining parameters analytically at each candidate (`iter_4` and `iter_5` for the four- and five-moment variants); `most_likely_parameters` then picks the modal solution across that search. It is fast and derivative-free, which is what makes it usable as an initialiser.",
+    whenToUse:
+      "Use it when a return or bet-outcome distribution is visibly bimodal — two regimes, or a mixture of trades that ran and trades that were stopped — and you want the components without paying for EM. It is the standard way to obtain the mixture parameters `bet_size_reserve` needs. Because it works from higher moments it is sensitive to tail estimation noise, so on small samples treat its output as an initialisation for a heavier optimiser rather than a final answer.",
+    relatedModules: ["bet-sizing", "backtest-statistics", "strategy-risk"],
     module: "ef3m",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Moment-based mixture fitting utilities for two-normal components.",
@@ -414,6 +467,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "ensemble-methods",
+    conceptOverview:
+      "The diagnostics behind the bagging-versus-boosting choice rather than another ensemble implementation. `bias_variance_noise` decomposes the error; `average_pairwise_prediction_correlation` measures how correlated your base learners actually are; `bagging_ensemble_variance` turns that rho into the variance a bagged ensemble can reach, sigma^2(rho + (1-rho)/N). The consequence AFML Chapter 6 draws is the useful one: as N grows the ensemble variance floors at sigma^2·rho, so with highly correlated learners more estimators buy nothing at all.",
+    whenToUse:
+      "Use it before scaling an ensemble. If measured rho is 0.9, going from 20 to 200 estimators is wasted compute, and `recommend_bagging_vs_boosting` will say so from the numbers rather than from folklore. Reach for bagging when the base learner is unstable (variance-dominated) and boosting when it is weak (bias-dominated). Under heavy label overlap use `sequential_bootstrap_sample_indices` instead of the IID bootstrap, or the bags will be near-duplicates of each other.",
+    relatedModules: ["sb-bagging", "sampling", "sample-weights", "cross-validation", "feature-importance"],
     module: "ensemble_methods",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.",
@@ -466,6 +524,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "etf-trick",
+    conceptOverview:
+      "The ETF trick turns a series of futures contracts — each with its own roll, financing cost and carry — into one continuous, reinvestable price series that a backtest can treat like a tradable instrument. `EtfTrick` consumes aligned open, close, allocation and cost tables plus optional financing rates and produces a NAV series; `get_futures_roll_series` applies backward or forward roll adjustment to a single contract chain. Both exist because naively concatenating contract prices manufactures a return at every roll.",
+    whenToUse:
+      "Use it whenever a backtest spans a contract roll, or whenever the traded object is a basket whose weights change over time. Suspiciously smooth PnL around roll dates is the symptom of skipping it. Costs and financing rates must come from the same clock as the price data, and the contract calendar assumptions are worth verifying against the exchange rather than inferring from the data. This module is Rust-only — no Python bindings are exposed.",
+    relatedModules: ["data-structures", "backtesting-engine", "backtest-statistics", "bet-sizing"],
     module: "etf_trick",
     subject: "Position Sizing and Trade Construction",
     summary: "Synthetic ETF and futures roll utilities for realistic PnL path construction.",
@@ -496,6 +559,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "feature-importance",
+    conceptOverview:
+      "The three AFML Chapter 8 importance methods on the Rust side, each with a different blind spot. MDI is in-sample and tree-specific: it sums each feature's impurity decrease across splits, cheap but defeated by substitution, since two interchangeable features split the credit and both then look weak. MDA permutes a feature in the *test* fold and measures the score drop, so it is model-agnostic and out-of-sample but still substitution-prone. Single-feature importance trains on one feature at a time, immune to substitution but blind to interactions. `feature_pca_analysis` cross-checks the ranking against an unsupervised one.",
+    whenToUse:
+      "Run at least two of the three: agreement between MDI and MDA is evidence, MDI alone is not. Prefer MDA when leakage risk is high, since it is the only one scored out of sample — and give it purged splits from `cross_validation`, not a fold count. Compare rankings across time windows before trusting them; a feature that is important in only one regime is a feature that will fail in the next.",
+    relatedModules: ["feature-diagnostics", "cross-validation", "sample-weights", "codependence", "fingerprint"],
     module: "feature_importance",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.",
@@ -611,6 +679,11 @@ Both filters replace the naive approach of labeling every bar, which creates hig
   },
   {
     slug: "fingerprint",
+    conceptOverview:
+      "Model fingerprinting decomposes a fitted model's behaviour into a linear effect, a non-linear effect and pairwise interaction effects per feature, by sweeping each feature across a grid and measuring how the prediction moves. The result describes *what the model learned* rather than how well it scored — two models with identical accuracy can have entirely different fingerprints, and only one of them may be relying on something that will still be there next quarter.",
+    whenToUse:
+      "Use it after fitting and before deploying, and again on every retrain: comparing fingerprints across retrains is a drift signal that accuracy metrics do not give you. Use the pairwise effects to find interaction risk, since a large pairwise term means the model's response to one feature depends on another, which makes its extrapolation fragile. It works with any model — implement `RegressionPredictor` or `ClassificationPredictor` and pass it to `fit`.",
+    relatedModules: ["feature-importance", "feature-diagnostics", "ensemble-methods", "backtesting-engine"],
     module: "fingerprint",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Model fingerprinting for linear, non-linear, and pairwise feature effects.",
@@ -689,6 +762,11 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
   },
   {
     slug: "hcaa",
+    conceptOverview:
+      "Hierarchical Clustering Asset Allocation generalises HRP's recursive bisection to risk measures other than variance. Seriation and the cluster tree are built the same way, but the split at each node weights the two sides by the chosen `allocation_metric` — cluster variance, standard deviation, Sharpe ratio, expected shortfall or conditional drawdown — so the same hierarchy can express a tail-risk budget rather than only a variance budget. Like HRP it never inverts the covariance matrix.",
+    whenToUse:
+      "Use it in place of `hrp` when your risk budget is not variance: expected shortfall or conditional drawdown for a drawdown-controlled mandate, Sharpe when you have return views you are willing to defend. Use `hrp` when you do not, since the variance split needs no expected-return estimate at all. The clustering is only as good as the distance fed to it, so build that with `codependence` rather than raw correlation, and sanity-check the cluster count with `onc`.",
+    relatedModules: ["hrp", "onc", "codependence", "portfolio-optimization", "cla"],
     module: "hcaa",
     subject: "Portfolio Construction and Risk",
     summary: "Hierarchical Clustering Asset Allocation variant with cluster-level constraints.",
@@ -719,6 +797,11 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
   },
   {
     slug: "hrp",
+    conceptOverview:
+      "Hierarchical Risk Parity replaces matrix inversion with a tree. It clusters assets on a correlation distance, reorders the covariance matrix so that similar assets sit adjacent (quasi-diagonalisation), then recursively bisects that ordering, splitting capital between the two halves in inverse proportion to their cluster variance. Nothing is inverted, so the numerical instability that makes Markowitz weights swing violently under a noisy covariance estimate simply does not arise.",
+    whenToUse:
+      "Use it when the asset count is large relative to the sample, when the covariance estimate is noisy, or whenever mean-variance weights are unstable between rebalances — which out of sample is most of the time. It needs no expected returns, which is both its robustness and its limit: if you have return views you trust, `cla` or `portfolio_optimization` will use them and HRP will not. Keep the asset ordering you pass in aligned with the dendrogram order you read back.",
+    relatedModules: ["hcaa", "codependence", "onc", "portfolio-optimization", "cla"],
     module: "hrp",
     subject: "Portfolio Construction and Risk",
     summary: "Hierarchical Risk Parity allocation with recursive bisection.",
@@ -856,6 +939,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "microstructural-features",
+    conceptOverview:
+      "Features computed from bar-level order flow rather than from price alone, in three families: effective-spread proxies (Roll, Corwin-Schultz), price-impact coefficients (Kyle's lambda, Amihud, Hasbrouck) and flow-toxicity or entropy measures (VPIN, plus Shannon, Lempel-Ziv and plug-in entropy over encoded tick signs). Together they estimate what OHLC bars omit: how expensive the instrument is to trade, and how likely it is that the counterparty knows something you do not.",
+    whenToUse:
+      "Use them as features when the edge or its cost depends on liquidity — execution models, regime detection, and any signal that decays with trade size. VPIN in particular is an early-warning indicator for flow toxicity ahead of liquidity events. Normalise within venue and time bucket before comparing across assets, since these are strongly regime-dependent, and freeze the symbol encoding used for entropy features or the values will not be comparable between training and production.",
+    relatedModules: ["data-structures", "streaming-hpc", "structural-breaks", "filters", "codependence"],
     module: "microstructural_features",
     subject: "Market Microstructure, Dependence and Regime Detection",
     summary: "Price-impact, spread, entropy, and flow toxicity estimators.",
@@ -901,6 +989,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "onc",
+    conceptOverview:
+      "Optimal Number of Clusters: runs k-means over a correlation matrix for a range of k, scores each partition by the mean-to-standard-deviation ratio of its silhouette scores, then re-clusters only the clusters that scored badly and keeps the result if it improves. Base k-means is unstable in both k and initialisation, so ONC restarts it `repeat` times and keeps the best — the point is a defensible cluster count, not a fast one.",
+    whenToUse:
+      "Use it before any hierarchical allocation to decide how many clusters the universe actually supports, instead of hard-coding a number; its answer feeds `hcaa`'s `optimal_num_clusters` directly. Use it also to test whether a claimed grouping — sectors, factors, strategy families — survives contact with the data. Clean the correlation matrix first: on an unstable universe ONC will happily find structure in noise and report a confident k for it.",
+    relatedModules: ["hcaa", "hrp", "codependence", "portfolio-optimization"],
     module: "onc",
     subject: "Portfolio Construction and Risk",
     summary: "Optimal Number of Clusters utilities for clustering stability and allocation workflows.",
@@ -923,6 +1016,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "portfolio-optimization",
+    conceptOverview:
+      "Mean-variance allocation with the constraints production actually needs. Four objectives — inverse variance, minimum volatility, maximum Sharpe, and efficient risk (maximum return at a target volatility) — each with a `_with` variant taking `AllocationOptions`: per-asset bounds, a global tuple bound, the expected-returns estimator (historical mean or exponentially weighted) and price resampling. The options struct is really the module; the constraint set matters far more to out-of-sample behaviour than the choice of objective.",
+    whenToUse:
+      "Use it when you have expected returns you are willing to defend, and `hrp` or `hcaa` when you do not. Treat `allocate_inverse_variance` as the baseline to beat — it uses no return estimate at all and is hard to improve on out of sample. Cap concentration through `bounds` before tuning the objective, and monitor turnover and the drift between target and filled weights, which usually account for more of the backtest-to-live gap than the optimiser does.",
+    relatedModules: ["hrp", "hcaa", "cla", "risk-metrics", "backtest-statistics"],
     module: "portfolio_optimization",
     subject: "Portfolio Construction and Risk",
     summary: "Mean-variance and constrained allocation methods with ergonomic APIs.",
@@ -967,6 +1065,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "risk-metrics",
+    conceptOverview:
+      "Downside risk measures over a return series or a return panel: value at risk (the quantile at the given confidence level), expected shortfall (the mean loss beyond it), conditional drawdown at risk, and portfolio variance from a covariance matrix and a weight vector. Expected shortfall and CDaR are subadditive where VaR is not, which is why a risk budget built on VaR alone can be gamed by splitting one position across two sleeves.",
+    whenToUse:
+      "Use it for portfolio-level guardrails and risk budgets, and as the input when `hcaa` should allocate on tail risk rather than on variance. Prefer expected shortfall to VaR whenever the number will be summed across books. These are non-parametric estimates, so they need enough tail observations to mean anything: at 95% confidence a 200-observation sample rests on ten points. All of them are `&self` methods on a unit struct, and the `_from_matrix` variants take return panels.",
+    relatedModules: ["hcaa", "portfolio-optimization", "backtest-statistics", "strategy-risk"],
     module: "risk_metrics",
     subject: "Portfolio Construction and Risk",
     summary: "Portfolio and return-distribution risk measures for downside control.",
@@ -989,6 +1092,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "strategy-risk",
+    conceptOverview:
+      "AFML Chapter 15 asks a question portfolio risk does not: given the precision, payout asymmetry and bet frequency this strategy actually achieved, what is the probability that the *process* fails to reach its Sharpe target? The symmetric and asymmetric helpers invert the Sharpe relation for whichever variable you are solving for — implied precision, implied frequency — and `estimate_strategy_failure_probability` bootstraps the realised bet outcomes, fits a KDE to the resulting precision distribution, and reports the mass falling below the precision the target Sharpe requires.",
+    whenToUse:
+      "Use it at strategy-approval time and then as a standing monitor: the implied precision threshold p* is a concrete kill criterion, and a strategy whose realised precision drifts toward it is failing before its PnL says so. Analyse the manager-controlled inputs — the payouts and the bet count — separately from market-determined precision, because the first are design choices and the second is not. This is strategy viability; use `risk_metrics` for holdings and tail risk.",
+    relatedModules: ["risk-metrics", "backtest-statistics", "bet-sizing", "backtesting-engine"],
     module: "strategy_risk",
     subject: "Portfolio Construction and Risk",
     summary: "AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.",
@@ -1036,6 +1144,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "hpc-parallel",
+    conceptOverview:
+      "AFML Chapter 20's atom/molecule model: a job is a list of independent atoms, atoms are grouped into molecules, and molecules are dispatched to workers. What this adds over a plain thread pool is the partitioning choice — linear for uniform-cost atoms, nested for the triangular workloads that dominate this library, where atom k touches k earlier observations — together with a metrics report and a serial mode whose callback semantics are identical to the threaded one.",
+    whenToUse:
+      "Use it for any embarrassingly parallel research loop: per-asset feature computation, bootstrap replicas, parameter sweeps. Choose `PartitionStrategy::Nested` when per-atom cost grows with the atom index, otherwise the final molecule becomes the whole runtime; choose `Linear` when atoms cost the same. Debug with `ExecutionMode::Serial` first — the callback contract is unchanged, so a bug that reproduces there is not a concurrency bug and you have just halved the search space.",
+    relatedModules: ["streaming-hpc", "combinatorial-optimization", "sampling", "backtesting-engine"],
     module: "hpc_parallel",
     subject: "Scaling, HPC and Infrastructure",
     summary: "AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.",
@@ -1083,6 +1196,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "combinatorial-optimization",
+    conceptOverview:
+      "AFML Chapter 21 tooling for discrete, path-dependent problems, built around keeping the integer structure explicit rather than relaxing it away. `DecisionSchema` describes an integer decision space and `solve_exact` enumerates it. `TradingTrajectorySchema` describes a trading path — per-step trade bounds, inventory limits, an optional terminal inventory — and `enumerate_trading_paths` produces every feasible trajectory, which `evaluate_trading_path` scores against expected returns, risk aversion, market impact and a fixed per-ticket cost.",
+    whenToUse:
+      "Use exact enumeration on small instances as a correctness oracle: `compare_exact_and_adapter` exists precisely so a heuristic or external solver can be validated against ground truth before it is trusted at scale. The decision space grows exponentially in horizon and dimension and `max_paths` will stop you — treat that as the signal to move to an adapter, not to raise the cap. The fixed ticket cost is what makes the problem genuinely combinatorial; without it a continuous relaxation would do.",
+    relatedModules: ["hpc-parallel", "bet-sizing", "portfolio-optimization", "backtesting-engine"],
     module: "combinatorial_optimization",
     subject: "Scaling, HPC and Infrastructure",
     summary:
@@ -1133,6 +1251,11 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
   },
   {
     slug: "streaming-hpc",
+    conceptOverview:
+      "AFML Chapter 22 is about turnaround time rather than throughput: an early-warning metric that arrives after the event is worthless however fast it was computed. This module keeps VPIN and venue-concentration HHI as incremental state with bounded memory — VPIN fills equal-volume buckets and retains a fixed-length window of completed ones, HHI retains a fixed event lookback — so per-event cost and memory stay constant however long the stream runs. `run_streaming_pipeline_parallel` fans many streams across workers through `hpc_parallel`.",
+    whenToUse:
+      "Use it for live or replayed order-flow monitoring where the alert has to fire during the event, not after it. The bundled `generate_synthetic_flash_crash_stream` exists to calibrate thresholds against a known-bad path first: a threshold pair that fires late on a synthetic crash will fire late on a real one. For batch feature computation over a completed history use `microstructural_features` instead, which is cheaper per bar and gives the same quantities.",
+    relatedModules: ["hpc-parallel", "microstructural-features", "structural-breaks", "data-structures"],
     module: "streaming_hpc",
     subject: "Scaling, HPC and Infrastructure",
     summary:
@@ -1315,6 +1438,11 @@ The result is a bootstrap sample where the drawn labels are as independent as po
   },
   {
     slug: "sb-bagging",
+    conceptOverview:
+      "Bagging in which the resampling respects label overlap. The standard bootstrap assumes IID draws; with triple-barrier labels whose spans overlap, an IID bag is full of near-duplicates, the base learners end up correlated, and the variance reduction bagging promises never materialises. Sequential bootstrap instead draws each index with probability proportional to its average uniqueness *given what has already been drawn*, so each bag is as close to independent as the data permits.",
+    whenToUse:
+      "Use it in place of ordinary bagging whenever the labels come from `labeling` — that is, whenever observations overlap in time. Measure the benefit rather than assuming it: `ensemble_methods::average_pairwise_prediction_correlation` will tell you whether the base learners actually decorrelated, and if rho is still high the extra sampling cost bought nothing. Note that `new()` takes the random seed, not the ensemble size: `n_estimators` defaults to 10 and must be set explicitly.",
+    relatedModules: ["sampling", "ensemble-methods", "sample-weights", "labeling", "cross-validation"],
     module: "sb_bagging",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Sequentially bootstrapped bagging classifiers/regressors.",
@@ -1345,6 +1473,11 @@ The result is a bootstrap sample where the drawn labels are as independent as po
   },
   {
     slug: "synthetic-backtesting",
+    conceptOverview:
+      "AFML Chapter 13's answer to profit-taking and stop-loss overfitting. Rather than searching the PT/SL mesh on the single historical path you have — where the winning cell is mostly luck — it calibrates an Ornstein-Uhlenbeck process to that path, generates thousands of synthetic paths from the fitted parameters, and evaluates the whole mesh across all of them. `detect_no_stable_optimum` then asks whether the resulting Sharpe surface has a peak worth trusting at all.",
+    whenToUse:
+      "Use it before committing to any exit rule. Its most valuable output is often the negative one: when the fitted persistence is close to 1 the price is near a random walk, the Sharpe surface is flat, and `no_stable_optimum` says so — meaning no PT/SL pair is defensible and the honest move is to skip the optimisation rather than take the argmax of noise. It complements `backtesting_engine` rather than replacing it, since that validates on the real path.",
+    relatedModules: ["backtesting-engine", "labeling", "backtest-statistics", "bet-sizing", "strategy-risk"],
     module: "synthetic_backtesting",
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.",
@@ -1388,6 +1521,11 @@ The result is a bootstrap sample where the drawn labels are as independent as po
   },
   {
     slug: "structural-breaks",
+    conceptOverview:
+      "Three families of break test. Chow-type statistics test for a break at a known or scanned candidate date. Chu-Stinchcombe-White is a sequential monitoring statistic that can be run online as data arrives. SADF — the supremum of ADF statistics over expanding windows — tests for *explosive* rather than merely non-stationary behaviour, which is the econometric signature of a bubble: an autoregressive coefficient that exceeds 1 rather than approaching it from below.",
+    whenToUse:
+      "Use SADF as a regime guard on any model whose parameters are estimated: a break means the training distribution no longer describes the present, and refitting then becomes a decision rather than a formality. Use the sequential statistics for online monitoring between refits. SADF cost grows quadratically with series length, because every endpoint re-runs an expanding-window regression, so keep long-window scenarios on a nightly path rather than in an interactive loop.",
+    relatedModules: ["filters", "microstructural-features", "fracdiff", "cross-validation"],
     module: "structural_breaks",
     subject: "Market Microstructure, Dependence and Regime Detection",
     summary: "Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).",
@@ -1410,6 +1548,11 @@ The result is a bootstrap sample where the drawn labels are as independent as po
   },
   {
     slug: "util-fast-ewma",
+    conceptOverview:
+      "One function: a single-pass exponentially weighted moving average with span-style decay, alpha = 2/(window+1), corrected by the accumulated weight so that early values are not dragged toward the seed. It mirrors `mlfinlab.util.fast_ewma` exactly, which is the point — it is what makes daily volatility and every EWMA-derived feature numerically comparable between this library and a pandas reference implementation.",
+    whenToUse:
+      "Use it instead of writing a rolling loop, so that everything downstream — `util::volatility`'s daily vol, the microstructure feature panel, dynamic threshold series for `filters` — shares one decay convention. Remember that `window` is a span rather than a hard lookback: the weight on a point w bars back is (1-alpha)^w, not zero, so the estimate remembers further than the number suggests. Size the span longer than the horizon you are trying to smooth over.",
+    relatedModules: ["util-volatility", "filters", "microstructural-features", "labeling"],
     module: "util::fast_ewma",
     subject: "Market Microstructure, Dependence and Regime Detection",
     summary: "Fast EWMA primitive shared across feature and volatility routines.",
@@ -1432,6 +1575,11 @@ The result is a bootstrap sample where the drawn labels are as independent as po
   },
   {
     slug: "util-volatility",
+    conceptOverview:
+      "Four volatility estimators with different data requirements and different blind spots. `get_daily_vol` is a close-to-close EWMA over a timestamped series — the estimator AFML uses to scale triple-barrier widths. Parkinson uses the high-low range and extracts far more information per observation, but ignores overnight gaps and assumes no drift. Garman-Klass adds the open and close. Yang-Zhang combines an overnight, an open-to-close and a Rogers-Satchell term under a variance-minimising weight, and is the only one of the four that handles both opening gaps and intraday drift.",
+    whenToUse:
+      "Use `get_daily_vol` whenever volatility is a scaling target for barriers or position sizes, and match its lookback to the event horizon — a 100-bar volatility scaling a 3-bar barrier is measuring the wrong thing. Use the range-based estimators when you have OHLC and want more precision from the same number of bars, preferring Yang-Zhang for instruments that gap. All range estimators degrade when quoted spreads are wide, because the recorded high and low then reflect microstructure noise rather than price.",
+    relatedModules: ["labeling", "filters", "util-fast-ewma", "bet-sizing", "microstructural-features"],
     module: "util::volatility",
     subject: "Market Microstructure, Dependence and Regime Detection",
     summary: "Volatility estimators used across labeling and risk workflows.",

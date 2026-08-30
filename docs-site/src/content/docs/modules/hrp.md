@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "hrp"
 api_surface: "both"
-risk_notes:
-  - "HRP is often more robust under unstable covariance estimates."
-  - "Ensure input asset order tracks produced dendrogram order."
 rust_api:
   - "HierarchicalRiskParity"
   - "HrpDendrogram"
@@ -21,13 +18,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Hierarchical Risk Parity replaces matrix inversion with a tree. It clusters assets on a correlation distance, reorders the covariance matrix so that similar assets sit adjacent (quasi-diagonalisation), then recursively bisects that ordering, splitting capital between the two halves in inverse proportion to their cluster variance. Nothing is inverted, so the numerical instability that makes Markowitz weights swing violently under a noisy covariance estimate simply does not arise.
 
-## Why This Module Exists
+## When to Use
 
-Produces stable allocations without matrix inversion required by classic Markowitz.
+Use it when the asset count is large relative to the sample, when the covariance estimate is noisy, or whenever mean-variance weights are unstable between rebalances — which out of sample is most of the time. It needs no expected returns, which is both its robustness and its limit: if you have return views you trust, `cla` or `portfolio_optimization` will use them and HRP will not. Keep the asset ordering you pass in aligned with the dendrogram order you read back.
 
 ## Mathematical Foundations
 
@@ -83,7 +80,15 @@ println!("seriation order: {:?}", hrp.ordered_indices);
 - `HierarchicalRiskParity`
 - `HrpDendrogram`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - HRP is often more robust under unstable covariance estimates.
 - Ensure input asset order tracks produced dendrogram order.
+
+## Related Modules
+
+- [`hcaa`](/modules/hcaa/)
+- [`codependence`](/modules/codependence/)
+- [`onc`](/modules/onc/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`cla`](/modules/cla/)

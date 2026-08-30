@@ -1,8 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { moduleDocs } from '../src/data/moduleDocs.ts';
 
-const outDir = path.resolve(process.cwd(), 'src/content/docs/modules');
+// Anchored to this file, not to process.cwd(). Running the generator from the
+// repo root used to silently create a second, stray src/content/docs/modules/
+// tree there instead of writing the real pages.
+const docsSite = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const outDir = path.join(docsSite, 'src/content/docs/modules');
 fs.mkdirSync(outDir, { recursive: true });
 
 // These pages are machine-emitted from src/data/moduleDocs.ts and have not been read
@@ -14,6 +19,36 @@ const generatedOn = new Date().toISOString().slice(0, 10);
 
 const q = (value) => JSON.stringify(String(value));
 const toYamlList = (values) => values.map((v) => `  - ${q(v)}`).join('\n');
+
+// conceptOverview, whenToUse and relatedModules are load-bearing: without them a
+// page is a heading skeleton. They were optional once and 27 of 39 modules left
+// them out, which shipped as thin pages rather than as an error. Fail loudly now.
+const REQUIRED_TEXT = ['conceptOverview', 'whenToUse'];
+for (const doc of moduleDocs) {
+  for (const field of REQUIRED_TEXT) {
+    if (typeof doc[field] !== 'string' || !doc[field].trim()) {
+      throw new Error(
+        `moduleDocs.ts: ${doc.slug} is missing a non-empty ${field}. ` +
+          'Write it — a module page without one is a heading skeleton.'
+      );
+    }
+  }
+  if (!Array.isArray(doc.relatedModules) || doc.relatedModules.length === 0) {
+    throw new Error(
+      `moduleDocs.ts: ${doc.slug} is missing relatedModules. ` +
+        'Name at least one related module; an isolated page is a dead end.'
+    );
+  }
+  const slugs = new Set(moduleDocs.map((d) => d.slug));
+  for (const slug of doc.relatedModules) {
+    if (!slugs.has(slug)) {
+      throw new Error(
+        `moduleDocs.ts: ${doc.slug} lists relatedModules entry "${slug}", ` +
+          'which is not a module slug — the generated link would 404.'
+      );
+    }
+  }
+}
 
 for (const doc of moduleDocs) {
   const sections = [];
@@ -28,15 +63,10 @@ for (const doc of moduleDocs) {
     sections.push(`## When to Use\n\n${doc.whenToUse}`);
   }
 
-  // --- Subject (kept for non-enriched modules) ---
-  if (!doc.conceptOverview) {
-    sections.push(`## Subject\n\n**${doc.subject}**`);
-  }
-
-  // --- Why This Module Exists (kept for non-enriched modules) ---
-  if (!doc.conceptOverview) {
-    sections.push(`## Why This Module Exists\n\n${doc.whyItExists}`);
-  }
+  // `## Subject` and `## Why This Module Exists` used to render here for modules
+  // without a conceptOverview. `subject` is a one-word taxonomy string — metadata
+  // formatted as a section — and `whyItExists` is a single sentence that
+  // conceptOverview now covers properly. Both branches are gone with the stubs.
 
   // --- Mathematical Foundations ---
   const formulas = doc.formulas.length
@@ -130,10 +160,15 @@ for (const doc of moduleDocs) {
     );
   }
 
-  // --- Implementation Notes ---
+  // --- Risk Notes and Caveats ---
+  // These were emitted twice on every page: once as the `risk_notes` frontmatter
+  // key and again, verbatim, as a body section titled 'Implementation Notes'.
+  // Nothing reads the frontmatter key (it is optional in src/content/config.ts
+  // and referenced by no component or script), and the content is caveats rather
+  // than implementation detail — so it is now rendered once, under its real name.
   if (doc.notes.length) {
     sections.push(
-      `## Implementation Notes\n\n${doc.notes.map((n) => `- ${n}`).join('\n')}`
+      `## Risk Notes and Caveats\n\n${doc.notes.map((n) => `- ${n}`).join('\n')}`
     );
   }
 
@@ -152,7 +187,6 @@ for (const doc of moduleDocs) {
       ? `afml_chapters:\n${doc.afmlChapters.map((c) => `  - ${c}`).join('\n')}\n`
       : '';
 
-  // Build frontmatter — risk_notes stay for schema queries, body uses Implementation Notes
   const content = `---
 title: ${q(doc.module)}
 description: ${q(doc.summary)}
@@ -165,9 +199,7 @@ audience:
   - quant-dev
   - platform-engineering
 module: ${q(doc.module)}
-${doc.apiSurface ? `api_surface: ${q(doc.apiSurface)}\n` : ''}${chapterNote}risk_notes:
-${toYamlList(doc.notes)}
-rust_api:
+${doc.apiSurface ? `api_surface: ${q(doc.apiSurface)}\n` : ''}${chapterNote}rust_api:
 ${toYamlList(doc.keyApis)}
 sidebar:
   badge: Module

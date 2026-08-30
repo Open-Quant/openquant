@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "adapters"
 api_surface: "python-only"
-risk_notes:
-  - "All adapter functions validate input length alignment before constructing frames."
-  - "SignalStreamBuffer supports incremental append for streaming research notebooks."
-  - "to_pandas() is available for downstream tools that require pandas; requires pandas to be installed."
 rust_api:
   - "to_polars_signal_frame"
   - "to_polars_event_frame"
@@ -86,7 +82,7 @@ all_signals = buf.frame()  # concat into single DataFrame
 - `to_polars_weights_frame`
 - `SignalStreamBuffer`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - All adapter functions validate input length alignment before constructing frames.
 - SignalStreamBuffer supports incremental append for streaming research notebooks.

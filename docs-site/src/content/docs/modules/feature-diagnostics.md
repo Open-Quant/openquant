@@ -13,11 +13,6 @@ module: "feature_diagnostics"
 api_surface: "python-only"
 afml_chapters:
   - 8
-risk_notes:
-  - "MDI is biased toward high-cardinality features; cross-check with MDA."
-  - "MDA uses purged k-fold CV internally to prevent leakage in importance estimates."
-  - "SFI trains single-feature models — useful for detecting features that are only useful in combination."
-  - "substitution_effect_report combines MDA + correlation + PCA in one call."
 rust_api:
   - "mdi_importance"
   - "mda_importance"
@@ -138,7 +133,7 @@ print(report["orthogonalized"]["max_abs_corr_after"])     # e.g., 0.03
 - `orthogonalize_features_pca`
 - `substitution_effect_report`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - MDI is biased toward high-cardinality features; cross-check with MDA.
 - MDA uses purged k-fold CV internally to prevent leakage in importance estimates.

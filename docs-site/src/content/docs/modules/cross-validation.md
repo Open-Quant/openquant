@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "cross_validation"
 api_surface: "rust-only"
-risk_notes:
-  - "Always align event end-times when purging."
-  - "Report variance across folds, not only mean score."
 rust_api:
   - "ml_cross_val_score"
   - "ml_get_train_times"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+Standard k-fold leaks in finance because labels overlap: an observation's label is realised over a span of bars, and a training observation whose span touches a test observation's span has effectively seen the answer. `PurgedKFold` takes those spans as `samples_info_sets`, drops the overlapping training observations (purging), then drops a further `pct_embargo` fraction of observations immediately after each test fold to catch the serial correlation the spans do not literally share.
 
-## Why This Module Exists
+## When to Use
 
-Time-dependent labels violate IID assumptions; purging/embargoing reduces leakage bias.
+Use it in place of plain k-fold for every model whose labels are event-based — which is every model built on `labeling`. `ml_cross_val_score` wraps it for scoring and `ml_get_train_times` exposes the purged training index if you are driving your own loop. Report fold-to-fold variance, not only the mean: a high mean with high variance across purged folds usually means the leakage moved rather than disappeared.
 
 ## Mathematical Foundations
 
@@ -80,7 +77,15 @@ println!("{} folds; fold 0 keeps {} training rows", splits.len(), splits[0].0.le
 - `PurgedKFold`
 - `Scoring`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Always align event end-times when purging.
 - Report variance across folds, not only mean score.
+
+## Related Modules
+
+- [`labeling`](/modules/labeling/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`backtesting-engine`](/modules/backtesting-engine/)
+- [`hyperparameter-tuning`](/modules/hyperparameter-tuning/)
+- [`feature-importance`](/modules/feature-importance/)

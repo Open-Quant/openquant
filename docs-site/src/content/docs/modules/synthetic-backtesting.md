@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "synthetic_backtesting"
 api_surface: "both"
-risk_notes:
-  - "Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample."
-  - "Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization."
 rust_api:
   - "calibrate_ou_params"
   - "generate_ou_paths"
@@ -25,13 +22,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+AFML Chapter 13's answer to profit-taking and stop-loss overfitting. Rather than searching the PT/SL mesh on the single historical path you have — where the winning cell is mostly luck — it calibrates an Ornstein-Uhlenbeck process to that path, generates thousands of synthetic paths from the fitted parameters, and evaluates the whole mesh across all of them. `detect_no_stable_optimum` then asks whether the resulting Sharpe surface has a peak worth trusting at all.
 
-## Why This Module Exists
+## When to Use
 
-AFML Chapter 13 shows that selecting PT/SL rules on a single historical path is prone to overfitting; synthetic path ensembles let us evaluate rule robustness under calibrated process dynamics.
+Use it before committing to any exit rule. Its most valuable output is often the negative one: when the fitted persistence is close to 1 the price is near a random walk, the Sharpe surface is flat, and `no_stable_optimum` says so — meaning no PT/SL pair is defensible and the honest move is to skip the optimisation rather than take the argmax of noise. It complements `backtesting_engine` rather than replacing it, since that validates on the real path.
 
 ## Mathematical Foundations
 
@@ -103,7 +100,15 @@ if out.diagnostics.no_stable_optimum {
 - `detect_no_stable_optimum`
 - `run_synthetic_otr_workflow`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample.
 - Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization.
+
+## Related Modules
+
+- [`backtesting-engine`](/modules/backtesting-engine/)
+- [`labeling`](/modules/labeling/)
+- [`backtest-statistics`](/modules/backtest-statistics/)
+- [`bet-sizing`](/modules/bet-sizing/)
+- [`strategy-risk`](/modules/strategy-risk/)

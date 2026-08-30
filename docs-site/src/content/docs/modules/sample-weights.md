@@ -13,9 +13,6 @@ module: "sample_weights"
 api_surface: "both"
 afml_chapters:
   - 4
-risk_notes:
-  - "Pair with sequential bootstrap for robust label sampling."
-  - "Time-decay controls recency bias explicitly."
 rust_api:
   - "get_weights_by_return"
   - "get_weights_by_time_decay"
@@ -123,7 +120,7 @@ println!("{} weights; newest = {:.4}", weights.len(), weights.last().map(|w| w.1
 - `get_weights_by_return`
 - `get_weights_by_time_decay`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Pair with sequential bootstrap for robust label sampling.
 - Time-decay controls recency bias explicitly.

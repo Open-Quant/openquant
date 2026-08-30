@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "streaming_hpc"
 api_surface: "both"
-risk_notes:
-  - "Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth."
-  - "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality."
-  - "Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives."
 rust_api:
   - "StreamEvent"
   - "VpinState"
@@ -29,13 +25,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Scaling, HPC and Infrastructure**
+AFML Chapter 22 is about turnaround time rather than throughput: an early-warning metric that arrives after the event is worthless however fast it was computed. This module keeps VPIN and venue-concentration HHI as incremental state with bounded memory — VPIN fills equal-volume buckets and retains a fixed-length window of completed ones, HHI retains a fixed event lookback — so per-event cost and memory stay constant however long the stream runs. `run_streaming_pipeline_parallel` fans many streams across workers through `hpc_parallel`.
 
-## Why This Module Exists
+## When to Use
 
-Streaming decisions are turnaround-time constrained; this module maintains VPIN/HHI-style indicators incrementally and supports multi-stream scaling across cores/chunk sizes.
+Use it for live or replayed order-flow monitoring where the alert has to fire during the event, not after it. The bundled `generate_synthetic_flash_crash_stream` exists to calibrate thresholds against a known-bad path first: a threshold pair that fires late on a synthetic crash will fire late on a real one. For batch feature computation over a completed history use `microstructural_features` instead, which is cheaper per bar and gives the same quantities.
 
 ## Mathematical Foundations
 
@@ -120,8 +116,15 @@ println!("streams={} molecules={} events/s={:.0}",
 - `StreamingPipelineConfig`
 - `StreamingRunMetrics`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth.
 - For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality.
 - Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives.
+
+## Related Modules
+
+- [`hpc-parallel`](/modules/hpc-parallel/)
+- [`microstructural-features`](/modules/microstructural-features/)
+- [`structural-breaks`](/modules/structural-breaks/)
+- [`data-structures`](/modules/data-structures/)

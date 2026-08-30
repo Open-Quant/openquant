@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "microstructural_features"
 api_surface: "both"
-risk_notes:
-  - "Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison."
-  - "Use shared bar definitions between training and live pipelines, otherwise feature drift is structural."
-  - "Entropy features are sensitive to encoding; freeze symbol maps in production."
 rust_api:
   - "get_roll_measure"
   - "get_corwin_schultz_estimator"
@@ -25,13 +21,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+Features computed from bar-level order flow rather than from price alone, in three families: effective-spread proxies (Roll, Corwin-Schultz), price-impact coefficients (Kyle's lambda, Amihud, Hasbrouck) and flow-toxicity or entropy measures (VPIN, plus Shannon, Lempel-Ziv and plug-in entropy over encoded tick signs). Together they estimate what OHLC bars omit: how expensive the instrument is to trade, and how likely it is that the counterparty knows something you do not.
 
-## Why This Module Exists
+## When to Use
 
-Microstructure features capture liquidity and order-flow dynamics not visible in OHLC bars alone.
+Use them as features when the edge or its cost depends on liquidity — execution models, regime detection, and any signal that decays with trade size. VPIN in particular is an early-warning indicator for flow toxicity ahead of liquidity events. Normalise within venue and time bucket before comparing across assets, since these are strongly regime-dependent, and freeze the symbol encoding used for entropy features or the values will not be comparable between training and production.
 
 ## Mathematical Foundations
 
@@ -141,8 +137,16 @@ assert!(h_plugin.is_finite());
 - `get_vpin`
 - `MicrostructuralFeaturesGenerator`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison.
 - Use shared bar definitions between training and live pipelines, otherwise feature drift is structural.
 - Entropy features are sensitive to encoding; freeze symbol maps in production.
+
+## Related Modules
+
+- [`data-structures`](/modules/data-structures/)
+- [`streaming-hpc`](/modules/streaming-hpc/)
+- [`structural-breaks`](/modules/structural-breaks/)
+- [`filters`](/modules/filters/)
+- [`codependence`](/modules/codependence/)

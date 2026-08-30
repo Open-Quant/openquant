@@ -13,11 +13,6 @@ module: "filters"
 api_surface: "both"
 afml_chapters:
   - 2
-risk_notes:
-  - "Calibrate thresholds to target event frequency, not just sensitivity."
-  - "Use identical filtering in train and live pipelines."
-  - "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold."
-  - "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions."
 rust_api:
   - "cusum_filter_indices"
   - "cusum_filter_timestamps"
@@ -148,7 +143,7 @@ let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).un
 - `Threshold`
 - `FilterError`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Calibrate thresholds to target event frequency, not just sensitivity.
 - Use identical filtering in train and live pipelines.

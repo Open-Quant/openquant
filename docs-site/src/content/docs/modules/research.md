@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "research"
 api_surface: "python-only"
-risk_notes:
-  - "make_synthetic_futures_dataset is deterministic given seed — use for regression tests and reproducible notebooks."
-  - "run_flywheel_iteration includes turnover estimation, transaction cost modeling, and net-of-cost Sharpe."
-  - "Promotion gates check realized Sharpe, net Sharpe, and leakage guards before flagging a strategy as deployment-ready."
 rust_api:
   - "make_synthetic_futures_dataset"
   - "run_flywheel_iteration"
@@ -98,7 +94,7 @@ print(result["summary"])
 - `run_flywheel_iteration`
 - `ResearchDataset`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - make_synthetic_futures_dataset is deterministic given seed — use for regression tests and reproducible notebooks.
 - run_flywheel_iteration includes turnover estimation, transaction cost modeling, and net-of-cost Sharpe.

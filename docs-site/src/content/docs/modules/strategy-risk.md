@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "strategy_risk"
 api_surface: "both"
-risk_notes:
-  - "Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p."
-  - "Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk."
 rust_api:
   - "sharpe_symmetric"
   - "implied_precision_symmetric"
@@ -28,13 +25,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+AFML Chapter 15 asks a question portfolio risk does not: given the precision, payout asymmetry and bet frequency this strategy actually achieved, what is the probability that the *process* fails to reach its Sharpe target? The symmetric and asymmetric helpers invert the Sharpe relation for whichever variable you are solving for — implied precision, implied frequency — and `estimate_strategy_failure_probability` bootstraps the realised bet outcomes, fits a KDE to the resulting precision distribution, and reports the mass falling below the precision the target Sharpe requires.
 
-## Why This Module Exists
+## When to Use
 
-Strategy risk is the probability that a process fails to achieve a Sharpe objective over time; it is distinct from holdings/portfolio variance risk and should be monitored separately.
+Use it at strategy-approval time and then as a standing monitor: the implied precision threshold p* is a concrete kill criterion, and a strategy whose realised precision drifts toward it is failing before its PnL says so. Analyse the manager-controlled inputs — the payouts and the bet count — separately from market-determined precision, because the first are design choices and the second is not. This is strategy viability; use `risk_metrics` for holdings and tail risk.
 
 ## Mathematical Foundations
 
@@ -100,7 +97,14 @@ println!("failure (KDE): {:.2}%", 100.0 * report.kde_failure_probability);
 - `StrategyRiskConfig`
 - `StrategyRiskReport`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p.
 - Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk.
+
+## Related Modules
+
+- [`risk-metrics`](/modules/risk-metrics/)
+- [`backtest-statistics`](/modules/backtest-statistics/)
+- [`bet-sizing`](/modules/bet-sizing/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

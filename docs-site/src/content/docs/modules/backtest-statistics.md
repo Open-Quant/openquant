@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "backtest_statistics"
 api_surface: "both"
-risk_notes:
-  - "Use annualization constants consistent with your bar frequency."
-  - "Deflated Sharpe is useful when strategy mining many variants."
 rust_api:
   - "sharpe_ratio"
   - "deflated_sharpe_ratio"
@@ -24,13 +21,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Turns a return or equity series into the handful of statistics a strategy is actually judged on: annualised Sharpe, information ratio, the drawdown and time-under-water profile, average holding period, bet concentration, and the multiple-testing corrections — probabilistic and deflated Sharpe — that say whether a Sharpe is real. Those corrections are why this module exists rather than a two-line Sharpe helper: AFML Chapter 14's point is that a Sharpe reported without the number of trials behind it is uninterpretable.
 
-## Why This Module Exists
+## When to Use
 
-Turns raw PnL/returns into risk-adjusted diagnostics used in model selection and production monitoring.
+Reach for it after a backtest run, at model-selection time, and again in production monitoring. Use `deflated_sharpe_ratio` whenever the strategy is the survivor of a search — a grid, a parameter sweep, a family of variants — and pass the trial count honestly; `sharpe_ratio` alone flatters every one of them. Note that `drawdown_and_time_under_water` consumes a timestamped equity curve, not a return vector, and that every annualisation constant must match your bar frequency.
 
 ## Mathematical Foundations
 
@@ -113,7 +110,14 @@ println!("sharpe={sharpe:.3} drawdowns={drawdowns:?} tuw={time_under_water:?}");
 - `drawdown_and_time_under_water`
 - `average_holding_period`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use annualization constants consistent with your bar frequency.
 - Deflated Sharpe is useful when strategy mining many variants.
+
+## Related Modules
+
+- [`backtesting-engine`](/modules/backtesting-engine/)
+- [`strategy-risk`](/modules/strategy-risk/)
+- [`risk-metrics`](/modules/risk-metrics/)
+- [`synthetic-backtesting`](/modules/synthetic-backtesting/)

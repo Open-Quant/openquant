@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "structural_breaks"
 api_surface: "both"
-risk_notes:
-  - "SADF can be computationally expensive on long windows."
-  - "Use dedicated slow/nightly test paths for heavy scenarios."
 rust_api:
   - "get_chow_type_stat"
   - "get_chu_stinchcombe_white_statistics"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+Three families of break test. Chow-type statistics test for a break at a known or scanned candidate date. Chu-Stinchcombe-White is a sequential monitoring statistic that can be run online as data arrives. SADF — the supremum of ADF statistics over expanding windows — tests for *explosive* rather than merely non-stationary behaviour, which is the econometric signature of a bubble: an autoregressive coefficient that exceeds 1 rather than approaching it from below.
 
-## Why This Module Exists
+## When to Use
 
-Regime instability can invalidate model assumptions; break detection is a core risk control.
+Use SADF as a regime guard on any model whose parameters are estimated: a break means the training distribution no longer describes the present, and refitting then becomes a decision rather than a formality. Use the sequential statistics for online monitoring between refits. SADF cost grows quadratically with series length, because every endpoint re-runs an expanding-window regression, so keep long-window scenarios on a nightly path rather than in an interactive loop.
 
 ## Mathematical Foundations
 
@@ -78,7 +75,14 @@ println!("{} SADF values, peak = {peak:.4}", sadf.len());
 - `get_sadf`
 - `SadfLags`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - SADF can be computationally expensive on long windows.
 - Use dedicated slow/nightly test paths for heavy scenarios.
+
+## Related Modules
+
+- [`filters`](/modules/filters/)
+- [`microstructural-features`](/modules/microstructural-features/)
+- [`fracdiff`](/modules/fracdiff/)
+- [`cross-validation`](/modules/cross-validation/)

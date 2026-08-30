@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "combinatorial_optimization"
 api_surface: "rust-only"
-risk_notes:
-  - "Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle."
-  - "Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment."
 rust_api:
   - "DecisionSchema"
   - "IntegerVariable"
@@ -30,13 +27,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Scaling, HPC and Infrastructure**
+AFML Chapter 21 tooling for discrete, path-dependent problems, built around keeping the integer structure explicit rather than relaxing it away. `DecisionSchema` describes an integer decision space and `solve_exact` enumerates it. `TradingTrajectorySchema` describes a trading path — per-step trade bounds, inventory limits, an optional terminal inventory — and `enumerate_trading_paths` produces every feasible trajectory, which `evaluate_trading_path` scores against expected returns, risk aversion, market impact and a fixed per-ticket cost.
 
-## Why This Module Exists
+## When to Use
 
-Many trading/search problems are discrete and path-dependent; this module keeps integer structure explicit and provides exact small-instance baselines before scaling to heuristics.
+Use exact enumeration on small instances as a correctness oracle: `compare_exact_and_adapter` exists precisely so a heuristic or external solver can be validated against ground truth before it is trusted at scale. The decision space grows exponentially in horizon and dimension and `max_paths` will stop you — treat that as the signal to move to an adapter, not to raise the cap. The fixed ticket cost is what makes the problem genuinely combinatorial; without it a continuous relaxation would do.
 
 ## Mathematical Foundations
 
@@ -116,7 +113,14 @@ println!("trades: {:?}", best.0.trades);
 - `evaluate_trading_path`
 - `solve_trading_trajectory_exact`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle.
 - Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment.
+
+## Related Modules
+
+- [`hpc-parallel`](/modules/hpc-parallel/)
+- [`bet-sizing`](/modules/bet-sizing/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "etf_trick"
 api_surface: "rust-only"
-risk_notes:
-  - "Verify contract calendar assumptions."
-  - "Costs and rates should come from the same clock as price data."
-  - "This module is Rust-only — no Python bindings are currently exposed."
 rust_api:
   - "EtfTrick"
   - "EtfTrick::from_tables"
@@ -27,13 +23,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Position Sizing and Trade Construction**
+The ETF trick turns a series of futures contracts — each with its own roll, financing cost and carry — into one continuous, reinvestable price series that a backtest can treat like a tradable instrument. `EtfTrick` consumes aligned open, close, allocation and cost tables plus optional financing rates and produces a NAV series; `get_futures_roll_series` applies backward or forward roll adjustment to a single contract chain. Both exist because naively concatenating contract prices manufactures a return at every roll.
 
-## Why This Module Exists
+## When to Use
 
-Backtests must include financing, carry, and contract-roll mechanics to avoid optimistic bias.
+Use it whenever a backtest spans a contract roll, or whenever the traded object is a basket whose weights change over time. Suspiciously smooth PnL around roll dates is the symptom of skipping it. Costs and financing rates must come from the same clock as the price data, and the contract calendar assumptions are worth verifying against the exchange rather than inferring from the data. This module is Rust-only — no Python bindings are exposed.
 
 ## Mathematical Foundations
 
@@ -85,8 +81,15 @@ let adjusted = get_futures_roll_series(&rows, "backward", true).unwrap();
 - `FuturesRollRow`
 - `Table`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Verify contract calendar assumptions.
 - Costs and rates should come from the same clock as price data.
 - This module is Rust-only — no Python bindings are currently exposed.
+
+## Related Modules
+
+- [`data-structures`](/modules/data-structures/)
+- [`backtesting-engine`](/modules/backtesting-engine/)
+- [`backtest-statistics`](/modules/backtest-statistics/)
+- [`bet-sizing`](/modules/bet-sizing/)

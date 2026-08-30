@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "hcaa"
 api_surface: "both"
-risk_notes:
-  - "Cluster linkage choices influence allocations."
-  - "Use with robust codependence distances when possible."
 rust_api:
   - "HierarchicalClusteringAssetAllocation"
   - "HcaaError"
@@ -21,13 +18,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Hierarchical Clustering Asset Allocation generalises HRP's recursive bisection to risk measures other than variance. Seriation and the cluster tree are built the same way, but the split at each node weights the two sides by the chosen `allocation_metric` — cluster variance, standard deviation, Sharpe ratio, expected shortfall or conditional drawdown — so the same hierarchy can express a tail-risk budget rather than only a variance budget. Like HRP it never inverts the covariance matrix.
 
-## Why This Module Exists
+## When to Use
 
-Allocates capital by hierarchy to reduce concentration and covariance-estimation fragility.
+Use it in place of `hrp` when your risk budget is not variance: expected shortfall or conditional drawdown for a drawdown-controlled mandate, Sharpe when you have return views you are willing to defend. Use `hrp` when you do not, since the variance split needs no expected-return estimate at all. The clustering is only as good as the distance fed to it, so build that with `codependence` rather than raw correlation, and sanity-check the cluster count with `onc`.
 
 ## Mathematical Foundations
 
@@ -91,7 +88,15 @@ println!("seriation order: {:?}", hcaa.ordered_indices);
 - `HierarchicalClusteringAssetAllocation`
 - `HcaaError`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Cluster linkage choices influence allocations.
 - Use with robust codependence distances when possible.
+
+## Related Modules
+
+- [`hrp`](/modules/hrp/)
+- [`onc`](/modules/onc/)
+- [`codependence`](/modules/codependence/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`cla`](/modules/cla/)

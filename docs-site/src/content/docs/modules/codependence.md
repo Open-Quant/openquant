@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "codependence"
 api_surface: "both"
-risk_notes:
-  - "Use with clustering and feature pruning workflows."
-  - "Bin selection materially impacts MI estimates."
 rust_api:
   - "distance_correlation"
   - "get_mutual_info"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+Dependence measures that survive non-linearity, which Pearson correlation does not. Distance correlation is zero only under genuine independence. Mutual information and variation of information are information-theoretic and need a binning choice, which `get_optimal_number_of_bins` supplies. The angular distances turn a correlation into a proper metric — sqrt(2(1-rho)) and its absolute and squared variants — which is what hierarchical clustering needs in order to be well posed at all.
 
-## Why This Module Exists
+## When to Use
 
-Financial relationships are often non-linear and regime-dependent; correlation alone is insufficient.
+Use it upstream of any clustering or feature-pruning step: `hrp`, `hcaa` and `onc` all consume a distance matrix, and feeding them raw correlation silently assumes the relationship is linear. Use distance correlation when you suspect a non-monotone relationship, and variation of information when you want a true metric on discrete variables. Bin selection materially changes mutual-information estimates, so fix it explicitly and record it alongside the result.
 
 ## Mathematical Foundations
 
@@ -74,7 +71,15 @@ let dcor = distance_correlation(&x, &y)?;
 - `variation_of_information_score`
 - `angular_distance`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use with clustering and feature pruning workflows.
 - Bin selection materially impacts MI estimates.
+
+## Related Modules
+
+- [`hrp`](/modules/hrp/)
+- [`hcaa`](/modules/hcaa/)
+- [`onc`](/modules/onc/)
+- [`feature-importance`](/modules/feature-importance/)
+- [`microstructural-features`](/modules/microstructural-features/)

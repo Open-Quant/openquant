@@ -13,11 +13,6 @@ module: "data_structures"
 api_surface: "both"
 afml_chapters:
   - 2
-risk_notes:
-  - "Threshold selection controls bar frequency and noise level."
-  - "Keep OHLCV semantics consistent across downstream features."
-  - "Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars."
-  - "`bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction."
 rust_api:
   - "standard_bars"
   - "time_bars"
@@ -158,7 +153,7 @@ let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 - `StandardBarType`
 - `ImbalanceBarType`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Threshold selection controls bar frequency and noise level.
 - Keep OHLCV semantics consistent across downstream features.

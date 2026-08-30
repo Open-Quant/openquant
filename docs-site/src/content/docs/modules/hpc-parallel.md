@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "hpc_parallel"
 api_surface: "rust-only"
-risk_notes:
-  - "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics."
-  - "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking."
 rust_api:
   - "partition_atoms"
   - "run_parallel"
@@ -27,13 +24,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Scaling, HPC and Infrastructure**
+AFML Chapter 20's atom/molecule model: a job is a list of independent atoms, atoms are grouped into molecules, and molecules are dispatched to workers. What this adds over a plain thread pool is the partitioning choice — linear for uniform-cost atoms, nested for the triangular workloads that dominate this library, where atom k touches k earlier observations — together with a metrics report and a serial mode whose callback semantics are identical to the threaded one.
 
-## Why This Module Exists
+## When to Use
 
-Research pipelines bottleneck on repeated independent computations; this module exposes reproducible partitioning and dispatch controls to scale those workloads safely.
+Use it for any embarrassingly parallel research loop: per-asset feature computation, bootstrap replicas, parameter sweeps. Choose `PartitionStrategy::Nested` when per-atom cost grows with the atom index, otherwise the final molecule becomes the whole runtime; choose `Linear` when atoms cost the same. Debug with `ExecutionMode::Serial` first — the callback contract is unchanged, so a bug that reproduces there is not a concurrency bug and you have just halved the search space.
 
 ## Mathematical Foundations
 
@@ -92,7 +89,14 @@ println!("molecules={} atoms/s={:.0}", report.metrics.molecules_total, report.me
 - `ParallelRunReport`
 - `HpcParallelMetrics`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics.
 - If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking.
+
+## Related Modules
+
+- [`streaming-hpc`](/modules/streaming-hpc/)
+- [`combinatorial-optimization`](/modules/combinatorial-optimization/)
+- [`sampling`](/modules/sampling/)
+- [`backtesting-engine`](/modules/backtesting-engine/)
