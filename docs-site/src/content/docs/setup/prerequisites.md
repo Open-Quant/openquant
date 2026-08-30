@@ -1,8 +1,7 @@
 ---
 title: Prerequisites
 description: Required toolchain and environment assumptions for OpenQuant docs and development.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

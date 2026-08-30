@@ -1,8 +1,7 @@
 ---
 title: Coverage Dashboard
 description: AFML-aligned documentation coverage checkpoints and current completeness status.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

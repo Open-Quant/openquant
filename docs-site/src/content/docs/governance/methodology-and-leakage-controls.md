@@ -1,8 +1,8 @@
 ---
 title: Methodology and Leakage Controls
 description: Required anti-leakage and methodology controls for OpenQuant research and evaluation.
-status: validated
-last_validated: '2026-03-02'
+status: reviewed
+last_validated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering

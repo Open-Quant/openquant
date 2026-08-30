@@ -1,8 +1,7 @@
 ---
 title: Examples Catalog
 description: Example entry points grouped by workflow stage.
-status: in_review
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

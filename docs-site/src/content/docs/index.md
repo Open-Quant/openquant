@@ -17,8 +17,8 @@ hero:
     - text: Browse Modules
       link: /openquant/modules/
       variant: minimal
-status: validated
-last_validated: '2026-03-02'
+status: reviewed
+last_validated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering

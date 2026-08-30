@@ -1,8 +1,7 @@
 ---
 title: Python Core Workflow
 description: Python-first workflow for ingestion, bars, diagnostics, and mid-frequency pipeline execution.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

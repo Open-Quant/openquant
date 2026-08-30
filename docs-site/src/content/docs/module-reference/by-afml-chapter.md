@@ -1,8 +1,8 @@
 ---
 title: By AFML Chapter
 description: Map AFML concepts to concrete OpenQuant modules and workflows.
-status: validated
-last_validated: '2026-03-02'
+status: reviewed
+last_validated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering

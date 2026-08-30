@@ -1,8 +1,7 @@
 ---
 title: Versioning and Release Policy
 description: Release and documentation versioning policy for OpenQuant.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

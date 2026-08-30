@@ -1,8 +1,7 @@
 ---
 title: Notebook Research Workflow
 description: Notebook-first research flow with promotion controls for institutional settings.
-status: in_review
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

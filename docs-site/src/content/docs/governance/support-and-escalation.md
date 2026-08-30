@@ -1,8 +1,7 @@
 ---
 title: Support and Escalation
 description: Operational support entry points and escalation expectations.
-status: in_review
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

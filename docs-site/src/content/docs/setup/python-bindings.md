@@ -1,8 +1,7 @@
 ---
 title: Python Bindings Setup
 description: Baseline guidance for Python package workflow integration.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

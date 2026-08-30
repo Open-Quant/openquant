@@ -1,8 +1,7 @@
 ---
 title: Indexing and Discovery
 description: Navigation model and search strategy for fast access to core OpenQuant capabilities.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering

@@ -1,8 +1,7 @@
 ---
 title: Rust Core Workflow
 description: Canonical Rust workflow from event sampling to portfolio/risk diagnostics.
-status: validated
-last_validated: '2026-03-02'
+status: draft
 audience:
   - quant-dev
   - platform-engineering
