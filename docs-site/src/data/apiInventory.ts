@@ -56,7 +56,7 @@ export const apiInventory = {
     ]
   },
   "rust": {
-    "backtest_statistics": [
+    "openquant::backtest_statistics": [
       "all_bets_concentration",
       "average_holding_period",
       "bets_concentration",
@@ -68,11 +68,11 @@ export const apiInventory = {
       "sharpe_ratio",
       "timing_of_flattening_and_flips"
     ],
-    "backtesting_engine": [
+    "openquant::backtesting_engine": [
       "cpcv_path_count",
       "validate"
     ],
-    "bet_sizing": [
+    "openquant::bet_sizing": [
       "avg_active_signals",
       "bet_size",
       "bet_size_budget",
@@ -112,7 +112,7 @@ export const apiInventory = {
       "mp_avg_active_signals",
       "single_bet_size_mixed"
     ],
-    "cla": [
+    "openquant::cla": [
       "_compute_lambda",
       "_compute_w",
       "_free_bound_weight",
@@ -126,7 +126,7 @@ export const apiInventory = {
       "covariance",
       "new"
     ],
-    "codependence": [
+    "openquant::codependence": [
       "absolute_angular_distance",
       "angular_distance",
       "distance_correlation",
@@ -135,7 +135,7 @@ export const apiInventory = {
       "squared_angular_distance",
       "variation_of_information_score"
     ],
-    "combinatorial_optimization": [
+    "openquant::combinatorial_optimization": [
       "compare_exact_and_adapter",
       "decision_space_size",
       "enumerate_trading_paths",
@@ -146,12 +146,12 @@ export const apiInventory = {
       "solve_with_adapter",
       "validate"
     ],
-    "cross_validation": [
+    "openquant::cross_validation": [
       "ml_get_train_times",
       "new",
       "split"
     ],
-    "data_processing": [
+    "openquant::data_processing": [
       "align_calendar_columns",
       "align_calendar_df",
       "align_calendar_rows",
@@ -162,13 +162,13 @@ export const apiInventory = {
       "quality_report_columns",
       "quality_report_df"
     ],
-    "data_structures": [
+    "openquant::data_structures": [
       "imbalance_bars",
       "run_bars",
       "standard_bars",
       "time_bars"
     ],
-    "ef3m": [
+    "openquant::ef3m": [
       "centered_moment",
       "fit",
       "get_moments",
@@ -181,7 +181,7 @@ export const apiInventory = {
       "single_fit_loop",
       "with_defaults"
     ],
-    "ensemble_methods": [
+    "openquant::ensemble_methods": [
       "aggregate_classification_probability_mean",
       "aggregate_classification_vote",
       "aggregate_regression_mean",
@@ -192,20 +192,20 @@ export const apiInventory = {
       "recommend_bagging_vs_boosting",
       "sequential_bootstrap_sample_indices"
     ],
-    "etf_trick": [
+    "openquant::etf_trick": [
       "from_csv",
       "from_tables",
       "get_etf_series",
       "get_futures_roll_series",
       "reset"
     ],
-    "feature_importance": [
+    "openquant::feature_importance": [
       "feature_pca_analysis",
       "get_orthogonal_features",
       "mean_decrease_impurity",
       "plot_feature_importance"
     ],
-    "filters": [
+    "openquant::filters": [
       "cusum_filter_indices",
       "cusum_filter_indices_checked",
       "cusum_filter_timestamps",
@@ -214,41 +214,41 @@ export const apiInventory = {
       "z_score_filter_timestamps",
       "z_score_filter_timestamps_checked"
     ],
-    "fingerprint": [
+    "openquant::fingerprint": [
       "get_effects",
       "new",
       "plot_effects"
     ],
-    "fracdiff": [
+    "openquant::fracdiff": [
       "frac_diff",
       "frac_diff_ffd",
       "get_weights",
       "get_weights_ffd"
     ],
-    "hcaa": [
+    "openquant::hcaa": [
       "allocate",
       "new"
     ],
-    "hpc_parallel": [
+    "openquant::hpc_parallel": [
       "is_empty",
       "is_finished",
       "len",
       "partition_atoms",
       "wait"
     ],
-    "hrp": [
+    "openquant::hrp": [
       "allocate",
       "new",
       "plot_clusters"
     ],
-    "hyperparameter_tuning": [
+    "openquant::hyperparameter_tuning": [
       "as_bool",
       "as_f64",
       "as_i64",
       "classification_score",
       "expand_param_grid"
     ],
-    "labeling": [
+    "openquant::labeling": [
       "add_vertical_barrier",
       "drop_labels",
       "get_bins",
@@ -257,7 +257,7 @@ export const apiInventory = {
       "triple_barrier_events",
       "triple_barrier_labels"
     ],
-    "microstructural_features": [
+    "openquant::microstructural_features": [
       "encode_array",
       "encode_tick_rule_array",
       "get_avg_tick_size",
@@ -283,13 +283,13 @@ export const apiInventory = {
       "sigma_mapping",
       "vwap"
     ],
-    "onc": [
+    "openquant::onc": [
       "get_onc_clusters"
     ],
-    "pipeline": [
+    "openquant::pipeline": [
       "run_mid_frequency_pipeline"
     ],
-    "portfolio_optimization": [
+    "openquant::portfolio_optimization": [
       "allocate_efficient_risk",
       "allocate_efficient_risk_with",
       "allocate_from_inputs",
@@ -303,7 +303,7 @@ export const apiInventory = {
       "compute_expected_and_covariance",
       "returns_method_from_str"
     ],
-    "risk_metrics": [
+    "openquant::risk_metrics": [
       "calculate_conditional_drawdown_risk",
       "calculate_conditional_drawdown_risk_from_matrix",
       "calculate_expected_shortfall",
@@ -312,11 +312,11 @@ export const apiInventory = {
       "calculate_value_at_risk_from_matrix",
       "calculate_variance"
     ],
-    "sample_weights": [
+    "openquant::sample_weights": [
       "get_weights_by_return",
       "get_weights_by_time_decay"
     ],
-    "sampling": [
+    "openquant::sampling": [
       "bootstrap_loop_run",
       "get_av_uniqueness_from_triple_barrier",
       "get_ind_mat_average_uniqueness",
@@ -325,12 +325,12 @@ export const apiInventory = {
       "num_concurrent_events",
       "seq_bootstrap"
     ],
-    "sb_bagging": [
+    "openquant::sb_bagging": [
       "fit",
       "new",
       "predict"
     ],
-    "strategy_risk": [
+    "openquant::strategy_risk": [
       "estimate_strategy_failure_probability",
       "implied_frequency_asymmetric",
       "implied_frequency_symmetric",
@@ -339,7 +339,7 @@ export const apiInventory = {
       "sharpe_asymmetric",
       "sharpe_symmetric"
     ],
-    "streaming_hpc": [
+    "openquant::streaming_hpc": [
       "completed_buckets",
       "current",
       "generate_synthetic_flash_crash_stream",
@@ -351,20 +351,123 @@ export const apiInventory = {
       "update",
       "window_len"
     ],
-    "structural_breaks": [
+    "openquant::structural_breaks": [
       "_get_betas",
       "_get_values_diff",
       "get_chow_type_stat",
       "get_chu_stinchcombe_white_statistics",
       "get_sadf"
     ],
-    "synthetic_backtesting": [
+    "openquant::synthetic_backtesting": [
       "calibrate_ou_params",
       "detect_no_stable_optimum",
       "evaluate_rule_on_paths",
       "generate_ou_paths",
       "run_synthetic_otr_workflow",
       "search_optimal_trading_rule"
+    ],
+    "openquant::util::fast_ewma": [
+      "ewma"
+    ],
+    "openquant::util::volatility": [
+      "get_daily_vol",
+      "get_garman_class_vol",
+      "get_parksinson_vol",
+      "get_yang_zhang_vol"
+    ],
+    "pyopenquant::backtest_stats": [
+      "register"
+    ],
+    "pyopenquant::bars": [
+      "register"
+    ],
+    "pyopenquant::bet_sizing": [
+      "register"
+    ],
+    "pyopenquant::cla": [
+      "register"
+    ],
+    "pyopenquant::codependence": [
+      "register"
+    ],
+    "pyopenquant::data": [
+      "register"
+    ],
+    "pyopenquant::ef3m": [
+      "register"
+    ],
+    "pyopenquant::ensemble": [
+      "register"
+    ],
+    "pyopenquant::fast_ewma": [
+      "register"
+    ],
+    "pyopenquant::filters": [
+      "register"
+    ],
+    "pyopenquant::fracdiff": [
+      "register"
+    ],
+    "pyopenquant::hcaa": [
+      "register"
+    ],
+    "pyopenquant::helpers": [
+      "bars_to_rows",
+      "build_labeling_events",
+      "build_ohlcv_columns",
+      "build_trades",
+      "format_naive_datetimes",
+      "matrix_from_rows",
+      "pair_timestamps_values",
+      "parse_naive_datetimes",
+      "parse_one_naive_datetime",
+      "parse_vertical_barriers",
+      "report_to_pydict"
+    ],
+    "pyopenquant::hrp": [
+      "register"
+    ],
+    "pyopenquant::labeling": [
+      "register"
+    ],
+    "pyopenquant::microstructural": [
+      "register"
+    ],
+    "pyopenquant::onc": [
+      "register"
+    ],
+    "pyopenquant::pipeline": [
+      "register"
+    ],
+    "pyopenquant::portfolio": [
+      "register"
+    ],
+    "pyopenquant::risk": [
+      "register"
+    ],
+    "pyopenquant::sample_weights": [
+      "register"
+    ],
+    "pyopenquant::sampling": [
+      "register"
+    ],
+    "pyopenquant::sb_bagging": [
+      "register"
+    ],
+    "pyopenquant::strategy_risk": [
+      "register"
+    ],
+    "pyopenquant::streaming_hpc": [
+      "register"
+    ],
+    "pyopenquant::structural_breaks": [
+      "register"
+    ],
+    "pyopenquant::synthetic_bt": [
+      "register"
+    ],
+    "pyopenquant::volatility": [
+      "register"
     ]
   }
 } as const;
