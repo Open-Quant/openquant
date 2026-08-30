@@ -28,6 +28,7 @@ export const apiInventory = {
       "load_ohlcv"
     ],
     "feature_diagnostics": [
+      "feature_screen_report",
       "mda_importance",
       "mdi_importance",
       "orthogonalize_features_pca",
@@ -41,6 +42,8 @@ export const apiInventory = {
     ],
     "research": [
       "make_synthetic_futures_dataset",
+      "research_run_manifest",
+      "run_flywheel_grid",
       "run_flywheel_iteration"
     ],
     "viz": [
