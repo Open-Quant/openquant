@@ -58,7 +58,7 @@ export const moduleDocs: ModuleDoc[] = [
       {
         title: "Compute Sharpe and drawdown",
         language: "rust",
-        code: `use openquant::backtest_statistics::{sharpe_ratio, drawdown_and_time_under_water};\n\nlet returns = vec![0.01, -0.005, 0.007, -0.002, 0.003];\nlet sr = sharpe_ratio(&returns, 252.0, 0.0);\nlet (dd, tuw) = drawdown_and_time_under_water(&returns);\nprintln!("{sr} {dd:?} {tuw:?}");`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::backtest_statistics::{drawdown_and_time_under_water, sharpe_ratio};\n\nlet returns = vec![0.01, -0.005, 0.007, -0.002, 0.003];\nlet sharpe = sharpe_ratio(&returns, 252.0, 0.0);\n\n// Drawdown and time-under-water are computed on a *timestamped equity curve*,\n// not on the return series: the function needs the timestamps to measure how\n// long each high-water mark went un-recovered.\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet mut equity = 1.0;\nlet curve: Vec<(NaiveDateTime, f64)> = returns\n    .iter()\n    .enumerate()\n    .map(|(i, r)| {\n        equity *= 1.0 + r;\n        (t0 + Duration::days(i as i64), equity)\n    })\n    .collect();\n\n// dollars = false reports each drawdown as a fraction of its high-water mark.\nlet (drawdowns, time_under_water) = drawdown_and_time_under_water(&curve, false);\nprintln!("sharpe={sharpe:.3} drawdowns={drawdowns:?} tuw={time_under_water:?}");`,
       },
     ],
     notes: [
@@ -105,7 +105,7 @@ export const moduleDocs: ModuleDoc[] = [
       {
         title: "Run CPCV and inspect Sharpe distribution",
         language: "rust",
-        code: `use openquant::backtesting_engine::{\n  run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,\n};\n\nlet result = run_cpcv(\n  &data,\n  &BacktestRunConfig {\n    mode_provenance: \"research_v3_with_costs\".to_string(),\n    trials_count: 24,\n    safeguards: BacktestSafeguards {\n      survivorship_bias_control: \"point-in-time universe\".to_string(),\n      look_ahead_control: \"lagged features\".to_string(),\n      data_mining_control: \"frozen split protocol\".to_string(),\n      cost_assumption: \"spread + slippage\".to_string(),\n      multiple_testing_control: \"trial count logged\".to_string(),\n    },\n  },\n  &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },\n  |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),\n)?;\n\nprintln!(\"phi = {}\", result.path_count);\nprintln!(\"path sharpe count = {}\", result.path_distribution.len());`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::backtesting_engine::{\n    run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,\n};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet pnl: Vec<f64> = (0..240).map(|i| ((i % 7) as f64 - 3.0) / 1000.0).collect();\n\n// Each observation carries the span its label was drawn over. That span — not the\n// observation's timestamp — is what purging and the embargo act on.\nlet data = BacktestData {\n    returns: pnl.clone(),\n    label_spans: (0..240)\n        .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2)))\n        .collect(),\n};\n\nlet result = run_cpcv(\n    &data,\n    &BacktestRunConfig {\n        mode_provenance: "research_v3_with_costs".to_string(),\n        trials_count: 24,\n        safeguards: BacktestSafeguards {\n            survivorship_bias_control: "point-in-time universe".to_string(),\n            look_ahead_control: "lagged features".to_string(),\n            data_mining_control: "frozen split protocol".to_string(),\n            cost_assumption: "spread + slippage".to_string(),\n            multiple_testing_control: "trial count logged".to_string(),\n        },\n    },\n    &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },\n    |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),\n)?;\n\nprintln!("phi = {}", result.path_count);\nprintln!("path sharpe count = {}", result.path_distribution.len());`,
       },
     ],
     notes: [
@@ -225,7 +225,7 @@ export const moduleDocs: ModuleDoc[] = [
       {
         title: "Configure PurgedKFold",
         language: "rust",
-        code: `use openquant::cross_validation::PurgedKFold;\n\nlet cv = PurgedKFold::new(5, 0.01);`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::cross_validation::PurgedKFold;\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\n\n// samples_info_sets is one (label_start, label_end) span per observation. It is\n// mandatory: without label lifetimes there is nothing to purge against.\nlet samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = (0..100)\n    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 3)))\n    .collect();\n\n// n_splits = 5 folds; pct_embargo = 0.01 drops a further 1% of the sample\n// immediately after each test fold. new() validates and returns a Result.\nlet cv = PurgedKFold::new(5, samples_info_sets, 0.01)?;\n\nlet splits = cv.split(100)?;\nprintln!("{} folds; fold 0 keeps {} training rows", splits.len(), splits[0].0.len());`,
       },
     ],
     notes: ["Always align event end-times when purging.", "Report variance across folds, not only mean score."],
@@ -347,7 +347,7 @@ The key insight is that information-driven bars produce returns that are closer 
       {
         title: "Randomized search with PurgedKFold semantics",
         language: "rust",
-        code: `use std::collections::BTreeMap;\nuse openquant::hyperparameter_tuning::{\n  randomized_search, RandomParamDistribution, SearchData, SearchScoring,\n};\n\nlet mut space = BTreeMap::new();\nspace.insert(\"C\".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });\nspace.insert(\"gamma\".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });\n\nlet result = randomized_search(\n  build_model,\n  &space,\n  25,\n  42,\n  SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },\n  5,\n  0.01,\n  SearchScoring::NegLogLoss,\n)?;\nprintln!(\"best score = {}\", result.best_score);`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::cross_validation::SimpleClassifier;\nuse openquant::hyperparameter_tuning::{\n    randomized_search, ParamSet, RandomParamDistribution, SearchData, SearchScoring,\n};\nuse std::collections::BTreeMap;\n\n// The search builds a fresh model from each sampled parameter set.\nstruct Logistic {\n    c: f64,\n}\nimpl SimpleClassifier for Logistic {\n    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}\n    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter().map(|row| 1.0 / (1.0 + (-self.c * row[0]).exp())).collect()\n    }\n}\nlet build_model =\n    |params: &ParamSet| Logistic { c: params["C"].as_f64().unwrap_or(1.0) };\n\nlet mut space = BTreeMap::new();\nspace.insert("C".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });\nspace.insert("gamma".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet x: Vec<Vec<f64>> = (0..60).map(|i| vec![(i as f64 - 30.0) / 30.0]).collect();\nlet y: Vec<f64> = (0..60).map(|i| if i >= 30 { 1.0 } else { 0.0 }).collect();\nlet w = vec![1.0f64; 60];\n// Label spans again — the search purges internally, so it needs them.\nlet info_sets: Vec<(NaiveDateTime, NaiveDateTime)> =\n    (0..60).map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2))).collect();\n\nlet result = randomized_search(\n    build_model,\n    &space,\n    25,   // n_iter — parameter sets sampled\n    42,   // seed\n    SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },\n    5,    // n_splits\n    0.01, // pct_embargo\n    SearchScoring::NegLogLoss,\n)?;\nprintln!("best score = {} with {:?}", result.best_score, result.best_params);`,
       },
     ],
     notes: [
@@ -476,7 +476,7 @@ The key insight is that information-driven bars produce returns that are closer 
       {
         title: "Run MDA with classifier",
         language: "rust",
-        code: `use openquant::feature_importance::mean_decrease_accuracy;\n\n// Plug in your classifier implementing SimpleClassifier\nlet importance = mean_decrease_accuracy(&clf, &x, &y, 5)?;`,
+        code: `use openquant::cross_validation::{Scoring, SimpleClassifier};\nuse openquant::feature_importance::mean_decrease_accuracy;\n\n// MDA works with any model implementing SimpleClassifier; this stand-in keeps\n// the example self-contained.\nstruct MeanThreshold {\n    threshold: f64,\n}\nimpl SimpleClassifier for MeanThreshold {\n    fn fit(&mut self, x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {\n        self.threshold = x.iter().map(|row| row[0]).sum::<f64>() / x.len() as f64;\n    }\n    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter().map(|row| if row[0] > self.threshold { 0.9 } else { 0.1 }).collect()\n    }\n}\n\nlet x: Vec<Vec<f64>> = (0..40).map(|i| vec![i as f64, (i % 7) as f64]).collect();\nlet y: Vec<f64> = (0..40).map(|i| if i >= 20 { 1.0 } else { 0.0 }).collect();\nlet feature_names = vec!["trend".to_string(), "noise".to_string()];\n\n// MDA is measured out of sample, so it takes the *already-purged splits* — not a\n// fold count. Feed it the output of PurgedKFold::split so the score is leak-free.\nlet splits = vec![\n    ((0..20).collect::<Vec<usize>>(), (20..40).collect::<Vec<usize>>()),\n    ((20..40).collect::<Vec<usize>>(), (0..20).collect::<Vec<usize>>()),\n];\n\nlet mut model = MeanThreshold { threshold: 0.0 };\nlet importance = mean_decrease_accuracy(\n    &mut model,\n    &x,\n    &y,\n    &feature_names,\n    &splits,\n    None, // sample_weight — pass uniqueness weights from \`sample_weights\` in practice\n    Scoring::Accuracy,\n)?;\n\nprintln!("trend: mean={:.4} std={:.4}", importance["trend"].mean, importance["trend"].std);`,
       },
     ],
     notes: ["Cross-validated MDA is preferred when leakage risk is high.", "Compare ranking stability across folds/time windows."],
@@ -575,7 +575,7 @@ Both filters replace the naive approach of labeling every bar, which creates hig
       {
         title: "Create regression fingerprint",
         language: "rust",
-        code: `use openquant::fingerprint::RegressionModelFingerprint;\n\nlet fp = RegressionModelFingerprint::new(&model, &x);\nlet effects = fp.linear_effects()?;`,
+        code: `use openquant::fingerprint::{RegressionModelFingerprint, RegressionPredictor};\n\n// Fingerprinting is model-agnostic: anything that can predict will do.\nstruct LinearModel {\n    beta: Vec<f64>,\n}\nimpl RegressionPredictor for LinearModel {\n    fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter()\n            .map(|row| row.iter().zip(self.beta.iter()).map(|(v, b)| v * b).sum())\n            .collect()\n    }\n}\n\nlet model = LinearModel { beta: vec![1.5, -0.5] };\nlet x: Vec<Vec<f64>> =\n    (0..50).map(|i| vec![i as f64 / 50.0, ((i % 5) as f64) / 5.0]).collect();\n\n// new() takes no arguments; the model and data go to fit(), which needs &mut self.\n// num_values is the partial-dependence grid resolution.\nlet mut fingerprint = RegressionModelFingerprint::new();\nfingerprint.fit(&model, &x, 10, Some(&[(0, 1)]))?;\n\n// The accessor is get_effects(), returning (linear, non-linear, optional pairwise).\nlet (linear, non_linear, pairwise) = fingerprint.get_effects()?;\nprintln!("linear={:?}", linear.norm);\nprintln!("non_linear={:?}", non_linear.norm);\nprintln!("pairwise={:?}", pairwise.map(|p| p.norm.clone()));`,
       },
     ],
     notes: ["Compare fingerprints across retrains for drift detection.", "Use pairwise effects to detect hidden interaction risk."],
@@ -653,7 +653,7 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
       {
         title: "Fit HCAA allocator",
         language: "rust",
-        code: `use openquant::hcaa::HierarchicalClusteringAssetAllocation;\n\nlet mut hcaa = HierarchicalClusteringAssetAllocation::new();\nlet w = hcaa.allocate(&prices)?;`,
+        code: `use nalgebra::DMatrix;\nuse openquant::hcaa::HierarchicalClusteringAssetAllocation;\n\nlet asset_names: Vec<String> =\n    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();\n// rows = observations, cols = assets, in the same order as \`asset_names\`.\nlet prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);\n\n// The constructor argument selects how expected returns are estimated\n// ("mean" or "exponential"); it is not optional.\nlet mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");\n\n// allocate() fills the struct in place and returns Result<(), HcaaError>.\n// It does not return the weights — read them from \`hcaa.weights\` afterwards.\nhcaa.allocate(\n    &asset_names,\n    Some(&prices),      // asset_prices\n    None,               // asset_returns\n    None,               // covariance_matrix\n    None,               // expected_asset_returns\n    "minimum_variance", // allocation_metric\n    0.05,               // confidence_level, used by the tail-risk metrics\n    None,               // optimal_num_clusters — inferred when None\n    None,               // resample_by\n)?;\n\nprintln!("weights: {:?}", hcaa.weights);\nprintln!("seriation order: {:?}", hcaa.ordered_indices);`,
       },
     ],
     notes: ["Cluster linkage choices influence allocations.", "Use with robust codependence distances when possible."],
@@ -675,7 +675,7 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
       {
         title: "Allocate with HRP",
         language: "rust",
-        code: `use openquant::hrp::HierarchicalRiskParity;\n\nlet mut hrp = HierarchicalRiskParity::new();\nlet weights = hrp.allocate(&prices)?;`,
+        code: `use nalgebra::DMatrix;\nuse openquant::hrp::HierarchicalRiskParity;\n\nlet asset_names: Vec<String> =\n    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();\n// rows = observations, cols = assets, in the same order as \`asset_names\`.\nlet prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);\n\nlet mut hrp = HierarchicalRiskParity::new();\n\n// allocate() mutates the struct and returns Result<(), HrpError>; the weights are\n// read back from \`hrp.weights\`. Exactly one of prices / returns / covariance must\n// be supplied.\nhrp.allocate(\n    &asset_names,\n    Some(&prices), // asset_prices\n    None,          // asset_returns\n    None,          // covariance_matrix\n    None,          // resample_by\n    false,         // use_shrinkage — Ledoit-Wolf shrinkage on the covariance\n)?;\n\nprintln!("weights: {:?}", hrp.weights);\nprintln!("seriation order: {:?}", hrp.ordered_indices);`,
       },
     ],
     notes: ["HRP is often more robust under unstable covariance estimates.", "Ensure input asset order tracks produced dendrogram order."],
@@ -856,7 +856,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         title: "Infer cluster structure",
         language: "rust",
-        code: `use openquant::onc::get_onc_clusters;\n\nlet out = get_onc_clusters(&corr, 20)?;\nprintln!("{}", out.clusters.len());`,
+        code: `use nalgebra::DMatrix;\nuse openquant::onc::get_onc_clusters;\n\n// ONC consumes a *correlation* matrix, not raw prices — build one from your\n// codependence measure of choice first.\nlet corr = DMatrix::from_row_slice(\n    4,\n    4,\n    &[\n        1.00, 0.85, 0.10, 0.05, //\n        0.85, 1.00, 0.12, 0.08, //\n        0.10, 0.12, 1.00, 0.78, //\n        0.05, 0.08, 0.78, 1.00,\n    ],\n);\n\n// \`repeat\` is the number of k-means restarts used to stabilise the partition.\nlet out = get_onc_clusters(&corr, 20)?;\nprintln!("{} clusters", out.clusters.len());\nprintln!("silhouette scores: {:?}", out.silhouette_scores);`,
       },
     ],
     notes: ["Run with repeated seeds/restarts for robust k selection.", "Use correlation cleaning before clustering unstable universes."],
@@ -896,7 +896,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         title: "End-to-end: Constrained Allocation with Exponential Returns and Resampling",
         language: "rust",
-        code: `use std::collections::HashMap;\nuse openquant::portfolio_optimization::{\n    allocate_max_sharpe_with,\n    AllocationOptions,\n    ReturnsMethod,\n};\n\nlet mut bounds = HashMap::new();\n// Cap concentration in first asset; enforce long-only defaults elsewhere\nbounds.insert(0usize, (0.0, 0.20));\n\nlet opts = AllocationOptions {\n    risk_free_rate: 0.02,\n    returns_method: ReturnsMethod::Exponential { span: 60 },\n    resample_by: Some(\"W\"),\n    bounds: Some(bounds),\n    tuple_bounds: Some((0.0, 0.40)),\n    ..Default::default()\n};\n\nlet constrained = allocate_max_sharpe_with(&prices, &opts)?;\nassert!(constrained.weights.iter().all(|w| *w >= -1e-10));`,
+        code: `use nalgebra::DMatrix;\nuse openquant::portfolio_optimization::{\n    allocate_max_sharpe_with, AllocationOptions, ReturnsMethod,\n};\nuse std::collections::HashMap;\n\n// rows = time, cols = assets\nlet prices = DMatrix::from_fn(252, 6, |i, j| 100.0 + (i as f64) * 0.03 + (j as f64) * 2.0);\n\nlet mut bounds = HashMap::new();\n// Cap concentration in the first asset; the tuple bound applies to the rest.\nbounds.insert(0usize, (0.0, 0.20));\n\nlet opts = AllocationOptions {\n    risk_free_rate: 0.02,\n    returns_method: ReturnsMethod::Exponential { span: 60 },\n    resample_by: Some("W"),\n    bounds: Some(bounds),\n    tuple_bounds: Some((0.0, 0.40)),\n    ..Default::default()\n};\n\nlet constrained = allocate_max_sharpe_with(&prices, &opts)?;\nassert!(constrained.weights.iter().all(|w| *w >= -1e-10));`,
       },
     ],
     notes: [
@@ -922,7 +922,7 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         title: "Compute VaR and ES",
         language: "rust",
-        code: `use openquant::risk_metrics::RiskMetrics;\n\nlet r = vec![-0.02, 0.01, -0.005, 0.003, 0.004];\nlet var95 = RiskMetrics::calculate_value_at_risk(&r, 0.05)?;\nlet es95 = RiskMetrics::calculate_expected_shortfall(&r, 0.05)?;`,
+        code: `use openquant::risk_metrics::RiskMetrics;\n\nlet returns = vec![-0.02, 0.01, -0.005, 0.003, 0.004];\n\n// These are &self methods on a unit struct, not associated functions: they need\n// a receiver. \`confidence_level\` is the tail probability (0.05 = 95% VaR).\nlet metrics = RiskMetrics;\nlet var_95 = metrics.calculate_value_at_risk(&returns, 0.05)?;\nlet es_95 = metrics.calculate_expected_shortfall(&returns, 0.05)?;\n\nprintln!("VaR(95%) = {var_95:.4}, ES(95%) = {es_95:.4}");`,
       },
     ],
     notes: ["Non-parametric estimates need enough tail observations.", "Use matrix variants for multi-asset return panels."],
@@ -1150,7 +1150,7 @@ w_decay = sample_weights.get_weights_by_time_decay(returns, 0.5)
       {
         title: "Compute event weights",
         language: "rust",
-        code: `use openquant::sample_weights::get_weights_by_time_decay;\n\nlet w = get_weights_by_time_decay(&returns, 0.5);`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::sample_weights::get_weights_by_time_decay;\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\n\n// Weighting is driven by triple-barrier events (t_in, t_out, label) — the label\n// lifetimes — plus the close series they span. It is not a function of returns.\nlet triple_barrier_events: Vec<(NaiveDateTime, NaiveDateTime, f64)> = (0..20)\n    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2), 1.0))\n    .collect();\nlet close: Vec<(NaiveDateTime, f64)> =\n    (0..25).map(|i| (t0 + Duration::days(i), 100.0 + i as f64 * 0.1)).collect();\n\n// decay = 0.5: the oldest observation keeps half the weight of the newest.\n// decay <= 0 erases the oldest observations entirely.\nlet weights = get_weights_by_time_decay(&triple_barrier_events, &close, 0.5)?;\nprintln!("{} weights; newest = {:.4}", weights.len(), weights.last().map(|w| w.1).unwrap_or(0.0));`,
       },
     ],
     notes: ["Pair with sequential bootstrap for robust label sampling.", "Time-decay controls recency bias explicitly."],
@@ -1264,7 +1264,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Instantiate SB bagging classifier",
         language: "rust",
-        code: `use openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier;\n\nlet bag = SequentiallyBootstrappedBaggingClassifier::new(100);`,
+        code: `use openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier;\n\n// The single constructor argument is \`random_state\` — NOT the ensemble size.\n// n_estimators defaults to 10 and has to be set explicitly.\nlet mut bag = SequentiallyBootstrappedBaggingClassifier::new(42);\nbag.n_estimators = 100;\nbag.oob_score = true;\n\nprintln!("{} estimators, seed {}", bag.n_estimators, bag.random_state);`,
       },
     ],
     notes: ["Sequential bootstrap improves diversity under event overlap.", "Tune max_samples/max_features with out-of-sample monitoring."],
@@ -1304,7 +1304,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "End-to-end synthetic OTR workflow",
         language: "rust",
-        code: `use openquant::synthetic_backtesting::{run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig};\n\nlet cfg = SyntheticBacktestConfig {\n  initial_price: historical_prices[historical_prices.len() - 1],\n  n_paths: 10_000,\n  horizon: 128,\n  seed: 42,\n  profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n  stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n  max_holding_steps: 64,\n  annualization_factor: 1.0,\n  stability_criteria: StabilityCriteria::default(),\n};\n\nlet out = run_synthetic_otr_workflow(&historical_prices, &cfg)?;\nif out.diagnostics.no_stable_optimum {\n  println!(\"Skip OTR optimization: {}\", out.diagnostics.reason);\n} else {\n  println!(\"Best PT/SL: {:?}\", out.best_rule);\n}`,
+        code: `use openquant::synthetic_backtesting::{\n    run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig,\n};\n\n// A realised price history is fitted to obtain the O-U parameters the synthetic\n// paths are drawn from.\nlet historical_prices: Vec<f64> =\n    (0..500).map(|i| 100.0 + (i as f64 * 0.05).sin() * 3.0).collect();\n\nlet cfg = SyntheticBacktestConfig {\n    initial_price: historical_prices[historical_prices.len() - 1],\n    n_paths: 10_000,\n    horizon: 128,\n    seed: 42,\n    profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n    stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n    max_holding_steps: 64,\n    annualization_factor: 1.0,\n    stability_criteria: StabilityCriteria::default(),\n};\n\nlet out = run_synthetic_otr_workflow(&historical_prices, &cfg)?;\nif out.diagnostics.no_stable_optimum {\n    println!("Skip OTR optimization: {}", out.diagnostics.reason);\n} else {\n    println!("Best PT/SL: {:?}", out.best_rule);\n}`,
       },
     ],
     notes: [
@@ -1329,7 +1329,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute SADF statistic",
         language: "rust",
-        code: `use openquant::structural_breaks::{get_sadf, SadfLags};\n\nlet y = vec![100.0, 100.2, 100.4, 100.1, 99.8, 100.0];\nlet sadf = get_sadf(&y, 3, SadfLags::Fixed(1))?;`,
+        code: `use openquant::structural_breaks::{get_sadf, SadfLags};\n\n// SADF is defined on log prices.\nlet log_prices: Vec<f64> =\n    (0..160).map(|i| (100.0 + i as f64 * 0.1 + ((i / 40) as f64) * 5.0).ln()).collect();\n\n// (series, model, add_const, min_length, lags). \`model\` selects the regression\n// specification — "linear", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp",\n// "sm_power" — and \`min_length\` is the shortest window a statistic is computed on.\nlet sadf = get_sadf(&log_prices, "linear", true, 20, SadfLags::Fixed(1))?;\n\nlet peak = sadf.iter().cloned().fold(f64::NEG_INFINITY, f64::max);\nprintln!("{} SADF values, peak = {peak:.4}", sadf.len());`,
       },
     ],
     notes: ["SADF can be computationally expensive on long windows.", "Use dedicated slow/nightly test paths for heavy scenarios."],
@@ -1373,7 +1373,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute daily and range-based volatility",
         language: "rust",
-        code: `use openquant::util::volatility::{get_daily_vol, get_parksinson_vol};\n\nlet dv = get_daily_vol(&close, 100);\nlet pv = get_parksinson_vol(&high, &low, 20);`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::util::volatility::{get_daily_vol, get_parksinson_vol};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet close: Vec<(NaiveDateTime, f64)> = (0..300)\n    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))\n    .collect();\nlet high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();\nlet low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();\n\n// Close-to-close EWMA vol on a timestamped series; \`lookback\` is the EWMA span.\nlet daily = get_daily_vol(&close, 100);\n// Parkinson uses the high/low range, so it needs no timestamps — \`window\` bars.\nlet parkinson = get_parksinson_vol(&high, &low, 20);\n\nprintln!("daily vol tail = {:?}", daily.last());\nprintln!("parkinson vol tail = {:?}", parkinson.last());`,
       },
     ],
     notes: ["Choose estimator based on available fields and microstructure noise.", "Daily-vol lookback should be matched to event horizon."],

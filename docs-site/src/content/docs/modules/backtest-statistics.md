@@ -49,12 +49,29 @@ $$IR=\frac{\mu-r_b}{\sigma_{(r-r_b)}}$$
 #### Compute Sharpe and drawdown
 
 ```rust
-use openquant::backtest_statistics::{sharpe_ratio, drawdown_and_time_under_water};
+use chrono::{Duration, NaiveDateTime};
+use openquant::backtest_statistics::{drawdown_and_time_under_water, sharpe_ratio};
 
 let returns = vec![0.01, -0.005, 0.007, -0.002, 0.003];
-let sr = sharpe_ratio(&returns, 252.0, 0.0);
-let (dd, tuw) = drawdown_and_time_under_water(&returns);
-println!("{sr} {dd:?} {tuw:?}");
+let sharpe = sharpe_ratio(&returns, 252.0, 0.0);
+
+// Drawdown and time-under-water are computed on a *timestamped equity curve*,
+// not on the return series: the function needs the timestamps to measure how
+// long each high-water mark went un-recovered.
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+let mut equity = 1.0;
+let curve: Vec<(NaiveDateTime, f64)> = returns
+    .iter()
+    .enumerate()
+    .map(|(i, r)| {
+        equity *= 1.0 + r;
+        (t0 + Duration::days(i as i64), equity)
+    })
+    .collect();
+
+// dollars = false reports each drawdown as a fraction of its high-water mark.
+let (drawdowns, time_under_water) = drawdown_and_time_under_water(&curve, false);
+println!("sharpe={sharpe:.3} drawdowns={drawdowns:?} tuw={time_under_water:?}");
 ```
 
 ## API Reference

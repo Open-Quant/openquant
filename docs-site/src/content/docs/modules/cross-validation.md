@@ -48,9 +48,23 @@ $$e=\lfloor p\cdot T\rfloor$$
 #### Configure PurgedKFold
 
 ```rust
+use chrono::{Duration, NaiveDateTime};
 use openquant::cross_validation::PurgedKFold;
 
-let cv = PurgedKFold::new(5, 0.01);
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+
+// samples_info_sets is one (label_start, label_end) span per observation. It is
+// mandatory: without label lifetimes there is nothing to purge against.
+let samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = (0..100)
+    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 3)))
+    .collect();
+
+// n_splits = 5 folds; pct_embargo = 0.01 drops a further 1% of the sample
+// immediately after each test fold. new() validates and returns a Result.
+let cv = PurgedKFold::new(5, samples_info_sets, 0.01)?;
+
+let splits = cv.split(100)?;
+println!("{} folds; fold 0 keeps {} training rows", splits.len(), splits[0].0.len());
 ```
 
 ## API Reference

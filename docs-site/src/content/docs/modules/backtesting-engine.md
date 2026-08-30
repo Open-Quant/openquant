@@ -57,25 +57,38 @@ $$S_{path}=\frac{\bar r_{path}}{\sigma_{path}}\sqrt{T_{path}}$$
 #### Run CPCV and inspect Sharpe distribution
 
 ```rust
+use chrono::{Duration, NaiveDateTime};
 use openquant::backtesting_engine::{
-  run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,
+    run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,
+};
+
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+let pnl: Vec<f64> = (0..240).map(|i| ((i % 7) as f64 - 3.0) / 1000.0).collect();
+
+// Each observation carries the span its label was drawn over. That span — not the
+// observation's timestamp — is what purging and the embargo act on.
+let data = BacktestData {
+    returns: pnl.clone(),
+    label_spans: (0..240)
+        .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2)))
+        .collect(),
 };
 
 let result = run_cpcv(
-  &data,
-  &BacktestRunConfig {
-    mode_provenance: "research_v3_with_costs".to_string(),
-    trials_count: 24,
-    safeguards: BacktestSafeguards {
-      survivorship_bias_control: "point-in-time universe".to_string(),
-      look_ahead_control: "lagged features".to_string(),
-      data_mining_control: "frozen split protocol".to_string(),
-      cost_assumption: "spread + slippage".to_string(),
-      multiple_testing_control: "trial count logged".to_string(),
+    &data,
+    &BacktestRunConfig {
+        mode_provenance: "research_v3_with_costs".to_string(),
+        trials_count: 24,
+        safeguards: BacktestSafeguards {
+            survivorship_bias_control: "point-in-time universe".to_string(),
+            look_ahead_control: "lagged features".to_string(),
+            data_mining_control: "frozen split protocol".to_string(),
+            cost_assumption: "spread + slippage".to_string(),
+            multiple_testing_control: "trial count logged".to_string(),
+        },
     },
-  },
-  &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },
-  |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),
+    &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },
+    |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),
 )?;
 
 println!("phi = {}", result.path_count);

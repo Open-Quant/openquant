@@ -46,10 +46,30 @@ $$\alpha=1-\frac{\sigma_{left}^2}{\sigma_{left}^2+\sigma_{right}^2}$$
 #### Allocate with HRP
 
 ```rust
+use nalgebra::DMatrix;
 use openquant::hrp::HierarchicalRiskParity;
 
+let asset_names: Vec<String> =
+    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();
+// rows = observations, cols = assets, in the same order as `asset_names`.
+let prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);
+
 let mut hrp = HierarchicalRiskParity::new();
-let weights = hrp.allocate(&prices)?;
+
+// allocate() mutates the struct and returns Result<(), HrpError>; the weights are
+// read back from `hrp.weights`. Exactly one of prices / returns / covariance must
+// be supplied.
+hrp.allocate(
+    &asset_names,
+    Some(&prices), // asset_prices
+    None,          // asset_returns
+    None,          // covariance_matrix
+    None,          // resample_by
+    false,         // use_shrinkage — Ledoit-Wolf shrinkage on the covariance
+)?;
+
+println!("weights: {:?}", hrp.weights);
+println!("seriation order: {:?}", hrp.ordered_indices);
 ```
 
 ## API Reference

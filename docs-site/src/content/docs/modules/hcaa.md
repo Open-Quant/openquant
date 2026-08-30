@@ -46,10 +46,34 @@ $$w_{left},w_{right}\propto\frac{1}{\sigma_{left}^2},\frac{1}{\sigma_{right}^2}$
 #### Fit HCAA allocator
 
 ```rust
+use nalgebra::DMatrix;
 use openquant::hcaa::HierarchicalClusteringAssetAllocation;
 
-let mut hcaa = HierarchicalClusteringAssetAllocation::new();
-let w = hcaa.allocate(&prices)?;
+let asset_names: Vec<String> =
+    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();
+// rows = observations, cols = assets, in the same order as `asset_names`.
+let prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);
+
+// The constructor argument selects how expected returns are estimated
+// ("mean" or "exponential"); it is not optional.
+let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");
+
+// allocate() fills the struct in place and returns Result<(), HcaaError>.
+// It does not return the weights — read them from `hcaa.weights` afterwards.
+hcaa.allocate(
+    &asset_names,
+    Some(&prices),      // asset_prices
+    None,               // asset_returns
+    None,               // covariance_matrix
+    None,               // expected_asset_returns
+    "minimum_variance", // allocation_metric
+    0.05,               // confidence_level, used by the tail-risk metrics
+    None,               // optimal_num_clusters — inferred when None
+    None,               // resample_by
+)?;
+
+println!("weights: {:?}", hcaa.weights);
+println!("seriation order: {:?}", hcaa.ordered_indices);
 ```
 
 ## API Reference

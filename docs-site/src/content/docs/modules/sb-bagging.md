@@ -50,7 +50,13 @@ $$S_b\sim P_{seq}(u)$$
 ```rust
 use openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier;
 
-let bag = SequentiallyBootstrappedBaggingClassifier::new(100);
+// The single constructor argument is `random_state` — NOT the ensemble size.
+// n_estimators defaults to 10 and has to be set explicitly.
+let mut bag = SequentiallyBootstrappedBaggingClassifier::new(42);
+bag.n_estimators = 100;
+bag.oob_score = true;
+
+println!("{} estimators, seed {}", bag.n_estimators, bag.random_state);
 ```
 
 ## API Reference

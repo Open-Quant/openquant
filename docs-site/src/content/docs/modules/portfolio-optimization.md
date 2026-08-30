@@ -79,15 +79,17 @@ assert!((er.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
 #### End-to-end: Constrained Allocation with Exponential Returns and Resampling
 
 ```rust
-use std::collections::HashMap;
+use nalgebra::DMatrix;
 use openquant::portfolio_optimization::{
-    allocate_max_sharpe_with,
-    AllocationOptions,
-    ReturnsMethod,
+    allocate_max_sharpe_with, AllocationOptions, ReturnsMethod,
 };
+use std::collections::HashMap;
+
+// rows = time, cols = assets
+let prices = DMatrix::from_fn(252, 6, |i, j| 100.0 + (i as f64) * 0.03 + (j as f64) * 2.0);
 
 let mut bounds = HashMap::new();
-// Cap concentration in first asset; enforce long-only defaults elsewhere
+// Cap concentration in the first asset; the tuple bound applies to the rest.
 bounds.insert(0usize, (0.0, 0.20));
 
 let opts = AllocationOptions {

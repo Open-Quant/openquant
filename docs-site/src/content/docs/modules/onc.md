@@ -47,10 +47,26 @@ $$k^*=\arg\min_k J(k)$$
 #### Infer cluster structure
 
 ```rust
+use nalgebra::DMatrix;
 use openquant::onc::get_onc_clusters;
 
+// ONC consumes a *correlation* matrix, not raw prices — build one from your
+// codependence measure of choice first.
+let corr = DMatrix::from_row_slice(
+    4,
+    4,
+    &[
+        1.00, 0.85, 0.10, 0.05, //
+        0.85, 1.00, 0.12, 0.08, //
+        0.10, 0.12, 1.00, 0.78, //
+        0.05, 0.08, 0.78, 1.00,
+    ],
+);
+
+// `repeat` is the number of k-means restarts used to stabilise the partition.
 let out = get_onc_clusters(&corr, 20)?;
-println!("{}", out.clusters.len());
+println!("{} clusters", out.clusters.len());
+println!("silhouette scores: {:?}", out.silhouette_scores);
 ```
 
 ## API Reference

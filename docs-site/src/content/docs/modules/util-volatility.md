@@ -48,10 +48,23 @@ $$\sigma_{YZ}^2=\sigma_o^2+k\sigma_c^2+(1-k)\sigma_{rs}^2$$
 #### Compute daily and range-based volatility
 
 ```rust
+use chrono::{Duration, NaiveDateTime};
 use openquant::util::volatility::{get_daily_vol, get_parksinson_vol};
 
-let dv = get_daily_vol(&close, 100);
-let pv = get_parksinson_vol(&high, &low, 20);
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+let close: Vec<(NaiveDateTime, f64)> = (0..300)
+    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))
+    .collect();
+let high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();
+let low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();
+
+// Close-to-close EWMA vol on a timestamped series; `lookback` is the EWMA span.
+let daily = get_daily_vol(&close, 100);
+// Parkinson uses the high/low range, so it needs no timestamps — `window` bars.
+let parkinson = get_parksinson_vol(&high, &low, 20);
+
+println!("daily vol tail = {:?}", daily.last());
+println!("parkinson vol tail = {:?}", parkinson.last());
 ```
 
 ## API Reference

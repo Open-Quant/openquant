@@ -54,25 +54,32 @@ $$R^*=\arg\max_{R\in\Omega}\frac{\mathbb E[\pi\mid R]}{\sigma[\pi\mid R]}$$
 #### End-to-end synthetic OTR workflow
 
 ```rust
-use openquant::synthetic_backtesting::{run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig};
+use openquant::synthetic_backtesting::{
+    run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig,
+};
+
+// A realised price history is fitted to obtain the O-U parameters the synthetic
+// paths are drawn from.
+let historical_prices: Vec<f64> =
+    (0..500).map(|i| 100.0 + (i as f64 * 0.05).sin() * 3.0).collect();
 
 let cfg = SyntheticBacktestConfig {
-  initial_price: historical_prices[historical_prices.len() - 1],
-  n_paths: 10_000,
-  horizon: 128,
-  seed: 42,
-  profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],
-  stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],
-  max_holding_steps: 64,
-  annualization_factor: 1.0,
-  stability_criteria: StabilityCriteria::default(),
+    initial_price: historical_prices[historical_prices.len() - 1],
+    n_paths: 10_000,
+    horizon: 128,
+    seed: 42,
+    profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],
+    stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],
+    max_holding_steps: 64,
+    annualization_factor: 1.0,
+    stability_criteria: StabilityCriteria::default(),
 };
 
 let out = run_synthetic_otr_workflow(&historical_prices, &cfg)?;
 if out.diagnostics.no_stable_optimum {
-  println!("Skip OTR optimization: {}", out.diagnostics.reason);
+    println!("Skip OTR optimization: {}", out.diagnostics.reason);
 } else {
-  println!("Best PT/SL: {:?}", out.best_rule);
+    println!("Best PT/SL: {:?}", out.best_rule);
 }
 ```
 

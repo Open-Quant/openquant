@@ -48,10 +48,46 @@ $$I_j=Score(X)-Score(X_{perm(j)})$$
 #### Run MDA with classifier
 
 ```rust
+use openquant::cross_validation::{Scoring, SimpleClassifier};
 use openquant::feature_importance::mean_decrease_accuracy;
 
-// Plug in your classifier implementing SimpleClassifier
-let importance = mean_decrease_accuracy(&clf, &x, &y, 5)?;
+// MDA works with any model implementing SimpleClassifier; this stand-in keeps
+// the example self-contained.
+struct MeanThreshold {
+    threshold: f64,
+}
+impl SimpleClassifier for MeanThreshold {
+    fn fit(&mut self, x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {
+        self.threshold = x.iter().map(|row| row[0]).sum::<f64>() / x.len() as f64;
+    }
+    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+        x.iter().map(|row| if row[0] > self.threshold { 0.9 } else { 0.1 }).collect()
+    }
+}
+
+let x: Vec<Vec<f64>> = (0..40).map(|i| vec![i as f64, (i % 7) as f64]).collect();
+let y: Vec<f64> = (0..40).map(|i| if i >= 20 { 1.0 } else { 0.0 }).collect();
+let feature_names = vec!["trend".to_string(), "noise".to_string()];
+
+// MDA is measured out of sample, so it takes the *already-purged splits* — not a
+// fold count. Feed it the output of PurgedKFold::split so the score is leak-free.
+let splits = vec![
+    ((0..20).collect::<Vec<usize>>(), (20..40).collect::<Vec<usize>>()),
+    ((20..40).collect::<Vec<usize>>(), (0..20).collect::<Vec<usize>>()),
+];
+
+let mut model = MeanThreshold { threshold: 0.0 };
+let importance = mean_decrease_accuracy(
+    &mut model,
+    &x,
+    &y,
+    &feature_names,
+    &splits,
+    None, // sample_weight — pass uniqueness weights from `sample_weights` in practice
+    Scoring::Accuracy,
+)?;
+
+println!("trend: mean={:.4} std={:.4}", importance["trend"].mean, importance["trend"].std);
 ```
 
 ## API Reference

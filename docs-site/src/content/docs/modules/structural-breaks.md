@@ -50,8 +50,17 @@ $$SADF=\sup_{r_2\in[r_0,1]} ADF_0^{r_2}$$
 ```rust
 use openquant::structural_breaks::{get_sadf, SadfLags};
 
-let y = vec![100.0, 100.2, 100.4, 100.1, 99.8, 100.0];
-let sadf = get_sadf(&y, 3, SadfLags::Fixed(1))?;
+// SADF is defined on log prices.
+let log_prices: Vec<f64> =
+    (0..160).map(|i| (100.0 + i as f64 * 0.1 + ((i / 40) as f64) * 5.0).ln()).collect();
+
+// (series, model, add_const, min_length, lags). `model` selects the regression
+// specification — "linear", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp",
+// "sm_power" — and `min_length` is the shortest window a statistic is computed on.
+let sadf = get_sadf(&log_prices, "linear", true, 20, SadfLags::Fixed(1))?;
+
+let peak = sadf.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+println!("{} SADF values, peak = {peak:.4}", sadf.len());
 ```
 
 ## API Reference
