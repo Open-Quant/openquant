@@ -229,3 +229,16 @@ h1 {
   font-family: var(--sl-font-mono);
   font-size: 0.92em;
 }
+
+/* The landing page shares its banner between the status badge and a call to
+   action, so links there take the status colours rather than the gradient
+   banner's near-white. */
+.sl-banner:has(.doc-status) a {
+  color: var(--doc-status-fg) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 0.2em;
+}
+
+.sl-banner:has(.doc-status) a:hover {
+  color: var(--doc-status-pill) !important;
+}
