@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
-RUST_SRC = ROOT / "crates" / "openquant" / "src"
+CRATES = ROOT / "crates"
+# Every crate whose `src/` tree is part of the public API surface. Scanned
+# recursively, so nested modules (e.g. openquant/src/util/*.rs) are included.
+RUST_CRATES = ("openquant", "pyopenquant")
 PY_SRC = ROOT / "python" / "openquant"
 OUT = ROOT / "docs-site" / "src" / "data" / "apiInventory.ts"
 
@@ -16,20 +19,37 @@ RUST_FN_RE = re.compile(r"^pub\s+fn\s+([a-zA-Z0-9_]+)\s*\(")
 PY_FN_RE = re.compile(r"^def\s+([a-zA-Z0-9_]+)\s*\(")
 
 
+def rust_module_key(crate: str, src_root: Path, path: Path) -> str:
+    """Rust-style module path, e.g. ``openquant::util::volatility``.
+
+    Keying by crate + path (not by ``path.stem``) is required now that the scan
+    recurses and covers more than one crate: several module names, such as
+    ``filters`` and ``volatility``, exist in both crates and would otherwise
+    silently overwrite each other.
+    """
+    parts = path.relative_to(src_root).with_suffix("").parts
+    return "::".join((crate,) + parts)
+
+
 def scan_rust() -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
-    for path in sorted(RUST_SRC.glob("*.rs")):
-        if path.name in {"lib.rs"}:
-            continue
-        module = path.stem
-        fns: list[str] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            m = RUST_FN_RE.match(line.strip())
-            if not m:
+    for crate in RUST_CRATES:
+        src_root = CRATES / crate / "src"
+        for path in sorted(src_root.rglob("*.rs")):
+            # Crate/module roots only re-export; they declare no API of their own.
+            if path.name in {"lib.rs", "mod.rs"}:
                 continue
-            fns.append(m.group(1))
-        if fns:
-            out[module] = sorted(set(fns))
+            module = rust_module_key(crate, src_root, path)
+            fns: list[str] = []
+            for line in path.read_text(encoding="utf-8").splitlines():
+                m = RUST_FN_RE.match(line.strip())
+                if not m:
+                    continue
+                fns.append(m.group(1))
+            if fns:
+                if module in out:
+                    raise SystemExit(f"duplicate rust module key: {module}")
+                out[module] = sorted(set(fns))
     return out
 
 
