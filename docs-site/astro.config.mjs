@@ -5,6 +5,7 @@ import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
 
 export default defineConfig({
+  site: 'https://open-quant.github.io',
   base: '/openquant',
   output: 'static',
   markdown: {
