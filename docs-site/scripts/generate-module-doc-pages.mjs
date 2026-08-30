@@ -41,7 +41,11 @@ for (const doc of moduleDocs) {
   // --- Mathematical Foundations ---
   const formulas = doc.formulas.length
     ? doc.formulas
-        .map((f) => `### ${f.label}\n\n$$${f.latex}$$`)
+        .map(
+          (f) =>
+            `### ${f.label}\n\n$$${f.latex}$$` +
+            (f.where ? `\n\nwhere ${f.where}` : '')
+        )
         .join('\n\n')
     : null;
 

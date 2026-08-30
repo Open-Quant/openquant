@@ -34,13 +34,29 @@ Turns raw PnL/returns into risk-adjusted diagnostics used in model selection and
 
 ## Mathematical Foundations
 
-### Sharpe
+### Sharpe Ratio
 
-$$S=\frac{\mu-r_f}{\sigma}$$
+$$\mathrm{SR}=\frac{\mu-r_f}{\sigma}\sqrt{n}$$
+
+where $\mu$ and $\sigma$ are the mean and standard deviation of the per-bar returns, $r_f$ the per-bar risk-free rate, and $n$ the number of bars per year (`entries_per_year`) — the annualisation constant must match your bar frequency.
 
 ### Information Ratio
 
-$$IR=\frac{\mu-r_b}{\sigma_{(r-r_b)}}$$
+$$\mathrm{IR}=\frac{\mu-r_b}{\sigma_{(r-r_b)}}$$
+
+where $r_b$ is the benchmark return and $\sigma_{(r-r_b)}$ the tracking error, i.e. the standard deviation of the *excess* return series.
+
+### Probabilistic Sharpe Ratio
+
+$$\mathrm{PSR}(\mathrm{SR}^*)=Z\left[\frac{(\widehat{\mathrm{SR}}-\mathrm{SR}^*)\sqrt{T-1}}{\sqrt{1-\hat\gamma_3\widehat{\mathrm{SR}}+\frac{\hat\gamma_4-1}{4}\widehat{\mathrm{SR}}^2}}\right]$$
+
+where $Z[\cdot]$ is the standard normal CDF, $\widehat{\mathrm{SR}}$ the observed (non-annualised) Sharpe ratio, $\mathrm{SR}^*$ the benchmark being tested against, $T$ the number of returns, and $\hat\gamma_3,\hat\gamma_4$ the sample skewness and kurtosis. Non-normal returns lower the confidence a given Sharpe deserves.
+
+### Deflated Sharpe Ratio
+
+$$\mathrm{DSR}=\mathrm{PSR}(\mathrm{SR}_0),\qquad \mathrm{SR}_0=\sqrt{V[\{\widehat{\mathrm{SR}}_n\}]}\left((1-\gamma)Z^{-1}\!\left[1-\tfrac{1}{N}\right]+\gamma Z^{-1}\!\left[1-\tfrac{e^{-1}}{N}\right]\right)$$
+
+where $N$ is the number of strategy variants you tried, $V[\{\widehat{\mathrm{SR}}_n\}]$ the variance of their Sharpe ratios, $\gamma\approx0.5772$ the Euler-Mascheroni constant, and $Z^{-1}$ the normal quantile function. $\mathrm{SR}_0$ is the Sharpe you would *expect* the best of $N$ independent worthless strategies to post, so DSR is the PSR measured against that bar instead of against zero. `deflated_sharpe_ratio` accepts either the raw $\{\widehat{\mathrm{SR}}_n\}$ or the $(\text{sd}, N)$ pair via `estimates_param`.
 
 ## Usage Examples
 

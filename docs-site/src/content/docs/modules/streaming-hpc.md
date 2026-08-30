@@ -39,17 +39,23 @@ Streaming decisions are turnaround-time constrained; this module maintains VPIN/
 
 ## Mathematical Foundations
 
-### VPIN (Rolling Buckets)
+### VPIN (Rolling Volume Buckets)
 
-$$\mathrm{VPIN}_t=\frac{1}{N}\sum_{i=t-N+1}^{t}\frac{|V_i^B-V_i^S|}{V_i}$$
+$$\mathrm{VPIN}_t=\frac{1}{N}\sum_{i=t-N+1}^{t}\frac{\left|V_i^{B}-V_i^{S}\right|}{V},\qquad V_i^{B}+V_i^{S}=V$$
+
+where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bucket $i$, $V$ the fixed `bucket_volume` every bucket is filled to, and $N$ = `support_buckets` the rolling window. Because buckets are equal-volume by construction, the denominator is a constant — this is the canonical Easley-Lopez de Prado form. The bar-based `get_vpin` in [`microstructural-features`](/modules/microstructural-features/) estimates the same quantity over unequal bars and so must normalise differently.
 
 ### Market Fragmentation HHI
 
 $$\mathrm{HHI}_t=\sum_{v=1}^{K}\left(\frac{n_{v,t}}{\sum_j n_{j,t}}\right)^2$$
 
-### Streaming Throughput
+where $n_{v,t}$ is the event count on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.
 
-$$\mathrm{throughput}=\frac{\#\mathrm{events\ processed}}{\mathrm{runtime\ seconds}}$$
+### Alert Condition
+
+$$\text{alert}_t\iff \mathrm{VPIN}_t\ge\tau_V\;\land\;\mathrm{HHI}_t\ge\tau_H,\qquad \text{risk}_t=\frac{1}{2}\left(\frac{\mathrm{VPIN}_t}{\tau_V}+\frac{\mathrm{HHI}_t}{\tau_H}\right)$$
+
+where $\tau_V$ and $\tau_H$ are `AlertThresholds { vpin, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.
 
 ## Usage Examples
 

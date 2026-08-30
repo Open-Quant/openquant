@@ -33,13 +33,17 @@ Improves model interpretability and helps remove unstable or redundant features.
 
 ## Mathematical Foundations
 
-### MDI
+### MDI — Mean Decrease Impurity
 
-$$I_j=\sum_{t\in T_j} p(t)\Delta i(t)$$
+$$I_j=\frac{1}{B}\sum_{b=1}^{B}\;\sum_{t\in T_j^{(b)}} p(t)\,\Delta i(t)$$
 
-### MDA
+where $T_j^{(b)}$ are the nodes of tree $b$ that split on feature $j$, $p(t)$ the fraction of samples reaching node $t$, and $\Delta i(t)$ the impurity drop at that split. This is the tree-based definition: it is in-sample, computable only for tree ensembles, and `mean_decrease_impurity` takes the per-tree importance vectors a fitted forest already exposes. The Python `feature_diagnostics.mdi_importance` uses a different, linear-model estimator under the same acronym — see that page.
 
-$$I_j=Score(X)-Score(X_{perm(j)})$$
+### MDA — Mean Decrease Accuracy
+
+$$I_j=\frac{1}{K}\sum_{k=1}^{K}\big(S_k-S_{k,\text{perm}(j)}\big)$$
+
+where $S_k$ is the out-of-sample score on purged fold $k$ and $S_{k,\text{perm}(j)}$ the same score after column $j$ is randomly permuted in the test set. Unlike MDI it is model-agnostic and out-of-sample, which is why `mean_decrease_accuracy` demands the CV splits rather than a fold count.
 
 ## Usage Examples
 

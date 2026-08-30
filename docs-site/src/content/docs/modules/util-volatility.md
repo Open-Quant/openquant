@@ -35,11 +35,15 @@ Volatility is a foundational scaling target for barriers, sizing, and risk contr
 
 ### Parkinson
 
-$$\sigma_P^2=\frac{1}{4\ln 2}\frac{1}{n}\sum (\ln(H_t/L_t))^2$$
+$$\sigma_P^2=\frac{1}{4\ln 2}\cdot\frac{1}{n}\sum_{t}\left(\ln\frac{H_t}{L_t}\right)^2$$
+
+where $H_t,L_t$ are the bar high and low and $n$ the `window` length. It uses the range rather than the close, so it is far more efficient than close-to-close on the same sample — but it ignores overnight gaps and assumes no drift.
 
 ### Yang-Zhang
 
-$$\sigma_{YZ}^2=\sigma_o^2+k\sigma_c^2+(1-k)\sigma_{rs}^2$$
+$$\sigma_{YZ}^2=\sigma_o^2+k\,\sigma_c^2+(1-k)\,\sigma_{rs}^2,\qquad k=\frac{0.34}{1.34+\frac{n+1}{n-1}}$$
+
+where $\sigma_o^2$ is the overnight (close-to-open) variance, $\sigma_c^2$ the open-to-close variance, and $\sigma_{rs}^2$ the Rogers-Satchell estimator; $n$ is the `window` length. $k$ is not a free parameter — it is the weight that minimises the estimator's variance, which is what makes Yang-Zhang the only one of these four that handles both overnight gaps and intraday drift. For a 20-bar window $k\approx0.14$, so the overnight and Rogers-Satchell terms carry most of the estimate.
 
 ## Usage Examples
 

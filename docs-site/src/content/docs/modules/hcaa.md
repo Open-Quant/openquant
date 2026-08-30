@@ -31,13 +31,17 @@ Allocates capital by hierarchy to reduce concentration and covariance-estimation
 
 ## Mathematical Foundations
 
-### Cluster Variance
+### Cluster Risk
 
-$$\sigma_C^2=w_C^T\Sigma_C w_C$$
+$$\sigma_C^2=w_C^{\top}\Sigma_C w_C$$
 
-### Recursive Split
+where $\Sigma_C$ is the covariance sub-matrix of cluster $C$ and $w_C$ its inverse-variance weights, normalised to sum to one within the cluster.
 
-$$w_{left},w_{right}\propto\frac{1}{\sigma_{left}^2},\frac{1}{\sigma_{right}^2}$$
+### Recursive Bisection Split
+
+$$\alpha=1-\frac{m_{\text{left}}}{m_{\text{left}}+m_{\text{right}}},\qquad w_{\text{left}}\mathrel{*}=\alpha,\quad w_{\text{right}}\mathrel{*}=1-\alpha$$
+
+where $m_C$ is the risk of cluster $C$ under the chosen `allocation_metric`: cluster variance ($\sigma_C^2$), standard deviation ($\sigma_C$), expected shortfall, or conditional drawdown. Lower risk on one side means a larger $\alpha$ for that side. This generalises the HRP split, which is the `minimum_variance` case. Two branches invert the sign: `sharpe_ratio` allocates $\alpha=\mathrm{SR}_{\text{left}}/(\mathrm{SR}_{\text{left}}+\mathrm{SR}_{\text{right}})$ because higher is better there, and `equal_weighting` skips the split entirely.
 
 ## Usage Examples
 

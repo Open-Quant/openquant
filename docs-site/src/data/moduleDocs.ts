@@ -1,6 +1,13 @@
 export type Formula = {
   label: string;
   latex: string;
+  /**
+   * Definitions for every symbol the equation introduces. Rendered directly
+   * under the equation. Populate it whenever a formula names something the
+   * reader has not already met on the page — an undefined symbol is the
+   * difference between a foundation and a decoration.
+   */
+  where?: string;
 };
 
 export type ExampleBlock = {
@@ -51,8 +58,26 @@ export const moduleDocs: ModuleDoc[] = [
       "average_holding_period",
     ],
     formulas: [
-      { label: "Sharpe", latex: "S=\\frac{\\mu-r_f}{\\sigma}" },
-      { label: "Information Ratio", latex: "IR=\\frac{\\mu-r_b}{\\sigma_{(r-r_b)}}" },
+      {
+        label: "Sharpe Ratio",
+        latex: "\\mathrm{SR}=\\frac{\\mu-r_f}{\\sigma}\\sqrt{n}",
+        where: "$\\mu$ and $\\sigma$ are the mean and standard deviation of the per-bar returns, $r_f$ the per-bar risk-free rate, and $n$ the number of bars per year (`entries_per_year`) — the annualisation constant must match your bar frequency.",
+      },
+      {
+        label: "Information Ratio",
+        latex: "\\mathrm{IR}=\\frac{\\mu-r_b}{\\sigma_{(r-r_b)}}",
+        where: "$r_b$ is the benchmark return and $\\sigma_{(r-r_b)}$ the tracking error, i.e. the standard deviation of the *excess* return series.",
+      },
+      {
+        label: "Probabilistic Sharpe Ratio",
+        latex: "\\mathrm{PSR}(\\mathrm{SR}^*)=Z\\left[\\frac{(\\widehat{\\mathrm{SR}}-\\mathrm{SR}^*)\\sqrt{T-1}}{\\sqrt{1-\\hat\\gamma_3\\widehat{\\mathrm{SR}}+\\frac{\\hat\\gamma_4-1}{4}\\widehat{\\mathrm{SR}}^2}}\\right]",
+        where: "$Z[\\cdot]$ is the standard normal CDF, $\\widehat{\\mathrm{SR}}$ the observed (non-annualised) Sharpe ratio, $\\mathrm{SR}^*$ the benchmark being tested against, $T$ the number of returns, and $\\hat\\gamma_3,\\hat\\gamma_4$ the sample skewness and kurtosis. Non-normal returns lower the confidence a given Sharpe deserves.",
+      },
+      {
+        label: "Deflated Sharpe Ratio",
+        latex: "\\mathrm{DSR}=\\mathrm{PSR}(\\mathrm{SR}_0),\\qquad \\mathrm{SR}_0=\\sqrt{V[\\{\\widehat{\\mathrm{SR}}_n\\}]}\\left((1-\\gamma)Z^{-1}\\!\\left[1-\\tfrac{1}{N}\\right]+\\gamma Z^{-1}\\!\\left[1-\\tfrac{e^{-1}}{N}\\right]\\right)",
+        where: "$N$ is the number of strategy variants you tried, $V[\\{\\widehat{\\mathrm{SR}}_n\\}]$ the variance of their Sharpe ratios, $\\gamma\\approx0.5772$ the Euler-Mascheroni constant, and $Z^{-1}$ the normal quantile function. $\\mathrm{SR}_0$ is the Sharpe you would *expect* the best of $N$ independent worthless strategies to post, so DSR is the PSR measured against that bar instead of against zero. `deflated_sharpe_ratio` accepts either the raw $\\{\\widehat{\\mathrm{SR}}_n\\}$ or the $(\\text{sd}, N)$ pair via `estimates_param`.",
+      },
     ],
     examples: [
       {
@@ -218,8 +243,16 @@ export const moduleDocs: ModuleDoc[] = [
     whyItExists: "Time-dependent labels violate IID assumptions; purging/embargoing reduces leakage bias.",
     keyApis: ["ml_cross_val_score", "ml_get_train_times", "PurgedKFold", "Scoring"],
     formulas: [
-      { label: "Purged Train Set", latex: "\\mathcal{T}_{train}=\\mathcal{T}\\setminus(\\mathcal{T}_{test}\\oplus e)" },
-      { label: "Embargo", latex: "e=\\lfloor p\\cdot T\\rfloor" },
+      {
+        label: "Purged Train Set",
+        latex: "\\mathcal{T}_{\\text{train}}=\\mathcal{T}\\setminus\\{i:\\;\\exists j\\in\\mathcal{T}_{\\text{test}},\\;[t_{i,0},t_{i,1}]\\cap[t_{j,0},t_{j,1}]\\neq\\varnothing\\}\\setminus\\mathcal{E}",
+        where: "$[t_{i,0},t_{i,1}]$ is observation $i$'s label span — the `samples_info_sets` entry `PurgedKFold::new` requires. *Purging* drops any training observation whose label lifetime overlaps a test label's; $\\mathcal{E}$ is the embargo set below. Overlap, not adjacency, is what leaks: two observations sampled a month apart still share information if their labels resolve on the same bar.",
+      },
+      {
+        label: "Embargo",
+        latex: "e=\\lfloor p\\cdot T\\rfloor,\\qquad \\mathcal{E}=\\{i:\\;\\max(\\mathcal{T}_{\\text{test}})<i\\le\\max(\\mathcal{T}_{\\text{test}})+e\\}",
+        where: "$T$ is the total number of observations and $p$ the `pct_embargo` fraction (0.01 = 1%), so $e$ is an observation count. The embargo drops the $e$ observations immediately *after* each test fold, which catches serial correlation that purging alone misses because the label spans do not literally overlap.",
+      },
     ],
     examples: [
       {
@@ -469,8 +502,16 @@ The key insight is that information-driven bars produce returns that are closer 
     whyItExists: "Improves model interpretability and helps remove unstable or redundant features.",
     keyApis: ["mean_decrease_impurity", "mean_decrease_accuracy", "single_feature_importance", "feature_pca_analysis"],
     formulas: [
-      { label: "MDI", latex: "I_j=\\sum_{t\\in T_j} p(t)\\Delta i(t)" },
-      { label: "MDA", latex: "I_j=Score(X)-Score(X_{perm(j)})" },
+      {
+        label: "MDI — Mean Decrease Impurity",
+        latex: "I_j=\\frac{1}{B}\\sum_{b=1}^{B}\\;\\sum_{t\\in T_j^{(b)}} p(t)\\,\\Delta i(t)",
+        where: "$T_j^{(b)}$ are the nodes of tree $b$ that split on feature $j$, $p(t)$ the fraction of samples reaching node $t$, and $\\Delta i(t)$ the impurity drop at that split. This is the tree-based definition: it is in-sample, computable only for tree ensembles, and `mean_decrease_impurity` takes the per-tree importance vectors a fitted forest already exposes. The Python `feature_diagnostics.mdi_importance` uses a different, linear-model estimator under the same acronym — see that page.",
+      },
+      {
+        label: "MDA — Mean Decrease Accuracy",
+        latex: "I_j=\\frac{1}{K}\\sum_{k=1}^{K}\\big(S_k-S_{k,\\text{perm}(j)}\\big)",
+        where: "$S_k$ is the out-of-sample score on purged fold $k$ and $S_{k,\\text{perm}(j)}$ the same score after column $j$ is randomly permuted in the test set. Unlike MDI it is model-agnostic and out-of-sample, which is why `mean_decrease_accuracy` demands the CV splits rather than a fold count.",
+      },
     ],
     examples: [
       {
@@ -490,8 +531,16 @@ The key insight is that information-driven bars produce returns that are closer 
     whyItExists: "Extracts informative events from noisy high-frequency sequences.",
     keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "cusum_filter_indices_checked", "cusum_filter_timestamps_checked", "z_score_filter_indices", "z_score_filter_timestamps", "z_score_filter_timestamps_checked", "Threshold", "FilterError"],
     formulas: [
-      { label: "CUSUM", latex: "S_t=\\max(0, S_{t-1}+r_t),\\; trigger\\;if\\;|S_t|>h" },
-      { label: "Z-score", latex: "z_t=\\frac{x_t-\\mu_t}{\\sigma_t}" },
+      {
+        label: "Symmetric CUSUM Filter",
+        latex: "S_t^{+}=\\max\\!\\left(0,\\,S_{t-1}^{+}+r_t\\right),\\qquad S_t^{-}=\\min\\!\\left(0,\\,S_{t-1}^{-}+r_t\\right),\\qquad \\text{event at }t\\iff S_t^{+}>h_t\\;\\lor\\;S_t^{-}<-h_t",
+        where: "$r_t=\\ln(p_t/p_{t-1})$ is the log return and $h_t$ the threshold — a constant for `Threshold::Scalar`, a per-bar series for `Threshold::Dynamic`. Both arms are needed: $S^{+}$ alone only ever detects upward runs. Whichever arm breaches is reset to $0$ and the bar is emitted as an event, so the filter measures *runs* away from the last event rather than a cumulative level.",
+      },
+      {
+        label: "Z-score Filter",
+        latex: "z_t=\\frac{x_t-\\mu_t}{\\sigma_t},\\qquad \\text{event at }t\\iff|z_t|>h",
+        where: "$\\mu_t$ and $\\sigma_t$ are the rolling mean and standard deviation over the lookback window ending at $t$.",
+      },
     ],
     examples: [
       {
@@ -646,8 +695,16 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
     whyItExists: "Allocates capital by hierarchy to reduce concentration and covariance-estimation fragility.",
     keyApis: ["HierarchicalClusteringAssetAllocation", "HcaaError"],
     formulas: [
-      { label: "Cluster Variance", latex: "\\sigma_C^2=w_C^T\\Sigma_C w_C" },
-      { label: "Recursive Split", latex: "w_{left},w_{right}\\propto\\frac{1}{\\sigma_{left}^2},\\frac{1}{\\sigma_{right}^2}" },
+      {
+        label: "Cluster Risk",
+        latex: "\\sigma_C^2=w_C^{\\top}\\Sigma_C w_C",
+        where: "$\\Sigma_C$ is the covariance sub-matrix of cluster $C$ and $w_C$ its inverse-variance weights, normalised to sum to one within the cluster.",
+      },
+      {
+        label: "Recursive Bisection Split",
+        latex: "\\alpha=1-\\frac{m_{\\text{left}}}{m_{\\text{left}}+m_{\\text{right}}},\\qquad w_{\\text{left}}\\mathrel{*}=\\alpha,\\quad w_{\\text{right}}\\mathrel{*}=1-\\alpha",
+        where: "$m_C$ is the risk of cluster $C$ under the chosen `allocation_metric`: cluster variance ($\\sigma_C^2$), standard deviation ($\\sigma_C$), expected shortfall, or conditional drawdown. Lower risk on one side means a larger $\\alpha$ for that side. This generalises the HRP split, which is the `minimum_variance` case. Two branches invert the sign: `sharpe_ratio` allocates $\\alpha=\\mathrm{SR}_{\\text{left}}/(\\mathrm{SR}_{\\text{left}}+\\mathrm{SR}_{\\text{right}})$ because higher is better there, and `equal_weighting` skips the split entirely.",
+      },
     ],
     examples: [
       {
@@ -818,7 +875,8 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         label: "Flow Toxicity and Entropy",
         latex:
-          "\\mathrm{VPIN}_t=\\frac{1}{n}\\sum_{i=t-n+1}^{t}\\frac{|V_i^b-V_i^s|}{V_i},\\qquad H=-\\sum_j p_j\\log p_j",
+          "\\mathrm{VPIN}_t=\\frac{1}{V_t}\\cdot\\frac{1}{n}\\sum_{i=t-n+1}^{t}\\left|V_i^{B}-V_i^{S}\\right|,\\qquad H=-\\sum_j p_j\\log p_j",
+        where: "$V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bar $i$ (`get_bvc_buy_volume` will estimate the split when it is not observed), $V_t$ the current bar's total volume, and $n$ the rolling `window`. The normaliser sits *outside* the sum because bars are not equal-volume: `get_vpin` averages the imbalance over the window and then scales by the latest bar. The equal-volume-bucket form used by [`streaming-hpc`](/modules/streaming-hpc/) divides each term by the same constant bucket size instead; the two agree when bars carry equal volume. $H$ is the entropy of the tick-sign message, with $p_j$ the empirical frequency of symbol $j$.",
       },
     ],
     examples: [
@@ -997,14 +1055,17 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         label: "Linear Partition Boundary",
         latex: "b_i=\\left\\lfloor\\frac{iN}{M}\\right\\rfloor,\\;i=0,\\dots,M",
+        where: "$N$ is the number of atoms, $M$ the number of molecules (`mp_batches` x workers), and molecule $i$ covers atoms $[b_{i-1},b_i)$. Every molecule gets the same *count* of atoms, which is correct only when atoms cost the same.",
       },
       {
         label: "Nested Partition Boundary",
         latex: "b_i=\\left\\lfloor N\\sqrt{\\frac{i}{M}}\\right\\rfloor,\\;i=0,\\dots,M",
+        where: "The same $N$ and $M$, for the triangular workloads that dominate this library — building an overlap or codependence matrix, where atom $k$ touches $k$ earlier observations, so its cost grows linearly with $k$. Later molecules therefore hold fewer atoms.",
       },
       {
-        label: "Throughput",
-        latex: "\\text{throughput}=\\frac{\\text{atoms processed}}{\\text{runtime seconds}}",
+        label: "Equal-Cost Condition",
+        latex: "\\text{cost}(i)\\;\\propto\\;\\frac{b_i^2-b_{i-1}^2}{2}=\\frac{N^2}{2M}\\quad\\text{for every }i",
+        where: "$b_i$ and $M$ are as above. This is why the square root is there: if atom $k$ costs $\\propto k$, a molecule spanning $[b_{i-1},b_i)$ costs $\\propto(b_i^2-b_{i-1}^2)/2$; substituting $b_i=N\\sqrt{i/M}$ makes that $N^2/(2M)$, the same for every molecule. Linear partitioning on the same workload leaves the last molecule roughly $2M-1$ times more expensive than the first, and the run is only as fast as that straggler.",
       },
     ],
     examples: [
@@ -1091,16 +1152,19 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
     ],
     formulas: [
       {
-        label: "VPIN (Rolling Buckets)",
-        latex: "\\mathrm{VPIN}_t=\\frac{1}{N}\\sum_{i=t-N+1}^{t}\\frac{|V_i^B-V_i^S|}{V_i}",
+        label: "VPIN (Rolling Volume Buckets)",
+        latex: "\\mathrm{VPIN}_t=\\frac{1}{N}\\sum_{i=t-N+1}^{t}\\frac{\\left|V_i^{B}-V_i^{S}\\right|}{V},\\qquad V_i^{B}+V_i^{S}=V",
+        where: "$V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bucket $i$, $V$ the fixed `bucket_volume` every bucket is filled to, and $N$ = `support_buckets` the rolling window. Because buckets are equal-volume by construction, the denominator is a constant — this is the canonical Easley-Lopez de Prado form. The bar-based `get_vpin` in [`microstructural-features`](/modules/microstructural-features/) estimates the same quantity over unequal bars and so must normalise differently.",
       },
       {
         label: "Market Fragmentation HHI",
         latex: "\\mathrm{HHI}_t=\\sum_{v=1}^{K}\\left(\\frac{n_{v,t}}{\\sum_j n_{j,t}}\\right)^2",
+        where: "$n_{v,t}$ is the event count on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.",
       },
       {
-        label: "Streaming Throughput",
-        latex: "\\mathrm{throughput}=\\frac{\\#\\mathrm{events\\ processed}}{\\mathrm{runtime\\ seconds}}",
+        label: "Alert Condition",
+        latex: "\\text{alert}_t\\iff \\mathrm{VPIN}_t\\ge\\tau_V\\;\\land\\;\\mathrm{HHI}_t\\ge\\tau_H,\\qquad \\text{risk}_t=\\frac{1}{2}\\left(\\frac{\\mathrm{VPIN}_t}{\\tau_V}+\\frac{\\mathrm{HHI}_t}{\\tau_H}\\right)",
+        where: "$\\tau_V$ and $\\tau_H$ are `AlertThresholds { vpin, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.",
       },
     ],
     examples: [
@@ -1257,8 +1321,16 @@ The result is a bootstrap sample where the drawn labels are as independent as po
     whyItExists: "Combines ensemble variance reduction with overlap-aware sampling.",
     keyApis: ["SequentiallyBootstrappedBaggingClassifier", "SequentiallyBootstrappedBaggingRegressor", "MaxSamples", "MaxFeatures"],
     formulas: [
-      { label: "Bagging Predictor", latex: "\\hat f(x)=\\frac{1}{B}\\sum_{b=1}^{B} f_b(x)" },
-      { label: "Bootstrap Sampling", latex: "S_b\\sim P_{seq}(u)" },
+      {
+        label: "Bagging Predictor",
+        latex: "\\hat f(x)=\\frac{1}{B}\\sum_{b=1}^{B} f_b(x)",
+        where: "$B$ = `n_estimators` and $f_b$ is the base learner fitted to the $b$-th resample. Note that $B$ defaults to $10$, not to the constructor argument, which is the random seed.",
+      },
+      {
+        label: "Sequential Bootstrap Draw",
+        latex: "\\Pr\\!\\left[i\\mid\\varphi\\right]=\\frac{\\bar u_i(\\varphi)}{\\sum_j \\bar u_j(\\varphi)},\\qquad \\bar u_i(\\varphi)=\\frac{1}{|T_i|}\\sum_{t\\in T_i}\\frac{1}{1+c_t(\\varphi)}",
+        where: "$\\varphi$ is the set of indices drawn so far, $T_i$ the bars spanned by observation $i$'s label, and $c_t(\\varphi)$ the number of already-drawn observations whose label also covers bar $t$. Drawing an observation that overlaps what is already in the bag drives $\\bar u_i$ down, so the next draw prefers something disjoint — this is what stops the standard IID bootstrap from silently resampling the same overlapping event $B$ times. Probabilities are recomputed after every draw. See [`sampling`](/modules/sampling/) for the uniqueness machinery.",
+      },
     ],
     examples: [
       {
@@ -1366,8 +1438,16 @@ The result is a bootstrap sample where the drawn labels are as independent as po
     whyItExists: "Volatility is a foundational scaling target for barriers, sizing, and risk controls.",
     keyApis: ["get_daily_vol", "get_parksinson_vol", "get_garman_class_vol", "get_yang_zhang_vol"],
     formulas: [
-      { label: "Parkinson", latex: "\\sigma_P^2=\\frac{1}{4\\ln 2}\\frac{1}{n}\\sum (\\ln(H_t/L_t))^2" },
-      { label: "Yang-Zhang", latex: "\\sigma_{YZ}^2=\\sigma_o^2+k\\sigma_c^2+(1-k)\\sigma_{rs}^2" },
+      {
+        label: "Parkinson",
+        latex: "\\sigma_P^2=\\frac{1}{4\\ln 2}\\cdot\\frac{1}{n}\\sum_{t}\\left(\\ln\\frac{H_t}{L_t}\\right)^2",
+        where: "$H_t,L_t$ are the bar high and low and $n$ the `window` length. It uses the range rather than the close, so it is far more efficient than close-to-close on the same sample — but it ignores overnight gaps and assumes no drift.",
+      },
+      {
+        label: "Yang-Zhang",
+        latex: "\\sigma_{YZ}^2=\\sigma_o^2+k\\,\\sigma_c^2+(1-k)\\,\\sigma_{rs}^2,\\qquad k=\\frac{0.34}{1.34+\\frac{n+1}{n-1}}",
+        where: "$\\sigma_o^2$ is the overnight (close-to-open) variance, $\\sigma_c^2$ the open-to-close variance, and $\\sigma_{rs}^2$ the Rogers-Satchell estimator; $n$ is the `window` length. $k$ is not a free parameter — it is the weight that minimises the estimator's variance, which is what makes Yang-Zhang the only one of these four that handles both overnight gaps and intraday drift. For a 20-bar window $k\\approx0.14$, so the overnight and Rogers-Satchell terms carry most of the estimate.",
+      },
     ],
     examples: [
       {
@@ -1444,8 +1524,16 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
     whyItExists: "AFML Chapter 8 requires multiple importance methods to detect substitution effects and unstable features before deploying models.",
     keyApis: ["mdi_importance", "mda_importance", "sfi_importance", "orthogonalize_features_pca", "substitution_effect_report"],
     formulas: [
-      { label: "MDI (Mean Decrease Impurity)", latex: "I_j^{MDI}=\\frac{1}{B}\\sum_{b=1}^B \\frac{|\\beta_j^{(b)}|}{\\sum_k|\\beta_k^{(b)}|}" },
-      { label: "MDA (Mean Decrease Accuracy)", latex: "I_j^{MDA}=\\frac{S_{base}-S_{perm(j)}}{1-S_{perm(j)}}" },
+      {
+        label: "In-Sample Importance (`mdi_importance`)",
+        latex: "I_j=\\frac{1}{B}\\sum_{b=1}^{B}\\frac{\\left|\\beta_j^{(b)}\\right|}{\\sum_k\\left|\\beta_k^{(b)}\\right|}",
+        where: "$\\beta^{(b)}$ are the coefficients of a linear probability model fitted to bootstrap replica $b$, and $B$ = `n_estimators`. **This is normalised coefficient magnitude, not impurity decrease.** The function is named `mdi_importance` because it fills MDI's role — a cheap in-sample ranking computed from the fitted model alone, with the same substitution-effect weakness — but there is no tree and no impurity term here. For the tree-based $I_j=\\frac{1}{B}\\sum_b\\sum_{t\\in T_j^{(b)}}p(t)\\Delta i(t)$, see the Rust [`feature-importance`](/modules/feature-importance/) module. The two are not interchangeable and will rank features differently: this one measures linear sensitivity, that one measures split usefulness. Features must be standardised for the magnitudes to be comparable.",
+      },
+      {
+        label: "Out-of-Sample Importance (`mda_importance`)",
+        latex: "I_j=\\frac{1}{K}\\sum_{k=1}^{K}\\frac{S_k-S_{k,\\text{perm}(j)}}{d(S_{k,\\text{perm}(j)})},\\qquad d(S)=\\begin{cases}-S & \\text{scoring}=\\texttt{neg\\_log\\_loss}\\\\ 1-S & \\text{scoring}=\\texttt{accuracy}\\end{cases}",
+        where: "$S_k$ is the score on purged fold $k$ and $S_{k,\\text{perm}(j)}$ the score after permuting column $j$ in that fold's test set. The denominator differs by scoring rule, and the default is `neg_log_loss` — with negative scores $-S$, not $1-S$, is what puts folds on a comparable scale. Splits come from `_purged_kfold_splits`, so `event_end_indices` must be supplied for the purge to do anything.",
+      },
     ],
     examples: [
       {

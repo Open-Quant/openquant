@@ -41,13 +41,19 @@ Research pipelines bottleneck on repeated independent computations; this module 
 
 $$b_i=\left\lfloor\frac{iN}{M}\right\rfloor,\;i=0,\dots,M$$
 
+where $N$ is the number of atoms, $M$ the number of molecules (`mp_batches` x workers), and molecule $i$ covers atoms $[b_{i-1},b_i)$. Every molecule gets the same *count* of atoms, which is correct only when atoms cost the same.
+
 ### Nested Partition Boundary
 
 $$b_i=\left\lfloor N\sqrt{\frac{i}{M}}\right\rfloor,\;i=0,\dots,M$$
 
-### Throughput
+where The same $N$ and $M$, for the triangular workloads that dominate this library — building an overlap or codependence matrix, where atom $k$ touches $k$ earlier observations, so its cost grows linearly with $k$. Later molecules therefore hold fewer atoms.
 
-$$\text{throughput}=\frac{\text{atoms processed}}{\text{runtime seconds}}$$
+### Equal-Cost Condition
+
+$$\text{cost}(i)\;\propto\;\frac{b_i^2-b_{i-1}^2}{2}=\frac{N^2}{2M}\quad\text{for every }i$$
+
+where $b_i$ and $M$ are as above. This is why the square root is there: if atom $k$ costs $\propto k$, a molecule spanning $[b_{i-1},b_i)$ costs $\propto(b_i^2-b_{i-1}^2)/2$; substituting $b_i=N\sqrt{i/M}$ makes that $N^2/(2M)$, the same for every molecule. Linear partitioning on the same workload leaves the last molecule roughly $2M-1$ times more expensive than the first, and the run is only as fast as that straggler.
 
 ## Usage Examples
 

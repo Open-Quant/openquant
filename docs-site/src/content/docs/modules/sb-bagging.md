@@ -37,9 +37,13 @@ Combines ensemble variance reduction with overlap-aware sampling.
 
 $$\hat f(x)=\frac{1}{B}\sum_{b=1}^{B} f_b(x)$$
 
-### Bootstrap Sampling
+where $B$ = `n_estimators` and $f_b$ is the base learner fitted to the $b$-th resample. Note that $B$ defaults to $10$, not to the constructor argument, which is the random seed.
 
-$$S_b\sim P_{seq}(u)$$
+### Sequential Bootstrap Draw
+
+$$\Pr\!\left[i\mid\varphi\right]=\frac{\bar u_i(\varphi)}{\sum_j \bar u_j(\varphi)},\qquad \bar u_i(\varphi)=\frac{1}{|T_i|}\sum_{t\in T_i}\frac{1}{1+c_t(\varphi)}$$
+
+where $\varphi$ is the set of indices drawn so far, $T_i$ the bars spanned by observation $i$'s label, and $c_t(\varphi)$ the number of already-drawn observations whose label also covers bar $t$. Drawing an observation that overlaps what is already in the bag drives $\bar u_i$ down, so the next draw prefers something disjoint — this is what stops the standard IID bootstrap from silently resampling the same overlapping event $B$ times. Probabilities are recomputed after every draw. See [`sampling`](/modules/sampling/) for the uniqueness machinery.
 
 ## Usage Examples
 

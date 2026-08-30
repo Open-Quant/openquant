@@ -35,11 +35,15 @@ Time-dependent labels violate IID assumptions; purging/embargoing reduces leakag
 
 ### Purged Train Set
 
-$$\mathcal{T}_{train}=\mathcal{T}\setminus(\mathcal{T}_{test}\oplus e)$$
+$$\mathcal{T}_{\text{train}}=\mathcal{T}\setminus\{i:\;\exists j\in\mathcal{T}_{\text{test}},\;[t_{i,0},t_{i,1}]\cap[t_{j,0},t_{j,1}]\neq\varnothing\}\setminus\mathcal{E}$$
+
+where $[t_{i,0},t_{i,1}]$ is observation $i$'s label span — the `samples_info_sets` entry `PurgedKFold::new` requires. *Purging* drops any training observation whose label lifetime overlaps a test label's; $\mathcal{E}$ is the embargo set below. Overlap, not adjacency, is what leaks: two observations sampled a month apart still share information if their labels resolve on the same bar.
 
 ### Embargo
 
-$$e=\lfloor p\cdot T\rfloor$$
+$$e=\lfloor p\cdot T\rfloor,\qquad \mathcal{E}=\{i:\;\max(\mathcal{T}_{\text{test}})<i\le\max(\mathcal{T}_{\text{test}})+e\}$$
+
+where $T$ is the total number of observations and $p$ the `pct_embargo` fraction (0.01 = 1%), so $e$ is an observation count. The embargo drops the $e$ observations immediately *after* each test fold, which catches serial correlation that purging alone misses because the label spans do not literally overlap.
 
 ## Usage Examples
 
