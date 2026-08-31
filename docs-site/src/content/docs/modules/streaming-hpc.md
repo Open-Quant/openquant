@@ -3,7 +3,7 @@ title: "streaming_hpc"
 description: "AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-30'
+last_generated: '2026-08-31'
 banner:
   content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:

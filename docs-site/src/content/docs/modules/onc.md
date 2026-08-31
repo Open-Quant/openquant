@@ -3,7 +3,7 @@ title: "onc"
 description: "Optimal Number of Clusters utilities for clustering stability and allocation workflows."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-30'
+last_generated: '2026-08-31'
 banner:
   content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:

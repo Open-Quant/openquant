@@ -372,7 +372,7 @@ export const apiInventory = {
     "openquant::util::volatility": [
       "get_daily_vol",
       "get_garman_class_vol",
-      "get_parksinson_vol",
+      "get_parkinson_vol",
       "get_yang_zhang_vol"
     ],
     "pyopenquant::backtest_stats": [
