@@ -168,7 +168,16 @@ pub fn build_ohlcv_columns(
             adj_close.len(),
         )));
     }
-    Ok(openquant::data_processing::OhlcvColumns { timestamps_us, symbols, open, high, low, close, volume, adj_close })
+    Ok(openquant::data_processing::OhlcvColumns {
+        timestamps_us,
+        symbols,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        adj_close,
+    })
 }
 
 pub fn report_to_pydict(
@@ -226,7 +235,12 @@ pub fn build_labeling_events(
         &close,
         &t_events,
         &target,
-        openquant::labeling::TripleBarrierConfig { pt, sl, min_ret, vertical_barrier_times: vbars.as_deref() },
+        openquant::labeling::TripleBarrierConfig {
+            pt,
+            sl,
+            min_ret,
+            vertical_barrier_times: vbars.as_deref(),
+        },
         side_storage.as_deref(),
     );
     Ok((close, events))

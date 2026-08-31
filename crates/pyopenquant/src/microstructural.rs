@@ -30,20 +30,40 @@ fn ms_get_bar_based_kyle_lambda(close: Vec<f64>, volume: Vec<f64>, window: usize
 }
 
 #[pyfunction(name = "get_bar_based_amihud_lambda")]
-fn ms_get_bar_based_amihud_lambda(close: Vec<f64>, dollar_volume: Vec<f64>, window: usize) -> Vec<f64> {
+fn ms_get_bar_based_amihud_lambda(
+    close: Vec<f64>,
+    dollar_volume: Vec<f64>,
+    window: usize,
+) -> Vec<f64> {
     openquant::microstructural_features::get_bar_based_amihud_lambda(&close, &dollar_volume, window)
 }
 
 #[pyfunction(name = "get_bar_based_hasbrouck_lambda")]
-fn ms_get_bar_based_hasbrouck_lambda(close: Vec<f64>, dollar_volume: Vec<f64>, window: usize) -> Vec<f64> {
-    openquant::microstructural_features::get_bar_based_hasbrouck_lambda(&close, &dollar_volume, window)
+fn ms_get_bar_based_hasbrouck_lambda(
+    close: Vec<f64>,
+    dollar_volume: Vec<f64>,
+    window: usize,
+) -> Vec<f64> {
+    openquant::microstructural_features::get_bar_based_hasbrouck_lambda(
+        &close,
+        &dollar_volume,
+        window,
+    )
 }
 
 // --- Trade-based features ---
 
 #[pyfunction(name = "get_trades_based_kyle_lambda")]
-fn ms_get_trades_based_kyle_lambda(price_diff: Vec<f64>, volume: Vec<f64>, aggressor_flags: Vec<f64>) -> f64 {
-    openquant::microstructural_features::get_trades_based_kyle_lambda(&price_diff, &volume, &aggressor_flags)
+fn ms_get_trades_based_kyle_lambda(
+    price_diff: Vec<f64>,
+    volume: Vec<f64>,
+    aggressor_flags: Vec<f64>,
+) -> f64 {
+    openquant::microstructural_features::get_trades_based_kyle_lambda(
+        &price_diff,
+        &volume,
+        &aggressor_flags,
+    )
 }
 
 #[pyfunction(name = "get_trades_based_amihud_lambda")]
@@ -52,8 +72,16 @@ fn ms_get_trades_based_amihud_lambda(log_ret: Vec<f64>, dollar_volume: Vec<f64>)
 }
 
 #[pyfunction(name = "get_trades_based_hasbrouck_lambda")]
-fn ms_get_trades_based_hasbrouck_lambda(log_ret: Vec<f64>, dollar_volume: Vec<f64>, aggressor_flags: Vec<f64>) -> f64 {
-    openquant::microstructural_features::get_trades_based_hasbrouck_lambda(&log_ret, &dollar_volume, &aggressor_flags)
+fn ms_get_trades_based_hasbrouck_lambda(
+    log_ret: Vec<f64>,
+    dollar_volume: Vec<f64>,
+    aggressor_flags: Vec<f64>,
+) -> f64 {
+    openquant::microstructural_features::get_trades_based_hasbrouck_lambda(
+        &log_ret,
+        &dollar_volume,
+        &aggressor_flags,
+    )
 }
 
 // --- VPIN ---

@@ -1,4 +1,6 @@
-use openquant::pipeline::{run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput};
+use openquant::pipeline::{
+    run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 

@@ -1,8 +1,7 @@
 use pyo3::prelude::*;
 
 use crate::helpers::{
-    build_labeling_events, pair_timestamps_values,
-    parse_naive_datetimes, parse_vertical_barriers,
+    build_labeling_events, pair_timestamps_values, parse_naive_datetimes, parse_vertical_barriers,
 };
 
 #[pyfunction(name = "add_vertical_barrier")]
@@ -16,21 +15,20 @@ fn labeling_add_vertical_barrier(
     num_seconds: i64,
 ) -> PyResult<Vec<(String, String)>> {
     let t_events = parse_naive_datetimes(t_events)?;
-    let close = pair_timestamps_values(
-        close_timestamps,
-        close_prices,
-        "close_timestamps",
-        "close_prices",
-    )?;
-    let barriers =
-        openquant::labeling::add_vertical_barrier(&t_events, &close, num_days, num_hours, num_minutes, num_seconds);
+    let close =
+        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
+    let barriers = openquant::labeling::add_vertical_barrier(
+        &t_events,
+        &close,
+        num_days,
+        num_hours,
+        num_minutes,
+        num_seconds,
+    );
     Ok(barriers
         .into_iter()
         .map(|(a, b)| {
-            (
-                a.format("%Y-%m-%d %H:%M:%S").to_string(),
-                b.format("%Y-%m-%d %H:%M:%S").to_string(),
-            )
+            (a.format("%Y-%m-%d %H:%M:%S").to_string(), b.format("%Y-%m-%d %H:%M:%S").to_string())
         })
         .collect())
 }
@@ -212,12 +210,8 @@ fn labeling_get_events(
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
 ) -> PyResult<Vec<(String, Option<String>, f64, Option<f64>, f64, f64)>> {
-    let close = pair_timestamps_values(
-        close_timestamps,
-        close_prices,
-        "close_timestamps",
-        "close_prices",
-    )?;
+    let close =
+        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_ev = parse_naive_datetimes(t_events)?;
     let target = pair_timestamps_values(
         target_timestamps,
@@ -266,21 +260,21 @@ fn labeling_get_bins(
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,
 ) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
-    let close = pair_timestamps_values(
-        close_timestamps,
-        close_prices,
-        "close_timestamps",
-        "close_prices",
-    )?;
+    let close =
+        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
 
     let parsed_events: Vec<(chrono::NaiveDateTime, openquant::labeling::Event)> = events
         .into_iter()
         .map(|(ts_str, t1_str, trgt, side, pt, sl)| {
-            let ts = chrono::NaiveDateTime::parse_from_str(&ts_str, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}")))?;
+            let ts = chrono::NaiveDateTime::parse_from_str(&ts_str, "%Y-%m-%d %H:%M:%S").map_err(
+                |e| pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}")),
+            )?;
             let t1 = t1_str
-                .map(|s| chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}"))))
+                .map(|s| {
+                    chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}"))
+                    })
+                })
                 .transpose()?;
             Ok((ts, openquant::labeling::Event { t1, trgt, side, pt, sl }))
         })

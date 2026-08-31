@@ -33,9 +33,7 @@ fn cla_allocate(
 
     let prices_m = asset_prices.map(matrix_from_rows).transpose()?;
     let cov_m = covariance_matrix.map(matrix_from_rows).transpose()?;
-    let expected_ret_m = expected_returns.map(|v| {
-        nalgebra::DMatrix::from_vec(v.len(), 1, v)
-    });
+    let expected_ret_m = expected_returns.map(|v| nalgebra::DMatrix::from_vec(v.len(), 1, v));
 
     cla.allocate(
         prices_m.as_ref().map(|m| openquant::cla::AssetPricesInput::RawMatrix(m)),

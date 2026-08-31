@@ -33,8 +33,8 @@ fn shpc_run_streaming_pipeline(
         },
     };
 
-    let report = openquant::streaming_hpc::run_streaming_pipeline(&stream_events, cfg)
-        .map_err(to_py_err)?;
+    let report =
+        openquant::streaming_hpc::run_streaming_pipeline(&stream_events, cfg).map_err(to_py_err)?;
 
     let d = PyDict::new(py);
 
@@ -71,8 +71,8 @@ fn shpc_generate_synthetic_flash_crash_stream(
         calm_venues,
         shock_venue,
     };
-    let stream = openquant::streaming_hpc::generate_synthetic_flash_crash_stream(cfg)
-        .map_err(to_py_err)?;
+    let stream =
+        openquant::streaming_hpc::generate_synthetic_flash_crash_stream(cfg).map_err(to_py_err)?;
     Ok(stream
         .into_iter()
         .map(|e| (e.timestamp_ns, e.price, e.buy_volume, e.sell_volume, e.venue_id))

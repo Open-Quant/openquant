@@ -1,4 +1,6 @@
-use openquant::data_processing::{align_calendar_columns, clean_ohlcv_columns, quality_report_columns};
+use openquant::data_processing::{
+    align_calendar_columns, clean_ohlcv_columns, quality_report_columns,
+};
 use polars::prelude::DataFrame;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;

@@ -3,7 +3,10 @@ use pyo3::types::PyDict;
 
 use crate::helpers::to_py_err;
 
-fn ou_params_to_dict(py: Python<'_>, p: &openquant::synthetic_backtesting::OuProcessParams) -> PyResult<PyObject> {
+fn ou_params_to_dict(
+    py: Python<'_>,
+    p: &openquant::synthetic_backtesting::OuProcessParams,
+) -> PyResult<PyObject> {
     let d = PyDict::new(py);
     d.set_item("phi", p.phi)?;
     d.set_item("intercept", p.intercept)?;
@@ -14,7 +17,10 @@ fn ou_params_to_dict(py: Python<'_>, p: &openquant::synthetic_backtesting::OuPro
     Ok(d.into_pyobject(py).unwrap().into_any().unbind())
 }
 
-fn surface_point_to_dict(py: Python<'_>, p: &openquant::synthetic_backtesting::RuleSurfacePoint) -> PyResult<PyObject> {
+fn surface_point_to_dict(
+    py: Python<'_>,
+    p: &openquant::synthetic_backtesting::RuleSurfacePoint,
+) -> PyResult<PyObject> {
     let d = PyDict::new(py);
     d.set_item("profit_taking", p.rule.profit_taking)?;
     d.set_item("stop_loss", p.rule.stop_loss)?;
@@ -26,7 +32,10 @@ fn surface_point_to_dict(py: Python<'_>, p: &openquant::synthetic_backtesting::R
     Ok(d.into_pyobject(py).unwrap().into_any().unbind())
 }
 
-fn diagnostics_to_dict(py: Python<'_>, d_in: &openquant::synthetic_backtesting::StabilityDiagnostics) -> PyResult<PyObject> {
+fn diagnostics_to_dict(
+    py: Python<'_>,
+    d_in: &openquant::synthetic_backtesting::StabilityDiagnostics,
+) -> PyResult<PyObject> {
     let d = PyDict::new(py);
     d.set_item("no_stable_optimum", d_in.no_stable_optimum)?;
     d.set_item("reason", &d_in.reason)?;
@@ -38,7 +47,10 @@ fn diagnostics_to_dict(py: Python<'_>, d_in: &openquant::synthetic_backtesting::
     Ok(d.into_pyobject(py).unwrap().into_any().unbind())
 }
 
-fn otr_result_to_dict(py: Python<'_>, r: openquant::synthetic_backtesting::OtrSearchResult) -> PyResult<PyObject> {
+fn otr_result_to_dict(
+    py: Python<'_>,
+    r: openquant::synthetic_backtesting::OtrSearchResult,
+) -> PyResult<PyObject> {
     let d = PyDict::new(py);
     d.set_item("params", ou_params_to_dict(py, &r.params)?)?;
     let rule = PyDict::new(py);
@@ -46,7 +58,8 @@ fn otr_result_to_dict(py: Python<'_>, r: openquant::synthetic_backtesting::OtrSe
     rule.set_item("stop_loss", r.best_rule.stop_loss)?;
     d.set_item("best_rule", rule)?;
     d.set_item("best_point", surface_point_to_dict(py, &r.best_point)?)?;
-    let surface: Vec<PyObject> = r.response_surface.iter().map(|p| surface_point_to_dict(py, p)).collect::<PyResult<_>>()?;
+    let surface: Vec<PyObject> =
+        r.response_surface.iter().map(|p| surface_point_to_dict(py, p)).collect::<PyResult<_>>()?;
     d.set_item("response_surface", surface)?;
     d.set_item("diagnostics", diagnostics_to_dict(py, &r.diagnostics)?)?;
     Ok(d.into_pyobject(py).unwrap().into_any().unbind())
@@ -54,7 +67,8 @@ fn otr_result_to_dict(py: Python<'_>, r: openquant::synthetic_backtesting::OtrSe
 
 #[pyfunction(name = "calibrate_ou_params")]
 fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObject> {
-    let params = openquant::synthetic_backtesting::calibrate_ou_params(&prices).map_err(to_py_err)?;
+    let params =
+        openquant::synthetic_backtesting::calibrate_ou_params(&prices).map_err(to_py_err)?;
     ou_params_to_dict(py, &params)
 }
 
@@ -72,10 +86,21 @@ fn sbt_generate_ou_paths(
     seed: u64,
 ) -> PyResult<Vec<Vec<f64>>> {
     let params = openquant::synthetic_backtesting::OuProcessParams {
-        phi, intercept, equilibrium, sigma, r_squared, stationary,
+        phi,
+        intercept,
+        equilibrium,
+        sigma,
+        r_squared,
+        stationary,
     };
-    openquant::synthetic_backtesting::generate_ou_paths(params, initial_price, n_paths, horizon, seed)
-        .map_err(to_py_err)
+    openquant::synthetic_backtesting::generate_ou_paths(
+        params,
+        initial_price,
+        n_paths,
+        horizon,
+        seed,
+    )
+    .map_err(to_py_err)
 }
 
 #[pyfunction(name = "evaluate_rule_on_paths")]
@@ -89,7 +114,10 @@ fn sbt_evaluate_rule_on_paths(
 ) -> PyResult<PyObject> {
     let rule = openquant::synthetic_backtesting::TradingRule { profit_taking, stop_loss };
     let result = openquant::synthetic_backtesting::evaluate_rule_on_paths(
-        &paths, rule, max_holding_steps, annualization_factor,
+        &paths,
+        rule,
+        max_holding_steps,
+        annualization_factor,
     )
     .map_err(to_py_err)?;
     surface_point_to_dict(py, &result)
@@ -109,7 +137,10 @@ fn sbt_detect_no_stable_optimum(
         .into_iter()
         .map(|(pt, sl, sharpe, mean_ret, std_ret, win_rate, avg_hold)| {
             openquant::synthetic_backtesting::RuleSurfacePoint {
-                rule: openquant::synthetic_backtesting::TradingRule { profit_taking: pt, stop_loss: sl },
+                rule: openquant::synthetic_backtesting::TradingRule {
+                    profit_taking: pt,
+                    stop_loss: sl,
+                },
                 sharpe,
                 mean_return: mean_ret,
                 std_return: std_ret,
@@ -124,8 +155,12 @@ fn sbt_detect_no_stable_optimum(
         min_surface_std,
         min_best_sharpe,
     };
-    let result = openquant::synthetic_backtesting::detect_no_stable_optimum(&surface, estimated_phi, criteria)
-        .map_err(to_py_err)?;
+    let result = openquant::synthetic_backtesting::detect_no_stable_optimum(
+        &surface,
+        estimated_phi,
+        criteria,
+    )
+    .map_err(to_py_err)?;
     diagnostics_to_dict(py, &result)
 }
 
@@ -166,12 +201,10 @@ fn sbt_run_synthetic_otr_workflow(
         n_paths,
         horizon,
         seed,
-        profit_taking_grid: profit_taking_grid.unwrap_or_else(|| {
-            (1..=20).map(|i| i as f64 * 0.25).collect()
-        }),
-        stop_loss_grid: stop_loss_grid.unwrap_or_else(|| {
-            (1..=20).map(|i| i as f64 * -0.25).collect()
-        }),
+        profit_taking_grid: profit_taking_grid
+            .unwrap_or_else(|| (1..=20).map(|i| i as f64 * 0.25).collect()),
+        stop_loss_grid: stop_loss_grid
+            .unwrap_or_else(|| (1..=20).map(|i| i as f64 * -0.25).collect()),
         max_holding_steps,
         annualization_factor,
         stability_criteria: openquant::synthetic_backtesting::StabilityCriteria {
@@ -181,8 +214,9 @@ fn sbt_run_synthetic_otr_workflow(
             min_best_sharpe,
         },
     };
-    let result = openquant::synthetic_backtesting::run_synthetic_otr_workflow(&historical_prices, &config)
-        .map_err(to_py_err)?;
+    let result =
+        openquant::synthetic_backtesting::run_synthetic_otr_workflow(&historical_prices, &config)
+            .map_err(to_py_err)?;
     otr_result_to_dict(py, result)
 }
 
@@ -206,7 +240,12 @@ fn sbt_search_optimal_trading_rule(
     min_best_sharpe: f64,
 ) -> PyResult<PyObject> {
     let params = openquant::synthetic_backtesting::OuProcessParams {
-        phi, intercept, equilibrium, sigma, r_squared, stationary,
+        phi,
+        intercept,
+        equilibrium,
+        sigma,
+        r_squared,
+        stationary,
     };
     let criteria = openquant::synthetic_backtesting::StabilityCriteria {
         random_walk_phi_threshold,
@@ -215,8 +254,13 @@ fn sbt_search_optimal_trading_rule(
         min_best_sharpe,
     };
     let result = openquant::synthetic_backtesting::search_optimal_trading_rule(
-        params, &paths, &profit_taking_grid, &stop_loss_grid,
-        max_holding_steps, annualization_factor, criteria,
+        params,
+        &paths,
+        &profit_taking_grid,
+        &stop_loss_grid,
+        max_holding_steps,
+        annualization_factor,
+        criteria,
     )
     .map_err(to_py_err)?;
     otr_result_to_dict(py, result)

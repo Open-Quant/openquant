@@ -40,8 +40,12 @@ fn sr_implied_precision_asymmetric(
     pi_minus: f64,
 ) -> PyResult<f64> {
     let payout = openquant::strategy_risk::AsymmetricPayout { pi_plus, pi_minus };
-    openquant::strategy_risk::implied_precision_asymmetric(target_sharpe, annual_bet_frequency, payout)
-        .map_err(to_py_err)
+    openquant::strategy_risk::implied_precision_asymmetric(
+        target_sharpe,
+        annual_bet_frequency,
+        payout,
+    )
+    .map_err(to_py_err)
 }
 
 #[pyfunction(name = "implied_frequency_asymmetric")]
@@ -84,8 +88,9 @@ fn sr_estimate_strategy_failure_probability(
         seed,
         kde_bandwidth,
     };
-    let report = openquant::strategy_risk::estimate_strategy_failure_probability(&bet_outcomes, cfg)
-        .map_err(to_py_err)?;
+    let report =
+        openquant::strategy_risk::estimate_strategy_failure_probability(&bet_outcomes, cfg)
+            .map_err(to_py_err)?;
 
     let d = PyDict::new(py);
     d.set_item("pi_plus", report.payout.pi_plus)?;
