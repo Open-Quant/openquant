@@ -49,7 +49,7 @@ Use this module as the first step when working with pre-aggregated OHLCV data (d
 
 #### Load, clean, and inspect OHLCV data
 
-```python
+```python doc-check=skip
 from openquant.data import load_ohlcv, data_quality_report, align_calendar
 
 # Load from CSV/Parquet with auto column normalization

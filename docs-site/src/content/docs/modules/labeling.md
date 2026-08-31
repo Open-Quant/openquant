@@ -69,7 +69,7 @@ $$\sigma_t=\operatorname{EWMA}\big(|r_t|\big),\qquad\text{barrier widths }\propt
 
 #### Triple-barrier labels from price series
 
-```python
+```python doc-check=skip
 from openquant._core import labeling, filters
 
 # 1) Detect events with CUSUM filter
@@ -95,7 +95,7 @@ labels = labeling.triple_barrier_labels(
 
 #### Meta-labeling: learn when to act on a primary signal
 
-```python
+```python doc-check=skip
 from openquant._core import labeling
 
 # Primary model gives side predictions (+1 or -1) at each event

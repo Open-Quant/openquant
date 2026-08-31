@@ -14,6 +14,15 @@ export type ExampleBlock = {
   title: string;
   language: "rust" | "bash" | "python";
   code: string;
+  /**
+   * `docCheck: "skip"` marks a python example as illustrative rather than
+   * runnable — it has `...` placeholders, reads a data file the repo does not
+   * ship, or continues a variable defined in the prose. The generator turns it
+   * into a ```python doc-check=skip fence, which check:python-examples parses
+   * but does not execute. Every skip is listed on every run, so it is a public
+   * exemption, not a quiet one. Anything that CAN run must not carry it.
+   */
+  docCheck?: "skip";
 };
 
 export type ParameterDoc = {
@@ -322,6 +331,7 @@ export const moduleDocs: ModuleDoc[] = [
       {
         title: "Build dollar bars from a Polars DataFrame",
         language: "python",
+        docCheck: "skip",
         code: `from openquant.bars import build_dollar_bars, bar_diagnostics
 import polars as pl
 
@@ -339,6 +349,7 @@ print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}`,
       {
         title: "Build tick and volume bars",
         language: "python",
+        docCheck: "skip",
         code: `from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
 
 tick_bars = build_tick_bars(df, ticks_per_bar=50)
@@ -850,6 +861,7 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
       {
         title: "Triple-barrier labels from price series",
         language: "python",
+        docCheck: "skip",
         code: `from openquant._core import labeling, filters
 
 # 1) Detect events with CUSUM filter
@@ -875,6 +887,7 @@ labels = labeling.triple_barrier_labels(
       {
         title: "Meta-labeling: learn when to act on a primary signal",
         language: "python",
+        docCheck: "skip",
         code: `from openquant._core import labeling
 
 # Primary model gives side predictions (+1 or -1) at each event
@@ -1621,6 +1634,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Load, clean, and inspect OHLCV data",
         language: "python",
+        docCheck: "skip",
         code: `from openquant.data import load_ohlcv, data_quality_report, align_calendar
 
 # Load from CSV/Parquet with auto column normalization
@@ -1687,6 +1701,8 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
       {
         title: "Run all three importance methods and compare",
         language: "python",
+        docCheck: "skip",
+        
         code: `from openquant.feature_diagnostics import (
     mdi_importance, mda_importance, sfi_importance
 )
@@ -1719,6 +1735,7 @@ print(mda["table"])`,
       {
         title: "Detect substitution effects between correlated features",
         language: "python",
+        docCheck: "skip",
         code: `from openquant.feature_diagnostics import substitution_effect_report
 
 report = substitution_effect_report(
@@ -1783,6 +1800,7 @@ All importance methods use purged k-fold cross-validation internally, preventing
       {
         title: "Run a complete research pipeline",
         language: "python",
+        docCheck: "skip",
         code: `from openquant.pipeline import run_mid_frequency_pipeline_frames, summarize_pipeline
 
 out = run_mid_frequency_pipeline_frames(

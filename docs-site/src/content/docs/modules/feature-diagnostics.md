@@ -68,7 +68,7 @@ where $S_k$ is the score on purged fold $k$ and $S_{k,\text{perm}(j)}$ the score
 
 #### Run all three importance methods and compare
 
-```python
+```python doc-check=skip
 from openquant.feature_diagnostics import (
     mdi_importance, mda_importance, sfi_importance
 )
@@ -101,7 +101,7 @@ print(mda["table"])
 
 #### Detect substitution effects between correlated features
 
-```python
+```python doc-check=skip
 from openquant.feature_diagnostics import substitution_effect_report
 
 report = substitution_effect_report(
