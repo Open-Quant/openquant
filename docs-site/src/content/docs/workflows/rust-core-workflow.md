@@ -3,8 +3,6 @@ title: Rust Core Workflow
 description: One runnable Rust program from event sampling to portfolio risk, with its output.
 status: reviewed
 last_validated: '2026-08-30'
-banner:
-  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> A human has read this page end to end. It has not been verified line by line against the code.'
 audience:
   - quant-dev
   - platform-engineering
@@ -306,4 +304,4 @@ report one, report how many configurations you tried to get it —
 
 - [Python Core Workflow](/workflows/python-core-workflow/) — the same ground in Python
 - [Modules by AFML chapter](/module-reference/by-afml-chapter/) — the module behind each stage
-- [API Surfaces](/module-reference/api-surfaces/) — the full Rust and Python symbol lists
+- [Module Reference Index](/modules/) — every module, by subject and by language surface

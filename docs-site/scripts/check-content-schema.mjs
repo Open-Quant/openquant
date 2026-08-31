@@ -74,6 +74,15 @@ function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
+/** The checkout root, or null outside a git checkout (a release tarball, say). */
+const repoRoot = (() => {
+  try {
+    return git(['rev-parse', '--show-toplevel'], docsRoot).trim();
+  } catch {
+    return null;
+  }
+})();
+
 /**
  * Last date each doc actually changed — the newer of its last commit date and,
  * when the working tree copy differs from HEAD (or is untracked), its filesystem
@@ -85,12 +94,17 @@ function git(args, cwd) {
  */
 function lastChangedDates(files) {
   const dates = new Map();
-  const mtimeDay = (file) => fs.statSync(file).mtime.toISOString().slice(0, 10);
+  // Local civil day, to match git's %cI: an mtime read in UTC would report
+  // tomorrow's date all evening west of Greenwich and fail every stamp made
+  // that day.
+  const mtimeDay = (file) => {
+    const d = fs.statSync(file).mtime;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  };
 
-  let repoRoot;
-  try {
-    repoRoot = git(['rev-parse', '--show-toplevel'], docsRoot).trim();
-  } catch {
+  if (!repoRoot) {
     // Not a git checkout (a release tarball, say). Fall back to mtime for everything.
     for (const file of files) dates.set(file, mtimeDay(file));
     return dates;
@@ -131,6 +145,52 @@ function lastChangedDates(files) {
   return dates;
 }
 
+/** A page's prose: everything below the frontmatter. */
+function bodyOf(text) {
+  return text.replace(/^---\n[\s\S]*?\n---\n?/, '');
+}
+
+/**
+ * The day a page's *prose* last changed, ignoring frontmatter-only edits.
+ *
+ * A stamp describes the body a human read, not the plumbing around it. Retiring
+ * a banner slot, adding an `audience` tag or renaming a sidebar key moves the
+ * file without moving one word a reader sees, and treating that as a content
+ * change would force a choice between a false re-review and a status downgrade
+ * — which is how a freshness gate teaches people to lie to it.
+ *
+ * Walks the page's history newest-first while the committed body still equals
+ * the working-tree body; the oldest such commit is when the prose last moved.
+ * Falls back to `naiveDay` when the body itself is uncommitted or the history
+ * is unreadable (a shallow clone, a release tarball), so the fallback is always
+ * the stricter answer. Only called for pages that would otherwise fail, so the
+ * extra `git show` calls cost nothing on a clean run.
+ */
+function lastBodyChangeDay(file, repoRoot, naiveDay) {
+  const rel = path.relative(repoRoot, file);
+  let log;
+  try {
+    log = git(['log', '--format=%H%x00%cI', '--', rel], repoRoot);
+  } catch {
+    return naiveDay;
+  }
+  const currentBody = bodyOf(fs.readFileSync(file, 'utf8'));
+  let day = null;
+  for (const line of log.split('\n')) {
+    if (!line.trim()) continue;
+    const [sha, iso] = line.split('\0');
+    let text;
+    try {
+      text = git(['show', `${sha}:${rel}`], repoRoot);
+    } catch {
+      break;
+    }
+    if (bodyOf(text) !== currentBody) break;
+    day = iso.slice(0, 10);
+  }
+  return day ?? naiveDay;
+}
+
 const files = walk(docsRoot);
 const changed = lastChangedDates(files);
 const errors = [];
@@ -157,16 +217,6 @@ for (const file of files) {
         `'validated' once it has also been checked against the code.`
     );
     continue;
-  }
-
-  // The reader-facing badge is rendered from the page's own banner frontmatter,
-  // so it can drift from `status` unless something checks. This is that check.
-  const badge = frontmatter.match(/doc-status--([a-z]+)/)?.[1];
-  if (badge && badge !== status) {
-    fail(
-      `status: ${status} but the reader-facing badge says '${badge}'. ` +
-        `Update the banner content so the badge matches the frontmatter status.`
-    );
   }
 
   // Every date present must be a real ISO date, whether or not this status needs it.
@@ -200,7 +250,12 @@ for (const file of files) {
   // Without this, `status: validated` is just a string anyone can paste, and can
   // be bulk-applied to a whole corpus — which is exactly how this site ended up
   // with 59 pages sharing one hardcoded review date.
-  const changedOn = changed.get(file);
+  // Frontmatter-only edits do not invalidate a stamp, so a page that looks
+  // stale gets a second, body-aware reading of its history before it fails.
+  let changedOn = changed.get(file);
+  if (changedOn && changedOn > fm[dateField] && repoRoot) {
+    changedOn = lastBodyChangeDay(file, repoRoot, changedOn);
+  }
   if (changedOn && changedOn > fm[dateField]) {
     const what =
       status === 'generated'

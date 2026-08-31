@@ -193,8 +193,6 @@ description: ${q(doc.summary)}
 status: generated
 generated_from: src/data/moduleDocs.ts
 last_generated: '${generatedOn}'
-banner:
-  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
@@ -210,6 +208,13 @@ ${sections.join('\n\n')}
 
   fs.writeFileSync(path.join(outDir, `${doc.slug}.md`), content, 'utf8');
 }
+
+// --- Index: the canonical module index -------------------------------------
+// This page is the one index of the 39 modules. It absorbed
+// module-reference/api-surfaces.md (the 'By language surface' section below),
+// which was a fourth hand-maintained listing of the same modules and had
+// already drifted from the data; generating it here means it cannot drift
+// again.
 
 // --- Index: grouped by subject ---
 const bySubject = new Map();
@@ -233,14 +238,58 @@ const groupedIndex = [...bySubject.entries()]
   )
   .join('\n\n');
 
+// --- Index: grouped by language surface ---
+// `apiSurface` says which bindings a module is reachable through; `pythonApis`
+// entries are namespace-qualified (`bet_sizing.get_signal`), so the Python half
+// is grouped by the namespace a reader actually imports.
+const rustModules = moduleDocs
+  .filter((doc) => doc.apiSurface !== 'python-only')
+  .sort((a, b) => a.module.localeCompare(b.module));
+
+const byNamespace = new Map();
+for (const doc of moduleDocs) {
+  for (const api of doc.pythonApis ?? []) {
+    const dot = api.lastIndexOf('.');
+    const namespace = dot === -1 ? doc.module : api.slice(0, dot);
+    const entry = byNamespace.get(namespace) || { slug: doc.slug, fns: [] };
+    if (entry.slug !== doc.slug) {
+      throw new Error(
+        `moduleDocs.ts: python namespace "${namespace}" is claimed by both ` +
+          `${entry.slug} and ${doc.slug}. The index can only link it to one page — ` +
+          'split the namespace or move the APIs onto one module.'
+      );
+    }
+    entry.fns.push(api.slice(dot + 1));
+    byNamespace.set(namespace, entry);
+  }
+}
+
+const languageIndex = [
+  '### Rust core',
+  '',
+  rustModules
+    .map((doc) => `- [\`${doc.module}\`](/modules/${doc.slug}/) — ${doc.summary}`)
+    .join('\n'),
+  '',
+  '### Python namespaces',
+  '',
+  [...byNamespace.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(
+      ([namespace, { slug, fns }]) =>
+        `- [\`${namespace}\`](/modules/${slug}/) — ${[...new Set(fns)]
+          .map((fn) => `\`${fn}\``)
+          .join(', ')}`
+    )
+    .join('\n'),
+].join('\n');
+
 const indexContent = `---
 title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
 last_generated: '${generatedOn}'
-banner:
-  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
@@ -248,9 +297,20 @@ sidebar:
   order: 1
 ---
 
-This index contains one page per OpenQuant module with purpose, APIs, formulas, examples, and implementation notes.
+This is the canonical index of every OpenQuant module: one page each, with
+purpose, APIs, formulas, examples, and implementation notes. It lists the same
+39 modules twice over — by subject, and by the language surface they are
+reachable through — because those are the two questions readers arrive with.
+For the AFML chapter each module implements, see
+[By AFML Chapter](/module-reference/by-afml-chapter/).
+
+## By subject
 
 ${groupedIndex}
+
+## By language surface
+
+${languageIndex}
 `;
 
 fs.writeFileSync(path.join(outDir, 'index.md'), indexContent, 'utf8');
