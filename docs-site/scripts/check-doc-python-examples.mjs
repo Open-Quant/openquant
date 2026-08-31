@@ -109,8 +109,18 @@ const candidates = [
 ].filter(Boolean);
 
 // The worktree's own python/ sources come first so the gate checks this tree,
-// not whatever wheel happens to be installed in the environment.
-const pythonPath = [path.join(repoRoot, 'python'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+// not whatever wheel happens to be installed in the environment. Only when the
+// compiled extension actually sits beside them, though: `maturin develop`
+// normally drops _core there, but if it has not, shadowing the installed
+// package with a source tree that has no _core turns a working environment
+// into an unimportable one.
+const localPackage = path.join(repoRoot, 'python');
+const hasLocalExtension = fs
+  .readdirSync(path.join(localPackage, 'openquant'), { withFileTypes: true })
+  .some((e) => e.isFile() && /^_core.*\.(so|pyd|dylib)$/.test(e.name));
+const pythonPath = [hasLocalExtension ? localPackage : null, process.env.PYTHONPATH]
+  .filter(Boolean)
+  .join(path.delimiter);
 const runEnv = { ...process.env, PYTHONPATH: pythonPath, PYTHONDONTWRITEBYTECODE: '1' };
 
 let python = null;
