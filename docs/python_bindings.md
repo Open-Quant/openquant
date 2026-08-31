@@ -182,7 +182,7 @@ Input conventions:
 - `feature_screen_report(...)`
 
 Default behavior:
-- Purged K-Fold + embargo defaults for MDA/SFI (`n_splits=5`, `pct_embargo=0.01`)
+- Purged K-Fold + embargo for MDA/SFI (`n_splits=5`, `pct_embargo=0.01`). `event_end_indices` is required — omitting it raises rather than silently returning unpurged results; pass `allow_unpurged=True` to accept embargo-only splits explicitly.
 - configurable scoring: `neg_log_loss`, `accuracy`, `f1`
 - notebook-ready outputs: polars tables + viz payload dictionaries
 

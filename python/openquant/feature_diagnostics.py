@@ -59,8 +59,22 @@ def _sample_weight(weights: Sequence[float] | None, n_rows: int) -> list[float] 
     return out
 
 
-def _build_intervals(event_end_indices: Sequence[int] | None, n_rows: int) -> list[tuple[int, int]]:
+def _build_intervals(
+    event_end_indices: Sequence[int] | None,
+    n_rows: int,
+    allow_unpurged: bool = False,
+) -> list[tuple[int, int]]:
     if event_end_indices is None:
+        if not allow_unpurged:
+            raise ValueError(
+                "event_end_indices is required for purged cross-validation. Without "
+                "label end indices every sample becomes a degenerate one-row interval "
+                "(i, i), which can only overlap the test rows themselves, so the purge "
+                "step removes nothing and training folds leak label information from "
+                "the test fold. Pass event_end_indices (the row index at which each "
+                "sample's label is resolved), or pass allow_unpurged=True to accept "
+                "embargo-only splits explicitly."
+            )
         return [(i, i) for i in range(n_rows)]
     ends = [int(v) for v in event_end_indices]
     if len(ends) != n_rows:
@@ -348,12 +362,13 @@ def mda_importance(
     n_splits: int = 5,
     pct_embargo: float = 0.01,
     scoring: str = "neg_log_loss",
+    allow_unpurged: bool = False,
 ) -> dict[str, object]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
     weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x))
+    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
 
     per_feature: list[list[float]] = [[] for _ in names]
@@ -392,7 +407,8 @@ def mda_importance(
         "records": table.to_dicts(),
         "viz_payload": payload,
         "cv": {
-            "method": "purged_kfold",
+            "method": "purged_kfold" if event_end_indices is not None else "kfold_embargo_only",
+            "purged": event_end_indices is not None,
             "n_splits": n_splits,
             "pct_embargo": pct_embargo,
             "fold_count": len(splits),
@@ -411,12 +427,13 @@ def sfi_importance(
     n_splits: int = 5,
     pct_embargo: float = 0.01,
     scoring: str = "neg_log_loss",
+    allow_unpurged: bool = False,
 ) -> dict[str, object]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
     weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x))
+    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
 
     per_feature: list[list[float]] = [[] for _ in names]
@@ -445,7 +462,8 @@ def sfi_importance(
         "records": table.to_dicts(),
         "viz_payload": payload,
         "cv": {
-            "method": "purged_kfold",
+            "method": "purged_kfold" if event_end_indices is not None else "kfold_embargo_only",
+            "purged": event_end_indices is not None,
             "n_splits": n_splits,
             "pct_embargo": pct_embargo,
             "fold_count": len(splits),
@@ -587,12 +605,13 @@ def substitution_effect_report(
     scoring: str = "neg_log_loss",
     corr_threshold: float = 0.9,
     orthogonalize: bool = True,
+    allow_unpurged: bool = False,
 ) -> dict[str, object]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
     weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x))
+    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
 
     mda = mda_importance(
@@ -604,6 +623,7 @@ def substitution_effect_report(
         n_splits=n_splits,
         pct_embargo=pct_embargo,
         scoring=scoring,
+        allow_unpurged=allow_unpurged,
     )
     base_table: pl.DataFrame = mda["table"]
     base_map = {row["feature"]: float(row["mean"]) for row in base_table.to_dicts()}
@@ -683,6 +703,7 @@ def substitution_effect_report(
             n_splits=n_splits,
             pct_embargo=pct_embargo,
             scoring=scoring,
+            allow_unpurged=allow_unpurged,
         )
         corr_abs_max = _max_abs_offdiag(corr)
         ortho_corr = _corr_matrix(x_ortho)
