@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "data"
 api_surface: "both"
-risk_notes:
-  - "Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol')."
-  - "clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically."
-  - "align_calendar marks missing bars with is_missing_bar=True for downstream imputation logic."
 rust_api:
   - "load_ohlcv"
   - "clean_ohlcv"
@@ -94,7 +90,7 @@ quality = data_quality_report(df)
 - `align_calendar`
 - `data_quality_report`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol').
 - clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically.

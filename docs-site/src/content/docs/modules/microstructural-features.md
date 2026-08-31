@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "microstructural_features"
 api_surface: "both"
-risk_notes:
-  - "Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison."
-  - "Use shared bar definitions between training and live pipelines, otherwise feature drift is structural."
-  - "Entropy features are sensitive to encoding; freeze symbol maps in production."
 rust_api:
   - "get_roll_measure"
   - "get_corwin_schultz_estimator"
@@ -25,13 +21,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Market Microstructure, Dependence and Regime Detection**
+Features computed from bar-level order flow rather than from price alone, in three families: effective-spread proxies (Roll, Corwin-Schultz), price-impact coefficients (Kyle's lambda, Amihud, Hasbrouck) and flow-toxicity or entropy measures (VPIN, plus Shannon, Lempel-Ziv and plug-in entropy over encoded tick signs). Together they estimate what OHLC bars omit: how expensive the instrument is to trade, and how likely it is that the counterparty knows something you do not.
 
-## Why This Module Exists
+## When to Use
 
-Microstructure features capture liquidity and order-flow dynamics not visible in OHLC bars alone.
+Use them as features when the edge or its cost depends on liquidity — execution models, regime detection, and any signal that decays with trade size. VPIN in particular is an early-warning indicator for flow toxicity ahead of liquidity events. Normalise within venue and time bucket before comparing across assets, since these are strongly regime-dependent, and freeze the symbol encoding used for entropy features or the values will not be comparable between training and production.
 
 ## Mathematical Foundations
 
@@ -45,7 +41,9 @@ $$\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1}
 
 ### Flow Toxicity and Entropy
 
-$$\mathrm{VPIN}_t=\frac{1}{n}\sum_{i=t-n+1}^{t}\frac{|V_i^b-V_i^s|}{V_i},\qquad H=-\sum_j p_j\log p_j$$
+$$\mathrm{VPIN}_t=\frac{1}{V_t}\cdot\frac{1}{n}\sum_{i=t-n+1}^{t}\left|V_i^{B}-V_i^{S}\right|,\qquad H=-\sum_j p_j\log p_j$$
+
+where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bar $i$ (`get_bvc_buy_volume` will estimate the split when it is not observed), $V_t$ the current bar's total volume, and $n$ the rolling `window`. The normaliser sits *outside* the sum because bars are not equal-volume: `get_vpin` averages the imbalance over the window and then scales by the latest bar. The equal-volume-bucket form used by [`streaming-hpc`](/modules/streaming-hpc/) divides each term by the same constant bucket size instead; the two agree when bars carry equal volume. $H$ is the entropy of the tick-sign message, with $p_j$ the empirical frequency of symbol $j$.
 
 ## Usage Examples
 
@@ -139,8 +137,16 @@ assert!(h_plugin.is_finite());
 - `get_vpin`
 - `MicrostructuralFeaturesGenerator`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison.
 - Use shared bar definitions between training and live pipelines, otherwise feature drift is structural.
 - Entropy features are sensitive to encoding; freeze symbol maps in production.
+
+## Related Modules
+
+- [`data-structures`](/modules/data-structures/)
+- [`streaming-hpc`](/modules/streaming-hpc/)
+- [`structural-breaks`](/modules/structural-breaks/)
+- [`filters`](/modules/filters/)
+- [`codependence`](/modules/codependence/)

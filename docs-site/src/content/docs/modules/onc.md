@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "onc"
 api_surface: "both"
-risk_notes:
-  - "Run with repeated seeds/restarts for robust k selection."
-  - "Use correlation cleaning before clustering unstable universes."
 rust_api:
   - "get_onc_clusters"
   - "check_improve_clusters"
@@ -22,13 +19,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Optimal Number of Clusters: runs k-means over a correlation matrix for a range of k, scores each partition by the mean-to-standard-deviation ratio of its silhouette scores, then re-clusters only the clusters that scored badly and keeps the result if it improves. Base k-means is unstable in both k and initialisation, so ONC restarts it `repeat` times and keeps the best — the point is a defensible cluster count, not a fast one.
 
-## Why This Module Exists
+## When to Use
 
-Cluster count selection is a key source of model risk in hierarchical portfolio methods.
+Use it before any hierarchical allocation to decide how many clusters the universe actually supports, instead of hard-coding a number; its answer feeds `hcaa`'s `optimal_num_clusters` directly. Use it also to test whether a claimed grouping — sectors, factors, strategy families — survives contact with the data. Clean the correlation matrix first: on an unstable universe ONC will happily find structure in noise and report a confident k for it.
 
 ## Mathematical Foundations
 
@@ -47,10 +44,26 @@ $$k^*=\arg\min_k J(k)$$
 #### Infer cluster structure
 
 ```rust
+use nalgebra::DMatrix;
 use openquant::onc::get_onc_clusters;
 
+// ONC consumes a *correlation* matrix, not raw prices — build one from your
+// codependence measure of choice first.
+let corr = DMatrix::from_row_slice(
+    4,
+    4,
+    &[
+        1.00, 0.85, 0.10, 0.05, //
+        0.85, 1.00, 0.12, 0.08, //
+        0.10, 0.12, 1.00, 0.78, //
+        0.05, 0.08, 0.78, 1.00,
+    ],
+);
+
+// `repeat` is the number of k-means restarts used to stabilise the partition.
 let out = get_onc_clusters(&corr, 20)?;
-println!("{}", out.clusters.len());
+println!("{} clusters", out.clusters.len());
+println!("silhouette scores: {:?}", out.silhouette_scores);
 ```
 
 ## API Reference
@@ -65,7 +78,14 @@ println!("{}", out.clusters.len());
 - `check_improve_clusters`
 - `OncResult`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Run with repeated seeds/restarts for robust k selection.
 - Use correlation cleaning before clustering unstable universes.
+
+## Related Modules
+
+- [`hcaa`](/modules/hcaa/)
+- [`hrp`](/modules/hrp/)
+- [`codependence`](/modules/codependence/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)

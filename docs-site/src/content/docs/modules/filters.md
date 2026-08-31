@@ -13,11 +13,6 @@ module: "filters"
 api_surface: "both"
 afml_chapters:
   - 2
-risk_notes:
-  - "Calibrate thresholds to target event frequency, not just sensitivity."
-  - "Use identical filtering in train and live pipelines."
-  - "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold."
-  - "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions."
 rust_api:
   - "cusum_filter_indices"
   - "cusum_filter_timestamps"
@@ -52,13 +47,17 @@ Apply event filters immediately after bar construction and before labeling. They
 
 ## Mathematical Foundations
 
-### CUSUM
+### Symmetric CUSUM Filter
 
-$$S_t=\max(0, S_{t-1}+r_t),\; trigger\;if\;|S_t|>h$$
+$$S_t^{+}=\max\!\left(0,\,S_{t-1}^{+}+r_t\right),\qquad S_t^{-}=\min\!\left(0,\,S_{t-1}^{-}+r_t\right),\qquad \text{event at }t\iff S_t^{+}>h_t\;\lor\;S_t^{-}<-h_t$$
 
-### Z-score
+where $r_t=\ln(p_t/p_{t-1})$ is the log return and $h_t$ the threshold — a constant for `Threshold::Scalar`, a per-bar series for `Threshold::Dynamic`. Both arms are needed: $S^{+}$ alone only ever detects upward runs. Whichever arm breaches is reset to $0$ and the bar is emitted as an event, so the filter measures *runs* away from the last event rather than a cumulative level.
 
-$$z_t=\frac{x_t-\mu_t}{\sigma_t}$$
+### Z-score Filter
+
+$$z_t=\frac{x_t-\mu_t}{\sigma_t},\qquad \text{event at }t\iff|z_t|>h$$
+
+where $\mu_t$ and $\sigma_t$ are the rolling mean and standard deviation over the lookback window ending at $t$.
 
 ## Key Parameters
 
@@ -144,7 +143,7 @@ let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).un
 - `Threshold`
 - `FilterError`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Calibrate thresholds to target event frequency, not just sensitivity.
 - Use identical filtering in train and live pipelines.

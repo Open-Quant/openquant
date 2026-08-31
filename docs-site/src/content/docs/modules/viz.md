@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "viz"
 api_surface: "python-only"
-risk_notes:
-  - "Payloads are plain dicts — render with plotly, matplotlib, or pass to a frontend."
-  - "prepare_feature_importance_payload sorts by importance descending and supports top_n filtering."
-  - "prepare_feature_importance_comparison_payload creates side-by-side grouped bar payloads for before/after analysis."
 rust_api:
   - "prepare_feature_importance_payload"
   - "prepare_drawdown_payload"
@@ -85,7 +81,7 @@ dd_payload = prepare_drawdown_payload(
 - `prepare_frontier_payload`
 - `prepare_cluster_payload`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Payloads are plain dicts — render with plotly, matplotlib, or pass to a frontend.
 - prepare_feature_importance_payload sorts by importance descending and supports top_n filtering.

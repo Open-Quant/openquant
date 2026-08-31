@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "ensemble_methods"
 api_surface: "both"
-risk_notes:
-  - "If base learners are highly correlated, bagging variance reduction is minimal even with many estimators."
-  - "Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations."
-  - "Boosting is usually preferable for weak learners (bias reduction); bagging is usually preferable for unstable learners (variance reduction)."
 rust_api:
   - "bias_variance_noise"
   - "bootstrap_sample_indices"
@@ -28,13 +24,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+The diagnostics behind the bagging-versus-boosting choice rather than another ensemble implementation. `bias_variance_noise` decomposes the error; `average_pairwise_prediction_correlation` measures how correlated your base learners actually are; `bagging_ensemble_variance` turns that rho into the variance a bagged ensemble can reach, sigma^2(rho + (1-rho)/N). The consequence AFML Chapter 6 draws is the useful one: as N grows the ensemble variance floors at sigma^2·rho, so with highly correlated learners more estimators buy nothing at all.
 
-## Why This Module Exists
+## When to Use
 
-AFML Chapter 6 emphasizes that ensemble gains depend on error decomposition and forecast dependence, not just estimator count.
+Use it before scaling an ensemble. If measured rho is 0.9, going from 20 to 200 estimators is wasted compute, and `recommend_bagging_vs_boosting` will say so from the numbers rather than from folklore. Reach for bagging when the base learner is unstable (variance-dominated) and boosting when it is weak (bias-dominated). Under heavy label overlap use `sequential_bootstrap_sample_indices` instead of the IID bootstrap, or the bags will be near-duplicates of each other.
 
 ## Mathematical Foundations
 
@@ -126,8 +122,16 @@ assert_eq!(mean_prob.len(), 3);
 - `bagging_ensemble_variance`
 - `recommend_bagging_vs_boosting`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - If base learners are highly correlated, bagging variance reduction is minimal even with many estimators.
 - Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations.
 - Boosting is usually preferable for weak learners (bias reduction); bagging is usually preferable for unstable learners (variance reduction).
+
+## Related Modules
+
+- [`sb-bagging`](/modules/sb-bagging/)
+- [`sampling`](/modules/sampling/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`cross-validation`](/modules/cross-validation/)
+- [`feature-importance`](/modules/feature-importance/)

@@ -13,9 +13,6 @@ module: "sample_weights"
 api_surface: "both"
 afml_chapters:
   - 4
-risk_notes:
-  - "Pair with sequential bootstrap for robust label sampling."
-  - "Time-decay controls recency bias explicitly."
 rust_api:
   - "get_weights_by_return"
   - "get_weights_by_time_decay"
@@ -86,9 +83,23 @@ w_decay = sample_weights.get_weights_by_time_decay(returns, 0.5)
 #### Compute event weights
 
 ```rust
+use chrono::{Duration, NaiveDateTime};
 use openquant::sample_weights::get_weights_by_time_decay;
 
-let w = get_weights_by_time_decay(&returns, 0.5);
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+
+// Weighting is driven by triple-barrier events (t_in, t_out, label) — the label
+// lifetimes — plus the close series they span. It is not a function of returns.
+let triple_barrier_events: Vec<(NaiveDateTime, NaiveDateTime, f64)> = (0..20)
+    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2), 1.0))
+    .collect();
+let close: Vec<(NaiveDateTime, f64)> =
+    (0..25).map(|i| (t0 + Duration::days(i), 100.0 + i as f64 * 0.1)).collect();
+
+// decay = 0.5: the oldest observation keeps half the weight of the newest.
+// decay <= 0 erases the oldest observations entirely.
+let weights = get_weights_by_time_decay(&triple_barrier_events, &close, 0.5)?;
+println!("{} weights; newest = {:.4}", weights.len(), weights.last().map(|w| w.1).unwrap_or(0.0));
 ```
 
 ## Common Pitfalls
@@ -109,7 +120,7 @@ let w = get_weights_by_time_decay(&returns, 0.5);
 - `get_weights_by_return`
 - `get_weights_by_time_decay`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Pair with sequential bootstrap for robust label sampling.
 - Time-decay controls recency bias explicitly.

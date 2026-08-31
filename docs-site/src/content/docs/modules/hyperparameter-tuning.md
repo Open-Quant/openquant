@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "hyperparameter_tuning"
 api_surface: "rust-only"
-risk_notes:
-  - "Use Accuracy only when each prediction has similar economic value (equal bet sizing)."
-  - "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude."
-  - "BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters."
 rust_api:
   - "grid_search"
   - "randomized_search"
@@ -27,13 +23,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Sampling, Validation and ML Diagnostics**
+Grid and randomized search that run under `PurgedKFold` rather than plain k-fold, so the tuning loop cannot buy its score with leakage. `randomized_search` samples from `RandomParamDistribution`, including log-uniform — the right prior for scale parameters such as C and gamma — and AFML Chapter 9's argument is that beyond a couple of dimensions random sampling dominates grid search per unit of compute. The scoring choice exposed by `SearchScoring` is an economic decision, not a statistical one.
 
-## Why This Module Exists
+## When to Use
 
-AFML Chapter 9 recommends tuning under PurgedKFold, using randomized search for large spaces, and scoring with metrics aligned to trading objectives.
+Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilities drive position size, since it penalises confident wrong answers the way a bet does; use `Accuracy` only when every prediction carries similar economic weight; use `BalancedAccuracy` for the severe class imbalance typical of meta-labelling, where recall of the positive class is what matters. Pass `sample_weight` from `sample_weights` — tuning on unweighted overlapping observations rewards the wrong model.
 
 ## Mathematical Foundations
 
@@ -56,26 +52,49 @@ $$-\frac{1}{\sum_i w_i}\sum_i w_i\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]$$
 #### Randomized search with PurgedKFold semantics
 
 ```rust
-use std::collections::BTreeMap;
+use chrono::{Duration, NaiveDateTime};
+use openquant::cross_validation::SimpleClassifier;
 use openquant::hyperparameter_tuning::{
-  randomized_search, RandomParamDistribution, SearchData, SearchScoring,
+    randomized_search, ParamSet, RandomParamDistribution, SearchData, SearchScoring,
 };
+use std::collections::BTreeMap;
+
+// The search builds a fresh model from each sampled parameter set.
+struct Logistic {
+    c: f64,
+}
+impl SimpleClassifier for Logistic {
+    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}
+    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+        x.iter().map(|row| 1.0 / (1.0 + (-self.c * row[0]).exp())).collect()
+    }
+}
+let build_model =
+    |params: &ParamSet| Logistic { c: params["C"].as_f64().unwrap_or(1.0) };
 
 let mut space = BTreeMap::new();
 space.insert("C".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });
 space.insert("gamma".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });
 
+let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+let x: Vec<Vec<f64>> = (0..60).map(|i| vec![(i as f64 - 30.0) / 30.0]).collect();
+let y: Vec<f64> = (0..60).map(|i| if i >= 30 { 1.0 } else { 0.0 }).collect();
+let w = vec![1.0f64; 60];
+// Label spans again — the search purges internally, so it needs them.
+let info_sets: Vec<(NaiveDateTime, NaiveDateTime)> =
+    (0..60).map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2))).collect();
+
 let result = randomized_search(
-  build_model,
-  &space,
-  25,
-  42,
-  SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },
-  5,
-  0.01,
-  SearchScoring::NegLogLoss,
+    build_model,
+    &space,
+    25,   // n_iter — parameter sets sampled
+    42,   // seed
+    SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },
+    5,    // n_splits
+    0.01, // pct_embargo
+    SearchScoring::NegLogLoss,
 )?;
-println!("best score = {}", result.best_score);
+println!("best score = {} with {:?}", result.best_score, result.best_params);
 ```
 
 ## API Reference
@@ -90,8 +109,16 @@ println!("best score = {}", result.best_score);
 - `SearchScoring`
 - `RandomParamDistribution`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use Accuracy only when each prediction has similar economic value (equal bet sizing).
 - Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.
 - BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.
+
+## Related Modules
+
+- [`cross-validation`](/modules/cross-validation/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`sb-bagging`](/modules/sb-bagging/)
+- [`ensemble-methods`](/modules/ensemble-methods/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

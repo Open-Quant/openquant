@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "pipeline"
 api_surface: "both"
-risk_notes:
-  - "The pipeline enforces input alignment and event ordering as leakage guards."
-  - "run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output."
-  - "summarize_pipeline extracts key metrics into a single-row DataFrame for notebook display."
 rust_api:
   - "run_mid_frequency_pipeline"
   - "run_mid_frequency_pipeline_frames"
@@ -96,7 +92,7 @@ print(summary)
 - `run_mid_frequency_pipeline_frames`
 - `summarize_pipeline`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - The pipeline enforces input alignment and event ordering as leakage guards.
 - run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output.

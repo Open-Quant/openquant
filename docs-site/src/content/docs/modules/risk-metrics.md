@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "risk_metrics"
 api_surface: "both"
-risk_notes:
-  - "Non-parametric estimates need enough tail observations."
-  - "Use matrix variants for multi-asset return panels."
 rust_api:
   - "RiskMetrics::calculate_value_at_risk"
   - "RiskMetrics::calculate_expected_shortfall"
@@ -23,13 +20,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Downside risk measures over a return series or a return panel: value at risk (the quantile at the given confidence level), expected shortfall (the mean loss beyond it), conditional drawdown at risk, and portfolio variance from a covariance matrix and a weight vector. Expected shortfall and CDaR are subadditive where VaR is not, which is why a risk budget built on VaR alone can be gamed by splitting one position across two sleeves.
 
-## Why This Module Exists
+## When to Use
 
-Risk budgets and guardrails require coherent downside metrics beyond variance.
+Use it for portfolio-level guardrails and risk budgets, and as the input when `hcaa` should allocate on tail risk rather than on variance. Prefer expected shortfall to VaR whenever the number will be summed across books. These are non-parametric estimates, so they need enough tail observations to mean anything: at 95% confidence a 200-observation sample rests on ten points. All of them are `&self` methods on a unit struct, and the `_from_matrix` variants take return panels.
 
 ## Mathematical Foundations
 
@@ -50,9 +47,15 @@ $$ES_\alpha = -E[R \mid R \le Q_\alpha(R)]$$
 ```rust
 use openquant::risk_metrics::RiskMetrics;
 
-let r = vec![-0.02, 0.01, -0.005, 0.003, 0.004];
-let var95 = RiskMetrics::calculate_value_at_risk(&r, 0.05)?;
-let es95 = RiskMetrics::calculate_expected_shortfall(&r, 0.05)?;
+let returns = vec![-0.02, 0.01, -0.005, 0.003, 0.004];
+
+// These are &self methods on a unit struct, not associated functions: they need
+// a receiver. `confidence_level` is the tail probability (0.05 = 95% VaR).
+let metrics = RiskMetrics;
+let var_95 = metrics.calculate_value_at_risk(&returns, 0.05)?;
+let es_95 = metrics.calculate_expected_shortfall(&returns, 0.05)?;
+
+println!("VaR(95%) = {var_95:.4}, ES(95%) = {es_95:.4}");
 ```
 
 ## API Reference
@@ -74,7 +77,14 @@ let es95 = RiskMetrics::calculate_expected_shortfall(&r, 0.05)?;
 - `RiskMetrics::calculate_conditional_drawdown_risk`
 - `RiskMetrics::calculate_variance`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Non-parametric estimates need enough tail observations.
 - Use matrix variants for multi-asset return panels.
+
+## Related Modules
+
+- [`hcaa`](/modules/hcaa/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`backtest-statistics`](/modules/backtest-statistics/)
+- [`strategy-risk`](/modules/strategy-risk/)

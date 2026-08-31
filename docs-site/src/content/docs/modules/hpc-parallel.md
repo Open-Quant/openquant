@@ -11,9 +11,6 @@ audience:
   - platform-engineering
 module: "hpc_parallel"
 api_surface: "rust-only"
-risk_notes:
-  - "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics."
-  - "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking."
 rust_api:
   - "partition_atoms"
   - "run_parallel"
@@ -27,13 +24,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Scaling, HPC and Infrastructure**
+AFML Chapter 20's atom/molecule model: a job is a list of independent atoms, atoms are grouped into molecules, and molecules are dispatched to workers. What this adds over a plain thread pool is the partitioning choice — linear for uniform-cost atoms, nested for the triangular workloads that dominate this library, where atom k touches k earlier observations — together with a metrics report and a serial mode whose callback semantics are identical to the threaded one.
 
-## Why This Module Exists
+## When to Use
 
-Research pipelines bottleneck on repeated independent computations; this module exposes reproducible partitioning and dispatch controls to scale those workloads safely.
+Use it for any embarrassingly parallel research loop: per-asset feature computation, bootstrap replicas, parameter sweeps. Choose `PartitionStrategy::Nested` when per-atom cost grows with the atom index, otherwise the final molecule becomes the whole runtime; choose `Linear` when atoms cost the same. Debug with `ExecutionMode::Serial` first — the callback contract is unchanged, so a bug that reproduces there is not a concurrency bug and you have just halved the search space.
 
 ## Mathematical Foundations
 
@@ -41,13 +38,19 @@ Research pipelines bottleneck on repeated independent computations; this module 
 
 $$b_i=\left\lfloor\frac{iN}{M}\right\rfloor,\;i=0,\dots,M$$
 
+where $N$ is the number of atoms, $M$ the number of molecules (`mp_batches` x workers), and molecule $i$ covers atoms $[b_{i-1},b_i)$. Every molecule gets the same *count* of atoms, which is correct only when atoms cost the same.
+
 ### Nested Partition Boundary
 
 $$b_i=\left\lfloor N\sqrt{\frac{i}{M}}\right\rfloor,\;i=0,\dots,M$$
 
-### Throughput
+where The same $N$ and $M$, for the triangular workloads that dominate this library — building an overlap or codependence matrix, where atom $k$ touches $k$ earlier observations, so its cost grows linearly with $k$. Later molecules therefore hold fewer atoms.
 
-$$\text{throughput}=\frac{\text{atoms processed}}{\text{runtime seconds}}$$
+### Equal-Cost Condition
+
+$$\text{cost}(i)\;\propto\;\frac{b_i^2-b_{i-1}^2}{2}=\frac{N^2}{2M}\quad\text{for every }i$$
+
+where $b_i$ and $M$ are as above. This is why the square root is there: if atom $k$ costs $\propto k$, a molecule spanning $[b_{i-1},b_i)$ costs $\propto(b_i^2-b_{i-1}^2)/2$; substituting $b_i=N\sqrt{i/M}$ makes that $N^2/(2M)$, the same for every molecule. Linear partitioning on the same workload leaves the last molecule roughly $2M-1$ times more expensive than the first, and the run is only as fast as that straggler.
 
 ## Usage Examples
 
@@ -86,7 +89,14 @@ println!("molecules={} atoms/s={:.0}", report.metrics.molecules_total, report.me
 - `ParallelRunReport`
 - `HpcParallelMetrics`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics.
 - If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking.
+
+## Related Modules
+
+- [`streaming-hpc`](/modules/streaming-hpc/)
+- [`combinatorial-optimization`](/modules/combinatorial-optimization/)
+- [`sampling`](/modules/sampling/)
+- [`backtesting-engine`](/modules/backtesting-engine/)

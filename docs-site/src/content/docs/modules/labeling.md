@@ -13,10 +13,6 @@ module: "labeling"
 api_surface: "both"
 afml_chapters:
   - 3
-risk_notes:
-  - "Label stability is dominated by event quality and volatility-target quality; calibrate these before tuning ML models."
-  - "Always audit class balance and average holding time after labeling; both drive downstream model behavior."
-  - "In meta-labeling, side alignment and timestamp joins are a frequent hidden bug source."
 rust_api:
   - "add_vertical_barrier"
   - "get_events"
@@ -203,7 +199,7 @@ assert!(!meta_bins.is_empty());
 - `drop_labels`
 - `Event`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Label stability is dominated by event quality and volatility-target quality; calibrate these before tuning ML models.
 - Always audit class balance and average holding time after labeling; both drive downstream model behavior.

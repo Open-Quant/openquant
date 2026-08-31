@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "portfolio_optimization"
 api_surface: "both"
-risk_notes:
-  - "Optimizer output is only as good as mean/covariance assumptions; stress-test inputs and rebalance frequency."
-  - "Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks."
-  - "Track turnover, realized slippage, and drift between target and filled weights in production."
 rust_api:
   - "allocate_inverse_variance"
   - "allocate_min_vol"
@@ -25,13 +21,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Portfolio Construction and Risk**
+Mean-variance allocation with the constraints production actually needs. Four objectives — inverse variance, minimum volatility, maximum Sharpe, and efficient risk (maximum return at a target volatility) — each with a `_with` variant taking `AllocationOptions`: per-asset bounds, a global tuple bound, the expected-returns estimator (historical mean or exponentially weighted) and price resampling. The options struct is really the module; the constraint set matters far more to out-of-sample behaviour than the choice of objective.
 
-## Why This Module Exists
+## When to Use
 
-Provides production-ready portfolio construction primitives with explicit options and constraints.
+Use it when you have expected returns you are willing to defend, and `hrp` or `hcaa` when you do not. Treat `allocate_inverse_variance` as the baseline to beat — it uses no return estimate at all and is hard to improve on out of sample. Cap concentration through `bounds` before tuning the objective, and monitor turnover and the drift between target and filled weights, which usually account for more of the backtest-to-live gap than the optimiser does.
 
 ## Mathematical Foundations
 
@@ -79,15 +75,17 @@ assert!((er.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
 #### End-to-end: Constrained Allocation with Exponential Returns and Resampling
 
 ```rust
-use std::collections::HashMap;
+use nalgebra::DMatrix;
 use openquant::portfolio_optimization::{
-    allocate_max_sharpe_with,
-    AllocationOptions,
-    ReturnsMethod,
+    allocate_max_sharpe_with, AllocationOptions, ReturnsMethod,
 };
+use std::collections::HashMap;
+
+// rows = time, cols = assets
+let prices = DMatrix::from_fn(252, 6, |i, j| 100.0 + (i as f64) * 0.03 + (j as f64) * 2.0);
 
 let mut bounds = HashMap::new();
-// Cap concentration in first asset; enforce long-only defaults elsewhere
+// Cap concentration in the first asset; the tuple bound applies to the rest.
 bounds.insert(0usize, (0.0, 0.20));
 
 let opts = AllocationOptions {
@@ -122,8 +120,16 @@ assert!(constrained.weights.iter().all(|w| *w >= -1e-10));
 - `allocate_efficient_risk`
 - `AllocationOptions`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Optimizer output is only as good as mean/covariance assumptions; stress-test inputs and rebalance frequency.
 - Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks.
 - Track turnover, realized slippage, and drift between target and filled weights in production.
+
+## Related Modules
+
+- [`hrp`](/modules/hrp/)
+- [`hcaa`](/modules/hcaa/)
+- [`cla`](/modules/cla/)
+- [`risk-metrics`](/modules/risk-metrics/)
+- [`backtest-statistics`](/modules/backtest-statistics/)

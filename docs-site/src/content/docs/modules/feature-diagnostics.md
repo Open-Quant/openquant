@@ -13,11 +13,6 @@ module: "feature_diagnostics"
 api_surface: "python-only"
 afml_chapters:
   - 8
-risk_notes:
-  - "MDI is biased toward high-cardinality features; cross-check with MDA."
-  - "MDA uses purged k-fold CV internally to prevent leakage in importance estimates."
-  - "SFI trains single-feature models — useful for detecting features that are only useful in combination."
-  - "substitution_effect_report combines MDA + correlation + PCA in one call."
 rust_api:
   - "mdi_importance"
   - "mda_importance"
@@ -46,13 +41,17 @@ Run feature diagnostics after training an initial model and before finalizing th
 
 ## Mathematical Foundations
 
-### MDI (Mean Decrease Impurity)
+### In-Sample Importance (`mdi_importance`)
 
-$$I_j^{MDI}=\frac{1}{B}\sum_{b=1}^B \frac{|\beta_j^{(b)}|}{\sum_k|\beta_k^{(b)}|}$$
+$$I_j=\frac{1}{B}\sum_{b=1}^{B}\frac{\left|\beta_j^{(b)}\right|}{\sum_k\left|\beta_k^{(b)}\right|}$$
 
-### MDA (Mean Decrease Accuracy)
+where $\beta^{(b)}$ are the coefficients of a linear probability model fitted to bootstrap replica $b$, and $B$ = `n_estimators`. **This is normalised coefficient magnitude, not impurity decrease.** The function is named `mdi_importance` because it fills MDI's role — a cheap in-sample ranking computed from the fitted model alone, with the same substitution-effect weakness — but there is no tree and no impurity term here. For the tree-based $I_j=\frac{1}{B}\sum_b\sum_{t\in T_j^{(b)}}p(t)\Delta i(t)$, see the Rust [`feature-importance`](/modules/feature-importance/) module. The two are not interchangeable and will rank features differently: this one measures linear sensitivity, that one measures split usefulness. Features must be standardised for the magnitudes to be comparable.
 
-$$I_j^{MDA}=\frac{S_{base}-S_{perm(j)}}{1-S_{perm(j)}}$$
+### Out-of-Sample Importance (`mda_importance`)
+
+$$I_j=\frac{1}{K}\sum_{k=1}^{K}\frac{S_k-S_{k,\text{perm}(j)}}{d(S_{k,\text{perm}(j)})},\qquad d(S)=\begin{cases}-S & \text{scoring}=\texttt{neg\_log\_loss}\\ 1-S & \text{scoring}=\texttt{accuracy}\end{cases}$$
+
+where $S_k$ is the score on purged fold $k$ and $S_{k,\text{perm}(j)}$ the score after permuting column $j$ in that fold's test set. The denominator differs by scoring rule, and the default is `neg_log_loss` — with negative scores $-S$, not $1-S$, is what puts folds on a comparable scale. Splits come from `_purged_kfold_splits`, so `event_end_indices` must be supplied for the purge to do anything.
 
 ## Key Parameters
 
@@ -134,7 +133,7 @@ print(report["orthogonalized"]["max_abs_corr_after"])     # e.g., 0.03
 - `orthogonalize_features_pca`
 - `substitution_effect_report`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - MDI is biased toward high-cardinality features; cross-check with MDA.
 - MDA uses purged k-fold CV internally to prevent leakage in importance estimates.

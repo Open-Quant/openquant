@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "bet_sizing"
 api_surface: "both"
-risk_notes:
-  - "Keep sizing logic coupled to latency and fill assumptions; limit price from dynamic sizing is a decision boundary, not a guaranteed fill."
-  - "Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure."
-  - "Calibrate step_size to real execution granularity (lots/contracts), not arbitrary decimals."
 rust_api:
   - "bet_size_probability"
   - "bet_size_dynamic"
@@ -27,13 +23,13 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Position Sizing and Trade Construction**
+The layer between a model's confidence and an order. `bet_size_probability` maps class probabilities to a signed size in [-1, 1] through the t-statistic of the probability against the null of no edge, averages sizes across bets that are still active, and discretises to your execution granularity. `bet_size_dynamic` works from a price forecast instead: given the current and maximum position it returns the target position and the limit price at which that size is justified. `bet_size_reserve` sizes from a fitted mixture of long/short concurrency rather than from any model score.
 
-## Why This Module Exists
+## When to Use
 
-A model signal is not tradable until converted into bounded, discrete, and risk-aware position sizes.
+Between signal generation and execution, always — a raw model score is not a position. Use the probability path when a classifier emits calibrated probabilities, the dynamic path when you have a price forecast and want a limit-order boundary, and reserve sizing when overlapping books or stacked strategies can accumulate hidden gross exposure. Set `step_size` to real lot or contract granularity, not an arbitrary decimal, and treat the limit price as a decision boundary rather than a fill you will get.
 
 ## Mathematical Foundations
 
@@ -148,8 +144,15 @@ assert!(!reserve.is_empty());
 - `get_target_pos`
 - `limit_price`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Keep sizing logic coupled to latency and fill assumptions; limit price from dynamic sizing is a decision boundary, not a guaranteed fill.
 - Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure.
 - Calibrate step_size to real execution granularity (lots/contracts), not arbitrary decimals.
+
+## Related Modules
+
+- [`labeling`](/modules/labeling/)
+- [`sample-weights`](/modules/sample-weights/)
+- [`strategy-risk`](/modules/strategy-risk/)
+- [`portfolio-optimization`](/modules/portfolio-optimization/)

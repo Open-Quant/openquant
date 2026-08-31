@@ -11,10 +11,6 @@ audience:
   - platform-engineering
 module: "streaming_hpc"
 api_surface: "both"
-risk_notes:
-  - "Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth."
-  - "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality."
-  - "Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives."
 rust_api:
   - "StreamEvent"
   - "VpinState"
@@ -29,27 +25,33 @@ sidebar:
   badge: Module
 ---
 
-## Subject
+## Concept Overview
 
-**Scaling, HPC and Infrastructure**
+AFML Chapter 22 is about turnaround time rather than throughput: an early-warning metric that arrives after the event is worthless however fast it was computed. This module keeps VPIN and venue-concentration HHI as incremental state with bounded memory — VPIN fills equal-volume buckets and retains a fixed-length window of completed ones, HHI retains a fixed event lookback — so per-event cost and memory stay constant however long the stream runs. `run_streaming_pipeline_parallel` fans many streams across workers through `hpc_parallel`.
 
-## Why This Module Exists
+## When to Use
 
-Streaming decisions are turnaround-time constrained; this module maintains VPIN/HHI-style indicators incrementally and supports multi-stream scaling across cores/chunk sizes.
+Use it for live or replayed order-flow monitoring where the alert has to fire during the event, not after it. The bundled `generate_synthetic_flash_crash_stream` exists to calibrate thresholds against a known-bad path first: a threshold pair that fires late on a synthetic crash will fire late on a real one. For batch feature computation over a completed history use `microstructural_features` instead, which is cheaper per bar and gives the same quantities.
 
 ## Mathematical Foundations
 
-### VPIN (Rolling Buckets)
+### VPIN (Rolling Volume Buckets)
 
-$$\mathrm{VPIN}_t=\frac{1}{N}\sum_{i=t-N+1}^{t}\frac{|V_i^B-V_i^S|}{V_i}$$
+$$\mathrm{VPIN}_t=\frac{1}{N}\sum_{i=t-N+1}^{t}\frac{\left|V_i^{B}-V_i^{S}\right|}{V},\qquad V_i^{B}+V_i^{S}=V$$
+
+where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bucket $i$, $V$ the fixed `bucket_volume` every bucket is filled to, and $N$ = `support_buckets` the rolling window. Because buckets are equal-volume by construction, the denominator is a constant — this is the canonical Easley-Lopez de Prado form. The bar-based `get_vpin` in [`microstructural-features`](/modules/microstructural-features/) estimates the same quantity over unequal bars and so must normalise differently.
 
 ### Market Fragmentation HHI
 
 $$\mathrm{HHI}_t=\sum_{v=1}^{K}\left(\frac{n_{v,t}}{\sum_j n_{j,t}}\right)^2$$
 
-### Streaming Throughput
+where $n_{v,t}$ is the event count on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.
 
-$$\mathrm{throughput}=\frac{\#\mathrm{events\ processed}}{\mathrm{runtime\ seconds}}$$
+### Alert Condition
+
+$$\text{alert}_t\iff \mathrm{VPIN}_t\ge\tau_V\;\land\;\mathrm{HHI}_t\ge\tau_H,\qquad \text{risk}_t=\frac{1}{2}\left(\frac{\mathrm{VPIN}_t}{\tau_V}+\frac{\mathrm{HHI}_t}{\tau_H}\right)$$
+
+where $\tau_V$ and $\tau_H$ are `AlertThresholds { vpin, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.
 
 ## Usage Examples
 
@@ -114,8 +116,15 @@ println!("streams={} molecules={} events/s={:.0}",
 - `StreamingPipelineConfig`
 - `StreamingRunMetrics`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth.
 - For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality.
 - Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives.
+
+## Related Modules
+
+- [`hpc-parallel`](/modules/hpc-parallel/)
+- [`microstructural-features`](/modules/microstructural-features/)
+- [`structural-breaks`](/modules/structural-breaks/)
+- [`data-structures`](/modules/data-structures/)

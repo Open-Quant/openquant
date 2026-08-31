@@ -13,9 +13,6 @@ module: "fracdiff"
 api_surface: "both"
 afml_chapters:
   - 5
-risk_notes:
-  - "Tune d using stationarity tests and information retention."
-  - "Threshold governs truncation error vs compute cost."
 rust_api:
   - "get_weights"
   - "get_weights_ffd"
@@ -110,7 +107,7 @@ let out = frac_diff_ffd(&series, 0.4, 1e-4);
 - `frac_diff`
 - `frac_diff_ffd`
 
-## Implementation Notes
+## Risk Notes and Caveats
 
 - Tune d using stationarity tests and information retention.
 - Threshold governs truncation error vs compute cost.
