@@ -3,8 +3,6 @@ title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: reviewed
 last_validated: '2026-08-30'
-banner:
-  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> A human has read this page end to end. It has not been verified line by line against the code.'
 audience:
   - quant-dev
   - platform-engineering
@@ -94,8 +92,9 @@ bump the date, or lower the status to `draft`. The gate reads the change
 date from `git log` plus the working-tree mtime, so an uncommitted edit
 counts.
 
-The reader-facing badge in each page's `banner.content` must also match
-`status`. Change one, change the other.
+The coloured pill a reader sees at the top of every page is rendered from
+`status` by the `Banner` override in `src/components/DocStatusBanner.astro`,
+so there is nothing to keep in step by hand.
 
 ## Next
 

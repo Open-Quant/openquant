@@ -3,7 +3,7 @@ title: OpenQuant Documentation
 description: Production-grade documentation for AFML-aligned quantitative research and portfolio engineering with OpenQuant.
 template: splash
 banner:
-  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> <a href="/openquant/quickstart/">New to OpenQuant? Start with the Quickstart guide →</a>'
+  content: '<a href="/openquant/quickstart/">New to OpenQuant? Start with the Quickstart guide →</a>'
 hero:
   title: OpenQuant Documentation
   tagline: Institutional-grade quantitative research documentation aligned to AFML chapters and production deployment controls.

@@ -3,8 +3,6 @@ title: Python Core Workflow
 description: One runnable Python script from raw OHLCV to a promotion decision, with its output.
 status: reviewed
 last_validated: '2026-08-30'
-banner:
-  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> A human has read this page end to end. It has not been verified line by line against the code.'
 audience:
   - quant-dev
   - platform-engineering

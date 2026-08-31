@@ -147,13 +147,12 @@ h1 {
 }
 
 /* ── Page status badge ───────────────────────────────────────────────────────
-   Every doc page declares a `status` in its frontmatter and renders it through
-   the Starlight banner slot, so a reader can always tell whether a page was
+   Every doc page declares a `status` in its frontmatter, and the Starlight
+   `Banner` override in src/components/DocStatusBanner.astro renders the pill
+   from that field, so a reader can always tell whether a page was
    machine-generated, is an unfinished draft, or has actually been read by a
-   human. Wired through `banner.content` rather than a Starlight component
-   override, because an override has to be registered in astro.config.mjs and
-   this branch does not own that file. check-content-schema.mjs enforces that
-   the badge matches the frontmatter status, so the two cannot drift.
+   human. The badge is derived from `status`, never written beside it, so the
+   two cannot drift.
    The `:has()` guard keeps the site-wide banner gradient above intact for any
    non-status banner. */
 .sl-banner:has(.doc-status) {

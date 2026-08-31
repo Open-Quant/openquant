@@ -1,0 +1,74 @@
+---
+/**
+ * Starlight `Banner` override — renders each page's status pill.
+ *
+ * Every doc page declares a `status` in its frontmatter (see
+ * src/content/config.ts). This component derives the reader-facing badge
+ * *from* that field, so the pill and the frontmatter cannot disagree: there is
+ * only one source of truth. It replaces an earlier arrangement in which each
+ * page hand-wrote the badge markup into `banner.content` and a rule in
+ * check-content-schema.mjs policed the two for drift.
+ *
+ * A page may still set `banner.content` of its own (index.md carries a
+ * Quickstart call to action); when it does, that text replaces the default
+ * sentence for the status and sits beside the pill.
+ *
+ * The markup is deliberately the same `.sl-banner` element Starlight's own
+ * Banner emits, so the palette in src/styles/starlight.css -- which keys off
+ * `.sl-banner:has(.doc-status--*)` and covers light and dark -- applies
+ * unchanged.
+ */
+const { entry } = Astro.locals.starlightRoute;
+const status = entry.data.status;
+const banner = entry.data.banner;
+
+const LABELS = {
+  generated: 'Generated',
+  draft: 'Draft',
+  reviewed: 'Reviewed',
+  validated: 'Validated',
+};
+
+const NOTES = {
+  generated:
+    'Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.',
+  draft: 'This page is known to be incomplete. Treat its contents as provisional.',
+  reviewed:
+    'A human has read this page end to end. It has not been verified line by line against the code.',
+  validated:
+    'A human has read this page end to end and checked it against the code.',
+};
+
+const label = status ? LABELS[status] : undefined;
+const note = banner?.content ?? (status ? NOTES[status] : undefined);
+---
+
+{
+  (label || note) && (
+    <div class="sl-banner" data-pagefind-ignore>
+      {label && <span class={`doc-status doc-status--${status}`}>{label}</span>}
+      {note && <Fragment set:html={note} />}
+    </div>
+  )
+}
+
+<style>
+  /* Copied from Starlight's own Banner component: overriding a component
+     replaces its scoped styles too, and the palette in starlight.css only
+     supplies colours on top of this base. */
+  @layer starlight.core {
+    .sl-banner {
+      --__sl-banner-text: var(--sl-color-banner-text, var(--sl-color-text-invert));
+      padding: var(--sl-nav-pad-y) var(--sl-nav-pad-x);
+      background-color: var(--sl-color-banner-bg, var(--sl-color-bg-accent));
+      color: var(--__sl-banner-text);
+      line-height: var(--sl-line-height-headings);
+      text-align: center;
+      text-wrap: balance;
+      box-shadow: var(--sl-shadow-sm);
+    }
+    .sl-banner :global(a) {
+      color: var(--__sl-banner-text);
+    }
+  }
+</style>

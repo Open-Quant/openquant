@@ -48,6 +48,11 @@ export default defineConfig({
         'katex/dist/katex.min.css',
         './src/styles/starlight.css',
       ],
+      components: {
+        // Derives each page's status pill from its `status` frontmatter rather
+        // than from hand-written markup in `banner.content`.
+        Banner: './src/components/DocStatusBanner.astro',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/Open-Quant/openquant' },
       ],
