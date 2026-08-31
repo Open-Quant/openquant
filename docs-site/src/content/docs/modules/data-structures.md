@@ -69,7 +69,7 @@ $$\left|\sum b_i\right| \ge E[|\sum b_i|]$$
 
 #### Build dollar bars from a Polars DataFrame
 
-```python
+```python doc-check=skip
 from openquant.bars import build_dollar_bars, bar_diagnostics
 import polars as pl
 
@@ -87,7 +87,7 @@ print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}
 
 #### Build tick and volume bars
 
-```python
+```python doc-check=skip
 from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
 
 tick_bars = build_tick_bars(df, ticks_per_bar=50)

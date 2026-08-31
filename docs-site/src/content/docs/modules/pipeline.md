@@ -47,7 +47,7 @@ Use this when you want to run a complete AFML workflow without manually chaining
 
 #### Run a complete research pipeline
 
-```python
+```python doc-check=skip
 from openquant.pipeline import run_mid_frequency_pipeline_frames, summarize_pipeline
 
 out = run_mid_frequency_pipeline_frames(

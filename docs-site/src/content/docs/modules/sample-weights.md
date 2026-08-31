@@ -63,17 +63,26 @@ $$w_i=(\frac{i}{T})^\delta$$
 ```python
 from openquant._core import sample_weights
 
-# Returns from labeled events (used for return-attribution weighting)
-returns = [0.01, -0.005, 0.007, -0.002, 0.003, 0.01, -0.008]
+# Both functions weight EVENTS, not raw returns: an event is
+# (t_in, t_out, label) and the return is attributed over the close series
+# between those two timestamps. Timestamps parse as "%Y-%m-%d %H:%M:%S".
+close_timestamps = [f"2024-01-02 09:3{i}:00" for i in range(8)]
+close_prices = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
 
-# Weight by absolute return (higher-impact events get more weight)
-w_return = sample_weights.get_weights_by_return(returns)
+events = [
+    (close_timestamps[0], close_timestamps[3], 1.0),
+    (close_timestamps[2], close_timestamps[5], -1.0),
+    (close_timestamps[4], close_timestamps[7], 1.0),
+]
 
-# Weight by time decay (more recent events weighted higher, delta=0.5)
-w_decay = sample_weights.get_weights_by_time_decay(returns, 0.5)
+# Weight by uniqueness-adjusted return attribution
+w_return = sample_weights.get_weights_by_return(events, close_timestamps, close_prices)
 
-# Use these weights in model training:
-# model.fit(X, y, sample_weight=w_return)
+# Weight by time decay (oldest event decayed to 0.5 of the newest)
+w_decay = sample_weights.get_weights_by_time_decay(events, close_timestamps, close_prices, 0.5)
+
+# Each is a list of (event_timestamp, weight) pairs:
+# model.fit(X, y, sample_weight=[w for _, w in w_return])
 ```
 
 ### Rust

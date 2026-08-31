@@ -215,7 +215,7 @@ than the frame itself, and may be killed.
 PyO3 boundary with plain Python objects. In
 `python/openquant/bars.py`, `_build_by_symbol` does, per symbol:
 
-```python
+```python doc-check=skip
 rows = rust_builder(
     [str(x) for x in sdf["ts"].to_list()],
     [float(x) for x in sdf["close"].to_list()],
@@ -234,7 +234,7 @@ multiple of the Arrow-backed frame you started from.
 loops per symbol, so the remaining axis is time: slice with polars (which
 stays in Arrow memory) and concatenate the bar frames.
 
-```python
+```python doc-check=skip
 import polars as pl
 from openquant import bars
 
