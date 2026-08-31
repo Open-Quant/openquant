@@ -3,7 +3,7 @@ title: "combinatorial_optimization"
 description: "AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-30'
+last_generated: '2026-08-31'
 banner:
   content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
