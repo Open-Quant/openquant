@@ -33,6 +33,15 @@ jobs:
       - name: Build Astro docs
         run: bun run build
         working-directory: docs-site
+      - name: Check internal links
+        run: bun run check:links
+        working-directory: docs-site
+      - name: Check content schema
+        run: bun run check:content-schema
+        working-directory: docs-site
+      - name: Check API inventory drift
+        run: bun run check:api-drift
+        working-directory: docs-site
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:

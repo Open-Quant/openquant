@@ -24,6 +24,25 @@ const walk = (dir) => {
 walk(root);
 
 const hrefRe = /href="([^"]+)"/g;
+const metaRefreshRe = /<meta[^>]+http-equiv="refresh"[^>]*content="[^"]*?url=([^"'\s]+)"/gi;
+
+// Map a site-absolute path onto the file the build actually emitted, or null
+// if nothing is there.
+const resolveTarget = (target) => {
+  const noHash = target.split('#')[0].split('?')[0];
+  if (!noHash.startsWith('/openquant')) {
+    return null;
+  }
+  const rel = noHash.replace(/^\/openquant\/?/, '');
+  if (rel.length === 0) {
+    return path.join(root, 'index.html');
+  }
+  if (path.extname(rel)) {
+    return path.join(root, rel);
+  }
+  return path.join(root, rel, 'index.html');
+};
+
 const missing = [];
 for (const file of htmlFiles) {
   const text = fs.readFileSync(file, 'utf-8');
@@ -34,22 +53,27 @@ for (const file of htmlFiles) {
       continue;
     }
 
-    const noHash = href.split('#')[0].split('?')[0];
-    if (!noHash.startsWith('/openquant')) {
+    // Links outside the base are somebody else's problem.
+    const candidate = resolveTarget(href);
+    if (candidate && !fs.existsSync(candidate)) {
+      missing.push({ source: file, href });
+    }
+  }
+
+  // Redirect stubs are pages too: a meta-refresh target that misses the base
+  // prefix 404s in production even though the alias itself returns 200.
+  while ((m = metaRefreshRe.exec(text)) !== null) {
+    const target = m[1];
+    if (target.startsWith('http') || target.startsWith('#')) {
       continue;
     }
-
-    const rel = noHash.replace(/^\/openquant\/?/, '');
-    let candidate;
-    if (rel.length === 0) {
-      candidate = path.join(root, 'index.html');
-    } else if (path.extname(rel)) {
-      candidate = path.join(root, rel);
-    } else {
-      candidate = path.join(root, rel, 'index.html');
+    const candidate = resolveTarget(target);
+    if (!candidate) {
+      missing.push({ source: file, href: `${target} (redirect target is not under /openquant)` });
+      continue;
     }
     if (!fs.existsSync(candidate)) {
-      missing.push({ source: file, href });
+      missing.push({ source: file, href: `${target} (redirect target)` });
     }
   }
 }
@@ -62,4 +86,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`Link check passed (${htmlFiles.length} HTML files scanned).`);
+console.log(`Link check passed (${htmlFiles.length} HTML files scanned, redirects included).`);

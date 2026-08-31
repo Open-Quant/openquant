@@ -26,20 +26,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: docs-site/package-lock.json
+          bun-version: latest
       - name: Install docs dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
         working-directory: docs-site
       - name: Build docs
-        run: npm run build
+        run: bun run build
         working-directory: docs-site
       - name: Check API inventory drift
-        run: npm run check:api-drift
+        run: bun run check:api-drift
         working-directory: docs-site
       - name: Check internal links
-        run: npm run check:links
+        run: bun run check:links
+        working-directory: docs-site
+      - name: Check content schema
+        run: bun run check:content-schema
         working-directory: docs-site
