@@ -53,3 +53,18 @@ jobs:
       - name: Check documented Rust examples compile
         run: bun run check:examples
         working-directory: docs-site
+      # check:python-examples EXECUTES every documented ```python block, so
+      # unlike the Rust gate it needs the compiled extension, not just a
+      # toolchain. Same maturin recipe as python-bindings.yml; the gate finds
+      # the interpreter at .venv/bin/python3 on its own.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - name: Create virtual environment for the Python examples
+        run: uv venv --python 3.11 .venv
+      - name: Build + install the openquant extension
+        run: uv run --python .venv/bin/python --with maturin maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+      - name: Check documented Python examples run
+        run: bun run check:python-examples
+        working-directory: docs-site
