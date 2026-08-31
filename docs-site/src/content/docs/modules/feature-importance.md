@@ -1,12 +1,16 @@
 ---
 title: "feature_importance"
 description: "Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "feature_importance"
+api_surface: "rust-only"
 risk_notes:
   - "Cross-validated MDA is preferred when leakage risk is high."
   - "Compare ranking stability across folds/time windows."

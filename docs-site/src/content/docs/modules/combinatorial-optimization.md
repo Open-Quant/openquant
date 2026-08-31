@@ -1,12 +1,16 @@
 ---
 title: "combinatorial_optimization"
 description: "AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "combinatorial_optimization"
+api_surface: "rust-only"
 risk_notes:
   - "Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle."
   - "Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment."

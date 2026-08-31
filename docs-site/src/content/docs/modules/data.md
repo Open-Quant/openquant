@@ -1,13 +1,16 @@
 ---
 title: "data"
 description: "OHLCV loading, cleaning, calendar alignment, and data quality reporting."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "data"
-api_surface: "python-only"
+api_surface: "both"
 risk_notes:
   - "Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol')."
   - "clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically."
@@ -80,8 +83,11 @@ quality = data_quality_report(df)
 - `data.clean_ohlcv`
 - `data.align_calendar`
 - `data.data_quality_report`
+- `data.clean_ohlcv_df`
+- `data.quality_report_df`
+- `data.align_calendar_df`
 
-### Key Functions
+### Rust API
 
 - `load_ohlcv`
 - `clean_ohlcv`

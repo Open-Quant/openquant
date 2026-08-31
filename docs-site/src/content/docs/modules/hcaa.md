@@ -1,12 +1,16 @@
 ---
 title: "hcaa"
 description: "Hierarchical Clustering Asset Allocation variant with cluster-level constraints."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "hcaa"
+api_surface: "both"
 risk_notes:
   - "Cluster linkage choices influence allocations."
   - "Use with robust codependence distances when possible."
@@ -49,6 +53,10 @@ let w = hcaa.allocate(&prices)?;
 ```
 
 ## API Reference
+
+### Python API
+
+- `hcaa.allocate_hcaa`
 
 ### Rust API
 

@@ -1,12 +1,16 @@
 ---
 title: "util::fast_ewma"
 description: "Fast EWMA primitive shared across feature and volatility routines."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "util::fast_ewma"
+api_surface: "both"
 risk_notes:
   - "Window length controls responsiveness vs smoothness."
   - "Prefer this helper over ad-hoc loops for consistency."
@@ -48,6 +52,10 @@ let y = ewma(&x, 3);
 ```
 
 ## API Reference
+
+### Python API
+
+- `fast_ewma.ewma`
 
 ### Rust API
 

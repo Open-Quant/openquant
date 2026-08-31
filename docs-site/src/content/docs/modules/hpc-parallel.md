@@ -1,12 +1,16 @@
 ---
 title: "hpc_parallel"
 description: "AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "hpc_parallel"
+api_surface: "rust-only"
 risk_notes:
   - "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics."
   - "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking."

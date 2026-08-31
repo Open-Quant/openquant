@@ -1,8 +1,11 @@
 ---
 title: "feature_diagnostics"
 description: "Feature importance diagnostics: MDI, MDA, SFI, PCA orthogonalization, and substitution-effect analysis."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering

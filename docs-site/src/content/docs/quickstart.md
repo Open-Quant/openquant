@@ -1,8 +1,10 @@
 ---
 title: Quickstart
 description: Execute the first-run OpenQuant validation path in under 30 minutes.
-status: validated
-last_validated: '2026-03-02'
+status: reviewed
+last_validated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--reviewed">Reviewed</span> A human has read this page end to end. It has not been verified line by line against the code.'
 audience:
   - quant-dev
   - platform-engineering

@@ -1,12 +1,16 @@
 ---
 title: "risk_metrics"
 description: "Portfolio and return-distribution risk measures for downside control."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "risk_metrics"
+api_surface: "both"
 risk_notes:
   - "Non-parametric estimates need enough tail observations."
   - "Use matrix variants for multi-asset return panels."
@@ -52,6 +56,16 @@ let es95 = RiskMetrics::calculate_expected_shortfall(&r, 0.05)?;
 ```
 
 ## API Reference
+
+### Python API
+
+- `risk.calculate_value_at_risk`
+- `risk.calculate_expected_shortfall`
+- `risk.calculate_conditional_drawdown_risk`
+- `risk.calculate_variance`
+- `risk.calculate_value_at_risk_from_matrix`
+- `risk.calculate_expected_shortfall_from_matrix`
+- `risk.calculate_conditional_drawdown_risk_from_matrix`
 
 ### Rust API
 

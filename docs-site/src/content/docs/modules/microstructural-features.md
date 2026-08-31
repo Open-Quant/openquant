@@ -1,12 +1,16 @@
 ---
 title: "microstructural_features"
 description: "Price-impact, spread, entropy, and flow toxicity estimators."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "microstructural_features"
+api_surface: "both"
 risk_notes:
   - "Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison."
   - "Use shared bar definitions between training and live pipelines, otherwise feature drift is structural."
@@ -101,6 +105,31 @@ assert!(h_plugin.is_finite());
 ```
 
 ## API Reference
+
+### Python API
+
+- `microstructural.get_roll_measure`
+- `microstructural.get_roll_impact`
+- `microstructural.get_corwin_schultz_estimator`
+- `microstructural.get_bekker_parkinson_vol`
+- `microstructural.get_bar_based_kyle_lambda`
+- `microstructural.get_bar_based_amihud_lambda`
+- `microstructural.get_bar_based_hasbrouck_lambda`
+- `microstructural.get_trades_based_kyle_lambda`
+- `microstructural.get_trades_based_amihud_lambda`
+- `microstructural.get_trades_based_hasbrouck_lambda`
+- `microstructural.vwap`
+- `microstructural.get_avg_tick_size`
+- `microstructural.get_vpin`
+- `microstructural.get_bvc_buy_volume`
+- `microstructural.encode_tick_rule_array`
+- `microstructural.quantile_mapping`
+- `microstructural.sigma_mapping`
+- `microstructural.encode_array`
+- `microstructural.get_shannon_entropy`
+- `microstructural.get_lempel_ziv_entropy`
+- `microstructural.get_plug_in_entropy`
+- `microstructural.get_konto_entropy`
 
 ### Rust API
 

@@ -1,8 +1,11 @@
 ---
 title: "data_structures"
 description: "Constructs standard/time/run/imbalance bars from trade streams."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
@@ -118,10 +121,10 @@ let t_bars = time_bars(&trades, Duration::minutes(5));
 // Dollar bars via standard_bars
 let d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);
 
-// Run bars
+// Run bars (Rust-only)
 let r_bars = run_bars(&trades, 100);
 
-// Tick imbalance bars
+// Tick imbalance bars (Rust-only)
 let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 ```
 
@@ -131,7 +134,7 @@ let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 - Setting the threshold too low, creating extremely noisy high-frequency bars, or too high, losing intraday resolution.
 - Forgetting to assign trade direction (buy/sell sign) before constructing imbalance or run bars — these require signed volume.
 - Mixing bar types across train and inference: if you train on dollar bars, your live pipeline must also use dollar bars with the same threshold.
-- Run bars and imbalance bars are available in Python via `bars.build_run_bars` and `bars.build_imbalance_bars`.
+- Run bars and imbalance bars are available in Python via bars.build_run_bars and bars.build_imbalance_bars.
 
 ## API Reference
 
@@ -143,7 +146,6 @@ let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 - `bars.build_dollar_bars`
 - `bars.build_run_bars`
 - `bars.build_imbalance_bars`
-- `bars.bar_diagnostics`
 
 ### Rust API
 
@@ -160,7 +162,7 @@ let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
 
 - Threshold selection controls bar frequency and noise level.
 - Keep OHLCV semantics consistent across downstream features.
-- Run bars and imbalance bars are available via `bars.build_run_bars` and `bars.build_imbalance_bars`.
+- Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars.
 - `bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction.
 
 ## Related Modules

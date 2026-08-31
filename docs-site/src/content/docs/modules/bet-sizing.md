@@ -1,12 +1,16 @@
 ---
 title: "bet_sizing"
 description: "Transforms model confidence and constraints into executable position sizes."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "bet_sizing"
+api_surface: "both"
 risk_notes:
   - "Keep sizing logic coupled to latency and fill assumptions; limit price from dynamic sizing is a decision boundary, not a guaranteed fill."
   - "Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure."
@@ -102,6 +106,37 @@ assert!(!reserve.is_empty());
 ```
 
 ## API Reference
+
+### Python API
+
+- `bet_sizing.get_signal`
+- `bet_sizing.discrete_signal`
+- `bet_sizing.bet_size`
+- `bet_sizing.bet_size_sigmoid`
+- `bet_sizing.bet_size_power`
+- `bet_sizing.inv_price`
+- `bet_sizing.inv_price_sigmoid`
+- `bet_sizing.inv_price_power`
+- `bet_sizing.get_w`
+- `bet_sizing.get_w_sigmoid`
+- `bet_sizing.get_w_power`
+- `bet_sizing.get_target_pos`
+- `bet_sizing.get_target_pos_sigmoid`
+- `bet_sizing.get_target_pos_power`
+- `bet_sizing.limit_price`
+- `bet_sizing.limit_price_sigmoid`
+- `bet_sizing.limit_price_power`
+- `bet_sizing.avg_active_signals`
+- `bet_sizing.bet_size_dynamic`
+- `bet_sizing.cdf_mixture`
+- `bet_sizing.single_bet_size_mixed`
+- `bet_sizing.get_concurrent_sides`
+- `bet_sizing.bet_size_budget`
+- `bet_sizing.bet_size_probability`
+- `bet_sizing.mp_avg_active_signals`
+- `bet_sizing.bet_size_reserve`
+- `bet_sizing.bet_size_reserve_with_fit`
+- `bet_sizing.bet_size_reserve_full`
 
 ### Rust API
 

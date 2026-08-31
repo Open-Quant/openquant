@@ -1,12 +1,16 @@
 ---
 title: "onc"
 description: "Optimal Number of Clusters utilities for clustering stability and allocation workflows."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "onc"
+api_surface: "both"
 risk_notes:
   - "Run with repeated seeds/restarts for robust k selection."
   - "Use correlation cleaning before clustering unstable universes."
@@ -50,6 +54,10 @@ println!("{}", out.clusters.len());
 ```
 
 ## API Reference
+
+### Python API
+
+- `onc.get_onc_clusters`
 
 ### Rust API
 

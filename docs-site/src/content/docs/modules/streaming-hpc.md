@@ -1,12 +1,16 @@
 ---
 title: "streaming_hpc"
 description: "AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "streaming_hpc"
+api_surface: "both"
 risk_notes:
   - "Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth."
   - "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality."
@@ -92,6 +96,11 @@ println!("streams={} molecules={} events/s={:.0}",
 ```
 
 ## API Reference
+
+### Python API
+
+- `streaming_hpc.run_streaming_pipeline`
+- `streaming_hpc.generate_synthetic_flash_crash_stream`
 
 ### Rust API
 

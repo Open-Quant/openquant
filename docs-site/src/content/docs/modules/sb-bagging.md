@@ -1,12 +1,16 @@
 ---
 title: "sb_bagging"
 description: "Sequentially bootstrapped bagging classifiers/regressors."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "sb_bagging"
+api_surface: "both"
 risk_notes:
   - "Sequential bootstrap improves diversity under event overlap."
   - "Tune max_samples/max_features with out-of-sample monitoring."
@@ -50,6 +54,11 @@ let bag = SequentiallyBootstrappedBaggingClassifier::new(100);
 ```
 
 ## API Reference
+
+### Python API
+
+- `sb_bagging.fit_predict_sb_classifier`
+- `sb_bagging.fit_predict_sb_regressor`
 
 ### Rust API
 

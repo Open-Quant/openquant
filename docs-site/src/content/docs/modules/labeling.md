@@ -1,8 +1,11 @@
 ---
 title: "labeling"
 description: "Triple-barrier event labeling and metadata generation."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
@@ -16,8 +19,6 @@ risk_notes:
   - "In meta-labeling, side alignment and timestamp joins are a frequent hidden bug source."
 rust_api:
   - "add_vertical_barrier"
-  - "triple_barrier_events"
-  - "triple_barrier_labels"
   - "get_events"
   - "get_bins"
   - "drop_labels"
@@ -186,10 +187,10 @@ assert!(!meta_bins.is_empty());
 
 ### Python API
 
-- `labeling.add_vertical_barrier`
-- `labeling.triple_barrier_events`
 - `labeling.triple_barrier_labels`
+- `labeling.triple_barrier_events`
 - `labeling.meta_labels`
+- `labeling.add_vertical_barrier`
 - `labeling.get_events`
 - `labeling.get_bins`
 - `labeling.drop_labels`

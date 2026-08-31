@@ -1,12 +1,16 @@
 ---
 title: "ensemble_methods"
 description: "Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities."
-status: validated
-last_validated: '2026-03-02'
+status: generated
+generated_from: src/data/moduleDocs.ts
+last_generated: '2026-08-30'
+banner:
+  content: '<span class="doc-status doc-status--generated">Generated</span> Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.'
 audience:
   - quant-dev
   - platform-engineering
 module: "ensemble_methods"
+api_surface: "both"
 risk_notes:
   - "If base learners are highly correlated, bagging variance reduction is minimal even with many estimators."
   - "Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations."
@@ -98,6 +102,18 @@ assert_eq!(mean_prob.len(), 3);
 ```
 
 ## API Reference
+
+### Python API
+
+- `ensemble.bias_variance_noise`
+- `ensemble.bootstrap_sample_indices`
+- `ensemble.sequential_bootstrap_sample_indices`
+- `ensemble.aggregate_regression_mean`
+- `ensemble.aggregate_classification_vote`
+- `ensemble.aggregate_classification_probability_mean`
+- `ensemble.average_pairwise_prediction_correlation`
+- `ensemble.bagging_ensemble_variance`
+- `ensemble.recommend_bagging_vs_boosting`
 
 ### Rust API
 
