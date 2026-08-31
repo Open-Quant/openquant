@@ -41,6 +41,17 @@ audience:
 7. [Module Reference Index](/modules/)
 8. [Methodology and Leakage Controls](/governance/methodology-and-leakage-controls/)
 
+Three shorter paths, depending on why you are here:
+
+- **New engineer:** [Quickstart](/quickstart/) → [Local Build Setup](/setup/local-build/) → [Rust Core Workflow](/workflows/rust-core-workflow/)
+- **Research user:** [Python Core Workflow](/workflows/python-core-workflow/) → [By AFML Chapter](/module-reference/by-afml-chapter/) → [Module Reference Index](/modules/)
+- **Reviewer or risk lead:** [Methodology and Leakage Controls](/governance/methodology-and-leakage-controls/) → [Reproducibility and Artifact Contracts](/governance/reproducibility-and-artifact-contracts/)
+
+Site search rewards three kinds of query: module names (`cross_validation`,
+`backtesting_engine`) when you need an API, AFML concepts (`purged`, `embargo`,
+`CPCV`) when you are reviewing methodology, and outcome terms (`drawdown`,
+`labeling`, `portfolio`) when you are looking for a workflow entry point.
+
 ## Core Workflow Lanes
 
 ### Event-Driven Data and Labeling (AFML Chapters 2-3)

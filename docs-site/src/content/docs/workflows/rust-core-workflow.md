@@ -304,4 +304,4 @@ report one, report how many configurations you tried to get it —
 
 - [Python Core Workflow](/workflows/python-core-workflow/) — the same ground in Python
 - [Modules by AFML chapter](/module-reference/by-afml-chapter/) — the module behind each stage
-- [API Surfaces](/module-reference/api-surfaces/) — the full Rust and Python symbol lists
+- [Module Reference Index](/modules/) — every module, by subject and by language surface

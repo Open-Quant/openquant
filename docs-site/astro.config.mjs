@@ -56,6 +56,11 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/Open-Quant/openquant' },
       ],
+      // Seven top-level groups. It was twenty, thirteen of them one AFML
+      // chapter each and five holding a single page, so a reader scrolled past
+      // a chapter menu to reach Reference, Governance and Coverage. The AFML
+      // chapters are still here — nested one level inside Modules, where a
+      // one-page chapter costs a line rather than a heading.
       sidebar: [
         {
           label: 'Getting Started',
@@ -69,144 +74,138 @@ export default defineConfig({
           autogenerate: { directory: 'setup' },
         },
         {
-          label: 'Core Workflows',
+          label: 'Workflows',
           autogenerate: { directory: 'workflows' },
         },
-        // ── AFML Chapter-based module groups ──
         {
-          label: 'Ch 2: Data Structures',
+          label: 'Modules',
           items: [
-            { slug: 'modules/data-structures' },
-            { slug: 'modules/filters' },
-            { slug: 'modules/etf-trick' },
+            { label: 'All Modules', link: '/modules/' },
+            {
+              label: 'Ch 2: Data Structures',
+              collapsed: true,
+              items: [
+                { slug: 'modules/data-structures' },
+                { slug: 'modules/filters' },
+                { slug: 'modules/etf-trick' },
+              ],
+            },
+            {
+              label: 'Ch 3: Labeling',
+              collapsed: true,
+              items: [
+                { slug: 'modules/labeling' },
+                { slug: 'modules/bet-sizing' },
+              ],
+            },
+            {
+              label: 'Ch 4: Sample Weights',
+              collapsed: true,
+              items: [
+                { slug: 'modules/sampling' },
+                { slug: 'modules/sample-weights' },
+                { slug: 'modules/sb-bagging' },
+              ],
+            },
+            {
+              label: 'Ch 5–7: Features & Validation',
+              collapsed: true,
+              items: [
+                { slug: 'modules/fracdiff' },
+                { slug: 'modules/ensemble-methods' },
+                { slug: 'modules/cross-validation' },
+              ],
+            },
+            {
+              label: 'Ch 8–9: Importance & Tuning',
+              collapsed: true,
+              items: [
+                { slug: 'modules/feature-importance' },
+                { slug: 'modules/fingerprint' },
+                { slug: 'modules/hyperparameter-tuning' },
+              ],
+            },
+            {
+              label: 'Ch 10–12: Backtesting',
+              collapsed: true,
+              items: [
+                { slug: 'modules/backtesting-engine' },
+                { slug: 'modules/synthetic-backtesting' },
+              ],
+            },
+            {
+              label: 'Ch 14–15: Diagnostics & Risk',
+              collapsed: true,
+              items: [
+                { slug: 'modules/backtest-statistics' },
+                { slug: 'modules/risk-metrics' },
+                { slug: 'modules/strategy-risk' },
+              ],
+            },
+            {
+              label: 'Ch 16: Portfolio Construction',
+              collapsed: true,
+              items: [
+                { slug: 'modules/hrp' },
+                { slug: 'modules/hcaa' },
+                { slug: 'modules/onc' },
+                { slug: 'modules/cla' },
+                { slug: 'modules/portfolio-optimization' },
+              ],
+            },
+            {
+              label: 'Ch 17–19: Microstructure & Regimes',
+              collapsed: true,
+              items: [
+                { slug: 'modules/structural-breaks' },
+                { slug: 'modules/microstructural-features' },
+                { slug: 'modules/codependence' },
+              ],
+            },
+            {
+              label: 'Ch 20–22: HPC & Advanced',
+              collapsed: true,
+              items: [
+                { slug: 'modules/hpc-parallel' },
+                { slug: 'modules/combinatorial-optimization' },
+                { slug: 'modules/streaming-hpc' },
+              ],
+            },
+            {
+              label: 'Shared Utilities',
+              collapsed: true,
+              items: [
+                { slug: 'modules/ef3m' },
+                { slug: 'modules/util-fast-ewma' },
+                { slug: 'modules/util-volatility' },
+              ],
+            },
+            {
+              label: 'Python Modules',
+              collapsed: true,
+              items: [
+                { slug: 'modules/data' },
+                { slug: 'modules/feature-diagnostics' },
+                { slug: 'modules/pipeline' },
+                { slug: 'modules/research' },
+                { slug: 'modules/adapters' },
+                { slug: 'modules/viz' },
+              ],
+            },
           ],
         },
-        {
-          label: 'Ch 3: Labeling',
-          items: [
-            { slug: 'modules/labeling' },
-            { slug: 'modules/bet-sizing' },
-          ],
-        },
-        {
-          label: 'Ch 4: Sample Weights',
-          items: [
-            { slug: 'modules/sampling' },
-            { slug: 'modules/sample-weights' },
-            { slug: 'modules/sb-bagging' },
-          ],
-        },
-        {
-          label: 'Ch 5: Fractional Differentiation',
-          items: [
-            { slug: 'modules/fracdiff' },
-          ],
-        },
-        {
-          label: 'Ch 6: Ensemble Methods',
-          items: [
-            { slug: 'modules/ensemble-methods' },
-          ],
-        },
-        {
-          label: 'Ch 7: Cross-Validation',
-          items: [
-            { slug: 'modules/cross-validation' },
-          ],
-        },
-        {
-          label: 'Ch 8: Feature Importance',
-          items: [
-            { slug: 'modules/feature-importance' },
-            { slug: 'modules/fingerprint' },
-          ],
-        },
-        {
-          label: 'Ch 9: Hyperparameter Tuning',
-          items: [
-            { slug: 'modules/hyperparameter-tuning' },
-          ],
-        },
-        {
-          label: 'Ch 10–12: Backtesting',
-          items: [
-            { slug: 'modules/backtesting-engine' },
-            { slug: 'modules/synthetic-backtesting' },
-          ],
-        },
-        {
-          label: 'Ch 14–15: Diagnostics & Risk',
-          items: [
-            { slug: 'modules/backtest-statistics' },
-            { slug: 'modules/risk-metrics' },
-            { slug: 'modules/strategy-risk' },
-          ],
-        },
-        {
-          label: 'Ch 16: Portfolio Construction',
-          items: [
-            { slug: 'modules/hrp' },
-            { slug: 'modules/hcaa' },
-            { slug: 'modules/onc' },
-            { slug: 'modules/cla' },
-            { slug: 'modules/portfolio-optimization' },
-          ],
-        },
-        {
-          label: 'Ch 17–19: Microstructure & Regimes',
-          items: [
-            { slug: 'modules/structural-breaks' },
-            { slug: 'modules/microstructural-features' },
-            { slug: 'modules/codependence' },
-          ],
-        },
-        {
-          label: 'Ch 20–22: HPC & Advanced',
-          items: [
-            { slug: 'modules/hpc-parallel' },
-            { slug: 'modules/combinatorial-optimization' },
-            { slug: 'modules/streaming-hpc' },
-          ],
-        },
-        {
-          label: 'Shared Utilities',
-          items: [
-            { slug: 'modules/ef3m' },
-            { slug: 'modules/util-fast-ewma' },
-            { slug: 'modules/util-volatility' },
-          ],
-        },
-        // ── Python-only modules ──
-        {
-          label: 'Python Modules',
-          items: [
-            { slug: 'modules/data' },
-            { slug: 'modules/feature-diagnostics' },
-            { slug: 'modules/pipeline' },
-            { slug: 'modules/research' },
-            { slug: 'modules/adapters' },
-            { slug: 'modules/viz' },
-          ],
-        },
-        // ── Reference ──
         {
           label: 'Reference',
           items: [
-            { slug: 'module-reference/api-surfaces' },
             { slug: 'module-reference/by-afml-chapter' },
-            { slug: 'module-reference/indexing-and-discovery' },
-            { label: 'All Modules', link: '/modules/' },
+            { slug: 'examples/catalog' },
           ],
         },
         {
-          label: 'Examples',
-          autogenerate: { directory: 'examples' },
-        },
-        {
-          label: 'Governance & Release',
+          label: 'Governance',
           autogenerate: { directory: 'governance' },
         },
-        { label: 'Coverage Dashboard', link: '/coverage/' },
+        { label: 'Coverage', link: '/coverage/' },
       ],
     }),
   ],
@@ -215,11 +214,14 @@ export default defineConfig({
     '/guides': '/openquant/workflows/rust-core-workflow/',
     '/tutorials': '/openquant/workflows/python-core-workflow/',
     '/notebook-research-workflow': '/openquant/workflows/notebook-research-workflow/',
-    '/api-reference': '/openquant/module-reference/api-surfaces/',
+    // api-surfaces.md was merged into the module index as 'By language surface'.
+    '/api-reference': '/openquant/modules/',
     '/examples': '/openquant/examples/catalog/',
     // '/modules' intentionally absent: it shadowed the real modules/index.md page
     // and broke the homepage "Browse Modules" CTA.
-    '/search': '/openquant/module-reference/indexing-and-discovery/',
+    // indexing-and-discovery.md described the sidebar; its discovery paths now
+    // live on the home page.
+    '/search': '/openquant/',
     '/publishing': '/openquant/governance/versioning-and-release-policy/',
     '/performance': '/openquant/governance/benchmark-policy/',
     '/contributing': '/openquant/governance/support-and-escalation/',

@@ -22,8 +22,8 @@ repository root:
 uv run --python .venv/bin/python python workflow.py
 ```
 
-For the namespace-by-namespace symbol list, see [API
-Surfaces](/module-reference/api-surfaces/). This page explains the loop
+For the namespace-by-namespace symbol list, see the [Module Reference
+Index](/modules/), under "By language surface". This page explains the loop
 rather than reprinting it.
 
 ## The script
@@ -226,4 +226,4 @@ about your features, not a bug.
 
 - [Rust Core Workflow](/workflows/rust-core-workflow/) — the same ground in Rust
 - [Examples Catalog](/examples/catalog/) — runnable examples that ship in the repo
-- [API Surfaces](/module-reference/api-surfaces/) — the full symbol lists
+- [Module Reference Index](/modules/) — the full symbol lists, by namespace
