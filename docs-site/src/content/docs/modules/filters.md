@@ -78,11 +78,12 @@ where $\mu_t$ and $\sigma_t$ are the rolling mean and standard deviation over th
 import openquant
 
 close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
+# The filters bindings parse "%Y-%m-%d %H:%M:%S" — a space, not an ISO "T".
 timestamps = [
-    "2024-01-02T09:30:00", "2024-01-02T09:31:00",
-    "2024-01-02T09:32:00", "2024-01-02T09:33:00",
-    "2024-01-02T09:34:00", "2024-01-02T09:35:00",
-    "2024-01-02T09:36:00", "2024-01-02T09:37:00",
+    "2024-01-02 09:30:00", "2024-01-02 09:31:00",
+    "2024-01-02 09:32:00", "2024-01-02 09:33:00",
+    "2024-01-02 09:34:00", "2024-01-02 09:35:00",
+    "2024-01-02 09:36:00", "2024-01-02 09:37:00",
 ]
 
 # CUSUM filter: fires when cumulative deviation exceeds threshold

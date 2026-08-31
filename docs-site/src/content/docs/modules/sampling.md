@@ -53,7 +53,7 @@ $$P(i)\propto E[u_i \mid \mathcal{S}]$$
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
 | `ind_matrix` | `Vec<Vec<i32>>` | Indicator matrix: rows=bars, cols=labels. Entry is 1 if bar i is active during label j | — |
-| `n_samples` | `Option<usize>` | Number of bootstrap draws; defaults to number of labels | None (= n_labels) |
+| `sample_length` | `Option<usize>` | Number of bootstrap draws; defaults to number of labels | None (= n_labels) |
 
 ## Usage Examples
 
@@ -74,12 +74,12 @@ ind_matrix = [
     [1, 0, 0],
 ]
 
-# Average uniqueness per label (diagnostic)
+# Average uniqueness across the whole matrix (one scalar diagnostic)
 avg_u = sampling.get_ind_mat_average_uniqueness(ind_matrix)
-# e.g., [0.72, 0.58, 0.44] — label 0 is most unique
+# e.g., 0.5556 — closer to 1.0 means less label overlap
 
-# Sequential bootstrap: draw n samples favoring unique labels
-drawn_indices = sampling.seq_bootstrap(ind_matrix, n_samples=3)
+# Sequential bootstrap: draw sample_length indices favouring unique labels
+drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
 # Returns label indices selected with overlap-aware probabilities
 ```
 

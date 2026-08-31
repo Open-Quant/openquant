@@ -68,13 +68,18 @@ where $S_k$ is the score on purged fold $k$ and $S_{k,\text{perm}(j)}$ the score
 
 #### Run all three importance methods and compare
 
-```python doc-check=skip
+```python
 from openquant.feature_diagnostics import (
     mdi_importance, mda_importance, sfi_importance
 )
 
-X = [[0.1, 0.5, 0.3], [0.2, 0.4, 0.1], ...]  # n_samples × n_features
-y = [1.0, 0.0, 1.0, ...]  # binary labels
+# A deterministic stand-in for your feature matrix: momentum carries the
+# signal, spread is noise, so the importances below are checkable.
+import random
+
+rng = random.Random(7)
+X = [[rng.gauss(0.0, 1.0) for _ in range(3)] for _ in range(120)]
+y = [1.0 if row[0] + 0.3 * row[1] > 0.0 else 0.0 for row in X]
 names = ["momentum", "volatility", "spread"]
 
 # event_end_indices[i] is the row at which sample i's label resolves. It is

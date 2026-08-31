@@ -628,11 +628,12 @@ The key insight is that information-driven bars produce returns that are closer 
         code: `import openquant
 
 close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
+# The filters bindings parse "%Y-%m-%d %H:%M:%S" — a space, not an ISO "T".
 timestamps = [
-    "2024-01-02T09:30:00", "2024-01-02T09:31:00",
-    "2024-01-02T09:32:00", "2024-01-02T09:33:00",
-    "2024-01-02T09:34:00", "2024-01-02T09:35:00",
-    "2024-01-02T09:36:00", "2024-01-02T09:37:00",
+    "2024-01-02 09:30:00", "2024-01-02 09:31:00",
+    "2024-01-02 09:32:00", "2024-01-02 09:33:00",
+    "2024-01-02 09:34:00", "2024-01-02 09:35:00",
+    "2024-01-02 09:36:00", "2024-01-02 09:37:00",
 ]
 
 # CUSUM filter: fires when cumulative deviation exceeds threshold
@@ -1335,17 +1336,26 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
         language: "python",
         code: `from openquant._core import sample_weights
 
-# Returns from labeled events (used for return-attribution weighting)
-returns = [0.01, -0.005, 0.007, -0.002, 0.003, 0.01, -0.008]
+# Both functions weight EVENTS, not raw returns: an event is
+# (t_in, t_out, label) and the return is attributed over the close series
+# between those two timestamps. Timestamps parse as "%Y-%m-%d %H:%M:%S".
+close_timestamps = [f"2024-01-02 09:3{i}:00" for i in range(8)]
+close_prices = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
 
-# Weight by absolute return (higher-impact events get more weight)
-w_return = sample_weights.get_weights_by_return(returns)
+events = [
+    (close_timestamps[0], close_timestamps[3], 1.0),
+    (close_timestamps[2], close_timestamps[5], -1.0),
+    (close_timestamps[4], close_timestamps[7], 1.0),
+]
 
-# Weight by time decay (more recent events weighted higher, delta=0.5)
-w_decay = sample_weights.get_weights_by_time_decay(returns, 0.5)
+# Weight by uniqueness-adjusted return attribution
+w_return = sample_weights.get_weights_by_return(events, close_timestamps, close_prices)
 
-# Use these weights in model training:
-# model.fit(X, y, sample_weight=w_return)`,
+# Weight by time decay (oldest event decayed to 0.5 of the newest)
+w_decay = sample_weights.get_weights_by_time_decay(events, close_timestamps, close_prices, 0.5)
+
+# Each is a list of (event_timestamp, weight) pairs:
+# model.fit(X, y, sample_weight=[w for _, w in w_return])`,
       },
       {
         title: "Compute event weights",
@@ -1408,12 +1418,12 @@ ind_matrix = [
     [1, 0, 0],
 ]
 
-# Average uniqueness per label (diagnostic)
+# Average uniqueness across the whole matrix (one scalar diagnostic)
 avg_u = sampling.get_ind_mat_average_uniqueness(ind_matrix)
-# e.g., [0.72, 0.58, 0.44] — label 0 is most unique
+# e.g., 0.5556 — closer to 1.0 means less label overlap
 
-# Sequential bootstrap: draw n samples favoring unique labels
-drawn_indices = sampling.seq_bootstrap(ind_matrix, n_samples=3)
+# Sequential bootstrap: draw sample_length indices favouring unique labels
+drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
 # Returns label indices selected with overlap-aware probabilities`,
       },
       {
@@ -1437,7 +1447,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
 **Alternatives**: Standard IID bootstrap (fast but leakage-prone), or sample weighting (correct expected value but doesn't reduce sample correlation).`,
     keyParameters: [
       { name: "ind_matrix", type: "Vec<Vec<i32>>", description: "Indicator matrix: rows=bars, cols=labels. Entry is 1 if bar i is active during label j", default: "—" },
-      { name: "n_samples", type: "Option<usize>", description: "Number of bootstrap draws; defaults to number of labels", default: "None (= n_labels)" },
+      { name: "sample_length", type: "Option<usize>", description: "Number of bootstrap draws; defaults to number of labels", default: "None (= n_labels)" },
     ],
     commonPitfalls: [
       "Building the indicator matrix with wrong event boundaries — off-by-one errors silently break uniqueness calculations.",
@@ -1701,14 +1711,18 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
       {
         title: "Run all three importance methods and compare",
         language: "python",
-        docCheck: "skip",
         
         code: `from openquant.feature_diagnostics import (
     mdi_importance, mda_importance, sfi_importance
 )
 
-X = [[0.1, 0.5, 0.3], [0.2, 0.4, 0.1], ...]  # n_samples × n_features
-y = [1.0, 0.0, 1.0, ...]  # binary labels
+# A deterministic stand-in for your feature matrix: momentum carries the
+# signal, spread is noise, so the importances below are checkable.
+import random
+
+rng = random.Random(7)
+X = [[rng.gauss(0.0, 1.0) for _ in range(3)] for _ in range(120)]
+y = [1.0 if row[0] + 0.3 * row[1] > 0.0 else 0.0 for row in X]
 names = ["momentum", "volatility", "spread"]
 
 # event_end_indices[i] is the row at which sample i's label resolves. It is
