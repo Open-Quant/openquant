@@ -24,11 +24,17 @@ jobs:
 
   docs-checks:
     runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      # check:examples cargo-checks every documented Rust example against the
+      # real crate, so this job needs a toolchain as well as bun.
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install docs dependencies
         run: bun install --frozen-lockfile
         working-directory: docs-site
@@ -43,4 +49,7 @@ jobs:
         working-directory: docs-site
       - name: Check content schema
         run: bun run check:content-schema
+        working-directory: docs-site
+      - name: Check documented Rust examples compile
+        run: bun run check:examples
         working-directory: docs-site
