@@ -1,7 +1,8 @@
 ---
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
-status: draft
+status: reviewed
+last_validated: '2026-08-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -14,70 +15,84 @@ command; if the answer differs, the page is out of date and the command is
 right. A coverage page maintained any other way tells you what someone
 hoped was true on the day they wrote it.
 
-Numbers below were measured on **2026-08-30**.
+That used to be an aspiration. The three tables below are now generated:
+
+```bash
+# verify — this is the step CI runs
+cd docs-site && bun run check:coverage
+# regenerate after a real change (path relative to the repo root)
+python3 scripts/docs/check_coverage.py --write
+```
+
+The gate recomputes each table from the tree and fails if this page disagrees
+with it, so the numbers cannot quietly rot again. Everything outside the
+generated regions is prose a human owns.
+
+<!-- coverage:begin:measured -->
+Numbers below were regenerated on **2026-08-30**.
+<!-- coverage:end:measured -->
 
 ## Documentation status
 
-```bash
-cd docs-site && node scripts/check-content-schema.mjs
-```
+`status` is enforced by a second gate, `check:content-schema`, which also
+refuses a review stamp that predates the page's last content change — so the
+tally below cannot be bulk-applied.
 
-That gate runs in CI and prints a tally of every page by `status`. As of
-the date above:
-
+<!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
 | `generated` | 40 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
-| `draft` | 8 | Hand-written, known incomplete. Claims nothing. |
-| `reviewed` | 11 | A human read the page end to end. |
-| `validated` | 0 | Reviewed *and* checked against the code. Nothing has earned this yet. |
-| **Total** | **59** | |
+| `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
+| `reviewed` | 12 | A human read the page end to end. |
+| `validated` | 0 | Reviewed *and* checked against the code. |
+| **Total** | **57** | |
+<!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
 is `validated`.** Until recently every page claimed `status: validated`
 with an identical `last_validated` date, because the value was a string
 literal in the page generator rather than a record of anyone's review.
-The taxonomy in `docs-site/scripts/check-content-schema.mjs` now refuses
-a stamp that predates the page's last content change, so the tally above
-cannot be bulk-applied.
 
 ## Module documentation depth
 
-```bash
-cd docs-site
-grep -c '^    module:' src/data/moduleDocs.ts          # documented modules
-grep -c '^    conceptOverview:' src/data/moduleDocs.ts # of those, the enriched tier
-```
+Module pages are emitted from `src/data/moduleDocs.ts`. Every entry now fills
+in `conceptOverview`, `whenToUse` and `relatedModules`, so every page carries
+those sections; the split below is over the two optional ones,
+`keyParameters` and `commonPitfalls`.
 
+<!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
-| Modules with a documentation entry | 39 |
-| …of which get the **enriched** template (`conceptOverview`, `whenToUse`, `keyParameters`, `commonPitfalls`, `relatedModules`) | 12 |
-| …of which fall through to the **stub** template (`Subject` + one sentence per heading) | 27 |
+| Modules with a documentation page | 39 |
+| …carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 10 |
+| …carrying the base template only | 29 |
+<!-- coverage:end:module-depth -->
 
-The stub tier is 69% of the module pages. Those pages have a heading
-skeleton, one sentence under each heading, and a closing "Implementation
-Notes" section that is a verbatim reprint of the page's own `risk_notes`
-frontmatter. Depth on those pages is a generator problem, not a per-page
-problem: adding `conceptOverview` to an entry in `moduleDocs.ts` moves it
-to the enriched tier.
+A base-template page is not a stub — it has a concept overview, mathematical
+foundations, usage examples, an API reference and risk notes. What it lacks is
+the parameter table telling you which knobs matter and the pitfalls section
+telling you how the module is usually misused. Both are the parts a reader
+reaches for second, and both are a `moduleDocs.ts` edit rather than a per-page
+rewrite.
 
 ## Code with no documentation entry at all
 
-```bash
-docd=$(grep -o 'module: "[^"]*"' docs-site/src/data/moduleDocs.ts | sed 's/module: "//;s/"//' | sort)
-comm -13 <(echo "$docd") <(grep "^pub mod" crates/openquant/src/lib.rs | sed 's/pub mod //;s/;//' | sort)
-comm -13 <(echo "$docd") <(ls python/openquant/*.py | xargs -n1 basename | sed 's/\.py//' | grep -v __init__ | sort)
-```
+The gate derives this from `pub mod` in `crates/openquant/src/lib.rs` and the
+modules in `python/openquant/`, against the `module:` frontmatter of the pages
+under `src/content/docs/modules/`. A gap fails the gate unless
+`docs-site/coverage_allowlist.toml` carries a reason and an unexpired date for
+it.
 
-| Surface | Undocumented |
-|---|---|
-| Rust (`crates/openquant/src/lib.rs`) | `data_processing` |
-| Python (`python/openquant/`) | `bars` |
+<!-- coverage:begin:gaps -->
+| Surface | Undocumented | Exempt until | Why |
+|---|---|---|---|
+| Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | Internal preprocessing helpers; no stable public surface to document yet. |
+| Python (`python/openquant/`) | `bars` | 2026-12-31 | Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted. |
+<!-- coverage:end:gaps -->
 
-`util` also appears in the raw diff, but it is a parent module whose two
-children (`util::fast_ewma`, `util::volatility`) both have pages; it is
-not a gap.
+`util` also appears in the raw module list, but it is a parent namespace whose
+two children (`util::fast_ewma`, `util::volatility`) both have pages; it is not
+a gap, and the gate does not count it as one.
 
 `openquant.bars` is the sharper miss of the two. It has no module page
 even though [Python Core Workflow](/workflows/python-core-workflow/)
@@ -91,23 +106,14 @@ Honestly: most of what you would want.
 
 - **Prose quality.** `status` records whether a human read a page, not
   whether the page is good.
-- **Whether the examples run.** Nothing in CI executes the code blocks on
-  these pages. The commands on the setup pages were executed by hand; the
-  module pages' snippets were not, and several of them do not compile.
+- **Whether the prose is right.** The gates count pages, sections and
+  modules. Nothing checks that a sentence describing an algorithm is true.
 - **API parity between Rust and Python.** `check:api-drift`
   (`scripts/generate_api_inventory.py --check`) tracks the *inventory* of
   public symbols, not whether both surfaces are documented equivalently.
-  That gate is **currently failing** on this branch.
 
-:::note[Why this page is still `draft`]
-Three of the four tables above are hand-transcribed from commands run
-once, on one day. That is better than the prose bullets this page used to
-carry, and every figure can be re-derived in seconds — but it is still a
-snapshot a human has to refresh, which is exactly the failure mode the
-page warns about in its first paragraph.
-
-The fix is to emit this page from the gate that already computes the
-tally. `check-content-schema.mjs` builds the status counts on every run
-and throws them away after printing. Until it writes them out instead,
-this page stays `draft`.
-:::
+The examples are covered, though, and by execution rather than by counting:
+`check:examples` compiles every documented Rust snippet against the real
+crate and `check:python-examples` runs every documented Python block against
+the built extension. Both are in the `docs-checks` CI job alongside this page's
+gate.

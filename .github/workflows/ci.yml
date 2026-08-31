@@ -50,6 +50,13 @@ jobs:
       - name: Check content schema
         run: bun run check:content-schema
         working-directory: docs-site
+      # check:coverage recomputes the coverage dashboard's tables from the tree
+      # and fails if the page disagrees, so its numbers cannot go stale the way
+      # they did when they were hand-transcribed. Python only; no extra setup
+      # beyond the runner's python3, same as check:api-drift above.
+      - name: Check docs coverage
+        run: bun run check:coverage
+        working-directory: docs-site
       - name: Check documented Rust examples compile
         run: bun run check:examples
         working-directory: docs-site
