@@ -11,7 +11,8 @@
     "check:api-drift": "python3 ../scripts/generate_api_inventory.py --check",
     "check:content-schema": "node scripts/check-content-schema.mjs",
     "check:examples": "node scripts/check-doc-examples.mjs",
-    "check:docs": "bun run build && bun run check:links && bun run check:api-drift && bun run check:content-schema && bun run check:examples"
+    "check:python-examples": "node scripts/check-doc-python-examples.mjs",
+    "check:docs": "bun run build && bun run check:links && bun run check:api-drift && bun run check:content-schema && bun run check:examples && bun run check:python-examples"
   },
   "devDependencies": {
     "astro": "^5.5.0"

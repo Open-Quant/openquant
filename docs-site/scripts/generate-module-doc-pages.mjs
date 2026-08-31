@@ -107,7 +107,12 @@ for (const doc of moduleDocs) {
     if (pythonExamples.length) {
       exSections.push(
         `### Python\n\n${pythonExamples
-          .map((ex) => `#### ${ex.title}\n\n\`\`\`python\n${ex.code}\n\`\`\``)
+          .map(
+            (ex) =>
+              // `docCheck: "skip"` becomes fence metadata rather than a comment
+              // in the code so that readers never see the gate's bookkeeping.
+              `#### ${ex.title}\n\n\`\`\`python${ex.docCheck === 'skip' ? ' doc-check=skip' : ''}\n${ex.code}\n\`\`\``
+          )
           .join('\n\n')}`
       );
     }
