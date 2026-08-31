@@ -1,5 +1,5 @@
 use csv::ReaderBuilder;
-use openquant::util::volatility::{get_garman_class_vol, get_parksinson_vol, get_yang_zhang_vol};
+use openquant::util::volatility::{get_garman_class_vol, get_parkinson_vol, get_yang_zhang_vol};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -47,7 +47,7 @@ fn test_volatility_estimators_match_mlfinlab_baseline() {
     let (open, high, low, close) = load_ohlc();
     let gm_vol = get_garman_class_vol(&open, &high, &low, &close, 20);
     let yz_vol = get_yang_zhang_vol(&open, &high, &low, &close, 20);
-    let park_vol = get_parksinson_vol(&high, &low, 20);
+    let park_vol = get_parkinson_vol(&high, &low, 20);
 
     assert_eq!(close.len(), gm_vol.len());
     assert_eq!(close.len(), yz_vol.len());

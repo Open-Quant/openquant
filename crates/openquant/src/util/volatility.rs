@@ -48,8 +48,9 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
 }
 
 /// Parkinson volatility estimator.
-/// Mirrors mlfinlab.util.volatility.get_parksinson_vol.
-pub fn get_parksinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
+/// Mirrors mlfinlab's `get_parksinson_vol` — note that upstream misspells
+/// "Parkinson"; this crate spells it correctly.
+pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
     assert_eq!(high.len(), low.len(), "high/low length mismatch");
     let estimator: Vec<f64> = high
         .iter()

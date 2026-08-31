@@ -14,9 +14,9 @@ fn volatility_get_daily_vol(
     Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
 }
 
-#[pyfunction(name = "get_parksinson_vol")]
-fn volatility_get_parksinson_vol(high: Vec<f64>, low: Vec<f64>, window: usize) -> Vec<f64> {
-    openquant::util::volatility::get_parksinson_vol(&high, &low, window)
+#[pyfunction(name = "get_parkinson_vol")]
+fn volatility_get_parkinson_vol(high: Vec<f64>, low: Vec<f64>, window: usize) -> Vec<f64> {
+    openquant::util::volatility::get_parkinson_vol(&high, &low, window)
 }
 
 #[pyfunction(name = "get_garman_class_vol")]
@@ -44,7 +44,7 @@ fn volatility_get_yang_zhang_vol(
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(py, "volatility")?;
     m.add_function(wrap_pyfunction!(volatility_get_daily_vol, &m)?)?;
-    m.add_function(wrap_pyfunction!(volatility_get_parksinson_vol, &m)?)?;
+    m.add_function(wrap_pyfunction!(volatility_get_parkinson_vol, &m)?)?;
     m.add_function(wrap_pyfunction!(volatility_get_garman_class_vol, &m)?)?;
     m.add_function(wrap_pyfunction!(volatility_get_yang_zhang_vol, &m)?)?;
     parent.add_submodule(&m)?;
