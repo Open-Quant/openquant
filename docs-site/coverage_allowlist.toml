@@ -1,0 +1,23 @@
+# Public modules with no documentation page yet.
+#
+# `scripts/docs/check_coverage.py` fails on any public module in
+# `crates/openquant/src/lib.rs` or `python/openquant/` that has no page under
+# `src/content/docs/modules/`. An entry here is the only way to keep such a gap
+# in the tree, and it costs a reason and an expiry date — after which the gate
+# fails again, so a gap cannot be parked here indefinitely.
+#
+# Delete the entry when you write the page; the gate fails on an exemption for a
+# module that turns out to be documented, because a stale exemption is how an
+# allowlist stops meaning anything.
+#
+#   [rust.some_module]      # or [python.some_module]
+#   reason = "why there is no page yet"
+#   expires = 2026-12-31    # bare date, not a string
+
+[rust.data_processing]
+reason = "Internal preprocessing helpers; no stable public surface to document yet."
+expires = 2026-12-31
+
+[python.bars]
+reason = "Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted."
+expires = 2026-12-31
