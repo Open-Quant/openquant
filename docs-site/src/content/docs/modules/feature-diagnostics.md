@@ -77,9 +77,22 @@ X = [[0.1, 0.5, 0.3], [0.2, 0.4, 0.1], ...]  # n_samples × n_features
 y = [1.0, 0.0, 1.0, ...]  # binary labels
 names = ["momentum", "volatility", "spread"]
 
+# event_end_indices[i] is the row at which sample i's label resolves. It is
+# REQUIRED for the purged methods: without it every sample would be a
+# degenerate one-row interval, nothing would be purged, and the training
+# folds would leak label information from the test fold. Passing it is what
+# makes the split actually purged.
+ends = [i + 3 for i in range(len(y))]
+
 mdi = mdi_importance(X, y, feature_names=names, n_estimators=32)
-mda = mda_importance(X, y, feature_names=names, n_splits=5, pct_embargo=0.01)
-sfi = sfi_importance(X, y, feature_names=names, n_splits=5)
+mda = mda_importance(X, y, feature_names=names, event_end_indices=ends,
+                     n_splits=5, pct_embargo=0.01)
+sfi = sfi_importance(X, y, feature_names=names, event_end_indices=ends,
+                     n_splits=5)
+
+# mda["cv"]["purged"] is True here. It is False -- and "method" reads
+# "kfold_embargo_only" -- if you deliberately opt out with
+# allow_unpurged=True, so an unpurged run can never look like a purged one.
 
 # Each returns: {"table": pl.DataFrame, "viz_payload": {...}, ...}
 print(mdi["table"])  # feature | mean | std | stderr

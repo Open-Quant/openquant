@@ -209,9 +209,12 @@ worth naming what each function answers:
   and biased toward high-cardinality features.
 - `mda_importance` — out-of-sample, by permutation. Takes
   `event_end_indices` (plus `n_splits`, `pct_embargo`) and builds *purged*
-  splits from them. This is the one to trust when the two disagree — but
-  only if you actually pass `event_end_indices`; the default builds
-  degenerate one-row intervals and purges nothing.
+  splits from them. This is the one to trust when the two disagree.
+  `event_end_indices` is **required**: omitting it raises, because a
+  missing horizon used to yield degenerate one-row intervals that purged
+  nothing. To accept embargo-only splits, opt out explicitly with
+  `allow_unpurged=True` — the result then reports
+  `cv["method"] == "kfold_embargo_only"` and `cv["purged"] is False`.
 - `sfi_importance` — one feature at a time, so it is the only one immune
   to the substitution effect. Also purged; also slow, since it refits per
   feature.
