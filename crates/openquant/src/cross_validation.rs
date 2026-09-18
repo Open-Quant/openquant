@@ -123,6 +123,12 @@ impl PurgedKFold {
         if samples_info_sets.is_empty() {
             return Err("samples_info_sets cannot be empty".into());
         }
+        if n_splits < 2 || n_splits > samples_info_sets.len() {
+            return Err(format!(
+                "n_splits must be between 2 and the number of samples ({}), got {n_splits}",
+                samples_info_sets.len()
+            ));
+        }
         Ok(Self { n_splits, samples_info_sets, pct_embargo })
     }
 
@@ -143,9 +149,20 @@ impl PurgedKFold {
             let test_indices: Vec<usize> = (start..stop).collect();
             let mut train_mask = vec![true; n];
 
-            // purge overlaps
-            let test_start = self.samples_info_sets[test_indices[0]].1;
-            let test_end = self.samples_info_sets[*test_indices.last().unwrap()].1;
+            // The test samples are never training samples, whatever their spans.
+            for keep in train_mask.iter_mut().take(stop).skip(start) {
+                *keep = false;
+            }
+
+            // Purge overlaps against the window the test labels cover: from the first
+            // test label's start to the latest end in the fold (AFML snippet 7.3). With
+            // variable-length labels that is not necessarily the last sample's end.
+            let test_start = self.samples_info_sets[start].0;
+            let test_end = self.samples_info_sets[start..stop]
+                .iter()
+                .map(|(_, end)| *end)
+                .max()
+                .expect("a fold is never empty: new() requires n_splits <= n_samples");
             for (i, (s, e)) in self.samples_info_sets.iter().enumerate() {
                 let start_in = *s >= test_start && *s <= test_end;
                 let end_in = *e >= test_start && *e <= test_end;
