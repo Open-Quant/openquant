@@ -14,12 +14,13 @@
 ## Reconciliation status
 - Reconciliation source of truth: `docs/reconciliation_closure_history.md`.
 - Most previously closed deliverables are now present on `main`.
-- Two acceptance-criteria mismatches remain tracked as open follow-ups:
-  - `OQ-ojp`: docs-site notebook workflow page + navigation links.
-  - `OQ-det`: experiment plot artifact outputs and tests.
+- Of the two follow-ups raised by that reconciliation:
+  - `OQ-ojp` (docs-site notebook workflow page + navigation links) landed in PR #14.
+  - `OQ-det` (experiment plot artifact outputs and tests) was closed in the tracker, but its
+    commit `27a2007` never reached `main`. Recovery is tracked in GitHub issue #33.
 
 ## Quality and CI posture
 - Core CI workflows are present for lint/test, benchmark regression, release checks, bindings smoke,
   and notebook/example smoke.
-- Remaining work is focused on documentation-site parity and experiment artifact completeness
-  (tracked by `OQ-ojp` and `OQ-det`).
+- Remaining work is tracked as GitHub issues #31-#61; the scope and evidence behind them is in
+  `docs/design/production-readiness-brief.md`.
