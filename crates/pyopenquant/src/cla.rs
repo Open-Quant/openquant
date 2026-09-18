@@ -14,6 +14,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
     solution=None,
     calculate_expected_returns="mean"
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn cla_allocate(
     py: Python<'_>,
     asset_prices: Option<Vec<Vec<f64>>>,

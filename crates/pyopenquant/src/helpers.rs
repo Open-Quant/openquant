@@ -142,6 +142,8 @@ pub fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<B
         .collect()
 }
 
+// Takes the raw OHLCV columns it validates into `OhlcvColumns`; a params struct would duplicate that type.
+#[allow(clippy::too_many_arguments)]
 pub fn build_ohlcv_columns(
     timestamps_us: Vec<i64>,
     symbols: Vec<String>,
@@ -203,18 +205,33 @@ pub fn report_to_pydict(
     Ok(out_report.into_pyobject(py).unwrap().into_any().unbind())
 }
 
-pub fn build_labeling_events(
-    close_timestamps: Vec<String>,
-    close_prices: Vec<f64>,
-    t_events: Vec<String>,
-    target_timestamps: Vec<String>,
-    target_values: Vec<f64>,
-    pt: f64,
-    sl: f64,
-    min_ret: f64,
-    vertical_barrier_times: Option<Vec<(String, String)>>,
-    side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<LabelingInputs> {
+/// Raw Python-side inputs shared by the triple-barrier labeling bindings.
+pub struct LabelingEventArgs {
+    pub close_timestamps: Vec<String>,
+    pub close_prices: Vec<f64>,
+    pub t_events: Vec<String>,
+    pub target_timestamps: Vec<String>,
+    pub target_values: Vec<f64>,
+    pub pt: f64,
+    pub sl: f64,
+    pub min_ret: f64,
+    pub vertical_barrier_times: Option<Vec<(String, String)>>,
+    pub side_prediction: Option<Vec<(String, f64)>>,
+}
+
+pub fn build_labeling_events(args: LabelingEventArgs) -> PyResult<LabelingInputs> {
+    let LabelingEventArgs {
+        close_timestamps,
+        close_prices,
+        t_events,
+        target_timestamps,
+        target_values,
+        pt,
+        sl,
+        min_ret,
+        vertical_barrier_times,
+        side_prediction,
+    } = args;
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_events = parse_naive_datetimes(t_events)?;

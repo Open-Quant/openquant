@@ -26,6 +26,8 @@ type AlignedOhlcvColumns = (
 );
 
 #[pyfunction(name = "clean_ohlcv")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_clean_ohlcv(
     py: Python<'_>,
     timestamps_us: Vec<i64>,
@@ -66,6 +68,8 @@ fn data_clean_ohlcv(
 }
 
 #[pyfunction(name = "quality_report")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_quality_report(
     py: Python<'_>,
     timestamps_us: Vec<i64>,
@@ -94,6 +98,8 @@ fn data_quality_report(
 }
 
 #[pyfunction(name = "align_calendar")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_align_calendar(
     timestamps_us: Vec<i64>,
     symbols: Vec<String>,

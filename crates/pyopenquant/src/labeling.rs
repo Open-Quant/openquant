@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 
 use crate::helpers::{
     build_labeling_events, pair_timestamps_values, parse_naive_datetimes, parse_vertical_barriers,
+    LabelingEventArgs,
 };
 
 /// Python-facing event row: `(timestamp, t1, trgt, side, pt, sl)`.
@@ -52,6 +53,8 @@ fn labeling_add_vertical_barrier(
     vertical_barrier_times=None,
     side_prediction=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn labeling_triple_barrier_events(
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,
@@ -64,7 +67,7 @@ fn labeling_triple_barrier_events(
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
 ) -> PyResult<Vec<EventRow>> {
-    let (_, events) = build_labeling_events(
+    let (_, events) = build_labeling_events(LabelingEventArgs {
         close_timestamps,
         close_prices,
         t_events,
@@ -75,7 +78,7 @@ fn labeling_triple_barrier_events(
         min_ret,
         vertical_barrier_times,
         side_prediction,
-    )?;
+    })?;
     Ok(events
         .into_iter()
         .map(|(ts, ev)| {
@@ -103,6 +106,8 @@ fn labeling_triple_barrier_events(
     min_ret=0.0,
     vertical_barrier_times=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn labeling_triple_barrier_labels(
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,
@@ -114,7 +119,7 @@ fn labeling_triple_barrier_labels(
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
 ) -> PyResult<Vec<BinRow>> {
-    let (close, events) = build_labeling_events(
+    let (close, events) = build_labeling_events(LabelingEventArgs {
         close_timestamps,
         close_prices,
         t_events,
@@ -124,8 +129,8 @@ fn labeling_triple_barrier_labels(
         sl,
         min_ret,
         vertical_barrier_times,
-        None,
-    )?;
+        side_prediction: None,
+    })?;
     Ok(openquant::labeling::triple_barrier_labels(&events, &close)
         .into_iter()
         .map(|row| {
@@ -153,6 +158,8 @@ fn labeling_triple_barrier_labels(
     min_ret=0.0,
     vertical_barrier_times=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn labeling_meta_labels(
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,
@@ -165,7 +172,7 @@ fn labeling_meta_labels(
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
 ) -> PyResult<Vec<BinRow>> {
-    let (close, events) = build_labeling_events(
+    let (close, events) = build_labeling_events(LabelingEventArgs {
         close_timestamps,
         close_prices,
         t_events,
@@ -175,8 +182,8 @@ fn labeling_meta_labels(
         sl,
         min_ret,
         vertical_barrier_times,
-        Some(side_prediction),
-    )?;
+        side_prediction: Some(side_prediction),
+    })?;
     Ok(openquant::labeling::meta_labels(&events, &close)
         .into_iter()
         .map(|row| {
@@ -204,6 +211,8 @@ fn labeling_meta_labels(
     vertical_barrier_times=None,
     side_prediction=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn labeling_get_events(
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,

@@ -208,6 +208,8 @@ pub fn meta_labels(
 }
 
 /// Backward-compatible triple-barrier API.
+// Mirrors the mlfinlab `get_events` signature.
+#[allow(clippy::too_many_arguments)]
 pub fn get_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
