@@ -1,0 +1,35 @@
+schema = 1
+id = "test-python-binding-contract"
+title = "Test every Python submodule and expose them from the package"
+scope = "[testing / P0] `crates/pyopenquant` registers 27 submodules (159 `add_function` calls) but `python/tests` exercise only the original 9. The 17 added in 3e5afc9 have no Python tests: fracdiff, volatility, codependence, backtest_stats, sample_weights, microstructural, strategy_risk, ensemble, structural_breaks, synthetic_bt, ef3m, streaming_hpc, hrp, hcaa, onc, cla, sb_bagging. `python/openquant/__init__.py` re-exports 6 of 27; the rest are reachable only via `openquant._core.*`. `pyopenquant` has no Rust unit tests. Note: the local `_core*.so` dated 2026-03-01 exposes 9 submodules - rebuild with `just py-develop` before trusting local results."
+requires_spec = false
+spec_reason = "Adds tests and re-exports for existing behavior; no function behavior changes."
+acceptance = [
+    "A contract test walks `openquant._core`, and fails if any submodule has no value test.",
+    "Each of the 17 submodules has at least one test asserting values from `tests/fixtures` (same references as the Rust tests).",
+    "All 27 submodules are importable as `openquant.<name>`.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-007",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "39"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

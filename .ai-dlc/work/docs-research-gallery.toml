@@ -1,0 +1,37 @@
+schema = 1
+id = "docs-research-gallery"
+title = "Add a research gallery and finish or remove stub pages"
+scope = "[docs / P2] The site has no research examples with plots, no changelog, and no performance numbers on the site itself. The governance section fills one of seven sidebar groups with stubs: three of five pages are 54-76-word drafts, and `notebook-research-workflow.md` is 98 words. Add a 'Research' section rendering each runbook (hypothesis, figures, result, decision), a performance page generated from `benchmarks/`, and a changelog. Write the governance pages properly or fold them into one page."
+requires_spec = false
+spec_reason = "Documentation-only change; behavior is owned by the code and already gated by the docs example checks."
+acceptance = [
+    "A Research section lists every runbook with at least one figure each.",
+    "No page under 150 words remains in the sidebar; 0 pages with status `draft`.",
+]
+reviewed = true
+depends_on = [
+    "runbook-meta-labeling",
+    "runbook-cpcv-dsr",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-013",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "55"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

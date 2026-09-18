@@ -1,0 +1,35 @@
+schema = 1
+id = "res-recover-stranded-work"
+title = "Recover or formally drop the four unmerged feature commits"
+scope = "[research / P0] Beads issues OQ-nbr.4, OQ-nbr.5 and OQ-det were closed but their commits never reached main; each branch is 1 commit ahead and 71-103 behind: `59ac6fa` feat/oq-nbr-4-validation (+324/-83: `split_with_diagnostics`, `cpcv_paths`, `count_train_test_overlaps` in cross_validation.rs), `27a2007` feat/oq-det-plot-artifacts (+115: plotting in experiments/run_pipeline.py), `25b7b24` feat/oq-nbr-5-modeling-lab (+798: notebook_modeling.rs), `f31de34` feat/afml-real-data-notebook (+3032: 12 templated per-chapter notebooks whose numbering collides with main's 07/08). Re-port 59ac6fa and 27a2007 onto main by hand (rebase will not apply cleanly). For 25b7b24 decide against a scikit-learn approach (brief decision 4). Mine f31de34 for ideas, then drop it. Also record a keep/delete decision for legacy `origin/feature-generation` (66 commits) and `origin/feature/tests` (59)."
+requires_spec = true
+spec_reason = "Re-porting 59ac6fa adds public cross-validation functions (CPCV paths, overlap diagnostics) whose behavior needs scenarios."
+acceptance = [
+    "`cpcv_paths`, `split_with_diagnostics` and `count_train_test_overlaps` exist on main with their original tests passing.",
+    "`experiments/run_pipeline.py` writes plot artifacts.",
+    "Each of the four commits and two legacy branches has a recorded outcome (merged/dropped + reason); the branches are deleted.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-002",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "33"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

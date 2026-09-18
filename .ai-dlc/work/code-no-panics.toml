@@ -1,0 +1,37 @@
+schema = 1
+id = "code-no-panics"
+title = "Remove panics from public API paths"
+scope = "[code / P0] `docs/project_status.md` says panics were migrated, but public paths still panic: `bet_sizing.rs` lines 39,53,77,192,230,242,263,288,362 and `filters.rs` 52,96,176 wrap `_checked` fns in `.expect`; `backtest_statistics.rs:107-164` calls `.first().unwrap()` on empty input; `data_structures.rs:55,94,126,171,211` and `util/volatility.rs:54-105` `assert!` on lengths/thresholds; `microstructural_features.rs:440` `partial_cmp().unwrap()` panics on NaN; also `sampling.rs:8`, `labeling.rs:59`, `util/fast_ewma.rs:7`. A panic inside a PyO3 call surfaces as `PanicException` and is a poor research experience. Decide per function: return `Result`, or keep an infallible wrapper only where inputs cannot be invalid."
+requires_spec = true
+spec_reason = "Changes behavior on invalid input from panic to Err for public functions."
+acceptance = [
+    "Each listed site has a test feeding the offending input (empty, mismatched length, NaN) and asserting `Err`, not a panic.",
+    "From Python the same inputs raise a normal exception, not `PanicException`.",
+    "`docs/project_status.md` claim about panics is true.",
+]
+reviewed = true
+depends_on = [
+    "code-typed-errors",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-005",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "36"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

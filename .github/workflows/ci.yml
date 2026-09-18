@@ -29,6 +29,10 @@ jobs:
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
       - uses: actions/checkout@v4
+        # Full history: check:content-schema dates pages with `git log`; a depth-1
+        # clone makes every page look changed today and fails every stamp.
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest

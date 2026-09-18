@@ -1,0 +1,35 @@
+schema = 1
+id = "design-direction"
+title = "Set one visual identity: palette, type, logo"
+scope = "[design / P0] Three unrelated palettes coexist: the logo is neon magenta `#e44de0`, cyan `#52c8f5`, yellow `#f0e050` with a Gaussian-blur glow on a dark rounded tile; README and docs banners use a purple-to-blue gradient `#1b1648 -> #36257b -> #0d64c8` with pink/teal radial glows; the site accent is muted navy `#0f5f9a`. The docs banner SVG reads 'Ship Smarter / Astro-native docs for quantitative ML systems' and names Space Grotesk, which is never loaded. Body font is Manrope (a marketing face) with `letter-spacing: 0.01em`; headings ask for weight 750, which is not loaded. Produce a design brief (`docs/templates/design-brief.md`) and 2-3 candidate directions evaluated with `docs/templates/design-rubric.md`. Recommended direction: printed reference manual - a text face (IBM Plex Sans or Source Serif 4) with IBM Plex Mono kept, ~70-character measure, white/near-black grounds, one accent taken from the logo and used only for links and focus, a flat logo mark without the glowing tile, radii <= 4px, visible hairlines, no gradients/glows/blur. Reference points: polars, uv/ruff, tokio, scikit-learn docs."
+requires_spec = false
+spec_reason = "Visual design decision recorded as a design brief and selection; no behavior."
+acceptance = [
+    "A design brief and a recorded selection exist under `docs/design/`, with tokens (color, type scale, spacing, radii) for light and dark.",
+    "Every text/background pair in the tokens is >= 4.5:1, computed and listed.",
+    "A flat logo mark and one banner are produced from the chosen palette.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-015",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "56"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

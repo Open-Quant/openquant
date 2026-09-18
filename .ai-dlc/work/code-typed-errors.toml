@@ -1,0 +1,37 @@
+schema = 1
+id = "code-typed-errors"
+title = "Replace String errors with typed errors across the Rust core"
+scope = "[code / P1] ~92 public signatures return `Result<_, String>`: backtesting_engine 21, data_processing 13, ensemble_methods 9, etf_trick 9, hyperparameter_tuning 9, feature_importance 8, fingerprint 7, synthetic_backtesting 6, microstructural_features 5, cross_validation 2, sample_weights 2, ef3m 1. 16 modules have error enums but only 6 implement `std::error::Error` (missing: cla, codependence, hcaa, hrp, onc, portfolio_optimization::AllocError, risk_metrics, sb_bagging, strategy_risk, structural_breaks). The crate does not use `thiserror`. Adopt `thiserror`, give each module an enum, implement Error+Display everywhere, and map them to specific Python exception types in pyopenquant."
+requires_spec = true
+spec_reason = "Public error types and the Python exceptions raised are observable API behavior."
+acceptance = [
+    "`grep -rn 'Result<.*, String>' crates/openquant/src` returns nothing.",
+    "Every public error enum implements `std::error::Error`; a compile-time test asserts it.",
+    "Python raises `ValueError`/module-specific exceptions with the Rust message; tested for at least one function per module.",
+]
+reviewed = true
+depends_on = [
+    "code-clippy-clean",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-004",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "35"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

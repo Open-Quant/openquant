@@ -1,0 +1,35 @@
+schema = 1
+id = "docs-landing-rewrite"
+title = "Rewrite the landing page to describe the library, not the documentation"
+scope = "[docs / P0] `docs-site/src/content/docs/index.md`: title 'OpenQuant Documentation', tagline 'Institutional-grade quantitative research documentation aligned to AFML chapters and production deployment controls', sections 'Documentation Principles' and 'What Is Included In This V1 Institutional Baseline', and the bullet 'Evidence over claims' with no evidence attached. No code, no numbers, no statement of what the library does. 'Institutional-grade' also sits in `astro.config.mjs:18`; the tab title is 'OpenQuant Documentation | OpenQuant Documentation'; at 390px the header clips to 'OpenQuant Documentatic'. Replace with: one sentence on what it is (Rust implementations of AFML methods with Python bindings), honest install status, a ~12-line Python example with real output, a benchmark table from `benchmarks/`, and a module-to-AFML-chapter map. Match the voice of the already-good `quickstart.md` ('The candidate was rejected, and that is the correct result.')."
+requires_spec = false
+spec_reason = "Documentation-only change; behavior is owned by the code and already gated by the docs example checks."
+acceptance = [
+    "The words 'institutional-grade', 'comprehensive', 'robust', 'seamless' do not appear on the site.",
+    "The landing example is executed by `check:python-examples` and shows its output.",
+    "Site title is 'OpenQuant'; the header does not clip at 390px.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-014",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "52"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

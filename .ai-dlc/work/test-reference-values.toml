@@ -1,0 +1,35 @@
+schema = 1
+id = "test-reference-values"
+title = "Add reference-checked tests for thin and inline-only modules"
+scope = "[testing / P1] 18 of 37 Rust test files use inline data with no external reference: backtesting_engine, ch10_snippets, combinatorial_optimization, cross_validation, data_processing, both data_structures files, ef3m, ensemble_methods, feature_importance, fingerprint, hpc_parallel, hyperparameter_tuning, sampling, sb_bagging, strategy_risk, streaming_hpc, synthetic_backtesting. Thin relative to size: data_processing 563 LOC/1 test, backtesting_engine 703/3, feature_importance 504/3, hyperparameter_tuning 425/3, onc 467/2, pipeline 394/2 inline with no integration file. For each, generate reference values from an independent implementation (numpy/scipy/scikit-learn/statsmodels script committed under `tests/fixtures/<module>/generate.py`) and add property tests where a closed form exists (e.g. purged folds never overlap label spans; PSR monotone in Sharpe)."
+requires_spec = false
+spec_reason = "Verification of existing behavior only. Any discrepancy found becomes its own bug ticket."
+acceptance = [
+    "Each listed module has tests against committed reference values with the generating script alongside.",
+    "Property tests exist for cross_validation, backtest_statistics and bet_sizing.",
+    "Discrepancies found are filed as separate issues rather than papered over with tolerances.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-008",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "40"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"
