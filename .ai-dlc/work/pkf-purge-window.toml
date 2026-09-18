@@ -12,7 +12,9 @@ acceptance = [
 ]
 reviewed = true
 depends_on = []
-requirements = ["docs/design/production-readiness-brief.md#RQ-008"]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-008",
+]
 
 [providers]
 specs = "openspec"
@@ -24,5 +26,11 @@ deploy = "none"
 [artifacts]
 tracker = "65"
 brief = "docs/design/production-readiness-brief.md"
+branch = "work/pkf-purge-window"
 
 [bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"
