@@ -1,0 +1,35 @@
+schema = 1
+id = "res-real-data-layer"
+title = "Build a real market data layer with cache, snapshot hash and recorded terms"
+scope = "[research / P0] There is no market data in the repo beyond mlfinlab-style test fixtures, and no fetcher in the package. Notebook 06 scrapes Stooq daily closes inline with `urllib`; Stooq's redistribution terms are unchecked (brief H2). `openquant.data` (`load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`) is used by no notebook. Add `openquant.data.fetch`: pluggable source, on-disk parquet cache, content hash recorded in each run's manifest, and a `DATA_SOURCES.md` stating each source's terms. Choose the source (owner decision 3) - candidates to evaluate: a fetch-only adapter where the user supplies their own key, and a small redistributable sample committed for CI. Target universe from the OQ-nbr epic: US equities/ETFs daily OHLCV."
+requires_spec = true
+spec_reason = "New public Python API and an on-disk cache format."
+acceptance = [
+    "`fetch(symbols, start, end)` returns a frame that passes `data_quality_report` and is served from cache offline on the second call.",
+    "Every run manifest records the dataset hash; changing the data changes the hash.",
+    "`DATA_SOURCES.md` records terms for each source; CI uses only data that may be redistributed.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-011",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "43"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

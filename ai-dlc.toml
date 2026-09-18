@@ -1,0 +1,63 @@
+schema = 4
+
+[roles]
+
+specs = "openspec"
+
+
+tracker = "github-issues"
+
+
+knowledge = "obsidian"
+
+
+scm = "github"
+
+
+deploy = "none"
+
+
+agent-client = ["claude-code", "codex"]
+
+
+
+[providers.github-issues]
+
+kind = "github-issues"
+
+# Select verified project/account settings with ai-dlc provider connect.
+# No account identity or credentials are inferred from scaffolding.
+
+
+host = "github.com"
+repository = "Open-Quant/openquant"
+viewer_id = "MDQ6VXNlcjQ4MDcxODcw"
+[gates]
+finish = ["specification-current", "pr-merged", "ci-green"]
+
+[checks]
+required = ["generated", "work-records"]
+
+[checks.commands]
+generated = "ai-dlc agents render --check"
+work-records = "ai-dlc work validate --all"
+
+
+
+
+
+[setup]
+steps = [
+
+  {id = "dependencies", command = "cargo fetch --locked", verify = "cargo fetch --locked --offline"},
+
+
+]
+
+# Set scm.repository to your selected owner/repository before SCM operations.
+# Extend required checks with application-specific validation before completing real work.
+
+[scm]
+repository = "Open-Quant/openquant"
+workflow = "verify.yml"
+target_branch = "main"

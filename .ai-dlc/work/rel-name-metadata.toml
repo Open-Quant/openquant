@@ -1,0 +1,36 @@
+schema = 1
+id = "rel-name-metadata"
+title = "Choose a distribution name and make package metadata and README accurate"
+scope = "[release / P1] PyPI `openquant` is owned by another project (futu, 0.0.3); `pyopenquant` returns 404 (free); crates.io `openquant` is free. `crates/openquant/Cargo.toml` `homepage`/`documentation` point to https://openquant.github.io/openquant-rs/ (404; real site is https://open-quant.github.io/openquant/) and keywords include `mlfinlab`. `pyopenquant` lacks `repository`/`readme`/`publish`. `pyproject.toml`: description says openquant-rs, `requires-python >=3.9` with only a 3.13 classifier, no `[project.urls]`, `pyarrow<20`. README is titled `openquant-rs`, has text links instead of badges, no install instructions, no docs link, says bench threshold 25% (justfile: 35%) and claims a 'production baseline package'. 'openquant-rs' also appears in Layout.astro, tests/crosswalk.md, assets. GitHub repo: generic description, 2 topics, default labels only."
+requires_spec = false
+spec_reason = "No observable library behavior changes; this is repository, CI or documentation work verified by the listed checks."
+acceptance = [
+    "The PyPI distribution name is decided and recorded; `pyproject.toml` uses it; import name documented.",
+    "All metadata URLs return 200; `grep -ri openquant-rs` finds no stale references outside history docs.",
+    "README states what the library is, the real install path, links the docs, and carries working CI/docs badges.",
+    "Repo description, homepage and topics (rust, python, pyo3, quant, afml) are set.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-016",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "58"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

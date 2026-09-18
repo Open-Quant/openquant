@@ -1,0 +1,37 @@
+schema = 1
+id = "res-notebook-runner"
+title = "Execute notebooks with rich outputs and run them in CI"
+scope = "[research / P1] `notebooks/python/scripts/execute_notebook_cells.py` is a plain `exec()` runner capturing stdout only, so no plots or tables persist; the docs site has zero images although a `viz` module exists. Carries beads OQ-nbr.8 (equity, drawdown, CPCV Sharpe distribution, confusion diagnostics payloads) and OQ-nbr.9 (templates, script parity, CI artifact check). Move to nbclient/papermill, commit executed notebooks with outputs, export figures for the docs site, and add a CI job that executes every runbook from cached data."
+requires_spec = false
+spec_reason = "Tooling; no library behavior change."
+acceptance = [
+    "`just notebooks-run` executes all notebooks headlessly and fails on any cell error.",
+    "Executed notebooks contain plots; figures are exported to a directory the docs site consumes.",
+    "A CI job runs the runbooks from the cached sample dataset. Closes beads OQ-nbr.8 and OQ-nbr.9.",
+]
+reviewed = true
+depends_on = [
+    "res-real-data-layer",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-012",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "45"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

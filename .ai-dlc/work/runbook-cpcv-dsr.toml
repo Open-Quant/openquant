@@ -1,0 +1,40 @@
+schema = 1
+id = "runbook-cpcv-dsr"
+title = "Runbook: CPCV backtest with PSR and deflated Sharpe"
+scope = "[runbook / P1] Study: take one strategy family with a small parameter grid, backtest with combinatorial purged CV to get a distribution of out-of-sample Sharpe paths rather than one number, then report PSR, DSR deflated by the registered trial count, MinTRL and probability of backtest overfitting. Contrast against a naive walk-forward single-path Sharpe to show the inflation. Existing pieces: `backtesting_engine`, `backtest_stats`, `strategy_risk`; needs the new bindings and evaluation module. Deliver as an executed notebook following the cell contract plus a matching docs-site page. It must state a falsifiable hypothesis up front, use the real data layer, avoid lookahead (signals lagged; verified by a shuffle/shift test), report results net of a stated cost model, and end with an honest promote/reject decision. A rejected hypothesis is an acceptable result."
+requires_spec = false
+spec_reason = "Uses existing and separately-specified APIs; adds no library behavior."
+acceptance = [
+    "The notebook executes in CI from cached data and its outputs and plots are committed.",
+    "A reviewer other than the author (or a written self-review checklist) confirms no lookahead and that the trial count fed to DSR is complete.",
+    "The docs-site page renders the figures and links the notebook.",
+]
+reviewed = true
+depends_on = [
+    "bind-validation-backtest",
+    "res-real-data-layer",
+    "res-evaluation-module",
+    "res-notebook-runner",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-012",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "48"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

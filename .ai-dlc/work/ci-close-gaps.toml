@@ -1,0 +1,38 @@
+schema = 1
+id = "ci-close-gaps"
+title = "Make CI gate what it claims to gate"
+scope = "[testing / P1] Not gated today: Python on 3.13 (CI uses 3.11; venv and classifier are 3.13); any Python lint or type check; `hpc_parallel_scaling` and `streaming_hpc_scaling` benches are not even compile-checked; multi-OS builds; code coverage. `nightly-validation.yml` is described as a full sweep but runs only `test_sadf_test`. pytest, notebook smoke and bench regression are path-filtered."
+requires_spec = false
+spec_reason = "No observable library behavior changes; this is repository, CI or documentation work verified by the listed checks."
+acceptance = [
+    "CI matrix runs pytest on 3.11 and 3.13; ruff (lint+format) and a type check run on `python/`.",
+    "`cargo bench --no-run` compiles all four benches in CI.",
+    "Nightly runs the full Rust and Python suites including ignored tests, plus notebook execution once it exists.",
+    "Coverage is reported for Rust (cargo-llvm-cov) and Python.",
+]
+reviewed = true
+depends_on = [
+    "code-clippy-clean",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-009",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "41"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"
