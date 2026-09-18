@@ -24,3 +24,4 @@ afml/
 .hf-cache/
 .crawl4ai-home/
 .pytest_cache/
+.claude/worktrees/
