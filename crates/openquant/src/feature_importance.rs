@@ -81,7 +81,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
 
         let base = score_model(model, &x_test, &y_test, sw_test.as_deref(), scoring);
 
-        for j in 0..n_features {
+        for (j, scores) in per_feature.iter_mut().enumerate() {
             let mut x_perm = x_test.clone();
             permute_col(&mut x_perm, j);
             let perm = score_model(model, &x_perm, &y_test, sw_test.as_deref(), scoring);
@@ -101,7 +101,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
                     }
                 }
             };
-            per_feature[j].push(if imp.is_finite() { imp } else { 0.0 });
+            scores.push(if imp.is_finite() { imp } else { 0.0 });
         }
     }
 
@@ -204,10 +204,13 @@ pub fn plot_feature_importance(
     Ok(())
 }
 
+/// PCA output: `(eigenvalues, eigenvectors, standardized feature rows)`.
+type PcaDecomposition = (Vec<f64>, DMatrix<f64>, Vec<Vec<f64>>);
+
 fn compute_pca(
     feature_rows: &[Vec<f64>],
     variance_thresh: f64,
-) -> Result<(Vec<f64>, DMatrix<f64>, Vec<Vec<f64>>), String> {
+) -> Result<PcaDecomposition, String> {
     if feature_rows.iter().any(|r| r.len() != feature_rows[0].len()) {
         return Err("ragged feature rows".to_string());
     }

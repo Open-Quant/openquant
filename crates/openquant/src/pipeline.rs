@@ -135,7 +135,7 @@ pub fn run_mid_frequency_pipeline(
     validate_input(&input, config)?;
 
     let event_indices =
-        cusum_filter_indices(&input.close, Threshold::Scalar(config.cusum_threshold));
+        cusum_filter_indices(input.close, Threshold::Scalar(config.cusum_threshold));
     if event_indices.is_empty() {
         return Err(PipelineError::NoEvents);
     }
@@ -173,7 +173,7 @@ pub fn run_mid_frequency_pipeline(
 
     let (strategy_returns, equity_curve) =
         compute_strategy_path(input.close, &signals.timeline_signal);
-    let risk_metrics = RiskMetrics::default();
+    let risk_metrics = RiskMetrics;
     let value_at_risk =
         risk_metrics.calculate_value_at_risk(&strategy_returns, config.confidence_level)?;
     let expected_shortfall =

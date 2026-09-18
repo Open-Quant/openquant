@@ -148,8 +148,8 @@ pub fn num_concurrent_events(
             continue;
         }
         let end_idx = end.min(price_index_len - 1);
-        for i in start..=end_idx {
-            counts[i] += 1;
+        for count in counts.iter_mut().take(end_idx + 1).skip(start) {
+            *count += 1;
         }
     }
     counts

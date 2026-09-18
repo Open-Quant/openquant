@@ -36,7 +36,7 @@ fn cla_allocate(
     let expected_ret_m = expected_returns.map(|v| nalgebra::DMatrix::from_vec(v.len(), 1, v));
 
     cla.allocate(
-        prices_m.as_ref().map(|m| openquant::cla::AssetPricesInput::RawMatrix(m)),
+        prices_m.as_ref().map(openquant::cla::AssetPricesInput::RawMatrix),
         expected_ret_m.as_ref(),
         cov_m.as_ref(),
         resample_by.as_deref(),

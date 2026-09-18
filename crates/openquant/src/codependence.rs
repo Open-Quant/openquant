@@ -303,23 +303,23 @@ pub fn get_mutual_info(
     let mut row_sums = vec![0.0; bins];
     let mut col_sums = vec![0.0; bins];
     for i in 0..bins {
-        for j in 0..bins {
+        for (j, col_sum) in col_sums.iter_mut().enumerate() {
             let value = contingency[i][j] as f64;
             row_sums[i] += value;
-            col_sums[j] += value;
+            *col_sum += value;
         }
     }
 
     let mut mutual_info = 0.0;
     for i in 0..bins {
-        for j in 0..bins {
+        for (j, col_sum) in col_sums.iter().enumerate() {
             let value = contingency[i][j] as f64;
             if value == 0.0 {
                 continue;
             }
             let p_ij = value / total_f;
             let p_i = row_sums[i] / total_f;
-            let p_j = col_sums[j] / total_f;
+            let p_j = col_sum / total_f;
             mutual_info += p_ij * (p_ij / (p_i * p_j)).ln();
         }
     }
@@ -367,23 +367,23 @@ pub fn variation_of_information_score(
     let mut row_sums = vec![0.0; bins];
     let mut col_sums = vec![0.0; bins];
     for i in 0..bins {
-        for j in 0..bins {
+        for (j, col_sum) in col_sums.iter_mut().enumerate() {
             let value = contingency[i][j] as f64;
             row_sums[i] += value;
-            col_sums[j] += value;
+            *col_sum += value;
         }
     }
 
     let mut mutual_info = 0.0;
     for i in 0..bins {
-        for j in 0..bins {
+        for (j, col_sum) in col_sums.iter().enumerate() {
             let value = contingency[i][j] as f64;
             if value == 0.0 {
                 continue;
             }
             let p_ij = value / total_f;
             let p_i = row_sums[i] / total_f;
-            let p_j = col_sums[j] / total_f;
+            let p_j = col_sum / total_f;
             mutual_info += p_ij * (p_ij / (p_i * p_j)).ln();
         }
     }

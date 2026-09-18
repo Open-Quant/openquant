@@ -1,10 +1,9 @@
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
-use std::f64::NAN;
 
 fn rolling_cov(x: &[f64], y: &[f64], window: usize) -> Vec<f64> {
     let n = x.len();
-    let mut out = vec![NAN; n];
+    let mut out = vec![f64::NAN; n];
     if window < 2 {
         return out;
     }
@@ -28,30 +27,28 @@ fn rolling_cov(x: &[f64], y: &[f64], window: usize) -> Vec<f64> {
 
 pub fn get_roll_measure(close: &[f64], window: usize) -> Vec<f64> {
     if close.len() < 2 {
-        return vec![NAN; close.len()];
+        return vec![f64::NAN; close.len()];
     }
-    let mut diff = vec![NAN; close.len()];
+    let mut diff = vec![f64::NAN; close.len()];
     for i in 1..close.len() {
         diff[i] = close[i] - close[i - 1];
     }
-    let mut diff_lag = vec![NAN; close.len()];
-    for i in 1..diff.len() {
-        diff_lag[i] = diff[i - 1];
-    }
+    let mut diff_lag = vec![f64::NAN; close.len()];
+    diff_lag[1..].copy_from_slice(&diff[..diff.len() - 1]);
     let cov = rolling_cov(&diff, &diff_lag, window);
-    cov.iter().map(|c| if c.is_nan() { NAN } else { 2.0 * (c.abs()).sqrt() }).collect()
+    cov.iter().map(|c| if c.is_nan() { f64::NAN } else { 2.0 * (c.abs()).sqrt() }).collect()
 }
 
 pub fn get_roll_impact(close: &[f64], dollar_volume: &[f64], window: usize) -> Vec<f64> {
     let roll = get_roll_measure(close, window);
     roll.iter()
         .zip(dollar_volume.iter())
-        .map(|(r, dv)| if r.is_nan() || *dv == 0.0 { NAN } else { r / dv })
+        .map(|(r, dv)| if r.is_nan() || *dv == 0.0 { f64::NAN } else { r / dv })
         .collect()
 }
 
 fn rolling_max(arr: &[f64], window: usize) -> Vec<f64> {
-    let mut out = vec![NAN; arr.len()];
+    let mut out = vec![f64::NAN; arr.len()];
     if window == 0 {
         return out;
     }
@@ -67,7 +64,7 @@ fn rolling_max(arr: &[f64], window: usize) -> Vec<f64> {
 }
 
 fn rolling_min(arr: &[f64], window: usize) -> Vec<f64> {
-    let mut out = vec![NAN; arr.len()];
+    let mut out = vec![f64::NAN; arr.len()];
     if window == 0 {
         return out;
     }
@@ -83,7 +80,7 @@ fn rolling_min(arr: &[f64], window: usize) -> Vec<f64> {
 }
 
 fn _get_beta(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
-    let mut ret_sq = vec![NAN; high.len()];
+    let mut ret_sq = vec![f64::NAN; high.len()];
     for i in 0..high.len() {
         if low[i] == 0.0 {
             continue;
@@ -91,7 +88,7 @@ fn _get_beta(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
         ret_sq[i] = (high[i] / low[i]).ln().powi(2);
     }
     // rolling sum over 2
-    let mut two_sum = vec![NAN; ret_sq.len()];
+    let mut two_sum = vec![f64::NAN; ret_sq.len()];
     for i in 1..ret_sq.len() {
         if ret_sq[i].is_nan() || ret_sq[i - 1].is_nan() {
             continue;
@@ -99,7 +96,7 @@ fn _get_beta(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
         two_sum[i] = ret_sq[i] + ret_sq[i - 1];
     }
     // rolling mean over window
-    let mut beta = vec![NAN; ret_sq.len()];
+    let mut beta = vec![f64::NAN; ret_sq.len()];
     if window == 0 {
         return beta;
     }
@@ -127,7 +124,7 @@ fn _get_gamma(high: &[f64], low: &[f64]) -> Vec<f64> {
         .map(
             |(h, l)| {
                 if h.is_nan() || l.is_nan() || *l == 0.0 {
-                    NAN
+                    f64::NAN
                 } else {
                     (h / l).ln().powi(2)
                 }
@@ -142,7 +139,7 @@ fn _get_alpha(beta: &[f64], gamma: &[f64]) -> Vec<f64> {
         .zip(gamma.iter())
         .map(|(b, g)| {
             if b.is_nan() || g.is_nan() {
-                return NAN;
+                return f64::NAN;
             }
             let mut alpha = (2.0_f64.sqrt() - 1.0) * b.sqrt() / den;
             alpha -= (g / den).sqrt();
@@ -163,7 +160,7 @@ pub fn get_corwin_schultz_estimator(high: &[f64], low: &[f64], window: usize) ->
         .iter()
         .map(|a| {
             if a.is_nan() {
-                NAN
+                f64::NAN
             } else {
                 let ea = a.exp();
                 2.0 * (ea - 1.0) / (1.0 + ea)
@@ -181,7 +178,7 @@ pub fn get_bekker_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec
         .zip(gamma.iter())
         .map(|(b, g)| {
             if b.is_nan() || g.is_nan() {
-                return NAN;
+                return f64::NAN;
             }
             let mut sigma = (2.0_f64.powf(-0.5) - 1.0) * b.sqrt() / (k2 * den);
             sigma += (g / (k2 * k2 * den)).sqrt();
@@ -195,11 +192,11 @@ pub fn get_bekker_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec
 }
 
 pub fn get_bar_based_kyle_lambda(close: &[f64], volume: &[f64], window: usize) -> Vec<f64> {
-    let mut diff = vec![NAN; close.len()];
+    let mut diff = vec![f64::NAN; close.len()];
     for i in 1..close.len() {
         diff[i] = close[i] - close[i - 1];
     }
-    let mut sign = vec![NAN; diff.len()];
+    let mut sign = vec![f64::NAN; diff.len()];
     for i in 0..diff.len() {
         let s = diff[i].signum();
         sign[i] = if s == 0.0 && i > 0 { sign[i - 1] } else { s };
@@ -208,9 +205,9 @@ pub fn get_bar_based_kyle_lambda(close: &[f64], volume: &[f64], window: usize) -
         .iter()
         .zip(volume.iter())
         .zip(sign.iter())
-        .map(|((d, v), s)| if *v == 0.0 || s.is_nan() { NAN } else { d / (v * s) })
+        .map(|((d, v), s)| if *v == 0.0 || s.is_nan() { f64::NAN } else { d / (v * s) })
         .collect();
-    let mut out = vec![NAN; close.len()];
+    let mut out = vec![f64::NAN; close.len()];
     for i in 0..close.len() {
         if i + 1 < window {
             continue;
@@ -230,14 +227,14 @@ pub fn get_bar_based_amihud_lambda(
     dollar_volume: &[f64],
     window: usize,
 ) -> Vec<f64> {
-    let mut ret_abs = vec![NAN; close.len()];
+    let mut ret_abs = vec![f64::NAN; close.len()];
     for i in 1..close.len() {
         if close[i - 1] == 0.0 {
             continue;
         }
         ret_abs[i] = (close[i] / close[i - 1]).ln().abs();
     }
-    let mut out = vec![NAN; close.len()];
+    let mut out = vec![f64::NAN; close.len()];
     for i in 0..close.len() {
         if i + 1 < window {
             continue;
@@ -264,14 +261,14 @@ pub fn get_bar_based_hasbrouck_lambda(
     dollar_volume: &[f64],
     window: usize,
 ) -> Vec<f64> {
-    let mut log_ret = vec![NAN; close.len()];
+    let mut log_ret = vec![f64::NAN; close.len()];
     for i in 1..close.len() {
         if close[i - 1] == 0.0 {
             continue;
         }
         log_ret[i] = (close[i] / close[i - 1]).ln();
     }
-    let mut sign = vec![NAN; log_ret.len()];
+    let mut sign = vec![f64::NAN; log_ret.len()];
     for i in 0..log_ret.len() {
         let s = log_ret[i].signum();
         sign[i] = if s == 0.0 && i > 0 { sign[i - 1] } else { s };
@@ -279,9 +276,9 @@ pub fn get_bar_based_hasbrouck_lambda(
     let signed_sqrt: Vec<f64> = sign
         .iter()
         .zip(dollar_volume.iter())
-        .map(|(s, dv)| if s.is_nan() || *dv < 0.0 { NAN } else { s * dv.sqrt() })
+        .map(|(s, dv)| if s.is_nan() || *dv < 0.0 { f64::NAN } else { s * dv.sqrt() })
         .collect();
-    let mut out = vec![NAN; close.len()];
+    let mut out = vec![f64::NAN; close.len()];
     for i in 0..close.len() {
         if i + 1 < window {
             continue;
@@ -312,7 +309,7 @@ pub fn get_trades_based_kyle_lambda(
     let num: f64 = signed.iter().zip(price_diff.iter()).map(|(x, y)| x * y).sum();
     let den: f64 = signed.iter().map(|x| x * x).sum();
     if den == 0.0 {
-        NAN
+        f64::NAN
     } else {
         num / den
     }
@@ -322,7 +319,7 @@ pub fn get_trades_based_amihud_lambda(log_ret: &[f64], dollar_volume: &[f64]) ->
     let num: f64 = dollar_volume.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
     let den: f64 = dollar_volume.iter().map(|x| x * x).sum();
     if den == 0.0 {
-        NAN
+        f64::NAN
     } else {
         num / den
     }
@@ -338,7 +335,7 @@ pub fn get_trades_based_hasbrouck_lambda(
     let num: f64 = signed.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
     let den: f64 = signed.iter().map(|x| x * x).sum();
     if den == 0.0 {
-        NAN
+        f64::NAN
     } else {
         num / den
     }
@@ -348,14 +345,14 @@ pub fn get_trades_based_hasbrouck_lambda(
 pub fn vwap(dollar_volume: &[f64], volume: &[f64]) -> f64 {
     let sum_v: f64 = volume.iter().sum();
     if sum_v == 0.0 {
-        return NAN;
+        return f64::NAN;
     }
     dollar_volume.iter().sum::<f64>() / sum_v
 }
 
 pub fn get_avg_tick_size(tick_sizes: &[f64]) -> f64 {
     if tick_sizes.is_empty() {
-        return NAN;
+        return f64::NAN;
     }
     tick_sizes.iter().sum::<f64>() / tick_sizes.len() as f64
 }
@@ -364,7 +361,7 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Vec<f64> {
     let sell_volume: Vec<f64> = volume.iter().zip(buy_volume.iter()).map(|(v, b)| v - b).collect();
     let imbalance: Vec<f64> =
         buy_volume.iter().zip(sell_volume.iter()).map(|(b, s)| (b - s).abs()).collect();
-    let mut out = vec![NAN; volume.len()];
+    let mut out = vec![f64::NAN; volume.len()];
     for i in 0..volume.len() {
         if i + 1 < window {
             continue;
@@ -382,13 +379,13 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Vec<f64> {
 }
 
 pub fn get_bvc_buy_volume(close: &[f64], volume: &[f64], window: usize) -> Vec<f64> {
-    let mut out = vec![NAN; close.len()];
+    let mut out = vec![f64::NAN; close.len()];
     let norm = Normal::new(0.0, 1.0).unwrap();
-    let mut diff = vec![NAN; close.len()];
+    let mut diff = vec![f64::NAN; close.len()];
     for i in 1..close.len() {
         diff[i] = close[i] - close[i - 1];
     }
-    let mut rolling_std = vec![NAN; close.len()];
+    let mut rolling_std = vec![f64::NAN; close.len()];
     for i in 0..close.len() {
         if i + 1 < window {
             continue;
@@ -420,7 +417,7 @@ pub fn encode_tick_rule_array(arr: &[i32]) -> Result<String, String> {
             1 => s.push('a'),
             -1 => s.push('b'),
             0 => s.push('c'),
-            other => return Err(format!("Unknown value for tick rule: {}", other)),
+            other => return Err(format!("Unknown value for tick rule: {other}")),
         }
     }
     Ok(s)
@@ -650,8 +647,10 @@ impl MicrostructuralFeaturesGenerator {
             let _ = parse_datetime(&rec[0]).map_err(|_| "column 0 not datetime".to_string())?;
         }
         Ok(Self {
+            // The generator owns its thresholds; borrowing would add a lifetime to a public type.
+            #[allow(clippy::unnecessary_to_owned)]
             tick_num_iter: tick_num_series.to_vec().into_iter(),
-            current_bar_tick: tick_num_series.get(0).copied().unwrap_or(0),
+            current_bar_tick: tick_num_series.first().copied().unwrap_or(0),
             price_diff: Vec::new(),
             trade_size: Vec::new(),
             tick_rule: Vec::new(),
@@ -675,14 +674,14 @@ impl MicrostructuralFeaturesGenerator {
 
     fn apply_tick_rule(&mut self, price: f64) -> f64 {
         let tick_diff = if let Some(prev) = self.prev_price { price - prev } else { 0.0 };
-        let signed_tick = if tick_diff != 0.0 {
+
+        if tick_diff != 0.0 {
             let s = tick_diff.signum();
             self.prev_tick_rule = s;
             s
         } else {
             self.prev_tick_rule
-        };
-        signed_tick
+        }
     }
 
     fn get_price_diff(&self, price: f64) -> f64 {
@@ -709,22 +708,15 @@ impl MicrostructuralFeaturesGenerator {
     }
 
     fn bar_features(&self, date_time: NaiveDateTime) -> Vec<f64> {
-        let mut features = Vec::new();
-        features.push(date_time.and_utc().timestamp_millis() as f64);
-        features.push(get_avg_tick_size(&self.trade_size));
-        features.push(self.tick_rule.iter().sum::<f64>());
-        features.push(vwap(&self.dollar_size, &self.trade_size));
-        features.push(get_trades_based_kyle_lambda(
-            &self.price_diff,
-            &self.trade_size,
-            &self.tick_rule,
-        ));
-        features.push(get_trades_based_amihud_lambda(&self.log_ret, &self.dollar_size));
-        features.push(get_trades_based_hasbrouck_lambda(
-            &self.log_ret,
-            &self.dollar_size,
-            &self.tick_rule,
-        ));
+        let mut features = vec![
+            date_time.and_utc().timestamp_millis() as f64,
+            get_avg_tick_size(&self.trade_size),
+            self.tick_rule.iter().sum::<f64>(),
+            vwap(&self.dollar_size, &self.trade_size),
+            get_trades_based_kyle_lambda(&self.price_diff, &self.trade_size, &self.tick_rule),
+            get_trades_based_amihud_lambda(&self.log_ret, &self.dollar_size),
+            get_trades_based_hasbrouck_lambda(&self.log_ret, &self.dollar_size, &self.tick_rule),
+        ];
 
         let tick_msg =
             encode_tick_rule_array(&self.tick_rule.iter().map(|v| *v as i32).collect::<Vec<_>>())

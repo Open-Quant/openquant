@@ -46,8 +46,8 @@ impl ReturnsEstimation {
         let rows = returns.nrows();
         let cols = returns.ncols();
         let mut out = vec![0.0; cols];
-        for c in 0..cols {
-            out[c] = (returns.column(c).sum() / rows as f64) * freq;
+        for (c, slot) in out.iter_mut().enumerate() {
+            *slot = (returns.column(c).sum() / rows as f64) * freq;
         }
         Ok(out)
     }

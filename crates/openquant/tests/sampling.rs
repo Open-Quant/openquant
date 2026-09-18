@@ -6,7 +6,7 @@ use openquant::sampling::{
 fn setup_labels() -> (Vec<usize>, Vec<(usize, usize)>) {
     // price bars hourly range 0..=168 (per test_sampling)
     let price_bars: Vec<usize> = (0..=168).collect();
-    let t_events = vec![1, 2, 5, 7, 10, 11, 12, 20];
+    let t_events = [1, 2, 5, 7, 10, 11, 12, 20];
     let t1: Vec<(usize, usize)> = t_events.iter().map(|t| (*t, t + 2)).collect();
     (price_bars, t1)
 }
@@ -167,7 +167,7 @@ fn test_bootstrap_loop_run() {
     let second = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc);
     let sum: f64 = second.iter().sum();
     let probs: Vec<f64> = second.iter().map(|v| *v / sum).collect();
-    let target = vec![0.35714286, 0.21428571, 0.42857143];
+    let target = [0.35714286, 0.21428571, 0.42857143];
     for (p, t) in probs.iter().zip(target.iter()) {
         assert!((p - t).abs() <= 1e-6);
     }

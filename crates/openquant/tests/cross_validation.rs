@@ -112,7 +112,7 @@ fn test_ml_cross_val_score_accuracy() {
     let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::Accuracy);
     assert_eq!(scores.len(), 3);
     for s in scores {
-        assert!(s >= 0.0 && s <= 1.0);
+        assert!((0.0..=1.0).contains(&s));
     }
 }
 

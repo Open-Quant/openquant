@@ -217,7 +217,7 @@ fn test_cdf_mixture_and_single_above_zero() {
     let cdf = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.5);
     assert!(cdf > 0.0 && cdf < 1.0);
     let b = single_bet_size_mixed(0.5, &fit);
-    assert!(b >= -1.0 && b <= 1.0);
+    assert!((-1.0..=1.0).contains(&b));
 }
 
 #[test]

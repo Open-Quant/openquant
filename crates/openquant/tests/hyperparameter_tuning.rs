@@ -147,8 +147,8 @@ fn test_randomized_search_seeded_deterministic_and_log_uniform() {
     let mut rng = StdRng::seed_from_u64(7);
     let s1 = sample_log_uniform(1e-3, 1e1, &mut rng).unwrap();
     let s2 = sample_log_uniform(1e-3, 1e1, &mut rng).unwrap();
-    assert!(s1 >= 1e-3 && s1 <= 1e1);
-    assert!(s2 >= 1e-3 && s2 <= 1e1);
+    assert!((1e-3..=1e1).contains(&s1));
+    assert!((1e-3..=1e1).contains(&s2));
     assert!((s1 - s2).abs() > 1e-12);
 }
 

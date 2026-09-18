@@ -76,14 +76,18 @@ pub struct EtfTrick {
 }
 
 #[derive(Clone, Debug)]
+struct InMemoryTables {
+    open: Table,
+    close: Table,
+    alloc: Table,
+    costs: Table,
+    rates: Option<Table>,
+}
+
+#[derive(Clone, Debug)]
 enum Source {
-    InMemory {
-        open: Table,
-        close: Table,
-        alloc: Table,
-        costs: Table,
-        rates: Option<Table>,
-    },
+    // Boxed so the enum is not sized by the five in-memory tables.
+    InMemory(Box<InMemoryTables>),
     Csv {
         open_path: String,
         close_path: String,
@@ -102,7 +106,9 @@ impl EtfTrick {
         rates: Option<Table>,
     ) -> Result<Self, String> {
         validate_shapes(&open, &close, &alloc, &costs, rates.as_ref())?;
-        Ok(Self { source: Source::InMemory { open, close, alloc, costs, rates } })
+        Ok(Self {
+            source: Source::InMemory(Box::new(InMemoryTables { open, close, alloc, costs, rates })),
+        })
     }
 
     pub fn from_csv(
@@ -125,9 +131,13 @@ impl EtfTrick {
 
     pub fn get_etf_series(&self, batch_size: usize) -> Result<Vec<(String, f64)>, String> {
         match &self.source {
-            Source::InMemory { open, close, alloc, costs, rates } => {
-                compute_etf_series(open, close, alloc, costs, rates.as_ref())
-            }
+            Source::InMemory(tables) => compute_etf_series(
+                &tables.open,
+                &tables.close,
+                &tables.alloc,
+                &tables.costs,
+                tables.rates.as_ref(),
+            ),
             Source::Csv { open_path, close_path, alloc_path, costs_path, rates_path } => {
                 if batch_size < 3 {
                     return Err("Batch size should be >= 3".to_string());
@@ -251,10 +261,10 @@ fn compute_etf_series(
         }
 
         let mut delta = vec![0.0; n_cols];
-        for j in 0..n_cols {
+        for (j, delta_j) in delta.iter_mut().enumerate() {
             let close_open = close.values[i][j] - open.values[i][j];
             let price_diff = close.values[i][j] - close.values[i - 1][j];
-            delta[j] = if prev_allocs_change { close_open } else { price_diff };
+            *delta_j = if prev_allocs_change { close_open } else { price_diff };
         }
 
         if prev_h.is_none() {

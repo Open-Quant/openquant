@@ -60,7 +60,10 @@ impl SimpleClassifier for LinearProbClassifier {
     }
 }
 
-fn make_dataset() -> (Vec<Vec<f64>>, Vec<f64>, Vec<String>, Vec<(Vec<usize>, Vec<usize>)>) {
+/// `(x, y, feature_names, cv_splits)`.
+type Dataset = (Vec<Vec<f64>>, Vec<f64>, Vec<String>, Vec<(Vec<usize>, Vec<usize>)>);
+
+fn make_dataset() -> Dataset {
     let mut x = Vec::new();
     let mut y = Vec::new();
     for i in 0..120usize {
@@ -91,7 +94,7 @@ fn test_orthogonal_features_and_pca_analysis() {
     let (x, _y, _names, _splits) = make_dataset();
     let pca = get_orthogonal_features(&x, 0.95).unwrap();
     assert_eq!(pca.len(), x.len());
-    assert!(pca[0].len() >= 1);
+    assert!(!pca[0].is_empty());
 
     let first_pc_mean = pca.iter().map(|r| r[0]).sum::<f64>() / pca.len() as f64;
     assert!(first_pc_mean.abs() < 1e-6);
