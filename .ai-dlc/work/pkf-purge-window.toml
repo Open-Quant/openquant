@@ -27,6 +27,7 @@ deploy = "none"
 tracker = "65"
 brief = "docs/design/production-readiness-brief.md"
 branch = "work/pkf-purge-window"
+pr = "https://github.com/Open-Quant/openquant/pull/66"
 
 [bindings]
 specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
