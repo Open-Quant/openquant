@@ -17,7 +17,7 @@ jobs:
       - name: Format/Lint/Test (fast)
         run: |
           cargo fmt -- --check
-          cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy --workspace --all-targets --all-features -- -D warnings
           cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
       - name: Package dry-run
         run: cargo package -p openquant

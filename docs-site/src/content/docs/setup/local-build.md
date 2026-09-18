@@ -35,7 +35,7 @@ Lint and format, mirroring the `lint` recipe in the `justfile`:
 
 ```bash
 cargo fmt -- --check
-cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
 ## Documentation quality gates
