@@ -387,8 +387,8 @@ fn maybe_record_progress(
     completed_atoms: usize,
     progress_every: usize,
 ) {
-    let should_record =
-        completed_molecules == total_molecules || completed_molecules % progress_every == 0;
+    let should_record = completed_molecules == total_molecules
+        || completed_molecules.is_multiple_of(progress_every);
     if !should_record {
         return;
     }

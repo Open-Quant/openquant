@@ -212,8 +212,8 @@ impl CLA {
             return Err(ClaError::UnknownReturns(self.calculate_expected_returns.clone()));
         }
 
-        if covariance_matrix.is_some() {
-            self.cov_matrix = covariance_matrix.unwrap().clone_owned();
+        if let Some(covariance_matrix) = covariance_matrix {
+            self.cov_matrix = covariance_matrix.clone_owned();
         } else {
             let returns = ReturnsEstimation::calculate_returns(asset_prices, resample_by)?;
             self.cov_matrix = covariance(&returns);

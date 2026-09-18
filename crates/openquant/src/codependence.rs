@@ -257,13 +257,18 @@ pub fn get_optimal_number_of_bins(
     }
 
     let n = num_obs as f64;
-    let bins = if corr_coef.is_none() || (corr_coef.unwrap() - 1.0).abs() <= 1e-4 {
+    let univariate = || {
         let z = (8.0 + 324.0 * n + 12.0 * (36.0 * n + 729.0 * n * n).sqrt()).cbrt();
         (z / 6.0 + 2.0 / (3.0 * z) + 1.0 / 3.0).round()
-    } else {
-        let corr = corr_coef.unwrap();
-        let inner = (1.0 + 24.0 * n / (1.0 - corr * corr)).sqrt();
-        (2.0_f64).powf(-0.5) * (1.0 + inner).sqrt()
+    };
+    // Arm order keeps a NaN correlation on the bivariate branch, as before.
+    let bins = match corr_coef {
+        None => univariate(),
+        Some(corr) if (corr - 1.0).abs() <= 1e-4 => univariate(),
+        Some(corr) => {
+            let inner = (1.0 + 24.0 * n / (1.0 - corr * corr)).sqrt();
+            (2.0_f64).powf(-0.5) * (1.0 + inner).sqrt()
+        }
     };
 
     let bins = bins.round() as isize;

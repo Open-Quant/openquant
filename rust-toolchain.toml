@@ -1,0 +1,6 @@
+# Pinned so `clippy -- -D warnings` means the same thing locally and in CI.
+# A floating `stable` adds lints every six weeks and would fail unrelated PRs.
+# Bump deliberately, fixing any new lints in the same change.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]

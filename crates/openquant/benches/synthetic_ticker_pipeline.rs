@@ -99,8 +99,8 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 for i in 0..3 {
                     for j in 0..3 {
                         let mut s = 0.0;
-                        for k in 0..n {
-                            s += (cols[i][k] - means[i]) * (cols[j][k] - means[j]);
+                        for (a, b) in cols[i].iter().zip(&cols[j]) {
+                            s += (a - means[i]) * (b - means[j]);
                         }
                         cov[(i, j)] = s / (n - 1) as f64;
                     }
