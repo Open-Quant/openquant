@@ -387,10 +387,13 @@ where
     Ok(out)
 }
 
+/// Per-fold performance plus the out-of-sample returns keyed by split id.
+type SplitEvaluation = (Vec<FoldPerformance>, HashMap<usize, Vec<f64>>);
+
 fn evaluate_splits_with_returns<E>(
     splits: &[SplitDefinition],
     evaluator: &mut E,
-) -> Result<(Vec<FoldPerformance>, HashMap<usize, Vec<f64>>), String>
+) -> Result<SplitEvaluation, String>
 where
     E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
 {

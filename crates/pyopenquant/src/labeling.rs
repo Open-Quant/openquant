@@ -4,6 +4,12 @@ use crate::helpers::{
     build_labeling_events, pair_timestamps_values, parse_naive_datetimes, parse_vertical_barriers,
 };
 
+/// Python-facing event row: `(timestamp, t1, trgt, side, pt, sl)`.
+type EventRow = (String, Option<String>, f64, Option<f64>, f64, f64);
+
+/// Python-facing label row: `(timestamp, ret, trgt, bin, side)`.
+type BinRow = (String, f64, f64, i8, Option<f64>);
+
 #[pyfunction(name = "add_vertical_barrier")]
 fn labeling_add_vertical_barrier(
     t_events: Vec<String>,
@@ -57,7 +63,7 @@ fn labeling_triple_barrier_events(
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<Vec<(String, Option<String>, f64, Option<f64>, f64, f64)>> {
+) -> PyResult<Vec<EventRow>> {
     let (_, events) = build_labeling_events(
         close_timestamps,
         close_prices,
@@ -107,7 +113,7 @@ fn labeling_triple_barrier_labels(
     sl: f64,
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
-) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
+) -> PyResult<Vec<BinRow>> {
     let (close, events) = build_labeling_events(
         close_timestamps,
         close_prices,
@@ -158,7 +164,7 @@ fn labeling_meta_labels(
     sl: f64,
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
-) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
+) -> PyResult<Vec<BinRow>> {
     let (close, events) = build_labeling_events(
         close_timestamps,
         close_prices,
@@ -209,7 +215,7 @@ fn labeling_get_events(
     num_threads: usize,
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<Vec<(String, Option<String>, f64, Option<f64>, f64, f64)>> {
+) -> PyResult<Vec<EventRow>> {
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_ev = parse_naive_datetimes(t_events)?;
@@ -256,10 +262,10 @@ fn labeling_get_events(
 
 #[pyfunction(name = "get_bins")]
 fn labeling_get_bins(
-    events: Vec<(String, Option<String>, f64, Option<f64>, f64, f64)>,
+    events: Vec<EventRow>,
     close_timestamps: Vec<String>,
     close_prices: Vec<f64>,
-) -> PyResult<Vec<(String, f64, f64, i8, Option<f64>)>> {
+) -> PyResult<Vec<BinRow>> {
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
 
@@ -290,10 +296,7 @@ fn labeling_get_bins(
 }
 
 #[pyfunction(name = "drop_labels")]
-fn labeling_drop_labels(
-    events: Vec<(String, f64, f64, i8, Option<f64>)>,
-    min_pct: f64,
-) -> Vec<(String, f64, f64, i8, Option<f64>)> {
+fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> Vec<BinRow> {
     let parsed: Vec<(chrono::NaiveDateTime, f64, f64, i8, Option<f64>)> = events
         .into_iter()
         .filter_map(|(ts_str, ret, trgt, label, side)| {

@@ -8,7 +8,10 @@ use openquant::microstructural_features::{
 };
 use std::path::Path;
 
-fn load_dollar_bars() -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
+/// `(close, high, low, cum_dollar, cum_volume)` columns.
+type DollarBarColumns = (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>);
+
+fn load_dollar_bars() -> DollarBarColumns {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/microstructural_features/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();

@@ -3,6 +3,14 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+/// Python-facing bar row:
+/// `(start_timestamp, timestamp, open, high, low, close, volume, dollar_value, tick_count)`.
+pub type BarRow = (String, String, f64, f64, f64, f64, f64, f64, usize);
+
+/// Parsed labeling inputs: `(close series, events keyed by timestamp)`.
+pub type LabelingInputs =
+    (Vec<(chrono::NaiveDateTime, f64)>, Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>);
+
 pub fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
     PyValueError::new_err(format!("{err:?}"))
 }
@@ -116,9 +124,7 @@ pub fn build_trades(
     Ok(trades)
 }
 
-pub fn bars_to_rows(
-    bars: Vec<openquant::data_structures::StandardBar>,
-) -> Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)> {
+pub fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<BarRow> {
     bars.into_iter()
         .map(|b| {
             (
@@ -208,10 +214,7 @@ pub fn build_labeling_events(
     min_ret: f64,
     vertical_barrier_times: Option<Vec<(String, String)>>,
     side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<(
-    Vec<(chrono::NaiveDateTime, f64)>,
-    Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>,
-)> {
+) -> PyResult<LabelingInputs> {
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_events = parse_naive_datetimes(t_events)?;
