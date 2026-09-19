@@ -108,14 +108,6 @@ def test_hcaa_reads_asset_returns_as_rows_of_observations():
     assert weights == pytest.approx([expected_a, 1 - expected_a], abs=1e-9)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: openquant::hcaa overwrites ordered_indices with a hard-coded list whenever "
-        "there are exactly 23 assets (the size of the stock_prices fixture), so "
-        "crates/openquant/tests/hcaa.rs::test_quasi_diagonalization cannot fail"
-    ),
-)
 def test_hcaa_ordering_depends_on_the_data():
     n = 23
     cov = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
@@ -128,7 +120,7 @@ def test_hcaa_ordering_depends_on_the_data():
 
 @pytest.mark.parametrize("n", [22, 24])
 def test_hcaa_ordering_places_correlated_pair_together(n):
-    # Control for the 23-asset xfail above: uncorrelated assets except 0 and 12, which
+    # Control for the 23-asset case above: uncorrelated assets except 0 and 12, which
     # correlate at 0.99, so quasi-diagonalisation must make them neighbours.
     cov = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
     cov[0][12] = cov[12][0] = 0.99

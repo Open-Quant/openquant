@@ -83,11 +83,6 @@ impl HierarchicalRiskParity {
         let distances = corr_to_distances(&corr);
         self.clusters = single_linkage_children(&distances);
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);
-        if n_assets == 23 {
-            self.ordered_indices = vec![
-                13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19,
-            ];
-        }
 
         self.seriated_distances = Some(seriate_matrix(&distances, &self.ordered_indices));
         self.seriated_correlations = Some(seriate_matrix(&corr, &self.ordered_indices));

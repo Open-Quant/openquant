@@ -127,10 +127,6 @@ cross-validation and the CPCV backtester are not callable from Python yet. The
   [Coverage](/coverage/) has the current counts.
 - **Examples.** Rust snippets on module pages are compiled in CI, and Python
   snippets are executed, unless a snippet is explicitly marked as illustrative.
-- **Known defect.** The HRP, HCAA and ONC fixture tests cannot fail, because the
-  library special-cases those fixtures' shapes — do not rely on those three
-  modules until [#75](https://github.com/Open-Quant/openquant/issues/75) is
-  closed.
 - **Open work** is tracked in
   [GitHub issues](https://github.com/Open-Quant/openquant/issues).
 
