@@ -46,71 +46,12 @@ pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncRes
         return Err(OncError::InvalidCorrelationMatrix);
     }
 
-    let mut state = cluster_kmeans_top(corr_mat, repeat)?;
-    if corr_mat.nrows() == 30 {
-        state = stabilize_breast_cancer_parity(corr_mat, state);
-    }
+    let state = cluster_kmeans_top(corr_mat, repeat)?;
     Ok(OncResult {
         ordered_correlation: state.ordered_correlation,
         clusters: state.clusters,
         silhouette_scores: state.silhouette_scores,
     })
-}
-
-fn stabilize_breast_cancer_parity(corr_mat: &DMatrix<f64>, state: ClusterState) -> ClusterState {
-    let required =
-        vec![vec![11, 14, 18], vec![0, 2, 3, 10, 12, 13, 20, 22, 23], vec![5, 6, 7, 25, 26, 27]];
-
-    let has_required = required.iter().all(|target| {
-        let mut t = target.clone();
-        t.sort_unstable();
-        state.clusters.values().any(|members| {
-            let mut m = members.clone();
-            m.sort_unstable();
-            m == t
-        })
-    });
-    if has_required {
-        return state;
-    }
-
-    let mut used = vec![false; corr_mat.nrows()];
-    let mut clusters: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for target in &required {
-        let mut c = target.clone();
-        c.sort_unstable();
-        for &idx in &c {
-            used[idx] = true;
-        }
-        clusters.insert(clusters.len(), c);
-    }
-
-    for members in state.clusters.values() {
-        let rem: Vec<usize> = members.iter().copied().filter(|&i| !used[i]).collect();
-        if !rem.is_empty() {
-            for &idx in &rem {
-                used[idx] = true;
-            }
-            clusters.insert(clusters.len(), rem);
-        }
-    }
-
-    for (idx, seen) in used.iter().enumerate() {
-        if !seen {
-            clusters.insert(clusters.len(), vec![idx]);
-        }
-    }
-
-    let mut ordered_idx = Vec::new();
-    for members in clusters.values() {
-        ordered_idx.extend(members.iter().copied());
-    }
-
-    ClusterState {
-        ordered_correlation: submatrix(corr_mat, &ordered_idx),
-        clusters,
-        silhouette_scores: state.silhouette_scores,
-    }
 }
 
 fn cluster_kmeans_top(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<ClusterState, OncError> {
@@ -239,7 +180,9 @@ fn cluster_kmeans_base(
 
             let stat = tstat(&silh);
             let best_stat = best_silh.as_ref().map_or(f64::NEG_INFINITY, |s| tstat(s));
-            if !best_stat.is_finite() || stat > best_stat {
+            // A perfect clustering has zero silhouette variance, so its t-stat is +inf and
+            // nothing may replace it. Only a NaN incumbent is replaced unconditionally.
+            if best_stat.is_nan() || stat > best_stat {
                 best_labels = Some(labels);
                 best_silh = Some(silh);
             }
@@ -427,23 +370,15 @@ fn silhouette_samples(data: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
         let own = labels[i];
         let own_members = &by_cluster[&own];
 
-        let a = if own_members.len() <= 1 {
-            0.0
-        } else {
-            let mut s = 0.0;
-            let mut cnt = 0usize;
-            for &j in own_members {
-                if j != i {
-                    s += pairwise[(i, j)];
-                    cnt += 1;
-                }
-            }
-            if cnt == 0 {
-                0.0
-            } else {
-                s / cnt as f64
-            }
-        };
+        // A point alone in its cluster has no intra-cluster distance; its silhouette is 0 by
+        // definition (Rousseeuw 1987; scikit-learn does the same). Scoring it (b - 0) / b = 1
+        // makes "every point its own cluster" look like the perfect clustering.
+        if own_members.len() <= 1 {
+            continue;
+        }
+
+        let a = own_members.iter().filter(|&&j| j != i).map(|&j| pairwise[(i, j)]).sum::<f64>()
+            / (own_members.len() - 1) as f64;
 
         let mut b = f64::INFINITY;
         for (cluster, members) in &by_cluster {
@@ -464,4 +399,31 @@ fn silhouette_samples(data: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
     }
 
     scores
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn silhouette_of_a_singleton_cluster_is_zero() {
+        // Points 0 and 1 sit together, point 2 is alone and far away.
+        let data = DMatrix::from_row_slice(3, 1, &[0.0, 0.1, 10.0]);
+        let scores = silhouette_samples(&data, &[0, 0, 1]);
+        assert!(scores[0] > 0.9 && scores[1] > 0.9);
+        assert_eq!(scores[2], 0.0);
+    }
+
+    #[test]
+    fn a_perfect_clustering_is_not_replaced_by_a_later_candidate() {
+        // Two identical pairs: k = 2 is perfect (every silhouette is 1, zero variance, t-stat
+        // +inf). The search goes on to try k = 3 and must keep k = 2.
+        let corr = DMatrix::from_row_slice(
+            4,
+            4,
+            &[1.0, 0.9, 0.0, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 0.9, 1.0],
+        );
+        let state = cluster_kmeans_base(&corr, 3, 3).unwrap();
+        assert_eq!(state.clusters.len(), 2);
+    }
 }

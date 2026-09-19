@@ -83,3 +83,48 @@ fn test_get_onc_clusters() {
 fn test_check_redo_condition() {
     assert_eq!((4, 5, 6), check_improve_clusters(2.0, 3.0, (1, 2, 3), (4, 5, 6)));
 }
+
+/// Correlation matrix with `sizes.len()` planted blocks: `within` inside a block, `between`
+/// across blocks, 1 on the diagonal.
+fn block_correlation(sizes: &[usize], within: f64, between: f64) -> DMatrix<f64> {
+    let n: usize = sizes.iter().sum();
+    let mut block_of = Vec::with_capacity(n);
+    for (b, size) in sizes.iter().enumerate() {
+        block_of.extend(std::iter::repeat_n(b, *size));
+    }
+    DMatrix::from_fn(n, n, |i, j| {
+        if i == j {
+            1.0
+        } else if block_of[i] == block_of[j] {
+            within
+        } else {
+            between
+        }
+    })
+}
+
+#[test]
+fn test_onc_recovers_planted_blocks() {
+    // Includes n = 30, the size the library used to special-case, and a perfectly separable
+    // case where every silhouette score is identical (zero variance, infinite t-stat).
+    for sizes in
+        [vec![4, 4], vec![3, 5, 4], vec![10, 10, 10], vec![6, 9, 7, 8], vec![5, 5, 5, 5, 5, 5]]
+    {
+        let corr = block_correlation(&sizes, 0.9, 0.05);
+        let result = get_onc_clusters(&corr, 10).unwrap();
+
+        let mut got: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+        for members in &mut got {
+            members.sort_unstable();
+        }
+        got.sort();
+
+        let mut expected = Vec::new();
+        let mut start = 0;
+        for size in &sizes {
+            expected.push((start..start + size).collect::<Vec<usize>>());
+            start += size;
+        }
+        assert_eq!(got, expected, "block sizes {sizes:?}");
+    }
+}

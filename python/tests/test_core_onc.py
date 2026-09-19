@@ -81,13 +81,6 @@ def test_onc_rejects_invalid_inputs():
         onc.get_onc_clusters([[1.0, 0.5], [0.5]], 5)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: ONC does not recover an unambiguous block structure (0.9 within blocks, "
-        "0.05 between); it returns n-1 clusters that are almost all singletons"
-    ),
-)
 @pytest.mark.parametrize("n, block_size", [(6, 3), (12, 4), (20, 5)])
 def test_onc_recovers_block_structure(n, block_size):
     result = onc.get_onc_clusters(_block_correlation(n, block_size), 10)
@@ -95,14 +88,6 @@ def test_onc_recovers_block_structure(n, block_size):
     assert _cluster_sets(result) == expected
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: for any 30x30 matrix openquant::onc force-inserts the three clusters that "
-        "crates/openquant/tests/onc.rs::test_get_onc_clusters asserts for the breast-cancer "
-        "fixture, regardless of the data"
-    ),
-)
 def test_onc_30_assets_clusters_depend_on_the_data():
     # Three blocks of ten: the breast-cancer cluster [11, 14, 18] straddles two blocks and
     # so cannot be a cluster of this matrix.
