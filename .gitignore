@@ -25,3 +25,4 @@ afml/
 .crawl4ai-home/
 .pytest_cache/
 .claude/worktrees/
+.playwright-mcp/
