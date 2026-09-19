@@ -1,0 +1,94 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>B · Ledger — OpenQuant identity candidate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>:root[data-theme=light]{--ground:#f7f8f5;--surface:#ebeee8;--text:#131a16;--muted:#536059;--accent:#735a00;--rule:#c1c9c3;--grid:rgba(19,26,22,0.07)} :root[data-theme=dark]{--ground:#0b0e0d;--surface:#131917;--text:#dfe6e1;--muted:#90a097;--accent:#e9c84a;--rule:#2c3632;--grid:rgba(223,230,225,0.07)}
+
+*{box-sizing:border-box} html{-webkit-text-size-adjust:100%} :root[data-theme=dark]{color-scheme:dark} :root[data-theme=light]{color-scheme:light}
+body{margin:0;background:var(--ground);color:var(--text);font:400 var(--body-size)/var(--leading) var(--body);
+  font-feature-settings:'kern','liga'}
+a{color:var(--accent);text-decoration:underline;text-underline-offset:.18em;text-decoration-thickness:1px}
+header.site{display:flex;align-items:center;gap:.75rem;padding:.8rem 1.25rem;border-bottom:1px solid var(--rule);
+  font:600 1.05rem/1 var(--ui)}
+header.site svg{width:24px;height:24px;flex:none}
+header.site .search{margin-left:1.5rem;flex:0 1 20rem;border:1px solid var(--rule);border-radius:3px;padding:.5rem .7rem;
+  font:400 .85rem/1 var(--ui);color:var(--muted)}
+header.site button{margin-left:auto;font:400 .8rem/1 var(--ui);color:var(--text);background:none;
+  border:1px solid var(--rule);border-radius:3px;padding:.45rem .7rem;cursor:pointer}
+.shell{display:grid;grid-template-columns:16rem minmax(0,1fr);min-height:100vh}
+aside.nav{border-right:1px solid var(--rule);padding:1.5rem 1.25rem;font:400 .92rem/1.5 var(--ui)}
+aside.nav h4{margin:1.4rem 0 .4rem;font:600 .72rem/1 var(--ui);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+aside.nav h4:first-child{margin-top:0}
+aside.nav a{display:block;padding:.22rem 0 .22rem .7rem;color:var(--text);text-decoration:none;border-left:2px solid transparent}
+aside.nav a.on{border-left-color:var(--accent);color:var(--accent);font-weight:600}
+main{padding:3rem 2rem 5rem;max-width:calc(var(--measure) + 4rem);margin:0 auto;width:100%}
+.eyebrow{color:var(--accent);margin:0 0 1rem}
+h1{margin:0 0 1rem} h2{margin:3rem 0 1rem} .lede{margin:0 0 1.5rem}
+.pill{display:inline-block;font:600 .68rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  background:var(--accent);color:var(--ground);padding:.32rem .5rem;border-radius:2px;margin-right:.6rem;vertical-align:middle}
+.status{font:400 .85rem/1.4 var(--ui);color:var(--muted);border-bottom:1px solid var(--rule);padding-bottom:1rem;margin-bottom:2rem}
+code{font:400 .88em var(--mono);background:var(--surface);padding:.1em .3em;border-radius:2px}
+pre{background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:1rem 1.1rem;overflow-x:auto;
+  font:400 .86rem/1.6 var(--mono);margin:1.25rem 0}
+pre code{background:none;padding:0;font-size:inherit}
+pre .c{color:var(--muted)} pre .k{color:var(--accent);font-weight:600}
+pre.out{border-left:3px solid var(--accent)}
+.formula{text-align:center;margin:1.6rem 0;overflow-x:auto;white-space:nowrap}
+.tablewrap{overflow-x:auto;margin:1.25rem 0}
+table{border-collapse:collapse;width:100%;font-size:.95em}
+th,td{padding:.55rem .8rem;border-bottom:1px solid var(--rule);text-align:left;white-space:nowrap}
+th{color:var(--muted)} th.n{text-align:right} td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.9em}
+aside.note{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1.1rem;margin:1.5rem 0;color:var(--muted)}
+@media (max-width:760px){.shell{grid-template-columns:minmax(0,1fr)} aside.nav{display:none} header.site .search{display:none}
+  main{padding:2rem 1rem 4rem} h1{font-size:2.1rem!important} .titleblock{margin:0 0 1.5rem!important;padding:1.25rem!important}}
+
+:root{--body:'IBM Plex Sans',sans-serif;--ui:'IBM Plex Mono',monospace;--mono:'IBM Plex Mono',monospace;
+  --body-size:1.02rem;--leading:1.68;--measure:53ch}
+h1{font:500 2.5rem/1.12 var(--mono);letter-spacing:-.03em}
+h2{font:600 .95rem/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  border-bottom:1px solid var(--rule);padding-bottom:.55rem}
+h2::before{content:'// ';color:var(--accent)}
+.lede{font:400 1.2rem/1.55 var(--body);color:var(--muted)}
+.eyebrow{font:500 .74rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+th{font:500 .74rem/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+table{border:1px solid var(--rule)} td,th{border-right:1px solid var(--rule)} td:last-child,th:last-child{border-right:0}
+.formula{font:400 1.05rem/1.5 var(--mono)}
+header.site,aside.nav{background:var(--surface)}
+</style>
+<script>function t(){var h=location.hash.slice(1);if(h==='dark'||h==='light')document.documentElement.dataset.theme=h}t();addEventListener('hashchange',t)</script>
+</head><body>
+<header class="site"><svg viewBox="-44 -44 88 88" aria-label="OpenQuant"><polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#e44de0"/>
+<polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#52c8f5" transform="rotate(120)"/>
+<polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#f0e050" transform="rotate(240)"/></svg><span>OpenQuant</span><span class="search">Search&nbsp;&nbsp;Ctrl K</span>
+<button onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">Light / dark</button></header>
+<div class="shell"><aside class="nav">
+<h4>Getting started</h4><a>Overview</a><a>Quickstart</a>
+<h4>Ch 3 · Labeling</h4><a class="on">labeling</a><a>bet_sizing</a>
+<h4>Ch 4 · Sample weights</h4><a>sampling</a><a>sample_weights</a><a>sb_bagging</a>
+<h4>Ch 7 · Validation</h4><a>cross_validation</a></aside>
+<main><div class="titleblock"><p class="eyebrow">AFML chapter 3 · Module</p>
+<h1>Triple-barrier labeling</h1>
+<p class="lede">Label each event by the first barrier its price path touches, instead of by where the price happens to be after a fixed number of bars.</p></div>
+<p class="status"><span class="pill">Reviewed</span>Read against AFML §3.4 and snippets 3.2–3.5 · validated 2026-09-19</p>
+<p>Fixed-horizon labels ignore the path. A trade that reaches +5% and then reverses to −1% by the horizon is recorded as a loss, although any realistic exit rule would have taken the profit. The <a href="#">triple-barrier method</a> sets a profit-taking barrier, a stop-loss barrier and a vertical time barrier, and labels the observation by whichever is touched first. Barrier widths scale with a volatility estimate, usually from <code>get_daily_vol</code>.</p>
+<h2>Definition</h2>
+<p>For an event at <em>t</em><sub>0</sub> with target σ and multipliers <em>pt</em>, <em>sl</em>, the first-touch time is</p>
+<p class="formula">τ = inf { t &gt; t₀ : r(t₀,t) ≥ pt·σ &nbsp;∨&nbsp; r(t₀,t) ≤ −sl·σ &nbsp;∨&nbsp; t = t₁ }</p>
+<h2>Example</h2>
+<pre><code><span class="k">from</span> openquant <span class="k">import</span> filters, labeling
+
+<span class="c"># AFML ch. 2: emit an event only when cumulative drift exceeds 0.4%.</span>
+events = filters.cusum_filter_timestamps(close, times, 0.004)
+vertical = labeling.add_vertical_barrier(events, times, close, 0, 0, 30, 0)
+labels = labeling.triple_barrier_labels(times, close, events, events, [0.005] * len(events), pt=1.0, sl=1.0, vertical_barrier_times=vertical)</code></pre>
+<pre class="out"><code>500 bars -> 42 events -> 42 labels
+label counts: {-1: 19, 1: 23}</code></pre>
+<h2>Out-of-sample results</h2>
+<div class="tablewrap"><table><thead><tr><th>Fold</th><th class="n">Events</th><th class="n">Precision</th><th class="n">Recall</th><th class="n">Sharpe</th><th class="n">PSR</th></tr></thead><tbody>
+<tr><td>2019 H1</td><td class="n">1,204</td><td class="n">0.581</td><td class="n">0.472</td><td class="n">1.14</td><td class="n">0.873</td></tr>
+<tr><td>2019 H2</td><td class="n">988</td><td class="n">0.547</td><td class="n">0.510</td><td class="n">0.62</td><td class="n">0.701</td></tr>
+<tr><td>2020 H1</td><td class="n">2,311</td><td class="n">0.533</td><td class="n">0.498</td><td class="n">−0.21</td><td class="n">0.412</td></tr>
+<tr><td>2020 H2</td><td class="n">1,076</td><td class="n">0.569</td><td class="n">0.455</td><td class="n">0.97</td><td class="n">0.829</td></tr></tbody></table></div>
+<aside class="note">Illustrative numbers for the design fixture only. They are not results.</aside>
+</main></div>
+</body></html>
