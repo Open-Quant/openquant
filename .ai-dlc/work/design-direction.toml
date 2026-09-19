@@ -27,6 +27,7 @@ brief = "docs/design/production-readiness-brief.md"
 plan = "docs/design/production-readiness-slices.md"
 tracker = "56"
 branch = "work/design-direction"
+pr = "https://github.com/Open-Quant/openquant/pull/72"
 
 [bindings]
 specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
