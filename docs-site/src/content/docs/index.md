@@ -76,16 +76,19 @@ print("label counts:", {b: sum(1 for row in labels if row[3] == b) for b in (-1,
 The walk is seeded, so this prints the same thing every time:
 
 ```text
-500 bars -> 42 events -> 42 labels
+500 bars -> 42 events -> 41 labels
 first label: ('2024-01-02 09:49:00', -0.001163909562213905, 0.005, -1, None)
-label counts: {-1: 19, 1: 23}
+label counts: {-1: 18, 1: 23}
 ```
 
 Each label is `(event time, return at first touch, target, label, side)`. The
 first event never reached either ±0.5% barrier: it ran into the 30-minute
 vertical barrier with a return of −0.12%, so it is labelled by the sign of that
-return. This example runs in CI on every change to the docs; if the API moves,
-the build fails before this page goes stale.
+return. There are 41 labels for 42 events because the last event's vertical
+barrier falls past the end of the data and neither horizontal barrier was
+touched: its outcome is not known yet, so it gets no label instead of an invented
+one. This example runs in CI on every change to the docs; if the API moves, the
+build fails before this page goes stale.
 
 ## What is implemented
 

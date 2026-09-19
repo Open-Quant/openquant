@@ -13,6 +13,30 @@ struct Row {
     close: f64,
 }
 
+#[derive(Deserialize)]
+struct ReferenceEvent {
+    t0: String,
+    t1: String,
+    trgt: f64,
+}
+
+#[derive(Deserialize)]
+struct Reference {
+    events: Vec<ReferenceEvent>,
+    weights_by_return: Vec<f64>,
+    time_decay: std::collections::HashMap<String, Vec<f64>>,
+}
+
+fn load_reference() -> Reference {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/sample_weights/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn parse_ts(value: &str) -> NaiveDateTime {
+    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f").unwrap()
+}
+
 fn load_close() -> Vec<(NaiveDateTime, f64)> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/filters/dollar_bar_sample.csv")
@@ -68,9 +92,21 @@ fn test_ret_attribution() {
     let (events, close, _, _) = setup_events();
     let weights = get_weights_by_return(&events, &close).expect("weights");
     assert_eq!(weights.len(), events.len());
-    // Loose tolerance as Python test used very wide tolerance
-    assert!((weights[0].1 - 0.781807).abs() <= 1e5);
-    assert!((weights[3].1 - 1.627944).abs() <= 1e5);
+
+    // mlfinlab's test compares these with a tolerance of 1e5, so nothing ever checked them, and
+    // this port inherited that. The reference here is the AFML snippets run in pandas
+    // (tests/fixtures/sample_weights/generate.py); it reproduces mlfinlab's quoted 0.781807 and
+    // 1.627944. Both sides sum the same log returns in f64, so 1e-10 is rounding room only.
+    let reference = load_reference();
+    assert_eq!(events.len(), reference.events.len());
+    for (event, want) in events.iter().zip(&reference.events) {
+        assert_eq!(event.0, parse_ts(&want.t0));
+        assert_eq!(event.1, parse_ts(&want.t1));
+        assert!((event.2 - want.trgt).abs() < 1e-12);
+    }
+    for (got, want) in weights.iter().zip(&reference.weights_by_return) {
+        assert!((got.1 - want).abs() < 1e-10, "got {}, want {want}", got.1);
+    }
 }
 
 #[test]
@@ -90,7 +126,20 @@ fn test_time_decay_weights() {
     assert_eq!(pos_decay.len(), len);
 
     assert_eq!(standard.last().unwrap().1, 1.0);
-    assert!((standard.first().unwrap().1 - 0.582191).abs() <= 1e5);
+    let reference = load_reference();
+    for (decay, got) in [
+        ("0.5", &standard),
+        ("1.0", &no_decay),
+        ("-0.5", &neg_decay),
+        ("0.0", &converge),
+        ("1.5", &pos_decay),
+    ] {
+        let want = &reference.time_decay[decay];
+        assert_eq!(got.len(), want.len());
+        for (g, w) in got.iter().zip(want) {
+            assert!((g.1 - w).abs() < 1e-10, "decay {decay}: got {}, want {w}", g.1);
+        }
+    }
     assert!(no_decay.iter().all(|(_, w)| (*w - 1.0).abs() < 1e-12));
     assert_eq!(neg_decay.iter().filter(|(_, w)| *w == 0.0).count(), 3);
     assert_eq!(

@@ -62,25 +62,24 @@ pub fn get_weights_by_return(
         return Err("NaN values in triple_barrier_events, delete nans".into());
     }
 
-    let _close_map: HashMap<NaiveDateTime, f64> = close.iter().cloned().collect();
     let num_conc = num_concurrent_events(
         &close.iter().map(|(ts, _)| *ts).collect_vec(),
         &triple_barrier_events.iter().map(|(t_in, t1, _)| (*t_in, *t1)).collect_vec(),
     );
 
+    // Snippet 4.10: `ret = log(close).diff()` over the whole series, then the sum of
+    // ret / concurrency over [t_in, t_out]. That includes the return arriving at t_in, so the
+    // returns are taken from the full series, not restarted inside each window.
+    let log_returns: Vec<(NaiveDateTime, f64)> =
+        close.windows(2).map(|w| (w[1].0, (w[1].1 / w[0].1).ln())).collect();
+
     let mut weights: Vec<(NaiveDateTime, f64)> = Vec::new();
     for (t_in, t_out, _) in triple_barrier_events {
-        let mut sum: f64 = 0.0;
-        let mut last: Option<f64> = None;
-        for (ts, price) in close.iter().filter(|(ts, _)| *ts >= *t_in && *ts <= *t_out) {
-            if let Some(prev) = last {
-                let ret = (price / prev).ln();
-                if let Some(c) = num_conc.get(ts) {
-                    sum += ret / (*c as f64);
-                }
-            }
-            last = Some(*price);
-        }
+        let sum: f64 = log_returns
+            .iter()
+            .filter(|(ts, _)| *ts >= *t_in && *ts <= *t_out)
+            .filter_map(|(ts, ret)| num_conc.get(ts).map(|c| ret / (*c as f64)))
+            .sum();
         weights.push((*t_in, sum.abs()));
     }
 
