@@ -80,6 +80,8 @@ fn portfolio_allocate_efficient_risk(
     resample_by=None,
     returns_method=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn portfolio_allocate_with_solution(
     prices: Vec<Vec<f64>>,
     solution: String,

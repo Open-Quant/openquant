@@ -177,7 +177,7 @@ fn test_triple_barrier_labeling() {
     );
     let labels = get_bins(&events, &close);
     assert_eq!(labels.len(), 8);
-    assert!(labels.iter().all(|(_, _, _, bin, _)| matches!(bin, -1 | 0 | 1)));
+    assert!(labels.iter().all(|(_, _, _, bin, _)| matches!(bin, -1..=1)));
 
     // meta labeling with side=1
     let side: Vec<(NaiveDateTime, f64)> = close.iter().map(|(ts, _)| (*ts, 1.0)).collect();
@@ -243,7 +243,7 @@ fn test_pt_sl_levels() {
     assert!(small_vertical_hits < high_vertical_hits);
 
     let labels_small = get_bins(&events_small, &close);
-    assert!(labels_small.iter().all(|(_, _, _, bin, _)| matches!(bin, -1 | 0 | 1)));
+    assert!(labels_small.iter().all(|(_, _, _, bin, _)| matches!(bin, -1..=1)));
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn test_triple_barrier_disabled_barrier_configurations() {
 
     let labels_none = triple_barrier_labels(&events_none, &close);
     assert!(!labels_none.is_empty());
-    assert!(labels_none.iter().all(|row| matches!(row.label, -1 | 0 | 1)));
+    assert!(labels_none.iter().all(|row| matches!(row.label, -1..=1)));
 
     let cfg_pt_only = TripleBarrierConfig {
         pt: 1.0,

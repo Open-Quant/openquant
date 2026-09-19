@@ -108,6 +108,9 @@ pub fn ml_get_train_times(
     out
 }
 
+/// One cross-validation split: `(train_indices, test_indices)`.
+pub type TrainTestSplit = (Vec<usize>, Vec<usize>);
+
 pub struct PurgedKFold {
     n_splits: usize,
     samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)>,
@@ -132,14 +135,14 @@ impl PurgedKFold {
         Ok(Self { n_splits, samples_info_sets, pct_embargo })
     }
 
-    pub fn split(&self, n_samples: usize) -> Result<Vec<(Vec<usize>, Vec<usize>)>, String> {
+    pub fn split(&self, n_samples: usize) -> Result<Vec<TrainTestSplit>, String> {
         if n_samples != self.samples_info_sets.len() {
             return Err("Dataset length must match samples_info_sets".into());
         }
         let n = n_samples;
         let mut fold_sizes = vec![n / self.n_splits; self.n_splits];
-        for i in 0..(n % self.n_splits) {
-            fold_sizes[i] += 1;
+        for fold_size in fold_sizes.iter_mut().take(n % self.n_splits) {
+            *fold_size += 1;
         }
         let mut current = 0;
         let mut splits = Vec::new();
@@ -177,13 +180,11 @@ impl PurgedKFold {
             if embargo > 0 {
                 let after = (stop as isize + embargo).min(n as isize);
                 let before = (start as isize - embargo).max(0);
-                for i in start..(after as usize) {
-                    if i < n {
-                        train_mask[i] = false;
-                    }
+                for keep in train_mask.iter_mut().take(after as usize).skip(start) {
+                    *keep = false;
                 }
-                for i in before as usize..start {
-                    train_mask[i] = false;
+                for keep in train_mask.iter_mut().take(start).skip(before as usize) {
+                    *keep = false;
                 }
             }
 

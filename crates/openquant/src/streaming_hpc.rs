@@ -152,7 +152,7 @@ impl VpinState {
     pub fn update(
         &mut self,
         mut buy_volume: f64,
-        mut sell_volume: f64,
+        sell_volume: f64,
     ) -> Result<Option<f64>, StreamingHpcError> {
         validate_non_negative_finite("buy_volume", buy_volume)?;
         validate_non_negative_finite("sell_volume", sell_volume)?;
@@ -175,7 +175,6 @@ impl VpinState {
             self.current_bucket_abs_imbalance += (used_buy - used_sell).abs();
 
             buy_volume -= used_buy;
-            sell_volume -= used_sell;
             remaining -= take;
 
             if self.current_bucket_volume >= self.cfg.bucket_volume - 1e-12 {

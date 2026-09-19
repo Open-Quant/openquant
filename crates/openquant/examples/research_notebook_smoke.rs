@@ -22,7 +22,7 @@ fn main() {
     assert!((sum_w - 1.0).abs() < 1e-6);
 
     let ret = vec![0.0, 0.002, -0.001, 0.004, -0.002, 0.003, 0.001, -0.0005, 0.0025];
-    let rm = RiskMetrics::default();
+    let rm = RiskMetrics;
     let _ = rm.calculate_value_at_risk(&ret, 0.05).expect("var");
     let _ = rm.calculate_expected_shortfall(&ret, 0.05).expect("es");
     let _ = rm.calculate_conditional_drawdown_risk(&ret, 0.05).expect("cdar");

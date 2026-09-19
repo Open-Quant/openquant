@@ -14,6 +14,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
     random_state=42,
     sample_weight=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sb_fit_predict_classifier(
     py: Python<'_>,
     x: Vec<Vec<f64>>,
@@ -54,6 +56,8 @@ fn sb_fit_predict_classifier(
     random_state=42,
     sample_weight=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sb_fit_predict_regressor(
     py: Python<'_>,
     x: Vec<Vec<f64>>,

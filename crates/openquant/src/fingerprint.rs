@@ -266,7 +266,7 @@ where
         for (ykl, yk, yl) in vals {
             acc += (ykl - mean_ykl - yk - yl).abs();
         }
-        store.insert(format!("({}, {})", k, l), acc / (num_values * num_values) as f64);
+        store.insert(format!("({k}, {l})"), acc / (num_values * num_values) as f64);
     }
     store
 }

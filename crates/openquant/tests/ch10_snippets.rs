@@ -34,23 +34,12 @@ fn build_ch10_setup() -> Ch10Setup {
         })
         .collect();
 
-    let bet_size_d: Vec<f64> = bet_size
-        .iter()
-        .map(|m| {
-            let mut v = (m / 0.1).round() * 0.1;
-            if v > 1.0 {
-                v = 1.0;
-            }
-            if v < -1.0 {
-                v = -1.0;
-            }
-            v
-        })
-        .collect();
+    let bet_size_d: Vec<f64> =
+        bet_size.iter().map(|m| ((m / 0.1).round() * 0.1).clamp(-1.0, 1.0)).collect();
 
     let signal: Vec<(NaiveDateTime, f64)> =
         dates.iter().copied().zip(bet_size.iter().copied()).collect();
-    let mut t_pnts: Vec<NaiveDateTime> = t1.iter().copied().collect();
+    let mut t_pnts: Vec<NaiveDateTime> = t1.to_vec();
     t_pnts.extend(dates.iter().copied());
     t_pnts.sort();
     t_pnts.dedup();

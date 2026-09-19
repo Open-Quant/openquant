@@ -89,8 +89,7 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 let mut cov = DMatrix::zeros(3, 3);
                 let mut cols =
                     [Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n)];
-                for i in 0..n {
-                    let r = rets[i];
+                for &r in rets.iter().take(n) {
                     cols[0].push(r);
                     cols[1].push((1.0 + r).ln());
                     cols[2].push(r * r.signum());
@@ -100,8 +99,8 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 for i in 0..3 {
                     for j in 0..3 {
                         let mut s = 0.0;
-                        for k in 0..n {
-                            s += (cols[i][k] - means[i]) * (cols[j][k] - means[j]);
+                        for (a, b) in cols[i].iter().zip(&cols[j]) {
+                            s += (a - means[i]) * (b - means[j]);
                         }
                         cov[(i, j)] = s / (n - 1) as f64;
                     }

@@ -66,7 +66,7 @@ fn test_against_python_fixture_weights() {
         .zip(weights.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "inverse variance max diff {}", max_diff);
+    assert!(max_diff < 1.0, "inverse variance max diff {max_diff}");
 
     let w_min = fixture["weights"]["min_volatility"].as_array().unwrap();
     let res_min = allocate_min_vol(&prices, None, None).unwrap();
@@ -76,7 +76,7 @@ fn test_against_python_fixture_weights() {
         .zip(w_min.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "min vol bound diff {}", max_diff);
+    assert!(max_diff < 1.0, "min vol bound diff {max_diff}");
 
     let w_max = fixture["weights"]["max_sharpe"].as_array().unwrap();
     let res_max = allocate_max_sharpe(&prices, 0.0, None, None).unwrap();
@@ -86,7 +86,7 @@ fn test_against_python_fixture_weights() {
         .zip(w_max.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "max sharpe diff {}", max_diff);
+    assert!(max_diff < 1.0, "max sharpe diff {max_diff}");
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
         .zip(exp_min.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 0.25, "min vol bound diff {}", max_diff);
+    assert!(max_diff < 0.25, "min vol bound diff {max_diff}");
 
     let res_max =
         openquant::portfolio_optimization::allocate_max_sharpe_with(&prices, &opts).unwrap();
@@ -178,7 +178,7 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
         .zip(exp_max.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "max sharpe bound diff {}", max_diff);
+    assert!(max_diff < 1.0, "max sharpe bound diff {max_diff}");
 
     let res_eff = openquant::portfolio_optimization::allocate_efficient_risk_with(
         &prices,
@@ -192,7 +192,7 @@ fn test_bound_and_infeasible_behavior_against_fixture() {
         .zip(exp_eff.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "efficient risk bound diff {}", max_diff);
+    assert!(max_diff < 1.0, "efficient risk bound diff {max_diff}");
 
     let err = allocate_min_vol(&prices, None, Some((0.9, 1.0))).unwrap_err();
     assert!(matches!(err, AllocError::InfeasibleBounds { .. }));

@@ -20,6 +20,8 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
     risk_free_rate=0.0,
     confidence_level=0.05
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn pipeline_run_mid_frequency_pipeline(
     py: Python<'_>,
     timestamps: Vec<String>,

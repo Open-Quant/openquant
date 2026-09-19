@@ -70,6 +70,8 @@ fn sr_implied_frequency_asymmetric(
     seed=42,
     kde_bandwidth=None
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sr_estimate_strategy_failure_probability(
     py: Python<'_>,
     bet_outcomes: Vec<f64>,

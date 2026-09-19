@@ -208,6 +208,8 @@ pub fn meta_labels(
 }
 
 /// Backward-compatible triple-barrier API.
+// Mirrors the mlfinlab `get_events` signature.
+#[allow(clippy::too_many_arguments)]
 pub fn get_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
@@ -254,7 +256,7 @@ pub fn drop_labels(
         let mut min_label: Option<(i8, f64)> = None;
         for (label, count) in &counts {
             let pct = *count as f64 / total;
-            if min_label.map_or(true, |(_, p)| pct < p) {
+            if min_label.is_none_or(|(_, p)| pct < p) {
                 min_label = Some((*label, pct));
             }
         }

@@ -1,6 +1,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+/// One M2N fit: `(mu_1, mu_2, sigma_1, sigma_2, p_1, error)`.
+type M2nFitRow = (f64, f64, f64, f64, f64, f64);
+
 #[pyfunction(name = "centered_moment")]
 fn ef3m_centered_moment(moments: Vec<f64>, order: usize) -> f64 {
     openquant::ef3m::centered_moment(&moments, order)
@@ -52,7 +55,7 @@ fn ef3m_fit_m2n(
     n_runs: usize,
     variant: usize,
     max_iter: usize,
-) -> PyResult<Vec<(f64, f64, f64, f64, f64, f64)>> {
+) -> PyResult<Vec<M2nFitRow>> {
     let mut m2n = openquant::ef3m::M2N::new(moments, epsilon, factor, n_runs, variant, max_iter, 1);
     let results = m2n.single_fit_loop(None);
     Ok(results

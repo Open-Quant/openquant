@@ -2,6 +2,9 @@ use pyo3::prelude::*;
 
 use crate::helpers::{pair_timestamps_values, parse_naive_datetimes, to_py_err};
 
+/// Python-facing reserve bet-size row: `(timestamp, active_long, active_short, c_t, bet_size)`.
+type ReserveRow = (String, f64, f64, f64, f64);
+
 #[pyfunction(name = "get_signal")]
 #[pyo3(signature = (prob, num_classes, pred=None))]
 fn bet_sizing_get_signal(prob: Vec<f64>, num_classes: usize, pred: Option<Vec<f64>>) -> Vec<f64> {
@@ -276,7 +279,7 @@ fn bet_sizing_bet_size_reserve_with_fit(
     t1_ends: Vec<String>,
     side: Vec<f64>,
     fit: [f64; 5],
-) -> PyResult<Vec<(String, f64, f64, f64, f64)>> {
+) -> PyResult<Vec<ReserveRow>> {
     let starts = parse_naive_datetimes(t1_starts)?;
     let ends = parse_naive_datetimes(t1_ends)?;
     if starts.len() != ends.len() || starts.len() != side.len() {
@@ -302,7 +305,7 @@ fn bet_sizing_bet_size_reserve_full(
     epsilon: f64,
     max_iter: usize,
     return_parameters: bool,
-) -> PyResult<(Vec<(String, f64, f64, f64, f64)>, Option<[f64; 5]>)> {
+) -> PyResult<(Vec<ReserveRow>, Option<[f64; 5]>)> {
     let starts = parse_naive_datetimes(t1_starts)?;
     let ends = parse_naive_datetimes(t1_ends)?;
     if starts.len() != ends.len() || starts.len() != side.len() {

@@ -8,7 +8,26 @@ use pyo3_polars::PyDataFrame;
 
 use crate::helpers::{build_ohlcv_columns, report_to_pydict, to_py_err};
 
+/// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, quality_report)`.
+type CleanOhlcvColumns =
+    (Vec<i64>, Vec<String>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, PyObject);
+
+/// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, is_missing_bar)`.
+type AlignedOhlcvColumns = (
+    Vec<i64>,
+    Vec<String>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<Option<f64>>,
+    Vec<bool>,
+);
+
 #[pyfunction(name = "clean_ohlcv")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_clean_ohlcv(
     py: Python<'_>,
     timestamps_us: Vec<i64>,
@@ -20,17 +39,7 @@ fn data_clean_ohlcv(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
     dedupe_keep_last: bool,
-) -> PyResult<(
-    Vec<i64>,
-    Vec<String>,
-    Vec<f64>,
-    Vec<f64>,
-    Vec<f64>,
-    Vec<f64>,
-    Vec<f64>,
-    Vec<f64>,
-    PyObject,
-)> {
+) -> PyResult<CleanOhlcvColumns> {
     let cols =
         build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
     let (clean, report) = clean_ohlcv_columns(&cols, dedupe_keep_last).map_err(to_py_err)?;
@@ -59,6 +68,8 @@ fn data_clean_ohlcv(
 }
 
 #[pyfunction(name = "quality_report")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_quality_report(
     py: Python<'_>,
     timestamps_us: Vec<i64>,
@@ -87,6 +98,8 @@ fn data_quality_report(
 }
 
 #[pyfunction(name = "align_calendar")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn data_align_calendar(
     timestamps_us: Vec<i64>,
     symbols: Vec<String>,
@@ -97,17 +110,7 @@ fn data_align_calendar(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
     interval_seconds: i64,
-) -> PyResult<(
-    Vec<i64>,
-    Vec<String>,
-    Vec<Option<f64>>,
-    Vec<Option<f64>>,
-    Vec<Option<f64>>,
-    Vec<Option<f64>>,
-    Vec<Option<f64>>,
-    Vec<Option<f64>>,
-    Vec<bool>,
-)> {
+) -> PyResult<AlignedOhlcvColumns> {
     let cols =
         build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
     let out = align_calendar_columns(&cols, interval_seconds).map_err(to_py_err)?;

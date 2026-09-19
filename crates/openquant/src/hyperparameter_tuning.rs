@@ -247,6 +247,8 @@ where
     search_over_params(build_classifier, params, data, n_splits, pct_embargo, scoring)
 }
 
+// Public search API: `grid_search`'s arguments plus `n_iter` and `seed`; signature kept stable.
+#[allow(clippy::too_many_arguments)]
 pub fn randomized_search<C, F>(
     build_classifier: F,
     param_space: &BTreeMap<String, RandomParamDistribution>,

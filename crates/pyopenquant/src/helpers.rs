@@ -3,6 +3,14 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+/// Python-facing bar row:
+/// `(start_timestamp, timestamp, open, high, low, close, volume, dollar_value, tick_count)`.
+pub type BarRow = (String, String, f64, f64, f64, f64, f64, f64, usize);
+
+/// Parsed labeling inputs: `(close series, events keyed by timestamp)`.
+pub type LabelingInputs =
+    (Vec<(chrono::NaiveDateTime, f64)>, Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>);
+
 pub fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
     PyValueError::new_err(format!("{err:?}"))
 }
@@ -116,9 +124,7 @@ pub fn build_trades(
     Ok(trades)
 }
 
-pub fn bars_to_rows(
-    bars: Vec<openquant::data_structures::StandardBar>,
-) -> Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)> {
+pub fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<BarRow> {
     bars.into_iter()
         .map(|b| {
             (
@@ -136,6 +142,8 @@ pub fn bars_to_rows(
         .collect()
 }
 
+// Takes the raw OHLCV columns it validates into `OhlcvColumns`; a params struct would duplicate that type.
+#[allow(clippy::too_many_arguments)]
 pub fn build_ohlcv_columns(
     timestamps_us: Vec<i64>,
     symbols: Vec<String>,
@@ -197,21 +205,33 @@ pub fn report_to_pydict(
     Ok(out_report.into_pyobject(py).unwrap().into_any().unbind())
 }
 
-pub fn build_labeling_events(
-    close_timestamps: Vec<String>,
-    close_prices: Vec<f64>,
-    t_events: Vec<String>,
-    target_timestamps: Vec<String>,
-    target_values: Vec<f64>,
-    pt: f64,
-    sl: f64,
-    min_ret: f64,
-    vertical_barrier_times: Option<Vec<(String, String)>>,
-    side_prediction: Option<Vec<(String, f64)>>,
-) -> PyResult<(
-    Vec<(chrono::NaiveDateTime, f64)>,
-    Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>,
-)> {
+/// Raw Python-side inputs shared by the triple-barrier labeling bindings.
+pub struct LabelingEventArgs {
+    pub close_timestamps: Vec<String>,
+    pub close_prices: Vec<f64>,
+    pub t_events: Vec<String>,
+    pub target_timestamps: Vec<String>,
+    pub target_values: Vec<f64>,
+    pub pt: f64,
+    pub sl: f64,
+    pub min_ret: f64,
+    pub vertical_barrier_times: Option<Vec<(String, String)>>,
+    pub side_prediction: Option<Vec<(String, f64)>>,
+}
+
+pub fn build_labeling_events(args: LabelingEventArgs) -> PyResult<LabelingInputs> {
+    let LabelingEventArgs {
+        close_timestamps,
+        close_prices,
+        t_events,
+        target_timestamps,
+        target_values,
+        pt,
+        sl,
+        min_ret,
+        vertical_barrier_times,
+        side_prediction,
+    } = args;
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let t_events = parse_naive_datetimes(t_events)?;

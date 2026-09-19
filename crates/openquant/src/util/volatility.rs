@@ -21,8 +21,8 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
 
         // searchsorted equivalent: find insertion point for target_time
         let mut j_opt = None;
-        for j in 0..i {
-            if close[j].0 <= target_time {
+        for (j, (ts_j, _)) in close.iter().enumerate().take(i) {
+            if *ts_j <= target_time {
                 j_opt = Some(j);
             }
         }
