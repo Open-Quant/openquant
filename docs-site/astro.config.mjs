@@ -14,8 +14,8 @@ export default defineConfig({
   },
   integrations: [
     starlight({
-      title: 'OpenQuant Documentation',
-      description: 'Institutional-grade quantitative research and production docs for OpenQuant.',
+      title: 'OpenQuant',
+      description: 'Rust implementations of the methods in Advances in Financial Machine Learning, with Python bindings.',
       logo: {
         src: './src/assets/openquant-icon.svg',
         alt: 'OpenQuant',
