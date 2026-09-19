@@ -48,6 +48,9 @@ to what is actually delivered.
 
 Both follow-ups are linked as `discovered-from` `OQ-mef.10`.
 
+Update 2026-09-18: `OQ-ojp` landed in PR #14. `OQ-det` was closed without its commit
+(`27a2007`) being merged; recovery is tracked in GitHub issue #33.
+
 ## Conclusion
 - Closed-issue claims for bindings, notebooks, pipeline, and CI smoke are materially present in tree.
 - Two acceptance-criteria gaps remain and are now explicitly tracked as open issues.

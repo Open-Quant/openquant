@@ -1,0 +1,23 @@
+name: Verify
+# Manual only: a source-generated ai-dlc project has no release manifest yet, so
+# bootstrap cannot succeed in CI. Re-enable pull_request/push once ai-dlc publishes one.
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bootstrap
+        run: bash scripts/bootstrap.sh --target github-actions
+      - name: Required checks
+        env:
+          AI_DLC_DOCS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: ai-dlc project check --target github-actions --required --json --receipt "$RUNNER_TEMP/ai-dlc-receipt.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-dlc-receipt
+          path: ${{ runner.temp }}/ai-dlc-receipt.json

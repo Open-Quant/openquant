@@ -1,0 +1,38 @@
+schema = 1
+id = "design-implement"
+title = "Implement the visual identity in the docs site and README"
+scope = "[design / P1] `docs-site/src/styles/starlight.css` gives the hero 16px radii, a gradient card, two radial-gradient washes on `.main-pane`, `backdrop-filter` blur on the header, a pill CTA and a drop-shadow glow behind the logo; blockquotes, tables and code blocks get 10-12px radii; `.sl-banner` carries a purple gradient that is always overridden. The draft status pill is white on `#a8760d` = 3.99:1 light and 3.88:1 dark (fails AA); light hairline `#c9d8e8` on `#f3f6fb` is 1.34:1 (borders barely visible). `src/layouts/Layout.astro` is 491 lines of an older dark glassy theme that nothing imports. Body text contrast is fine (14.9:1 / 15.6:1) and must stay so. Apply the tokens from design-direction; delete `Layout.astro` and dead banner SVGs; fix the pill; update README banner. Capture before/after Playwright screenshots (landing, module page, workflow page; light/dark; 1440px and 390px)."
+requires_spec = false
+spec_reason = "Presentation-only change."
+acceptance = [
+    "No `gradient`, `blur(` or `drop-shadow` remains in site CSS; no radius above 4px.",
+    "An automated contrast check over the token pairs passes in the docs CI job.",
+    "`Layout.astro` is gone; before/after screenshots are attached to the PR; the 13 production redirects still resolve.",
+]
+reviewed = true
+depends_on = [
+    "design-direction",
+    "docs-landing-rewrite",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-015",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "57"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

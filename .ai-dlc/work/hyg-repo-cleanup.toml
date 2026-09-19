@@ -1,0 +1,37 @@
+schema = 1
+id = "hyg-repo-cleanup"
+title = "Clean the repository root, ignore local tooling, and prune merged branches"
+scope = "[hygiene / P0] Evidence (2026-09-18, main=d3e6dfa): untracked `afml/` (4.6M) is a scraped copy of the AFML book and is not ignored; `.worktrees/` (41G), `.hf-cache/` (88M) and `.crawl4ai-home/` are not ignored; a tracked 0-byte file `foo` exists since d1eacec; `assets/banner.svg`, `banner_v2.svg`, `banner_v3.svg` are unused; `docs/project_status.md` and `docs/reconciliation_closure_history.md` list OQ-ojp/OQ-det as open though closed; `docs/stabilization_productionization.md` references a `/Users/seankoval/.codex/...` path and a missing `ROADMAP.md`; 15 local branches are fully merged (feat/oq-mef-1..10, oq-nbr-1-benchmark-metrics, oq-nbr-1-data-module, oq-nbr-notebook-research-track, oq-ojp-notebook-workflow-docs, oq-u5h-pyo3-bindings) plus detached worktree oq-pre-rust-data; origin has 28 heads. In scope: ignore rules, delete `foo` and dead banners, fix the stale docs, remove merged worktrees/branches locally and on origin, decide `AGENTS.md`/`.gitattributes` (depends on the beads decision in the brief). Out of scope: the 4 branches with unmerged commits (see res-recover-stranded-work) and history rewriting."
+requires_spec = false
+spec_reason = "No observable library behavior changes; this is repository, CI or documentation work verified by the listed checks."
+acceptance = [
+    "A fresh clone plus local tooling directories shows a clean `git status`.",
+    "`git branch --merged main` lists only `main`; every deleted branch was first confirmed with `git cherry main <branch>` showing no `+` commits.",
+    "`foo` and the three unused banners are removed; stale status docs match the tracker.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-001",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "31"
+branch = "work/hyg-repo-cleanup"
+pr = "https://github.com/Open-Quant/openquant/pull/63"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

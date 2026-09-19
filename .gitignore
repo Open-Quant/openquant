@@ -10,3 +10,18 @@ docs-site/dist/
 **/__pycache__/
 python/openquant/_core*.so
 experiments/artifacts/
+
+# ai-dlc
+.env
+.env.*
+node_modules/
+.ai-dlc/receipts/
+.ai-dlc/local/
+
+# local research tooling and worktrees (never commit: afml/ is a scraped book copy)
+afml/
+.worktrees/
+.hf-cache/
+.crawl4ai-home/
+.pytest_cache/
+.claude/worktrees/

@@ -1,0 +1,37 @@
+schema = 1
+id = "docs-api-reference"
+title = "Publish a real API reference for Rust and Python"
+scope = "[docs / P1] Each module page's 'API Reference' is a bare list of names - no signatures, types, returns or errors. Nothing links to rustdoc/docs.rs and nothing is generated for Python. Publish `cargo doc` output under `/api/rust/` on the Pages site (docs.rs after release). For Python, generate signatures from the built extension: add `text_signature`/docstrings in pyopenquant and ship `.pyi` stubs, then render a reference section. Extend the existing API-drift gate to fail when a bound function lacks a docstring."
+requires_spec = false
+spec_reason = "Documentation-only change; behavior is owned by the code and already gated by the docs example checks."
+acceptance = [
+    "Every public Rust item and every Python function has a rendered signature and description reachable from its module page.",
+    "`help(openquant.labeling.triple_barrier_labels)` shows a useful docstring; stubs pass a type checker.",
+    "The drift gate fails on an undocumented binding.",
+]
+reviewed = true
+depends_on = [
+    "code-rustdoc",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-013",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "54"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

@@ -1,0 +1,37 @@
+schema = 1
+id = "bind-validation-backtest"
+title = "Add Python bindings for purged CV, CPCV backtesting, feature importance and tuning"
+scope = "[research / P0] No binding files exist for `cross_validation` (PurgedKFold), `backtesting_engine` (CPCV), `feature_importance` (MDI/MDA/SFI) or `hyperparameter_tuning`. These are exactly the AFML pieces a credible study needs, so every runbook is blocked on them. Unverified guess: they are unbound because they take closures/trait objects. Design the Python surface to return index splits and path assignments (so any sklearn estimator can be used) rather than passing Python callables into Rust. PR #27 made label spans mandatory for feature-importance CV - the binding must preserve that. Lower priority modules without bindings (fingerprint, combinatorial_optimization, hpc_parallel, etf_trick) are out of scope here."
+requires_spec = true
+spec_reason = "New public Python API."
+acceptance = [
+    "`openquant.cross_validation.purged_kfold_splits(...)` and CPCV path generation return numpy index arrays; tests prove no train index overlaps a test label span and embargo is honored.",
+    "Feature importance cannot be called from Python without label spans.",
+    "A Python test reproduces the Rust fixture results for each new binding.",
+]
+reviewed = true
+depends_on = [
+    "res-recover-stranded-work",
+]
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-010",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+brief = "docs/design/production-readiness-brief.md"
+plan = "docs/design/production-readiness-slices.md"
+tracker = "42"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"

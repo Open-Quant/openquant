@@ -11,7 +11,9 @@
 - Long-running SADF hotspot (explicit):
   - `just test-slow`
 - Migration sync integrity:
-  - `python /Users/seankoval/.codex/skills/migration-sync/scripts/check_migration_sync.py --roadmap ROADMAP.md --crosswalk openquant-rs/tests/crosswalk.md`
+  - Module-to-test parity is recorded in `tests/crosswalk.md`. The script that once checked it
+    lived outside this repository and `ROADMAP.md` was never part of it, so there is no
+    runnable gate for this today.
 
 ## Performance Gates
 - Hotspot benchmarks:

@@ -1,0 +1,19 @@
+_src_path: /home/seanm/repos/ai-dlc/project-templates
+agent_clients:
+- claude-code
+- codex
+capabilities:
+- specs
+- tracker
+- knowledge
+- scm
+- deploy
+- agent-client
+initialize: false
+knowledge: obsidian
+preset: rust
+project_name: project-openquant
+tracker: github-issues
+tracker_settings:
+    kind: github-issues
+

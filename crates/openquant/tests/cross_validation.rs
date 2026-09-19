@@ -145,3 +145,79 @@ fn test_ml_cross_val_score_f1() {
         assert!((0.0..=1.0).contains(&s));
     }
 }
+
+fn spans_intersect(a: (NaiveDateTime, NaiveDateTime), b: (NaiveDateTime, NaiveDateTime)) -> bool {
+    a.0 <= b.1 && b.0 <= a.1
+}
+
+/// Daily bars, each label spanning three days: sample i covers [day i, day i + 3].
+fn three_day_labels(n: usize) -> Vec<(NaiveDateTime, NaiveDateTime)> {
+    let start = NaiveDateTime::parse_from_str("2019-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    (0..n)
+        .map(|i| {
+            let s = start + chrono::Duration::days(i as i64);
+            (s, s + chrono::Duration::days(3))
+        })
+        .collect()
+}
+
+#[test]
+fn test_purged_kfold_purges_labels_overlapping_the_first_test_sample() {
+    // Folds are [0..4], [4..8], [8..12]. For the middle fold the test labels cover
+    // day 4 through day 10, so training samples 1, 2, 3 (ending on days 4, 5, 6) and
+    // 8, 9, 10 (starting on days 8, 9, 10) overlap it. Only 0 and 11 are clean.
+    let info_sets = three_day_labels(12);
+    let splits = PurgedKFold::new(3, info_sets, 0.0).unwrap().split(12).unwrap();
+
+    let expected_train: [Vec<usize>; 3] = [vec![7, 8, 9, 10, 11], vec![0, 11], vec![0, 1, 2, 3, 4]];
+    for (fold, (train, test)) in splits.iter().enumerate() {
+        assert_eq!(test, &(fold * 4..fold * 4 + 4).collect::<Vec<_>>());
+        assert_eq!(train, &expected_train[fold], "fold {fold}");
+    }
+}
+
+#[test]
+fn test_purged_kfold_no_train_label_overlaps_any_test_label() {
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    let origin = NaiveDateTime::parse_from_str("2019-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let mut rng = StdRng::seed_from_u64(7);
+    for _ in 0..200 {
+        let n = rng.gen_range(6..60);
+        let n_splits = rng.gen_range(2..=n.min(6));
+        // Increasing start times with variable-length labels, as triple-barrier
+        // events produce: an early label may outlive a later one.
+        let mut minute = 0i64;
+        let info_sets: Vec<_> = (0..n)
+            .map(|_| {
+                minute += rng.gen_range(1..10);
+                let s = origin + chrono::Duration::minutes(minute);
+                (s, s + chrono::Duration::minutes(rng.gen_range(0..40)))
+            })
+            .collect();
+
+        let splits = PurgedKFold::new(n_splits, info_sets.clone(), 0.0).unwrap().split(n).unwrap();
+        for (train, test) in &splits {
+            for &tr in train {
+                for &te in test {
+                    assert!(
+                        !spans_intersect(info_sets[tr], info_sets[te]),
+                        "train {tr} {:?} overlaps test {te} {:?} (n={n}, splits={n_splits})",
+                        info_sets[tr],
+                        info_sets[te]
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_purged_kfold_rejects_impossible_split_counts() {
+    let info_sets = three_day_labels(5);
+    for n_splits in [0, 1, 6] {
+        assert!(PurgedKFold::new(n_splits, info_sets.clone(), 0.0).is_err(), "n_splits={n_splits}");
+    }
+    assert!(PurgedKFold::new(5, info_sets, 0.0).is_ok());
+}

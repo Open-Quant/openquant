@@ -1,0 +1,8 @@
+schema = 1
+id = "example-only"
+title = "Describe the proposed outcome"
+scope = "Bound the requested change"
+requires_spec = false
+spec_reason = "Replace with the reviewed reason this change does or does not require a formal specification"
+acceptance = ["Replace with an observable acceptance criterion"]
+reviewed = false
