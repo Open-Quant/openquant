@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Python bindings for openquant via PyO3"
 license = "MIT"
+repository = "https://github.com/Open-Quant/openquant"
+homepage = "https://open-quant.github.io/openquant/"
+readme = "../../README.md"
+# Distributed as the `pyopenquant` wheel on PyPI (built by maturin), never as a crate.
+publish = false
 
 [lib]
 name = "_core"

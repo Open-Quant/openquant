@@ -3,20 +3,30 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "openquant"
+name = "pyopenquant"
 version = "0.1.0"
-description = "Python bindings for openquant-rs"
+description = "Rust implementations of methods from Advances in Financial Machine Learning, with Python bindings (import name: openquant)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "OpenQuant contributors" }]
 classifiers = [
   "Programming Language :: Rust",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Scientific/Engineering",
   "License :: OSI Approved :: MIT License",
 ]
 dependencies = ["polars>=1.0,<2", "pyarrow>=15,<20"]
+
+[project.urls]
+Homepage = "https://open-quant.github.io/openquant/"
+Documentation = "https://open-quant.github.io/openquant/"
+Repository = "https://github.com/Open-Quant/openquant"
+Issues = "https://github.com/Open-Quant/openquant/issues"
 
 [tool.maturin]
 manifest-path = "crates/pyopenquant/Cargo.toml"
