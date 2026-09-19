@@ -59,13 +59,13 @@ pub fn frac_diff(series: &[f64], diff_amt: f64, thresh: f64) -> Vec<f64> {
     let skip = cum.iter().filter(|v| **v > thresh).count();
 
     let mut out = vec![f64::NAN; n];
-    for iloc in skip..n {
+    for (iloc, slot) in out.iter_mut().enumerate().skip(skip) {
         let w_start = n - (iloc + 1);
         let mut acc = 0.0;
         for j in 0..=iloc {
             acc += weights[w_start + j] * series[j];
         }
-        out[iloc] = acc;
+        *slot = acc;
     }
     out
 }
@@ -81,13 +81,13 @@ pub fn frac_diff_ffd(series: &[f64], diff_amt: f64, thresh: f64) -> Vec<f64> {
     }
     let width = weights.len() - 1;
     let mut out = vec![f64::NAN; n];
-    for iloc in width..n {
+    for (iloc, slot) in out.iter_mut().enumerate().skip(width) {
         let loc0 = iloc - width;
         let mut acc = 0.0;
         for (k, w) in weights.iter().enumerate() {
             acc += *w * series[loc0 + k];
         }
-        out[iloc] = acc;
+        *slot = acc;
     }
     out
 }

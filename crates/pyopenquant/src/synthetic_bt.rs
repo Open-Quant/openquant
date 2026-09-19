@@ -73,6 +73,8 @@ fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObjec
 }
 
 #[pyfunction(name = "generate_ou_paths")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sbt_generate_ou_paths(
     phi: f64,
     intercept: f64,
@@ -180,6 +182,8 @@ fn sbt_detect_no_stable_optimum(
     min_surface_std=0.05,
     min_best_sharpe=0.0
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sbt_run_synthetic_otr_workflow(
     py: Python<'_>,
     historical_prices: Vec<f64>,
@@ -221,6 +225,8 @@ fn sbt_run_synthetic_otr_workflow(
 }
 
 #[pyfunction(name = "search_optimal_trading_rule")]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn sbt_search_optimal_trading_rule(
     py: Python<'_>,
     phi: f64,

@@ -177,12 +177,15 @@ pub fn _get_betas(
     Ok((b_mean_vec, matrix_to_vec(b_var_matrix)))
 }
 
+/// Regression inputs for SADF: `(x rows, y, lag list)`.
+type SadfRegressionInputs = (Vec<Vec<f64>>, Vec<f64>, Vec<usize>);
+
 fn get_y_x(
     series: &[f64],
     model: &str,
     lags: SadfLags,
     add_const: bool,
-) -> StructuralBreakResult<(Vec<Vec<f64>>, Vec<f64>, Vec<usize>)> {
+) -> StructuralBreakResult<SadfRegressionInputs> {
     let series_len = series.len();
     if series_len < 2 {
         return Err(StructuralBreakError::InputTooShort);
@@ -195,7 +198,7 @@ fn get_y_x(
 
     let lag_values = match lags {
         SadfLags::Fixed(value) => (1..=value).collect::<Vec<_>>(),
-        SadfLags::Array(values) => values.into_iter().map(|v| v as usize).collect(),
+        SadfLags::Array(values) => values.into_iter().collect(),
     };
     let max_lag = *lag_values.iter().max().unwrap_or(&0);
     let start_index = max_lag + 1;
@@ -299,7 +302,7 @@ fn get_sadf_at_t(x: &[Vec<f64>], y: &[f64], min_length: usize) -> StructuralBrea
         let x_subset = x[start..].to_vec();
 
         let (b_mean, b_var) = _get_betas(&x_subset, &y_subset)?;
-        if b_mean.get(0).map(|v| v.is_nan()).unwrap_or(true) {
+        if b_mean.first().map(|v| v.is_nan()).unwrap_or(true) {
             continue;
         }
 

@@ -4,7 +4,7 @@ use openquant::data_structures::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use crate::helpers::{bars_to_rows, build_trades};
+use crate::helpers::{bars_to_rows, build_trades, BarRow};
 
 #[pyfunction(name = "build_time_bars")]
 fn bars_build_time_bars(
@@ -12,7 +12,7 @@ fn bars_build_time_bars(
     prices: Vec<f64>,
     volumes: Vec<f64>,
     interval_seconds: i64,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if interval_seconds <= 0 {
         return Err(PyValueError::new_err("interval_seconds must be > 0"));
     }
@@ -27,7 +27,7 @@ fn bars_build_tick_bars(
     prices: Vec<f64>,
     volumes: Vec<f64>,
     ticks_per_bar: usize,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if ticks_per_bar == 0 {
         return Err(PyValueError::new_err("ticks_per_bar must be > 0"));
     }
@@ -42,7 +42,7 @@ fn bars_build_volume_bars(
     prices: Vec<f64>,
     volumes: Vec<f64>,
     volume_per_bar: f64,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if !volume_per_bar.is_finite() || volume_per_bar <= 0.0 {
         return Err(PyValueError::new_err("volume_per_bar must be > 0"));
     }
@@ -57,7 +57,7 @@ fn bars_build_dollar_bars(
     prices: Vec<f64>,
     volumes: Vec<f64>,
     dollar_value_per_bar: f64,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if !dollar_value_per_bar.is_finite() || dollar_value_per_bar <= 0.0 {
         return Err(PyValueError::new_err("dollar_value_per_bar must be > 0"));
     }
@@ -72,7 +72,7 @@ fn bars_build_run_bars(
     prices: Vec<f64>,
     volumes: Vec<f64>,
     threshold: usize,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if threshold == 0 {
         return Err(PyValueError::new_err("threshold must be > 0"));
     }
@@ -88,7 +88,7 @@ fn bars_build_imbalance_bars(
     volumes: Vec<f64>,
     threshold: f64,
     bar_type: String,
-) -> PyResult<Vec<(String, String, f64, f64, f64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<BarRow>> {
     if !threshold.is_finite() || threshold <= 0.0 {
         return Err(PyValueError::new_err("threshold must be > 0"));
     }

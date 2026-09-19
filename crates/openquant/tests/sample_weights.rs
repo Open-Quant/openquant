@@ -29,12 +29,14 @@ fn load_close() -> Vec<(NaiveDateTime, f64)> {
     out
 }
 
-fn setup_events() -> (
+type EventsSetup = (
     Vec<(NaiveDateTime, NaiveDateTime, f64)>,
     Vec<(NaiveDateTime, f64)>,
     Vec<NaiveDateTime>,
     Vec<f64>,
-) {
+);
+
+fn setup_events() -> EventsSetup {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();

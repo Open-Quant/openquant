@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: reviewed
-last_validated: '2026-08-30'
+last_validated: '2026-09-18'
 audience:
   - quant-dev
   - platform-engineering
@@ -35,7 +35,7 @@ Lint and format, mirroring the `lint` recipe in the `justfile`:
 
 ```bash
 cargo fmt -- --check
-cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
 ## Documentation quality gates

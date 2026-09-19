@@ -3,10 +3,16 @@ use pyo3::types::PyDict;
 
 use crate::helpers::to_py_err;
 
+/// Python-facing stream event: `(timestamp_ns, price, buy_volume, sell_volume, venue_id)`.
+type StreamEventRow = (i64, f64, f64, f64, usize);
+
+/// Python-facing snapshot: `(timestamp_ns, price, vpin, hhi, normalized_risk_score, is_alert)`.
+type SnapshotRow = (i64, f64, Option<f64>, Option<f64>, Option<f64>, bool);
+
 #[pyfunction(name = "run_streaming_pipeline")]
 fn shpc_run_streaming_pipeline(
     py: Python<'_>,
-    events: Vec<(i64, f64, f64, f64, usize)>,
+    events: Vec<StreamEventRow>,
     bucket_volume: f64,
     support_buckets: usize,
     lookback_events: usize,
@@ -38,7 +44,7 @@ fn shpc_run_streaming_pipeline(
 
     let d = PyDict::new(py);
 
-    let snapshots: Vec<(i64, f64, Option<f64>, Option<f64>, Option<f64>, bool)> = report
+    let snapshots: Vec<SnapshotRow> = report
         .snapshots
         .into_iter()
         .map(|s| (s.timestamp_ns, s.price, s.vpin, s.hhi, s.normalized_risk_score, s.is_alert))
@@ -64,7 +70,7 @@ fn shpc_generate_synthetic_flash_crash_stream(
     crash_start_fraction: f64,
     calm_venues: usize,
     shock_venue: usize,
-) -> PyResult<Vec<(i64, f64, f64, f64, usize)>> {
+) -> PyResult<Vec<StreamEventRow>> {
     let cfg = openquant::streaming_hpc::SyntheticStreamConfig {
         events,
         crash_start_fraction,

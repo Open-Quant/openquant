@@ -40,7 +40,7 @@ pub fn bet_size_power(w_param: f64, price_div: f64) -> f64 {
 }
 
 pub fn bet_size_power_checked(w_param: f64, price_div: f64) -> Result<f64, BetSizingError> {
-    if price_div < -1.0 || price_div > 1.0 {
+    if !(-1.0..=1.0).contains(&price_div) {
         return Err(BetSizingError::PriceDivergenceOutOfRange { value: price_div });
     }
     if price_div == 0.0 {
@@ -112,26 +112,14 @@ pub fn discrete_signal(signal0: &[f64], step_size: f64) -> Vec<f64> {
     if step_size <= 0.0 {
         return signal0.to_vec();
     }
-    signal0
-        .iter()
-        .map(|s| {
-            let mut v = (s / step_size).round() * step_size;
-            if v > 1.0 {
-                v = 1.0;
-            }
-            if v < -1.0 {
-                v = -1.0;
-            }
-            v
-        })
-        .collect()
+    signal0.iter().map(|s| ((s / step_size).round() * step_size).clamp(-1.0, 1.0)).collect()
 }
 
 pub fn avg_active_signals(
     signal: &[(NaiveDateTime, f64)],
     t1: &[NaiveDateTime],
 ) -> Vec<(NaiveDateTime, f64)> {
-    let mut t_points: Vec<NaiveDateTime> = t1.iter().copied().collect();
+    let mut t_points: Vec<NaiveDateTime> = t1.to_vec();
     t_points.extend(signal.iter().map(|(ts, _)| *ts));
     t_points.sort();
     t_points.dedup();
@@ -172,7 +160,7 @@ pub fn bet_size_probability(
     let side: Vec<f64> = events.iter().map(|(_, _, _, s)| *s).collect();
     let signal0 = get_signal(&prob, num_classes, Some(&side));
     let mut signals: Vec<(NaiveDateTime, f64)> =
-        events.iter().map(|(ts, _, _, _)| *ts).zip(signal0.into_iter()).collect();
+        events.iter().map(|(ts, _, _, _)| *ts).zip(signal0).collect();
     if average_active {
         let t1: Vec<NaiveDateTime> = events.iter().map(|(_, t1, _, _)| *t1).collect();
         signals = avg_active_signals(&signals, &t1);
@@ -291,7 +279,7 @@ pub fn get_w_power(price_div: f64, m_bet_size: f64) -> f64 {
 }
 
 pub fn get_w_power_checked(price_div: f64, m_bet_size: f64) -> Result<f64, BetSizingError> {
-    if price_div < -1.0 || price_div > 1.0 {
+    if !(-1.0..=1.0).contains(&price_div) {
         return Err(BetSizingError::PriceDivergenceOutOfRange { value: price_div });
     }
     let w_calc = (m_bet_size / price_div.signum()).ln() / price_div.abs().ln();
@@ -536,6 +524,11 @@ pub fn bet_size_reserve_with_fit(
         .collect()
 }
 
+/// Reserve bet-size row: `(timestamp, active_long, active_short, c_t, bet_size)`.
+pub type ReserveBetSizeRow = (NaiveDateTime, f64, f64, f64, f64);
+/// Fitted two-normal mixture parameters `[mu1, mu2, sigma1, sigma2, p1]`.
+pub type MixtureParams = [f64; 5];
+
 pub fn bet_size_reserve_full(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
@@ -543,13 +536,13 @@ pub fn bet_size_reserve_full(
     epsilon: f64,
     max_iter: usize,
     return_parameters: bool,
-) -> (Vec<(NaiveDateTime, f64, f64, f64, f64)>, Option<[f64; 5]>) {
+) -> (Vec<ReserveBetSizeRow>, Option<MixtureParams>) {
     let concurrent = get_concurrent_sides(t1, side);
     let c_t: Vec<f64> = concurrent.iter().map(|(_, l, s)| l - s).collect();
     let fit = fit_two_normal_mixture_em(&c_t, fit_runs, epsilon, max_iter);
     let events = concurrent
         .into_iter()
-        .zip(c_t.into_iter())
+        .zip(c_t)
         .map(|((ts, l, s), c)| {
             let b = single_bet_size_mixed(c, &fit);
             (ts, l, s, c, b)

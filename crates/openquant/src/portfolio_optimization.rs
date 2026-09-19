@@ -12,16 +12,13 @@ pub enum AllocError {
     NaNResult(&'static str),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum ReturnsMethod {
+    #[default]
     Mean,
-    Exponential { span: usize },
-}
-
-impl Default for ReturnsMethod {
-    fn default() -> Self {
-        ReturnsMethod::Mean
-    }
+    Exponential {
+        span: usize,
+    },
 }
 
 #[derive(Clone)]
@@ -140,8 +137,8 @@ fn returns_and_means(
     let mut expected = vec![0.0; cols];
     match opts.returns_method {
         ReturnsMethod::Mean => {
-            for c in 0..cols {
-                expected[c] = (returns.column(c).sum() / rows as f64) * freq;
+            for (c, slot) in expected.iter_mut().enumerate() {
+                *slot = (returns.column(c).sum() / rows as f64) * freq;
             }
         }
         ReturnsMethod::Exponential { span } => {

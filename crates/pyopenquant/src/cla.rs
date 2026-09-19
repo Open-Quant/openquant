@@ -14,6 +14,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
     solution=None,
     calculate_expected_returns="mean"
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn cla_allocate(
     py: Python<'_>,
     asset_prices: Option<Vec<Vec<f64>>>,
@@ -36,7 +38,7 @@ fn cla_allocate(
     let expected_ret_m = expected_returns.map(|v| nalgebra::DMatrix::from_vec(v.len(), 1, v));
 
     cla.allocate(
-        prices_m.as_ref().map(|m| openquant::cla::AssetPricesInput::RawMatrix(m)),
+        prices_m.as_ref().map(openquant::cla::AssetPricesInput::RawMatrix),
         expected_ret_m.as_ref(),
         cov_m.as_ref(),
         resample_by.as_deref(),

@@ -12,7 +12,7 @@ fmt-check:
     cargo fmt -- --check
 
 clippy:
-    cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 check:
     cargo check --all-targets --all-features

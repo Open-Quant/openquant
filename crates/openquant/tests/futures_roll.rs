@@ -34,7 +34,7 @@ fn load_rows() -> Vec<FuturesRollRow> {
     let roll_2 = NaiveDate::from_ymd_opt(2018, 1, 17).unwrap();
 
     let mut rows = Vec::with_capacity(opens.len());
-    for (o, c) in opens.into_iter().zip(closes.into_iter()) {
+    for (o, c) in opens.into_iter().zip(closes) {
         assert_eq!(o.date, c.date);
         let date = NaiveDate::parse_from_str(&o.date, "%Y-%m-%d").unwrap();
         let current = if date <= roll_1 {

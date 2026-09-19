@@ -18,7 +18,7 @@ jobs:
       - name: Format check
         run: cargo fmt -- --check
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D clippy::correctness -D clippy::suspicious
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Tests (fast)
         run: cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 

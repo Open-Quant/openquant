@@ -1,4 +1,4 @@
 # Clippy lint levels are controlled in CI and Just commands:
-# `cargo clippy --all-targets --all-features -- -D warnings`
+# `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 #
 # Keep this file for future stable clippy configuration options.

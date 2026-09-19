@@ -144,7 +144,7 @@ fn test_lambda_for_no_bounded_weights() {
     let cov = covariance(&prices.data);
     let (x, y) = cla._compute_lambda(&cov, &cov, &cla.expected_returns, None, &[1], &[0]);
     assert!(x.is_finite());
-    let _ = y as i64;
+    let _ = y;
 }
 
 #[test]
@@ -224,13 +224,15 @@ fn test_purge_excess() {
 
 #[test]
 fn test_flag_true_for_purge_num_err() {
-    let mut cla = CLA::default();
-    cla.weights = vec![vec![1.0]];
-    cla.lower_bounds = vec![100.0];
-    cla.upper_bounds = vec![1.0];
-    cla.lambdas = vec![0.0];
-    cla.gammas = vec![0.0];
-    cla.free_weights = vec![vec![]];
+    let mut cla = CLA {
+        weights: vec![vec![1.0]],
+        lower_bounds: vec![100.0],
+        upper_bounds: vec![1.0],
+        lambdas: vec![0.0],
+        gammas: vec![0.0],
+        free_weights: vec![vec![]],
+        ..CLA::default()
+    };
     cla._purge_num_err(1.0).unwrap();
     assert!(cla.weights.is_empty());
     assert!(cla.lambdas.is_empty());
