@@ -17,7 +17,7 @@ fn load_prices_and_names() -> (DMatrix<f64>, Vec<String>) {
     let nrows = rows.len();
     let ncols = rows[0].len();
     let flat = rows.into_iter().flat_map(|r| r.into_iter()).collect::<Vec<f64>>();
-    (DMatrix::from_vec(nrows, ncols, flat), names)
+    (DMatrix::from_row_slice(nrows, ncols, &flat), names)
 }
 
 fn returns_from_prices(prices: &DMatrix<f64>) -> DMatrix<f64> {

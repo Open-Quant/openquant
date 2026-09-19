@@ -19,7 +19,7 @@ fn load_prices() -> DMatrix<f64> {
     let rows = data.len();
     let cols = data[0].len();
     let flat: Vec<f64> = data.into_iter().flat_map(|r| r.into_iter()).collect();
-    DMatrix::from_vec(rows, cols, flat)
+    DMatrix::from_row_slice(rows, cols, &flat)
 }
 
 fn covariance(prices: &DMatrix<f64>) -> DMatrix<f64> {
