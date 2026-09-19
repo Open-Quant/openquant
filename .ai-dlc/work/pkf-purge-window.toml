@@ -1,0 +1,37 @@
+schema = 1
+id = "pkf-purge-window"
+title = "PurgedKFold::split leaks: test window starts at the first test label's END time"
+scope = "[code / P0] `PurgedKFold::split` in `crates/openquant/src/cross_validation.rs` builds its purge window from `.1` (label END) of the first test sample instead of `.0` (label START), and takes the window end from the last test sample rather than the max end over the fold. Training samples whose labels overlap the leading test labels are therefore not purged (label leakage), and variable-length labels can under-purge the trailing edge. In scope: correct the window, add a regression property test that fails before the fix, check every other caller/copy of the same window logic in the crate (the free `ml_get_train_times`-style helper near line 95, feature-importance and hyperparameter-tuning CV paths) and the docs page for the module. Out of scope: Python bindings (#42), re-porting 59ac6fa (#33), changing embargo semantics."
+requires_spec = false
+spec_reason = "Bug fix restoring already-specified behavior: AFML snippet 7.3 and the mlfinlab PurgedKFold this module ports define the test window as first test start to max test end. No new observable behavior is designed; the regression property test is the evidence."
+acceptance = [
+    "A property test over random variable-length label spans with pct_embargo = 0 asserts that no training label span intersects any test label span; it fails on main and passes after the fix.",
+    "A hand-checkable case (daily bars, 3-day labels) asserts the exact expected train indices for each fold.",
+    "Existing cross_validation, feature_importance and hyperparameter_tuning tests pass; any expectation that changes is listed in the PR with the reason it was wrong before.",
+    "Every other occurrence of the window logic in the crate is fixed or shown correct.",
+]
+reviewed = true
+depends_on = []
+requirements = [
+    "docs/design/production-readiness-brief.md#RQ-008",
+]
+
+[providers]
+specs = "openspec"
+tracker = "github-issues"
+knowledge = "obsidian"
+scm = "github"
+deploy = "none"
+
+[artifacts]
+tracker = "65"
+brief = "docs/design/production-readiness-brief.md"
+branch = "work/pkf-purge-window"
+pr = "https://github.com/Open-Quant/openquant/pull/66"
+
+[bindings]
+specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
+scm = "3b84f35e400d540889fad394b18e490bec249322822d2d41e7d135cd7ac00d5e"
+deploy = "35eaaa262f8720e500b0246b1fbc0ec3b114bc8b10e73aeca744ff30b8c4f12b"
+knowledge = "28ca66580437daadd63929abd63c2bedd34b5e0212f2d94a9c8fcd653e711852"
+tracker = "7294d66bac2988ddbb65a5bd1abab4984b8fb0255a52f2b2fcfe547a468036a0"
