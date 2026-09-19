@@ -98,15 +98,6 @@ def test_sb_bagging_rejects_invalid_inputs():
         sb_bagging.fit_predict_sb_regressor([[1.0, 2.0], [1.0]], [0.0, 1.0], ind_mat)
 
 
-_SCRAMBLED = (
-    "FINDING: helpers::matrix_from_rows feeds row-major rows to the column-major "
-    "DMatrix::from_vec, so a multi-column feature matrix is scrambled before fitting; "
-    "with all 8 features the in-sample accuracy is at chance (~0.50) although feature 0 "
-    "alone scores 0.96"
-)
-
-
-@pytest.mark.xfail(strict=True, reason=_SCRAMBLED)
 def test_sb_classifier_all_features():
     # Mirrors crates/openquant/tests/sb_bagging.rs::test_sb_classifier
     x, y, _, ind_mat = _synthetic_dataset()

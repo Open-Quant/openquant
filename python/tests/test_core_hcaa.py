@@ -88,14 +88,6 @@ def test_hcaa_rejects_invalid_inputs():
         hcaa.allocate_hcaa(["a", "b"], covariance_matrix=COV_2, allocation_metric="sharpe_ratio")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: helpers::matrix_from_rows feeds row-major rows to the column-major "
-        "DMatrix::from_vec, so every non-square matrix argument (prices, returns) is "
-        "scrambled; both assets come out at 0.5"
-    ),
-)
 def test_hcaa_reads_asset_returns_as_rows_of_observations():
     n_obs = 40
     a = [0.001 if t % 2 == 0 else -0.001 for t in range(n_obs)]

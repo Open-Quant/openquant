@@ -166,14 +166,6 @@ def test_portfolio_rejects_ragged_matrix():
         openquant.portfolio.allocate_min_vol([[1.0, 2.0], [3.0]])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: helpers::matrix_from_rows feeds row-major rows to the column-major "
-        "DMatrix::from_vec, so a (n_obs x n_assets) price matrix is scrambled; both assets "
-        "come out at 0.5"
-    ),
-)
 def test_portfolio_inverse_variance_reads_prices_as_rows_of_observations():
     # Asset 0 moves +-0.1% per bar and asset 1 +-2%, so inverse-variance weighting must
     # give asset 0 nearly everything.

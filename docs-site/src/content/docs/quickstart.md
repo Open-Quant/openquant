@@ -99,9 +99,9 @@ leakage checks:
   has_forward_look_bias    False
 
 summary:
-  portfolio_sharpe               8.319781
-  portfolio_return               0.020480
-  portfolio_risk                 0.002462
+  portfolio_sharpe              20.032999
+  portfolio_return               0.017616
+  portfolio_risk                 0.000879
   realized_sharpe               -0.136778
   value_at_risk                 -0.000209
   expected_shortfall            -0.000312
@@ -151,7 +151,7 @@ spread and a volatility-scaled slippage term. `net_sharpe` is recomputed
 after that charge. For a mid-frequency strategy this gap is usually the
 whole story.
 
-**`portfolio_sharpe` is not your strategy's Sharpe.** It reads 8.32 above
+**`portfolio_sharpe` is not your strategy's Sharpe.** It reads 20.03 above
 while `realized_sharpe` is -0.14. They answer different questions:
 `portfolio_sharpe` is the in-sample optimum of the allocator across the
 four synthetic assets, and `realized_sharpe` is what the traded strategy
