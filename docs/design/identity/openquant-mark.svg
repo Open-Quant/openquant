@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-44 -44 88 88" role="img" aria-label="OpenQuant">
+  <!-- Flat pinwheel: the organisation's three hues, no tile, no gradient, no glow. Legible at 16px. -->
+  <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#e44de0"/>
+  <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#52c8f5" transform="rotate(120)"/>
+  <polygon points="-2,-10 -18,-38 16,-40 36,-20 14,0" fill="#f0e050" transform="rotate(240)"/>
+</svg>
