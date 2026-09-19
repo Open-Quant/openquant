@@ -1,10 +1,10 @@
 # Design selection: design-direction (#56)
 
 - Canonical brief / RQ / delivery slice: `docs/design/production-readiness-brief.md` · RQ-015 · `design-direction`
-- Decision owner and source: Sean Koval — **not yet decided**
-- Decision status: proposed
+- Decision owner and source: Sean Koval — chose **A** on 2026-09-19 ("go with A"), as proposed: A taking B's table treatment, with one further revision to clear findings 1 and 3
+- Decision status: reviewed
 - Effective rubric ID/version: `oq-identity` v1 (frozen in commit `3179fb6`, before any candidate existed)
-- Declared budget, actual use and remaining authorization: 3 candidates + 1 revision each. Used: 3 candidates, 1 revision each (a shared fix to the reading measure and the 390px overflow). **Exhausted.** No paid resources.
+- Declared budget, actual use and remaining authorization: 3 candidates + 1 revision each. Used: 3 candidates, 1 revision each (a shared fix to the reading measure and the 390px overflow), then **one owner-authorised revision of A** (r2). No paid resources.
 - Evaluator: self-review by the generating session. Independence was unavailable, so the ratings below are a proposal, not a verdict.
 
 ## How to look at them
@@ -65,3 +65,17 @@ Screenshots used for the ratings are in `evidence/`.
   2. With that choice, the owner authorises one further revision to clear findings 1 and 3, after which the tokens are frozen in `tokens.md` and the banner is drawn in the chosen palette. Both are deliberately not produced yet: they depend on the choice.
   3. #57 then implements the tokens in `docs-site/src/styles/starlight.css`.
 - Already direction-independent and delivered: `openquant-mark.svg`, the flat pinwheel (no tile, gradient or glow), which every candidate uses at 24px.
+
+## Revision r2 of A (owner-authorised, 2026-09-19)
+
+Changes: numeric header cells keep the label size (finding 1); `color-scheme` follows the theme (finding 3); B's column hairlines added inside A's heavy top and bottom rules.
+
+Measured in the browser, both themes: at 1440px the table is no longer clipped and the formula does not overflow; at 390px there is no page scroll and the table and formula scroll inside their own boxes (what B3 requires). Evidence: `evidence/a-monograph-r2-light-table.jpeg`, `evidence/a-monograph-r2-dark-table.jpeg`.
+
+Re-rating under rubric v1: **S4 Data legibility 2 → 4** (fits, aligns, reads like a statement; dark scrollbars now dark). S1 4, S2 3, S3 4, S5 3 unchanged. All required checks pass and every rated criterion is ≥ 3.
+
+- Selected candidate/revision: **A · Monograph, r2** (`candidates/a-monograph.html` as committed with this section).
+- Contract outcome: **accepted** (self-rated; chosen by the owner).
+- Stop reason: contract-satisfied.
+- Frozen outputs: `tokens.md`, `openquant-mark.svg`, `openquant-banner.svg`.
+- Residual, carried to #57: Starlight chrome unverified against these tokens; banner text is live SVG text. B and C are retained for the record; findings 1 and 3 were fixed in shared CSS, so only B's formula overflow (finding 2) remains in the retained files.
