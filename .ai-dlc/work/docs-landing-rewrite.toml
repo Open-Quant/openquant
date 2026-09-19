@@ -27,6 +27,7 @@ brief = "docs/design/production-readiness-brief.md"
 plan = "docs/design/production-readiness-slices.md"
 tracker = "52"
 branch = "work/docs-landing-rewrite"
+pr = "https://github.com/Open-Quant/openquant/pull/71"
 
 [bindings]
 specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"
