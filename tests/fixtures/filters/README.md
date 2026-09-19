@@ -39,7 +39,7 @@ for ts in (True, False):
     key = f"{'timestamps' if ts else 'index'}"
     result["z_score"][key] = [serialize(e) for e in events]
 
-with open('openquant-rs/tests/fixtures/filters/events.json', 'w', encoding='utf-8') as f:
+with open('tests/fixtures/filters/events.json', 'w', encoding='utf-8') as f:
     json.dump(result, f, indent=2)
 PY
 ```
