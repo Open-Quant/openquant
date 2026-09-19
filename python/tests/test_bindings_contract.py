@@ -164,3 +164,25 @@ def test_portfolio_fixture_smoke():
 def test_portfolio_rejects_ragged_matrix():
     with pytest.raises(ValueError):
         openquant.portfolio.allocate_min_vol([[1.0, 2.0], [3.0]])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "FINDING: helpers::matrix_from_rows feeds row-major rows to the column-major "
+        "DMatrix::from_vec, so a (n_obs x n_assets) price matrix is scrambled; both assets "
+        "come out at 0.5"
+    ),
+)
+def test_portfolio_inverse_variance_reads_prices_as_rows_of_observations():
+    # Asset 0 moves +-0.1% per bar and asset 1 +-2%, so inverse-variance weighting must
+    # give asset 0 nearly everything.
+    prices = [[100.0, 100.0]]
+    for t in range(40):
+        a = 0.001 if t % 2 == 0 else -0.001
+        b = 0.02 if t % 4 < 2 else -0.02
+        prices.append([prices[-1][0] * (1 + a), prices[-1][1] * (1 + b)])
+
+    weights, _, _, _ = openquant.portfolio.allocate_inverse_variance(prices)
+
+    assert weights[0] > 0.99
