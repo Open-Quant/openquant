@@ -89,14 +89,6 @@ def test_hrp_rejects_invalid_inputs():
         hrp.allocate_hrp(["a", "b"], asset_returns=[[0.1, 0.2], [0.1]])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: helpers::matrix_from_rows feeds row-major rows to the column-major "
-        "DMatrix::from_vec, so every non-square matrix argument (prices, returns) is "
-        "scrambled; both assets come out at 0.5"
-    ),
-)
 def test_hrp_reads_asset_returns_as_rows_of_observations():
     # Asset `a` is 20x less volatile than `b`, so it must take nearly all the weight.
     n_obs = 40

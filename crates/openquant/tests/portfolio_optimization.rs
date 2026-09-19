@@ -25,7 +25,7 @@ fn load_prices() -> DMatrix<f64> {
     let rows = data.len();
     let cols = data[0].len();
     let flat: Vec<f64> = data.into_iter().flat_map(|r| r.into_iter()).collect();
-    DMatrix::from_vec(rows, cols, flat)
+    DMatrix::from_row_slice(rows, cols, &flat)
 }
 
 fn load_fixture() -> Value {
@@ -66,7 +66,10 @@ fn test_against_python_fixture_weights() {
         .zip(weights.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "inverse variance max diff {max_diff}");
+    // Sensitive to matrix orientation: 5.6e-4 with the prices read correctly, 0.22 when the
+    // loader interleaved rows and columns (#74). The remaining comparisons below still use
+    // tolerances too loose to mean anything; min-vol is 0.17 from the reference (#76).
+    assert!(max_diff < 1e-3, "inverse variance max diff {max_diff}");
 
     let w_min = fixture["weights"]["min_volatility"].as_array().unwrap();
     let res_min = allocate_min_vol(&prices, None, None).unwrap();

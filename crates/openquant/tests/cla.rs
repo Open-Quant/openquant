@@ -25,7 +25,7 @@ fn load_asset_prices() -> AssetPrices {
     let rows = data.len();
     let cols = data[0].len();
     let flat: Vec<f64> = data.into_iter().flat_map(|r| r.into_iter()).collect();
-    let matrix = DMatrix::from_vec(rows, cols, flat);
+    let matrix = DMatrix::from_row_slice(rows, cols, &flat);
     AssetPrices::new(matrix, index)
 }
 

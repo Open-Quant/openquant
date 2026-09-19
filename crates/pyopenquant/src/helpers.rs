@@ -27,8 +27,10 @@ pub fn matrix_from_rows(rows: Vec<Vec<f64>>) -> PyResult<DMatrix<f64>> {
     if rows.iter().any(|r| r.len() != ncols) {
         return Err(PyValueError::new_err("prices matrix must be rectangular"));
     }
+    // `rows` is row-major (one inner Vec per row). `DMatrix::from_vec` is column-major and
+    // would interleave rows and columns for any non-square input.
     let flat: Vec<f64> = rows.into_iter().flatten().collect();
-    Ok(DMatrix::from_vec(nrows, ncols, flat))
+    Ok(DMatrix::from_row_slice(nrows, ncols, &flat))
 }
 
 pub fn parse_naive_datetimes(values: Vec<String>) -> PyResult<Vec<chrono::NaiveDateTime>> {
