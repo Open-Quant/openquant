@@ -646,11 +646,15 @@ impl MicrostructuralFeaturesGenerator {
             // Try multiple datetime formats (with/without fractional seconds)
             let _ = parse_datetime(&rec[0]).map_err(|_| "column 0 not datetime".to_string())?;
         }
+        // Take the first threshold *out of* the iterator. Peeking at it instead leaves
+        // it to be served again after the first bar closes, which emits a one-tick bar.
+        // The generator owns its thresholds; borrowing would add a lifetime to a public type.
+        #[allow(clippy::unnecessary_to_owned)]
+        let mut tick_num_iter = tick_num_series.to_vec().into_iter();
+        let current_bar_tick = tick_num_iter.next().unwrap_or(0);
         Ok(Self {
-            // The generator owns its thresholds; borrowing would add a lifetime to a public type.
-            #[allow(clippy::unnecessary_to_owned)]
-            tick_num_iter: tick_num_series.to_vec().into_iter(),
-            current_bar_tick: tick_num_series.first().copied().unwrap_or(0),
+            tick_num_iter,
+            current_bar_tick,
             price_diff: Vec::new(),
             trade_size: Vec::new(),
             tick_rule: Vec::new(),

@@ -254,3 +254,30 @@ fn test_first_generation_features() {
     assert!((mean(&bekker) - 0.001456).abs() < 1e-4);
     assert!((bekker[25] - 0.000517).abs() < 1e-4);
 }
+
+#[test]
+fn test_feature_generator_emits_one_row_per_tick_threshold() {
+    // 30 ticks; trade size is 1 for ticks 1-10, 2 for 11-20, 3 for 21-30. With bars
+    // closing at ticks 10, 20 and 30 the average tick size per bar is exactly 1, 2, 3.
+    let path = std::env::temp_dir()
+        .join(format!("openquant_ticks_{}_one_row_per_threshold.csv", std::process::id()));
+    let mut csv = String::from("Date and Time,Price,Volume\n");
+    for tick in 0..30 {
+        let price = 100.0 + (tick % 5) as f64 * 0.25;
+        csv.push_str(&format!("2011/07/31 23:31:{:02}.000,{price},{}\n", 10 + tick, tick / 10 + 1));
+    }
+    std::fs::write(&path, csv).unwrap();
+
+    let mut gen = MicrostructuralFeaturesGenerator::new_from_csv(
+        path.to_str().unwrap(),
+        &[10, 20, 30],
+        None,
+        None,
+    )
+    .unwrap();
+    let feats = gen.get_features_from_csv(path.to_str().unwrap()).unwrap();
+    std::fs::remove_file(&path).ok();
+
+    let avg_tick_sizes: Vec<f64> = feats.iter().map(|row| row[1]).collect();
+    assert_eq!(avg_tick_sizes, vec![1.0, 2.0, 3.0]);
+}
