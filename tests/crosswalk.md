@@ -1,6 +1,6 @@
 # Python → Rust test crosswalk
 
-| Python tests (mlfinlab/tests) | Rust tests (openquant-rs) | Fixtures | Status |
+| Python tests (mlfinlab/tests) | Rust tests (openquant) | Fixtures | Status |
 | --- | --- | --- | --- |
 | test_filters.py | crates/openquant/tests/filters.rs | tests/fixtures/filters/{dollar_bar_sample.csv, events.json} | ✅ ported |
 | test_backtest_statistics.py | crates/openquant/tests/backtest_statistics.rs | tests/fixtures/backtest_statistics/dollar_bar_sample.csv | ✅ ported |
@@ -34,5 +34,5 @@
 | test_volatility_features.py | crates/openquant/tests/volatility_features.rs | tests/fixtures/backtest_statistics/dollar_bar_sample.csv | ✅ ported |
 
 Notes:
-- Fixtures live under `openquant-rs/tests/fixtures/` and should be shared across Python/Rust tests.
+- Fixtures live under `tests/fixtures/` and should be shared across Python/Rust tests.
 - Update `Status` as modules are ported; add fixture file references and any tolerance notes.

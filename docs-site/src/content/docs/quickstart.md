@@ -2,7 +2,7 @@
 title: Quickstart
 description: Install OpenQuant and get one real result out of it.
 status: reviewed
-last_validated: '2026-08-30'
+last_validated: '2026-09-19'
 audience:
   - quant-dev
   - platform-engineering
@@ -26,8 +26,10 @@ cd openquant
 
 ## Step 2 — Install
 
-`openquant` is not on PyPI: the Python package sits on a compiled PyO3
-extension, so installing it means building it.
+OpenQuant is not on PyPI yet: the Python package sits on a compiled PyO3
+extension, so installing it means building it. It will be published as
+`pyopenquant` (import name `openquant`). Do not `pip install openquant` —
+that name on PyPI belongs to an unrelated project.
 
 ```bash
 uv venv --python 3.11 .venv

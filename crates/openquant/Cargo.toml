@@ -3,12 +3,12 @@ name = "openquant"
 version = "0.1.0"
 authors = ["seankoval <seanmkoval@gmail.com>"]
 edition = "2021"
-description = "Rust-first quantitative finance toolkit inspired by mlfinlab/AFML"
+description = "Rust implementations of methods from Advances in Financial Machine Learning (AFML)"
 repository = "https://github.com/Open-Quant/openquant"
-homepage = "https://openquant.github.io/openquant-rs/"
-documentation = "https://openquant.github.io/openquant-rs/"
+homepage = "https://open-quant.github.io/openquant/"
+documentation = "https://open-quant.github.io/openquant/"
 license = "MIT"
-keywords = ["quant", "finance", "trading", "afml", "mlfinlab"]
+keywords = ["quant", "finance", "trading", "afml", "machine-learning"]
 categories = ["finance", "science", "algorithms"]
 readme = "../../README.md"
 

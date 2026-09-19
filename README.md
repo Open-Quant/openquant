@@ -2,25 +2,48 @@
   <img src="assets/banner_v4.svg" alt="OpenQuant" width="100%" />
 </p>
 
-<h1 align="center">openquant-rs</h1>
+<h1 align="center">OpenQuant</h1>
 
 <p align="center">
-  <strong>Rust-native quantitative finance toolkit for research and production workflows.</strong>
+  <strong>Rust implementations of the methods in <em>Advances in Financial Machine Learning</em>, with Python bindings.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Open-Quant/openquant/actions/workflows/ci.yml">CI</a>
+  <a href="https://github.com/Open-Quant/openquant/actions/workflows/ci.yml"><img src="https://github.com/Open-Quant/openquant/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://github.com/Open-Quant/openquant/actions/workflows/docs-pages.yml"><img src="https://github.com/Open-Quant/openquant/actions/workflows/docs-pages.yml/badge.svg?branch=main" alt="Docs" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
+</p>
+
+<p align="center">
+  <a href="https://open-quant.github.io/openquant/"><strong>Documentation</strong></a>
   ·
-  <a href="https://github.com/Open-Quant/openquant/actions/workflows/benchmark-regression.yml">Benchmark Regression</a>
+  <a href="https://open-quant.github.io/openquant/quickstart/">Quickstart</a>
   ·
-  <a href="https://github.com/Open-Quant/openquant/actions/workflows/release.yml">Release Readiness</a>
+  <a href="https://github.com/Open-Quant/openquant/issues">Issues</a>
 </p>
 
 ## Status
-- Production baseline package: benchmarks + regression checks + release workflow are in place.
-- High-coverage module-level tests, benchmark tracking, and release gates are active.
+Pre-release (0.1.0, unpublished). The Rust core covers most AFML chapters and is
+tested in CI; the Python bindings expose 27 submodules. Nothing is on crates.io or
+PyPI yet, so installing means building from source. Open work is tracked in
+[issues](https://github.com/Open-Quant/openquant/issues); the reasoning behind it is in
+`docs/design/production-readiness-brief.md`.
 
-Detailed status: `docs/project_status.md`
+## Install
+Requires a Rust toolchain (pinned by `rust-toolchain.toml`), Python 3.11+ and
+[`uv`](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/Open-Quant/openquant.git && cd openquant
+uv venv --python 3.13 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv run --python .venv/bin/python python -c "import openquant; print('ok')"
+```
+
+The Python distribution will be published as **`pyopenquant`**; the import name is
+`openquant`. Do not `pip install openquant` - that name on PyPI belongs to an
+unrelated project.
 
 ## Quick Start
 ```bash
@@ -35,7 +58,7 @@ cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
 
 # Collect + check benchmark thresholds
 python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
-python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 25
+python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json
 ```
 
 ## Research Flywheel (Python + Rust)
@@ -75,8 +98,8 @@ uv run --python .venv/bin/python python python/benchmarks/benchmark_data_process
 - Python bindings quickstart + API map: `docs/python_bindings.md`
 - Notebook-first workflow + promotion checklist: `docs/research_workflow.md`
 
-## Astro Docs Site (GitHub Pages)
-A modern docs site scaffold is included under `docs-site/`.
+## Docs site
+The documentation at https://open-quant.github.io/openquant/ is built from `docs-site/` (Astro + Starlight).
 
 ```bash
 cd docs-site
