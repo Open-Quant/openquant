@@ -1,0 +1,66 @@
+import pytest
+
+from _core_fixtures import load_csv_columns, nanmean
+
+from openquant import volatility
+
+
+def test_range_estimators_match_mlfinlab_baseline():
+    # Mirrors crates/openquant/tests/volatility_features.rs::
+    # test_volatility_estimators_match_mlfinlab_baseline
+    open_, high, low, close = load_csv_columns(
+        "backtest_statistics/dollar_bar_sample.csv", ["open", "high", "low", "close"]
+    )
+    gm_vol = volatility.get_garman_class_vol(open_, high, low, close, 20)
+    yz_vol = volatility.get_yang_zhang_vol(open_, high, low, close, 20)
+    park_vol = volatility.get_parkinson_vol(high, low, 20)
+
+    assert len(gm_vol) == len(close)
+    assert len(yz_vol) == len(close)
+    assert len(park_vol) == len(close)
+
+    assert abs(nanmean(gm_vol) - 0.001482) < 1e-6
+    assert abs(nanmean(yz_vol) - 0.00162001) < 1e-6
+    assert abs(nanmean(park_vol) - 0.00149997) < 1e-6
+
+
+def test_daily_vol_is_zero_for_constant_daily_return():
+    # No Rust value test exists for get_daily_vol (it is only used as an input in
+    # crates/openquant/tests/sample_weights.rs). A series compounding at exactly 1% per
+    # day has identical one-day returns, so any EWM standard deviation of them is zero.
+    timestamps = [f"2024-01-{day:02d} 00:00:00" for day in range(1, 11)]
+    prices = [100.0 * 1.01**i for i in range(10)]
+
+    out = volatility.get_daily_vol(timestamps, prices, 5)
+
+    # The first bar has no bar at least one day older, so it produces no estimate.
+    assert [ts for ts, _ in out] == timestamps[1:]
+    assert [v for _, v in out] == pytest.approx([0.0] * 9, abs=1e-9)
+
+
+def test_daily_vol_rejects_length_mismatch_and_bad_timestamps():
+    with pytest.raises(ValueError, match="length mismatch"):
+        volatility.get_daily_vol(["2024-01-01 00:00:00"], [1.0, 2.0], 5)
+    with pytest.raises(ValueError, match="invalid datetime"):
+        volatility.get_daily_vol(["2024-01-01"], [1.0], 5)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "FINDING: range estimators assert_eq! on input lengths, so mismatched inputs "
+        "surface as pyo3 PanicException instead of ValueError"
+    ),
+)
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: volatility.get_parkinson_vol([1.0, 2.0, 3.0], [1.0], 2),
+        lambda: volatility.get_garman_class_vol([1.0, 2.0, 3.0], [1.0], [1.0], [1.0], 2),
+        lambda: volatility.get_yang_zhang_vol([1.0, 2.0, 3.0], [1.0], [1.0], [1.0], 2),
+    ],
+    ids=["parkinson", "garman_klass", "yang_zhang"],
+)
+def test_range_estimators_length_mismatch_raises_value_error(call):
+    with pytest.raises(ValueError):
+        call()
