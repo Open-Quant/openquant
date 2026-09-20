@@ -17,6 +17,15 @@ fs.mkdirSync(outDir, { recursive: true });
 // stay idempotent) and so the stamp is comparable with the schema gate's mtime rule.
 const generatedOn = new Date().toISOString().slice(0, 10);
 
+// Write a page only if something other than its date stamp changed. Re-stamping all 39 pages
+// on every run buried real changes under date-only diffs, and a stamp that moves without the
+// content moving says nothing.
+const stripStamp = (text) => text.replace(/^last_generated: .*$/m, '');
+function writeIfChanged(file, content) {
+  if (fs.existsSync(file) && stripStamp(fs.readFileSync(file, 'utf8')) === stripStamp(content)) return;
+  fs.writeFileSync(file, content, 'utf8');
+}
+
 const q = (value) => JSON.stringify(String(value));
 const toYamlList = (values) => values.map((v) => `  - ${q(v)}`).join('\n');
 
@@ -24,7 +33,11 @@ const toYamlList = (values) => values.map((v) => `  - ${q(v)}`).join('\n');
 // page is a heading skeleton. They were optional once and 27 of 39 modules left
 // them out, which shipped as thin pages rather than as an error. Fail loudly now.
 const REQUIRED_TEXT = ['conceptOverview', 'whenToUse'];
-for (const doc of moduleDocs) {
+// A module whose page has been written by hand sets `handwritten: true`. Its entry here
+// shrinks to the metadata the index needs, and this script never touches its .md again.
+// When every module is hand-written, moduleDocs.ts is metadata only (issue #53).
+const isGenerated = (doc) => !doc.handwritten;
+for (const doc of moduleDocs.filter(isGenerated)) {
   for (const field of REQUIRED_TEXT) {
     if (typeof doc[field] !== 'string' || !doc[field].trim()) {
       throw new Error(
@@ -50,7 +63,7 @@ for (const doc of moduleDocs) {
   }
 }
 
-for (const doc of moduleDocs) {
+for (const doc of moduleDocs.filter(isGenerated)) {
   const sections = [];
 
   // --- Concept Overview ---
@@ -213,7 +226,7 @@ sidebar:
 ${sections.join('\n\n')}
 `;
 
-  fs.writeFileSync(path.join(outDir, `${doc.slug}.md`), content, 'utf8');
+  writeIfChanged(path.join(outDir, `${doc.slug}.md`), content);
 }
 
 // --- Index: the canonical module index -------------------------------------
@@ -320,5 +333,13 @@ ${groupedIndex}
 ${languageIndex}
 `;
 
-fs.writeFileSync(path.join(outDir, 'index.md'), indexContent, 'utf8');
-console.log(`Generated ${moduleDocs.length} module pages.`);
+writeIfChanged(path.join(outDir, 'index.md'), indexContent);
+for (const doc of moduleDocs.filter((d) => d.handwritten)) {
+  if (!fs.existsSync(path.join(outDir, `${doc.slug}.md`))) {
+    throw new Error(`moduleDocs.ts: ${doc.slug} is marked handwritten but modules/${doc.slug}.md does not exist.`);
+  }
+}
+const generatedCount = moduleDocs.filter(isGenerated).length;
+console.log(
+  `Generated ${generatedCount} module pages; ${moduleDocs.length - generatedCount} are hand-written and were left alone.`
+);

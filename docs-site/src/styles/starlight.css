@@ -467,3 +467,32 @@ site-search dialog::backdrop {
 mobile-starlight-toc .toggle {
   border-radius: 3px;
 }
+
+/* ── Figures ─────────────────────────────────────────────────────────────────
+   Drawn by docs-site/scripts/figures/ in both palettes; a page carries one <img> per theme. */
+/* Expressive Code frames are <figure class="frame"> too; these rules are for pictures only. */
+.sl-markdown-content figure:not(.frame) {
+  margin: 2rem 0;
+}
+
+.sl-markdown-content figure:not(.frame) img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--oq-rule);
+  border-radius: 3px;
+}
+
+/* Starlight's theme utilities set display:none; this keeps them winning over the rule above. */
+:root[data-theme='light'] .sl-markdown-content figure:not(.frame) img.light\:sl-hidden,
+:root[data-theme='dark'] .sl-markdown-content figure:not(.frame) img.dark\:sl-hidden {
+  display: none;
+}
+
+.sl-markdown-content figure:not(.frame) figcaption {
+  margin-top: 0.6rem;
+  font-family: var(--oq-sans);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--oq-muted);
+}

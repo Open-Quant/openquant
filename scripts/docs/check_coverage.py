@@ -41,10 +41,11 @@ PY_SRC = ROOT / "python" / "openquant"
 ALLOWLIST = ROOT / "docs-site" / "coverage_allowlist.toml"
 
 # Same taxonomy, same order, as docs-site/scripts/check-content-schema.mjs.
-STATUS_ORDER = ("generated", "draft", "reviewed", "validated")
+STATUS_ORDER = ("generated", "draft", "authored", "reviewed", "validated")
 STATUS_MEANS = {
     "generated": "Emitted from `src/data/moduleDocs.ts`. Nobody has read it.",
     "draft": "Hand-written, known incomplete. Claims nothing.",
+    "authored": "Hand-written and complete, examples executed by the docs gates. No human has read it.",
     "reviewed": "A human read the page end to end.",
     "validated": "Reviewed *and* checked against the code.",
 }
@@ -108,19 +109,27 @@ def documented_modules() -> set[str]:
     return names
 
 
-def module_depth() -> tuple[int, int]:
-    """(pages carrying the full template, pages carrying only the base template)."""
-    full = base = 0
+def module_depth() -> tuple[int, int, int]:
+    """(generated pages with the full template, with the base template only, hand-written pages).
+
+    A hand-written page has no template, so sorting it by which template headings it happens
+    to contain would miscount it as a thin generated page.
+    """
+    full = base = handwritten = 0
     for page in sorted(MODULE_PAGES.glob("*.md")):
-        if not frontmatter(page).get("module"):
+        meta = frontmatter(page)
+        if not meta.get("module"):
             continue  # the index page
+        if meta.get("status") != "generated":
+            handwritten += 1
+            continue
         text = page.read_text(encoding="utf-8")
         headings = {h for h in BASE_SECTIONS + FULL_SECTIONS if f"\n## {h}\n" in text}
         if all(h in headings for h in FULL_SECTIONS):
             full += 1
         else:
             base += 1
-    return full, base
+    return full, base, handwritten
 
 
 def public_surfaces() -> dict[str, list[str]]:
@@ -205,15 +214,16 @@ def render_status_tally(tally: dict[str, int]) -> str:
     return "\n".join(lines)
 
 
-def render_module_depth(full: int, base: int) -> str:
+def render_module_depth(full: int, base: int, handwritten: int) -> str:
     return "\n".join(
         [
             "| | Count |",
             "|---|---|",
-            f"| Modules with a documentation page | {full + base} |",
-            f"| …carrying the full template (**Key Parameters** and **Common Pitfalls** "
+            f"| Modules with a documentation page | {full + base + handwritten} |",
+            f"| …written by hand, with a citation and executed examples | {handwritten} |",
+            f"| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** "
             f"on top of the base sections) | {full} |",
-            f"| …carrying the base template only | {base} |",
+            f"| …generated, carrying the base template only | {base} |",
         ]
     )
 
@@ -243,12 +253,12 @@ def main() -> int:
 
     today = date.today()
     tally = status_tally()
-    full, base = module_depth()
+    full, base, handwritten = module_depth()
     rows, failures = gaps(today)
 
     regions = {
         "status-tally": render_status_tally(tally),
-        "module-depth": render_module_depth(full, base),
+        "module-depth": render_module_depth(full, base, handwritten),
         "gaps": render_gaps(rows),
         "measured": f"Numbers below were regenerated on **{today.isoformat()}**.",
     }
@@ -288,7 +298,10 @@ def main() -> int:
         f"docs pages: {sum(tally.values())} "
         f"({', '.join(f'{tally[s]} {s}' for s in STATUS_ORDER if tally[s])})"
     )
-    print(f"module pages: {full + base} ({full} full template, {base} base template)")
+    print(
+        f"module pages: {full + base + handwritten} "
+        f"({handwritten} hand-written, {full} full template, {base} base template)"
+    )
     print(f"undocumented public modules: {len(rows) or 'none'}")
 
     if drifted:

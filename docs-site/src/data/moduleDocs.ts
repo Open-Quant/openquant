@@ -33,6 +33,12 @@ export type ParameterDoc = {
 };
 
 export type ModuleDoc = {
+  /**
+   * The module's page is a hand-written .md file. The generator leaves it alone, and this
+   * entry keeps only what the module index needs: slug, module, subject, summary, surface.
+   * Every content field below is then unused. Issue #53 ends when every entry looks like this.
+   */
+  handwritten?: true;
   slug: string;
   module: string;
   subject: string;
@@ -43,11 +49,11 @@ export type ModuleDoc = {
    * so the 39 existing entries still type-check, and safe to delete once
    * something has been done with the one-liners.
    */
-  whyItExists: string;
-  keyApis: string[];
-  formulas: Formula[];
-  examples: ExampleBlock[];
-  notes: string[];
+  whyItExists?: string;
+  keyApis?: string[];
+  formulas?: Formula[];
+  examples?: ExampleBlock[];
+  notes?: string[];
   /**
    * The three fields below are REQUIRED, and the generator asserts them.
    * They used to be optional, and 27 of the 39 modules simply omitted them:
@@ -55,9 +61,9 @@ export type ModuleDoc = {
    * so a missing overview shipped as a 130-word page instead of failing the
    * build. A new module with none of these is now a loud generator error.
    */
-  conceptOverview: string;
-  whenToUse: string;
-  relatedModules: string[];
+  conceptOverview?: string;
+  whenToUse?: string;
+  relatedModules?: string[];
   keyParameters?: ParameterDoc[];
   commonPitfalls?: string[];
   afmlChapters?: number[];
@@ -320,85 +326,11 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "data-structures",
     module: "data_structures",
     subject: "Event-Driven Data and Labeling",
-    summary: "Constructs standard/time/run/imbalance bars from trade streams.",
-    whyItExists: "Event-based bars reduce heteroskedasticity and improve stationarity versus fixed-time sampling.",
-    keyApis: ["standard_bars", "time_bars", "run_bars", "imbalance_bars", "Trade", "StandardBar", "StandardBarType", "ImbalanceBarType"],
-    formulas: [
-      { label: "Dollar Bar Trigger", latex: "\\sum_{i=t_0}^{t} p_i v_i \\ge \\theta" },
-      { label: "Imbalance Trigger", latex: "\\left|\\sum b_i\\right| \\ge E[|\\sum b_i|]" },
-    ],
-    examples: [
-      {
-        title: "Build dollar bars from a Polars DataFrame",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant.bars import build_dollar_bars, bar_diagnostics
-import polars as pl
-
-# Input: Polars DataFrame with ts, symbol, open, high, low, close, volume columns
-df = pl.read_parquet("trades.parquet")
-
-# Dollar bars: each bar aggregates ~$5M of notional
-bars = build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)
-# Returns: Polars DataFrame with ts, symbol, open, high, low, close, volume, adj_close, start_ts, n_obs, dollar_value
-
-# Check bar quality: low autocorrelation = good
-diag = bar_diagnostics(bars)
-print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}`,
-      },
-      {
-        title: "Build tick and volume bars",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
-
-tick_bars = build_tick_bars(df, ticks_per_bar=50)
-vol_bars = build_volume_bars(df, volume_per_bar=100_000.0)
-time_bars = build_time_bars(df, interval="5m")`,
-      },
-      {
-        title: "Build bars from Rust",
-        language: "rust",
-        code: `use chrono::Duration;\nuse openquant::data_structures::{\n    standard_bars, time_bars, run_bars, imbalance_bars,\n    Trade, StandardBarType, ImbalanceBarType,\n};\n\nlet trades: Vec<Trade> = vec![];\n\n// Fixed-time bars\nlet t_bars = time_bars(&trades, Duration::minutes(5))?;\n\n// Dollar bars via standard_bars\nlet d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar)?;\n\n// Run bars (Rust-only)\nlet r_bars = run_bars(&trades, 100)?;\n\n// Tick imbalance bars (Rust-only)\nlet ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick)?;`,
-      },
-    ],
-    notes: [
-      "Threshold selection controls bar frequency and noise level.",
-      "Keep OHLCV semantics consistent across downstream features.",
-      "Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars.",
-      "`bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction.",
-    ],
-    conceptOverview: `Traditional financial data uses fixed-time bars (1-minute, daily), but these sample uniformly regardless of market activity. During quiet periods you get noise; during volatile periods you under-sample important information.
-
-Information-driven bars (AFML Chapter 2) sample based on market activity instead of clock time. **Dollar bars** trigger a new bar when cumulative traded dollar volume reaches a threshold, producing roughly equal-information observations. **Volume bars** trigger on cumulative share volume. **Tick bars** trigger on trade count.
-
-**Imbalance bars** go further: they detect when the net signed trade flow (buy minus sell) exceeds its expected magnitude, capturing points where informed trading pressure shifts. **Run bars** detect runs of same-signed trades exceeding expectations.
-
-The key insight is that information-driven bars produce returns that are closer to IID normal, which makes downstream ML models (labeling, feature importance, cross-validation) better behaved. All AFML workflows assume information-driven bars as input.`,
-    whenToUse: `This is the first module in any AFML pipeline. Raw tick or trade data goes in; structured OHLCV bars come out. Everything downstream — labeling, features, sampling — consumes these bars.
-
-**Prerequisites**: Raw trade or tick data with timestamps, prices, and volumes.
-
-**Alternatives**: Standard time bars if your data is already aggregated. For pre-aggregated OHLCV data, use the \`data\` module's \`load_ohlcv\` and \`clean_ohlcv\` functions instead.`,
-    keyParameters: [
-      { name: "dollar_value_per_bar", type: "float", description: "Dollar notional threshold for dollar bars (Python)", default: "5_000_000.0" },
-      { name: "volume_per_bar", type: "float", description: "Cumulative volume threshold for volume bars (Python)", default: "100_000.0" },
-      { name: "ticks_per_bar", type: "int", description: "Trade count threshold for tick bars (Python)", default: "50" },
-      { name: "interval", type: "str", description: "Time interval for time bars, e.g. '1d', '5m', '1h' (Python)", default: "'1d'" },
-      { name: "threshold", type: "f64", description: "Bar trigger threshold for standard_bars, run_bars, imbalance_bars (Rust)", default: "—" },
-      { name: "bar_type", type: "StandardBarType", description: "Tick, Volume, or Dollar — selects accumulation metric (Rust)", default: "—" },
-    ],
-    commonPitfalls: [
-      "Using time bars when your data has highly variable activity — dollar or volume bars will produce more stationary returns.",
-      "Setting the threshold too low, creating extremely noisy high-frequency bars, or too high, losing intraday resolution.",
-      "Forgetting to assign trade direction (buy/sell sign) before constructing imbalance or run bars — these require signed volume.",
-      "Mixing bar types across train and inference: if you train on dollar bars, your live pipeline must also use dollar bars with the same threshold.",
-      "Run bars and imbalance bars are available in Python via bars.build_run_bars and bars.build_imbalance_bars.",
-    ],
-    relatedModules: ["filters", "labeling", "fracdiff"],
+    summary: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.",
+    handwritten: true,
     afmlChapters: [2],
     apiSurface: "both",
-    pythonApis: ["bars.build_time_bars", "bars.build_tick_bars", "bars.build_volume_bars", "bars.build_dollar_bars", "bars.build_run_bars", "bars.build_imbalance_bars"],
+    pythonApis: ["bars.build_time_bars", "bars.build_tick_bars", "bars.build_volume_bars", "bars.build_dollar_bars", "bars.bar_diagnostics"],
   },
   {
     slug: "hyperparameter-tuning",
@@ -535,37 +467,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "etf-trick",
-    conceptOverview:
-      "The ETF trick turns a series of futures contracts — each with its own roll, financing cost and carry — into one continuous, reinvestable price series that a backtest can treat like a tradable instrument. `EtfTrick` consumes aligned open, close, allocation and cost tables plus optional financing rates and produces a NAV series; `get_futures_roll_series` applies backward or forward roll adjustment to a single contract chain. Both exist because naively concatenating contract prices manufactures a return at every roll.",
-    whenToUse:
-      "Use it whenever a backtest spans a contract roll, or whenever the traded object is a basket whose weights change over time. Suspiciously smooth PnL around roll dates is the symptom of skipping it. Costs and financing rates must come from the same clock as the price data, and the contract calendar assumptions are worth verifying against the exchange rather than inferring from the data. This module is Rust-only — no Python bindings are exposed.",
-    relatedModules: ["data-structures", "backtesting-engine", "backtest-statistics", "bet-sizing"],
     module: "etf_trick",
     subject: "Position Sizing and Trade Construction",
-    summary: "Synthetic ETF and futures roll utilities for realistic PnL path construction.",
-    whyItExists: "Backtests must include financing, carry, and contract-roll mechanics to avoid optimistic bias.",
-    keyApis: ["EtfTrick", "EtfTrick::from_tables", "EtfTrick::from_csv", "EtfTrick::get_etf_series", "get_futures_roll_series", "FuturesRollRow", "Table"],
-    formulas: [
-      { label: "ETF NAV Update", latex: "NAV_t=NAV_{t-1}(1+r_t-c_t)" },
-      { label: "Roll Return", latex: "r^{roll}_t=\\frac{F^{near}_t-F^{far}_t}{F^{far}_t}" },
-    ],
-    examples: [
-      {
-        title: "Construct synthetic ETF series",
-        language: "rust",
-        code: `use openquant::etf_trick::{EtfTrick, Table};\n\n// Load open/close/allocation/cost tables from CSV\nlet etf = EtfTrick::from_csv(\n    "open.csv", "close.csv", "alloc.csv", "costs.csv", Some("rates.csv"),\n).unwrap();\n\n// Generate synthetic ETF NAV series\nlet series = etf.get_etf_series(252).unwrap();\n// Returns Vec<(date_string, nav_value)>`,
-      },
-      {
-        title: "Compute futures roll-adjusted series",
-        language: "rust",
-        code: `use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};\n\nlet rows: Vec<FuturesRollRow> = vec![/* ... */];\nlet adjusted = get_futures_roll_series(&rows, "backward", true).unwrap();`,
-      },
-    ],
-    notes: [
-      "Verify contract calendar assumptions.",
-      "Costs and rates should come from the same clock as price data.",
-      "This module is Rust-only — no Python bindings are currently exposed.",
-    ],
+    summary: "A rebalanced futures basket, or one rolled contract, as a single continuous value series.",
+    handwritten: true,
+    afmlChapters: [2],
     apiSurface: "rust-only",
   },
   {
@@ -606,85 +512,8 @@ The key insight is that information-driven bars produce returns that are closer 
     slug: "filters",
     module: "filters",
     subject: "Event-Driven Data and Labeling",
-    summary: "CUSUM and z-score event filters for event-driven sampling.",
-    whyItExists: "Extracts informative events from noisy high-frequency sequences.",
-    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "z_score_filter_indices", "z_score_filter_timestamps", "Threshold", "FilterError"],
-    formulas: [
-      {
-        label: "Symmetric CUSUM Filter",
-        latex: "S_t^{+}=\\max\\!\\left(0,\\,S_{t-1}^{+}+r_t\\right),\\qquad S_t^{-}=\\min\\!\\left(0,\\,S_{t-1}^{-}+r_t\\right),\\qquad \\text{event at }t\\iff S_t^{+}>h_t\\;\\lor\\;S_t^{-}<-h_t",
-        where: "$r_t=\\ln(p_t/p_{t-1})$ is the log return and $h_t$ the threshold — a constant for `Threshold::Scalar`, a per-bar series for `Threshold::Dynamic`. Both arms are needed: $S^{+}$ alone only ever detects upward runs. Whichever arm breaches is reset to $0$ and the bar is emitted as an event, so the filter measures *runs* away from the last event rather than a cumulative level.",
-      },
-      {
-        label: "Z-score Filter",
-        latex: "z_t=\\frac{x_t-\\mu_t}{\\sigma_t},\\qquad \\text{event at }t\\iff|z_t|>h",
-        where: "$\\mu_t$ and $\\sigma_t$ are the rolling mean and standard deviation over the lookback window ending at $t$.",
-      },
-    ],
-    examples: [
-      {
-        title: "CUSUM and z-score event detection",
-        language: "python",
-        code: `import openquant
-
-close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-# The filters bindings parse "%Y-%m-%d %H:%M:%S" — a space, not an ISO "T".
-timestamps = [
-    "2024-01-02 09:30:00", "2024-01-02 09:31:00",
-    "2024-01-02 09:32:00", "2024-01-02 09:33:00",
-    "2024-01-02 09:34:00", "2024-01-02 09:35:00",
-    "2024-01-02 09:36:00", "2024-01-02 09:37:00",
-]
-
-# CUSUM filter: fires when cumulative deviation exceeds threshold
-event_indices = openquant.filters.cusum_filter_indices(close, 0.02)
-
-# With timestamps: returns event timestamps directly
-event_ts = openquant.filters.cusum_filter_timestamps(close, timestamps, 0.02)
-
-# Z-score filter: fires when z-score exceeds threshold
-z_indices = openquant.filters.z_score_filter_indices(close, mean_window=20, std_window=20, threshold=2.0)
-z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_window=20, std_window=20, threshold=2.0)`,
-      },
-      {
-        title: "CUSUM with static and dynamic thresholds",
-        language: "rust",
-        code: `use openquant::filters::{cusum_filter_indices, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\n\n// Static threshold\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02))?;\n\n// Dynamic threshold (e.g. volatility-scaled per bar)\nlet dynamic_h = vec![0.02, 0.025, 0.018, 0.022];\nlet idx = cusum_filter_indices(&close, Threshold::Dynamic(dynamic_h))?;`,
-      },
-    ],
-    notes: [
-      "Calibrate thresholds to target event frequency, not just sensitivity.",
-      "Use identical filtering in train and live pipelines.",
-      "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.",
-      "The CUSUM filters and the timestamp variants return Result<..., FilterError>: a dynamic threshold shorter than the series, or too few timestamps, is an error. Python raises ValueError.",
-    ],
-    conceptOverview: `Instead of sampling at fixed intervals, AFML Chapter 2 uses structural event filters to detect when something meaningful happens in the price process. This produces training examples that correspond to real market inflection points rather than arbitrary calendar dates.
-
-The **CUSUM filter** tracks a cumulative sum of returns (or price changes). It resets to zero when the cumulative deviation exceeds a threshold h, and the reset point becomes an event. This captures points where the price has moved "enough" since the last event. The filter is directional: it tracks both positive and negative cumulative deviations separately.
-
-The **z-score filter** standardizes the current value against a rolling mean and standard deviation, firing when the z-score exceeds a threshold. This is useful for mean-reverting signals where you want events when the price deviates significantly from its recent average.
-
-Both filters replace the naive approach of labeling every bar, which creates highly correlated and redundant training examples.`,
-    whenToUse: `Apply event filters immediately after bar construction and before labeling. They bridge raw bars to the labeling module: bars go in, event timestamps come out.
-
-**Prerequisites**: A price series (close prices from bars), and optionally timestamps.
-
-**Alternatives**: Fixed-interval sampling (simpler but creates redundant events), or custom event logic for strategy-specific triggers.`,
-    keyParameters: [
-      { name: "close", type: "list[float]", description: "Input price series (close prices)", default: "—" },
-      { name: "threshold", type: "float", description: "CUSUM trigger level; controls event frequency (Python: scalar only)", default: "—" },
-      { name: "threshold", type: "Threshold", description: "CUSUM trigger: Threshold::Scalar(f64) or Threshold::Dynamic(Vec<f64>) (Rust)", default: "—" },
-      { name: "mean_window", type: "int", description: "Rolling mean lookback for z-score filter", default: "—" },
-      { name: "std_window", type: "int", description: "Rolling std lookback for z-score filter", default: "—" },
-      { name: "timestamps", type: "list[str]", description: "Optional timestamps; use _timestamps variants to get event times instead of indices", default: "—" },
-    ],
-    commonPitfalls: [
-      "Setting the CUSUM threshold too tight in volatile regimes — you get too many events and labels become noisy. Scale h by recent volatility.",
-      "Using different thresholds in training vs live inference — the event distribution shifts and the model sees a different regime.",
-      "Applying CUSUM to non-stationary raw prices instead of returns or log-returns — the filter becomes meaningless as the price drifts.",
-      "Python bindings only support scalar thresholds — use the Rust API directly if you need dynamic (per-bar) thresholds.",
-    ],
-    relatedModules: ["data-structures", "labeling", "sample-weights"],
+    summary: "The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.",
+    handwritten: true,
     afmlChapters: [2],
     apiSurface: "both",
     pythonApis: ["filters.cusum_filter_indices", "filters.cusum_filter_timestamps", "filters.z_score_filter_indices", "filters.z_score_filter_timestamps"],

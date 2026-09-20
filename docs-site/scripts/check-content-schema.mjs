@@ -10,6 +10,9 @@ const docsRoot = path.resolve(process.cwd(), 'src/content/docs');
  *
  *   generated — machine-emitted from src/data/moduleDocs.ts. Nobody has read it.
  *   draft     — hand-written, known to be incomplete. Claims nothing.
+ *   authored  — hand-written and complete, its examples executed by the docs gates, but
+ *               not yet read by a human. Pages written by an AI assistant stop here:
+ *               only a person can raise one to 'reviewed'.
  *   reviewed  — a human read the page and it stands on its own.
  *   validated — reviewed AND checked against the code it describes.
  *
@@ -20,11 +23,12 @@ const docsRoot = path.resolve(process.cwd(), 'src/content/docs');
 const STATUS_DATE_FIELD = {
   generated: 'last_generated',
   draft: null,
+  authored: 'last_authored',
   reviewed: 'last_validated',
   validated: 'last_validated',
 };
 const STATUSES = Object.keys(STATUS_DATE_FIELD);
-const DATE_FIELDS = ['last_generated', 'last_validated'];
+const DATE_FIELDS = ['last_generated', 'last_authored', 'last_validated'];
 
 function walk(dir) {
   const files = [];
@@ -213,7 +217,8 @@ for (const file of files) {
     fail(
       `status: ${status} is not one of ${STATUSES.join(' | ')}. ` +
         `Use 'generated' for machine-emitted pages, 'draft' for hand-written pages ` +
-        `that are not finished, 'reviewed' once a human has read the page, and ` +
+        `that are not finished, 'authored' for finished pages no human has read yet, ` +
+        `'reviewed' once a human has read the page, and ` +
         `'validated' once it has also been checked against the code.`
     );
     continue;
@@ -223,6 +228,19 @@ for (const file of files) {
   for (const field of DATE_FIELDS) {
     if (field in fm && !parseIsoDate(fm[field])) {
       fail(`${field}: ${fm[field]} is not a valid ISO date (expected YYYY-MM-DD)`);
+    }
+  }
+
+  // A hand-written module page says where its method comes from. Generated pages never
+  // did — not one cited an AFML section — which is part of why they read as filler.
+  const isModulePage = /(^|\/)modules\/(?!index\.)[^/]+\.mdx?$/.test(rel);
+  if (isModulePage && status !== 'generated') {
+    const items = frontmatter.match(/^citation:\n((?:[ \t]+- .+\n?)+)/m)?.[1] ?? '';
+    if (!items.trim()) {
+      fail(
+        `module page with status: ${status} needs a non-empty 'citation' list ` +
+          `(AFML chapter, section and snippet; the original paper where there is one).`
+      );
     }
   }
 
