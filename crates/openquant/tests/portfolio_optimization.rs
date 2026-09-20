@@ -79,17 +79,14 @@ fn test_against_python_fixture_weights() {
         .zip(w_min.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "min vol bound diff {max_diff}");
+    // 0.0028 now that the long-only problem is actually solved (it was 0.17 when the
+    // unconstrained optimum was clamped). What is left is the returns convention: log returns
+    // here, simple returns in the fixture, the same gap inverse-variance shows above.
+    assert!(max_diff < 5e-3, "min vol diff {max_diff}");
 
-    let w_max = fixture["weights"]["max_sharpe"].as_array().unwrap();
-    let res_max = allocate_max_sharpe(&prices, 0.0, None, None).unwrap();
-    let max_diff = res_max
-        .weights
-        .iter()
-        .zip(w_max.iter())
-        .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
-        .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "max sharpe diff {max_diff}");
+    // The fixture's max_sharpe weights are not compared: they depend on a risk-free rate and an
+    // annualisation this file does not know, and the old `< 1.0` tolerance could not fail anyway.
+    // The optimisers are checked against scipy on fixed inputs in portfolio_qp_reference.rs.
 }
 
 #[test]
@@ -156,46 +153,37 @@ fn test_allocation_with_supplied_inputs() {
 }
 
 #[test]
-fn test_bound_and_infeasible_behavior_against_fixture() {
+fn test_bound_and_infeasible_behavior() {
+    // This used to compare against the fixture's `*_bound0` weights at tolerances of 0.25 and
+    // 1.0. Those weights were generated under a different constraint (all 23 are non-zero and
+    // capped at 0.3), so the comparison was never like for like. What is checked here is the
+    // bound this test applies; bounded optima are checked against scipy in
+    // portfolio_qp_reference.rs.
     let prices = load_prices();
-    let fixture = load_fixture();
     let mut bounds = HashMap::new();
     bounds.insert(0, (0.3, 1.0));
     let opts = AllocationOptions { bounds: Some(bounds), ..Default::default() };
-    let res_min = openquant::portfolio_optimization::allocate_min_vol_with(&prices, &opts).unwrap();
-    let exp_min = fixture["weights"]["min_volatility_bound0"].as_array().unwrap();
-    let max_diff = res_min
-        .weights
-        .iter()
-        .zip(exp_min.iter())
-        .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
-        .fold(0.0_f64, f64::max);
-    assert!(max_diff < 0.25, "min vol bound diff {max_diff}");
 
-    let res_max =
-        openquant::portfolio_optimization::allocate_max_sharpe_with(&prices, &opts).unwrap();
-    let exp_max = fixture["weights"]["max_sharpe_bound0"].as_array().unwrap();
-    let max_diff = res_max
-        .weights
-        .iter()
-        .zip(exp_max.iter())
-        .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
-        .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "max sharpe bound diff {max_diff}");
+    let unbounded = allocate_min_vol(&prices, None, None).unwrap();
+    assert!(unbounded.weights[0] < 0.3, "the floor must bind for this test to mean anything");
 
-    let res_eff = openquant::portfolio_optimization::allocate_efficient_risk_with(
-        &prices,
-        &AllocationOptions { target_return: 0.01, ..opts.clone() },
-    )
-    .unwrap();
-    let exp_eff = fixture["weights"]["efficient_risk_bound0"].as_array().unwrap();
-    let max_diff = res_eff
-        .weights
-        .iter()
-        .zip(exp_eff.iter())
-        .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
-        .fold(0.0_f64, f64::max);
-    assert!(max_diff < 1.0, "efficient risk bound diff {max_diff}");
+    let solutions = [
+        openquant::portfolio_optimization::allocate_min_vol_with(&prices, &opts).unwrap(),
+        openquant::portfolio_optimization::allocate_max_sharpe_with(&prices, &opts).unwrap(),
+        openquant::portfolio_optimization::allocate_efficient_risk_with(
+            &prices,
+            &AllocationOptions { target_return: 0.0, ..opts.clone() },
+        )
+        .unwrap(),
+    ];
+    for res in &solutions {
+        assert!(res.weights[0] >= 0.3 - 1e-9, "floor violated: {}", res.weights[0]);
+        assert!((res.weights.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(res.weights.iter().all(|w| *w >= -1e-9 && *w <= 1.0 + 1e-9));
+    }
+    // A floor that binds is met exactly by the minimum-variance portfolio, and costs variance.
+    assert!((solutions[0].weights[0] - 0.3).abs() < 1e-9);
+    assert!(solutions[0].portfolio_risk > unbounded.portfolio_risk);
 
     let err = allocate_min_vol(&prices, None, Some((0.9, 1.0))).unwrap_err();
     assert!(matches!(err, AllocError::InfeasibleBounds { .. }));
