@@ -85,5 +85,24 @@ for name, case in cases.items():
     case["weights"] = [float(x) for x in w]
     print(f"{name:30s} var={case['variance']:.3e} ret={case['return']:+.5f} nonzero={int((w > 1e-7).sum()):2d} max={w.max():.4f}")
 
-(HERE / "qp_reference.json").write_text(json.dumps({"source": __doc__.strip().splitlines()[0], "cases": cases}, indent=2) + "\n")
+
+
+def frontier(bounds, label, n_points=15):
+    """Minimum variance at evenly spaced target returns, from the minimum-variance return up to
+    just below the highest attainable return. This is what the CLA frontier must reproduce."""
+    w_lo = best(variance, bounds, [budget])
+    w_hi = best(lambda w: -(w @ mu), bounds, [budget])
+    r_lo, r_hi = float(w_lo @ mu), float(w_hi @ mu)
+    rows = []
+    for r in np.linspace(r_lo, r_lo + 0.98 * (r_hi - r_lo), n_points):
+        w = best(variance, bounds, [budget, {"type": "ineq", "fun": lambda w, r=r: w @ mu - r}])
+        rows.append({"target_return": float(r), "variance": float(w @ C @ w)})
+    print(f"frontier {label:10s} returns {r_lo:+.5f} .. {r_hi:+.5f}")
+    return {"min_variance_return": r_lo, "max_return": r_hi, "points": rows}
+
+
+frontiers = {"long_only": frontier(long_only, "long_only"), "capped": frontier(capped, "capped")}
+
+(HERE / "qp_reference.json").write_text(json.dumps(
+    {"source": __doc__.strip().splitlines()[0], "cases": cases, "frontiers": frontiers}, indent=2) + "\n")
 print("positive mu:", int((mu > 0).sum()), "of", n)
