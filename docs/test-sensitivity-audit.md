@@ -60,7 +60,7 @@ The earlier claim was "19 of 37 Rust test files check against fixtures". What is
 | bet_sizing.rs + ch10_snippets.rs | bet_sizing | 17 + 32 | fixture values and inline closed forms, tol 1e-12 | 3/3 | SENSITIVE | - |
 | cla.rs (oos) | cla | 20 | structure (sum to 1, bounds), one 1e-12 literal | 0/2 (EMA weight sign, sqrt dropped from sigma) | INSENSITIVE | not in scope |
 | codependence.rs | codependence | 3 | reference literals, tight | 2/2 | SENSITIVE | - |
-| combinatorial_optimization.rs | combinatorial_optimization | 5 | inline expected values and optimal decisions | 0/2 (impact cost sign, risk penalty |x| vs x^2) | INSENSITIVE | not done |
+| combinatorial_optimization.rs | combinatorial_optimization | 5 | inline expected values and optimal decisions | 0/2 (impact cost sign, risk penalty abs(x) vs x^2) | INSENSITIVE | not done |
 | cross_validation.rs | cross_validation | 9 | index-set properties, scores only checked to lie in [0,1] | 1/3; embargo off-by-one and F1 missing factor 2 survived | PARTLY | not done |
 | data_processing.rs | data_processing | 1 | row counts on one 3-row case | 1/2; **ctl survived** (gap count never asserted) | PARTLY | not done |
 | data_structures_standard.rs + data_structures_run_imbalance.rs | data_structures | 2 + 2 | inline exact bar values | 1/3; `>=` vs `>` volume threshold and signed-vs-abs imbalance survived (no boundary case) | PARTLY | not done |
