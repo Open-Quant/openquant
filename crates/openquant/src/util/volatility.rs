@@ -7,41 +7,46 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
         return Vec::new();
     }
 
-    let alpha = 2.0 / (lookback as f64 + 1.0);
-    let one_minus = 1.0 - alpha;
+    // AFML snippet 3.1: the return over (at least) the previous day, then
+    // `ewm(span=lookback).std()`. pandas' defaults are `adjust=True, bias=False`: weights
+    // (1 - alpha)^k over the whole history and the unbiased weighted variance. The mean and
+    // variance are updated incrementally, as pandas does, rather than as
+    // `sum(w x^2)/sum(w) - mean^2`, which cancels catastrophically when returns barely vary.
+    let decay = 1.0 - 2.0 / (lookback as f64 + 1.0);
+    let (mut sum_wt, mut sum_wt2, mut old_wt) = (0.0f64, 0.0f64, 0.0f64);
+    let (mut mean, mut var) = (0.0f64, 0.0f64);
 
     let mut out = Vec::new();
-    let mut mean = 0.0f64;
-    let mut var = 0.0f64;
-    let mut initialized = false;
-
-    for i in 0..close.len() {
-        let (ts_i, price_i) = close[i];
+    for (i, &(ts_i, price_i)) in close.iter().enumerate() {
+        // `searchsorted(t - 1 day) - 1`: the last bar strictly before one day ago.
         let target_time = ts_i - Duration::days(1);
+        let Some(j) = close[..i].iter().rposition(|(ts_j, _)| *ts_j < target_time) else {
+            continue;
+        };
+        let ret = price_i / close[j].1 - 1.0;
 
-        // searchsorted equivalent: find insertion point for target_time
-        let mut j_opt = None;
-        for (j, (ts_j, _)) in close.iter().enumerate().take(i) {
-            if *ts_j <= target_time {
-                j_opt = Some(j);
-            }
-        }
-        if let Some(j) = j_opt {
-            let (_, price_prev) = close[j];
-            let ret = price_i / price_prev - 1.0;
+        sum_wt *= decay;
+        sum_wt2 *= decay * decay;
+        old_wt *= decay;
 
-            if !initialized {
-                mean = ret;
-                var = 0.0;
-                initialized = true;
-            } else {
-                let prev_mean = mean;
-                mean = alpha * ret + one_minus * mean;
-                var = one_minus * (var + alpha * (ret - prev_mean).powi(2));
-            }
-            let std = var.max(0.0).sqrt();
-            out.push((ts_i, std));
+        let old_mean = mean;
+        let total = old_wt + 1.0;
+        mean = (old_wt * old_mean + ret) / total;
+        var = (old_wt * (var + (old_mean - mean).powi(2)) + (ret - mean).powi(2)) / total;
+
+        sum_wt += 1.0;
+        sum_wt2 += 1.0;
+        old_wt += 1.0;
+
+        // One observation has no sample variance: pandas reports NaN there and so does this,
+        // so the result lines up with `ewm().std()` row for row. `get_events` drops a NaN
+        // target, exactly as `target[target > min_ret]` does.
+        let denom = sum_wt * sum_wt - sum_wt2;
+        if denom <= 0.0 {
+            out.push((ts_i, f64::NAN));
+            continue;
         }
+        out.push((ts_i, (var.max(0.0) * sum_wt * sum_wt / denom).sqrt()));
     }
 
     out

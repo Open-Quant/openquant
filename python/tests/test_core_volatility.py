@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from _core_fixtures import load_csv_columns, nanmean
@@ -33,9 +35,13 @@ def test_daily_vol_is_zero_for_constant_daily_return():
 
     out = volatility.get_daily_vol(timestamps, prices, 5)
 
-    # The first bar has no bar at least one day older, so it produces no estimate.
-    assert [ts for ts, _ in out] == timestamps[1:]
-    assert [v for _, v in out] == pytest.approx([0.0] * 9, abs=1e-9)
+    # Snippet 3.1 compares each bar with the last bar *strictly* more than a day older
+    # (`searchsorted(t - 1 day) - 1`), so with bars exactly one day apart the first estimate is
+    # on the third bar, against the first. pandas gives the same 8 rows: NaN for the first
+    # (one observation has no sample variance), then exactly 0.
+    assert [ts for ts, _ in out] == timestamps[2:]
+    assert math.isnan(out[0][1])
+    assert [v for _, v in out[1:]] == pytest.approx([0.0] * 7, abs=1e-15)
 
 
 def test_daily_vol_rejects_length_mismatch_and_bad_timestamps():

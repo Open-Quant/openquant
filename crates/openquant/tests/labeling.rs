@@ -47,14 +47,16 @@ fn test_daily_volatility() {
     let daily_vol = get_daily_vol(&close, 100);
     assert_eq!(daily_vol.len(), 960);
     let last = daily_vol.last().unwrap().1;
-    assert!((last - 0.008968238932170641).abs() < 1e-4);
+    // The pandas value from snippet 3.1. It used to be compared at 1e-4, which also accepted a
+    // biased, non-adjusted variance; see tests/daily_vol.rs for the full reference.
+    assert!((last - 0.008968238932170641).abs() < 1e-12);
 
     // tz-localized version should match values
     let tz_close: Vec<_> = close.iter().map(|(ts, price)| (*ts, *price)).collect();
     let tz_vol = get_daily_vol(&tz_close, 100);
     assert_eq!(daily_vol.len(), tz_vol.len());
     for (a, b) in daily_vol.iter().zip(tz_vol.iter()) {
-        assert!((a.1 - b.1).abs() < 1e-12);
+        assert!((a.1 - b.1).abs() < 1e-12 || (a.1.is_nan() && b.1.is_nan()));
     }
 }
 
@@ -294,7 +296,10 @@ fn test_triple_barrier_disabled_barrier_configurations() {
         vertical_barriers.iter().copied().collect();
     assert!(events_none.iter().all(|(ts, ev)| match vbar_map.get(ts).copied() {
         Some(v) => ev.t1 == Some(v),
-        None => ev.t1.is_some(),
+        // With both horizontal barriers disabled and no vertical barrier nothing can end the
+        // event, so snippet 3.2 leaves t1 empty. This used to assert `is_some()`, which
+        // encoded the library filling in the last bar.
+        None => ev.t1.is_none(),
     }));
 
     let labels_none = triple_barrier_labels(&events_none, &close);
