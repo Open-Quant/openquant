@@ -136,30 +136,6 @@ fn test_cla_efficient_frontier() {
 }
 
 #[test]
-fn test_lambda_for_no_bounded_weights() {
-    let prices = load_asset_prices();
-    let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
-        .unwrap();
-    let cov = covariance(&prices.data);
-    let (x, y) = cla._compute_lambda(&cov, &cov, &cla.expected_returns, None, &[1], &[0]);
-    assert!(x.is_finite());
-    let _ = y;
-}
-
-#[test]
-fn test_free_bound_weights() {
-    let prices = load_asset_prices();
-    let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
-        .unwrap();
-    let free = vec![1usize; cla.expected_returns.nrows() + 1];
-    let (x, y) = cla._free_bound_weight(&free);
-    assert!(!x);
-    assert!(!y);
-}
-
-#[test]
 fn test_expected_returns_equals_means() {
     let mut prices = load_asset_prices();
     let cols = prices.data.ncols();
@@ -172,33 +148,6 @@ fn test_expected_returns_equals_means() {
     cla._initialise(&prices.data, Some("B"), None, None).unwrap();
     let last = cla.expected_returns[(cla.expected_returns.nrows() - 1, 0)];
     assert!((last - 1e-5).abs() < 1e-12);
-}
-
-#[test]
-fn test_lambda_for_zero_matrices() {
-    let prices = load_asset_prices();
-    let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
-        .unwrap();
-    let mut cov = covariance(&prices.data);
-    for v in cov.iter_mut() {
-        *v = 0.0;
-    }
-    let (x, y) = cla._compute_lambda(&cov, &cov, &cla.expected_returns, None, &[1], &[0]);
-    assert_eq!(x, 0.0);
-    assert_eq!(y, 0);
-}
-
-#[test]
-fn test_w_for_no_bounded_weights() {
-    let prices = load_asset_prices();
-    let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
-    cla.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, Some("min_volatility"))
-        .unwrap();
-    let cov = covariance(&prices.data);
-    let (x, y) = cla._compute_w(&cov, &cov, &cla.expected_returns, None);
-    assert_eq!(x.len(), cov.nrows());
-    assert!(y.is_finite());
 }
 
 #[test]
@@ -254,17 +203,42 @@ fn test_value_error_for_unknown_solution() {
 }
 
 #[test]
-fn test_value_error_for_non_dataframe_input() {
+fn test_a_bare_price_matrix_gives_the_same_answer_as_dated_prices() {
+    // mlfinlab rejects anything that is not a DataFrame. That check means nothing here, and
+    // rejecting a matrix made the price path unreachable from Python, so a matrix is accepted.
     let prices = load_asset_prices();
-    let mut cla = CLA::default();
-    let err = cla.allocate(
-        Some(AssetPricesInput::RawMatrix(&prices.data)),
-        None,
-        None,
-        None,
-        Some("cla_turning_points"),
-    );
-    assert!(matches!(err, Err(ClaError::InvalidAssetPrices(_))));
+    let mut dated = CLA::default();
+    dated.allocate(Some(AssetPricesInput::Prices(&prices)), None, None, None, None).unwrap();
+    let mut bare = CLA::default();
+    bare.allocate(Some(AssetPricesInput::RawMatrix(&prices.data)), None, None, None, None).unwrap();
+    assert_eq!(dated.weights, bare.weights);
+    assert!(dated.weights.len() > 1);
+}
+
+#[test]
+fn test_two_uncorrelated_assets_follow_the_closed_form_critical_line() {
+    // Four tests used to stand here. They called `_compute_lambda`, `_compute_w` and
+    // `_free_bound_weight`, which were placeholders returning (0.0, 0), zeros and
+    // (false, false), and asserted exactly those constants. The algorithm exists now, so this
+    // checks it against a case that can be worked by hand.
+    //
+    // Long-only, mu = (0.10, 0.04), variances (0.04, 0.01), no correlation. The line starts all
+    // in asset 0. With both free, w = gamma C^-1 1 + lambda C^-1 mu and the budget give
+    // w_1 = 0 at lambda = var_0 / (mu_0 - mu_1) = 0.04 / 0.06, and at lambda = 0 the
+    // minimum-variance portfolio is inverse-variance: (0.01, 0.04) / 0.05 = (0.2, 0.8).
+    let mu = DMatrix::from_column_slice(2, 1, &[0.10, 0.04]);
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, 0.01]);
+    let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
+    cla.allocate(None, Some(&mu), Some(&cov), None, Some("cla_turning_points")).unwrap();
+
+    assert_eq!(cla.weights.len(), 3);
+    assert_eq!(cla.weights[0], vec![1.0, 0.0]);
+    assert!(cla.lambdas[0].is_infinite());
+    assert!((cla.weights[1][0] - 1.0).abs() < 1e-12 && cla.weights[1][1].abs() < 1e-12);
+    assert!((cla.lambdas[1] - 0.04 / 0.06).abs() < 1e-12, "lambda {}", cla.lambdas[1]);
+    assert!((cla.weights[2][0] - 0.2).abs() < 1e-12 && (cla.weights[2][1] - 0.8).abs() < 1e-12);
+    assert_eq!(cla.lambdas[2], 0.0);
+    assert_eq!(cla.free_weights[2].len(), 2);
 }
 
 #[test]

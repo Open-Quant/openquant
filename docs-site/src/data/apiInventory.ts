@@ -113,9 +113,6 @@ export const apiInventory = {
       "single_bet_size_mixed"
     ],
     "openquant::cla": [
-      "_compute_lambda",
-      "_compute_w",
-      "_free_bound_weight",
       "_initialise",
       "_purge_excess",
       "_purge_num_err",
