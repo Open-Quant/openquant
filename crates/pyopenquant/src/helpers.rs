@@ -11,12 +11,8 @@ pub type BarRow = (String, String, f64, f64, f64, f64, f64, f64, usize);
 pub type LabelingInputs =
     (Vec<(chrono::NaiveDateTime, f64)>, Vec<(chrono::NaiveDateTime, openquant::labeling::Event)>);
 
-pub fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
-    PyValueError::new_err(format!("{err:?}"))
-}
-
-/// An invalid-argument error from the core, raised as `ValueError` with the core's message.
-pub fn input_err<T: core::fmt::Display>(err: T) -> PyErr {
+/// A core error, raised as `ValueError` carrying the core's own message.
+pub fn to_py_err<T: core::fmt::Display>(err: T) -> PyErr {
     PyValueError::new_err(err.to_string())
 }
 

@@ -7,6 +7,57 @@
 use chrono::NaiveDateTime;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum BacktestError {
+    /// A failure reported by the caller's split evaluator, passed through verbatim.
+    #[error("{0}")]
+    Evaluator(String),
+    #[error("label span end must be >= start")]
+    LabelSpanEndBeforeStart,
+    #[error("group {group} has {found} occurrences, expected {expected}")]
+    GroupOccurrences { group: usize, found: usize, expected: usize },
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("returns and label_spans length mismatch")]
+    ReturnsLabelSpansLengthMismatch,
+    #[error("{name} must be {requirement}")]
+    Invalid { name: &'static str, requirement: &'static str },
+    #[error("walk-forward produced an empty train split")]
+    EmptyWalkForwardTrainSplit,
+    #[error("walk-forward produced no splits")]
+    NoWalkForwardSplits,
+    #[error("cross-validation produced an empty train split")]
+    EmptyCrossValidationTrainSplit,
+    #[error("CPCV produced an empty train split")]
+    EmptyCpcvTrainSplit,
+    #[error("split evaluator returned empty returns")]
+    EmptySplitReturns,
+    #[error("split evaluator returned non-finite returns")]
+    NonFiniteSplitReturns,
+    #[error("test_groups must be < n_groups")]
+    TestGroupsNotBelowGroups,
+    #[error("n_folds cannot exceed number of samples")]
+    TooManyFolds,
+    #[error("k cannot exceed n")]
+    CombinationSizeTooLarge,
+    #[error("combination count overflowed usize")]
+    CombinationCountOverflow,
+    #[error("split references out-of-range test group")]
+    TestGroupOutOfRange,
+    #[error("invalid path assignment length")]
+    InvalidPathAssignmentLength,
+    #[error("path references unknown split")]
+    UnknownSplitInPath,
+    #[error("path assignment references split not containing group")]
+    PathSplitMissingGroup,
+    #[error("missing split returns for CPCV path construction")]
+    MissingSplitReturns,
+    #[error("split return count must match split test indices length")]
+    SplitReturnCountMismatch,
+    #[error("split returns missing group test index")]
+    MissingGroupTestIndex,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BacktestSafeguards {
     pub survivorship_bias_control: String,
@@ -17,21 +68,21 @@ pub struct BacktestSafeguards {
 }
 
 impl BacktestSafeguards {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), BacktestError> {
         if self.survivorship_bias_control.trim().is_empty() {
-            return Err("survivorship_bias_control cannot be empty".to_string());
+            return Err(BacktestError::Empty("survivorship_bias_control"));
         }
         if self.look_ahead_control.trim().is_empty() {
-            return Err("look_ahead_control cannot be empty".to_string());
+            return Err(BacktestError::Empty("look_ahead_control"));
         }
         if self.data_mining_control.trim().is_empty() {
-            return Err("data_mining_control cannot be empty".to_string());
+            return Err(BacktestError::Empty("data_mining_control"));
         }
         if self.cost_assumption.trim().is_empty() {
-            return Err("cost_assumption cannot be empty".to_string());
+            return Err(BacktestError::Empty("cost_assumption"));
         }
         if self.multiple_testing_control.trim().is_empty() {
-            return Err("multiple_testing_control cannot be empty".to_string());
+            return Err(BacktestError::Empty("multiple_testing_control"));
         }
         Ok(())
     }
@@ -44,19 +95,19 @@ pub struct BacktestData {
 }
 
 impl BacktestData {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), BacktestError> {
         if self.returns.is_empty() {
-            return Err("returns cannot be empty".to_string());
+            return Err(BacktestError::Empty("returns"));
         }
         if self.returns.len() != self.label_spans.len() {
-            return Err("returns and label_spans length mismatch".to_string());
+            return Err(BacktestError::ReturnsLabelSpansLengthMismatch);
         }
         if self.returns.iter().any(|r| !r.is_finite()) {
-            return Err("returns must be finite".to_string());
+            return Err(BacktestError::Invalid { name: "returns", requirement: "finite" });
         }
         for (start, end) in &self.label_spans {
             if end < start {
-                return Err("label span end must be >= start".to_string());
+                return Err(BacktestError::LabelSpanEndBeforeStart);
             }
         }
         Ok(())
@@ -175,7 +226,7 @@ pub struct CpcvResult {
     pub diagnostics: BacktestDiagnostics,
 }
 
-pub fn cpcv_path_count(n_groups: usize, test_groups: usize) -> Result<usize, String> {
+pub fn cpcv_path_count(n_groups: usize, test_groups: usize) -> Result<usize, BacktestError> {
     validate_cpcv_params(n_groups, test_groups)?;
     let total = n_choose_k(n_groups, test_groups)?;
     Ok((total * test_groups) / n_groups)
@@ -186,21 +237,21 @@ pub fn run_walk_forward<E>(
     run: &BacktestRunConfig,
     config: &WalkForwardConfig,
     mut evaluator: E,
-) -> Result<WalkForwardResult, String>
+) -> Result<WalkForwardResult, BacktestError>
 where
-    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
+    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, BacktestError>,
 {
     data.validate()?;
     run.validate(BacktestMode::WalkForward)?;
     validate_embargo(config.pct_embargo)?;
     if config.min_train_size == 0 {
-        return Err("min_train_size must be > 0".to_string());
+        return Err(BacktestError::Invalid { name: "min_train_size", requirement: "> 0" });
     }
     if config.test_size == 0 {
-        return Err("test_size must be > 0".to_string());
+        return Err(BacktestError::Invalid { name: "test_size", requirement: "> 0" });
     }
     if config.step_size == 0 {
-        return Err("step_size must be > 0".to_string());
+        return Err(BacktestError::Invalid { name: "step_size", requirement: "> 0" });
     }
 
     let n_samples = data.returns.len();
@@ -223,7 +274,7 @@ where
             n_samples,
         );
         if train_indices.is_empty() {
-            return Err("walk-forward produced an empty train split".to_string());
+            return Err(BacktestError::EmptyWalkForwardTrainSplit);
         }
         split_defs.push(SplitDefinition {
             split_id,
@@ -238,7 +289,7 @@ where
     }
 
     if split_defs.is_empty() {
-        return Err("walk-forward produced no splits".to_string());
+        return Err(BacktestError::NoWalkForwardSplits);
     }
 
     let folds = evaluate_splits(&split_defs, &mut evaluator)?;
@@ -252,15 +303,15 @@ pub fn run_cross_validation<E>(
     run: &BacktestRunConfig,
     config: &CrossValidationConfig,
     mut evaluator: E,
-) -> Result<CrossValidationResult, String>
+) -> Result<CrossValidationResult, BacktestError>
 where
-    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
+    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, BacktestError>,
 {
     data.validate()?;
     run.validate(BacktestMode::CrossValidation)?;
     validate_embargo(config.pct_embargo)?;
     if config.n_splits < 2 {
-        return Err("n_splits must be >= 2".to_string());
+        return Err(BacktestError::Invalid { name: "n_splits", requirement: ">= 2" });
     }
 
     let base_test_splits = contiguous_folds(data.returns.len(), config.n_splits)?;
@@ -276,7 +327,7 @@ where
             data.returns.len(),
         );
         if train_indices.is_empty() {
-            return Err("cross-validation produced an empty train split".to_string());
+            return Err(BacktestError::EmptyCrossValidationTrainSplit);
         }
         split_defs.push(SplitDefinition {
             split_id,
@@ -299,9 +350,9 @@ pub fn run_cpcv<E>(
     run: &BacktestRunConfig,
     config: &CpcvConfig,
     mut evaluator: E,
-) -> Result<CpcvResult, String>
+) -> Result<CpcvResult, BacktestError>
 where
-    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
+    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, BacktestError>,
 {
     data.validate()?;
     run.validate(BacktestMode::CombinatorialPurgedCrossValidation)?;
@@ -330,7 +381,7 @@ where
         );
 
         if train_indices.is_empty() {
-            return Err("CPCV produced an empty train split".to_string());
+            return Err(BacktestError::EmptyCpcvTrainSplit);
         }
 
         split_defs.push(SplitDefinition {
@@ -374,9 +425,9 @@ where
 fn evaluate_splits<E>(
     splits: &[SplitDefinition],
     evaluator: &mut E,
-) -> Result<Vec<FoldPerformance>, String>
+) -> Result<Vec<FoldPerformance>, BacktestError>
 where
-    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
+    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, BacktestError>,
 {
     let mut out = Vec::with_capacity(splits.len());
     for split in splits {
@@ -393,9 +444,9 @@ type SplitEvaluation = (Vec<FoldPerformance>, HashMap<usize, Vec<f64>>);
 fn evaluate_splits_with_returns<E>(
     splits: &[SplitDefinition],
     evaluator: &mut E,
-) -> Result<SplitEvaluation, String>
+) -> Result<SplitEvaluation, BacktestError>
 where
-    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, String>,
+    E: FnMut(&SplitDefinition) -> Result<Vec<f64>, BacktestError>,
 {
     let mut out = Vec::with_capacity(splits.len());
     let mut split_returns = HashMap::with_capacity(splits.len());
@@ -408,12 +459,12 @@ where
     Ok((out, split_returns))
 }
 
-fn summarize_returns(split_id: usize, returns: &[f64]) -> Result<FoldPerformance, String> {
+fn summarize_returns(split_id: usize, returns: &[f64]) -> Result<FoldPerformance, BacktestError> {
     if returns.is_empty() {
-        return Err("split evaluator returned empty returns".to_string());
+        return Err(BacktestError::EmptySplitReturns);
     }
     if returns.iter().any(|r| !r.is_finite()) {
-        return Err("split evaluator returned non-finite returns".to_string());
+        return Err(BacktestError::NonFiniteSplitReturns);
     }
     let n = returns.len();
     let mean = returns.iter().sum::<f64>() / n as f64;
@@ -452,12 +503,12 @@ fn build_diagnostics(
 }
 
 impl BacktestRunConfig {
-    fn validate(&self, mode: BacktestMode) -> Result<(), String> {
+    fn validate(&self, mode: BacktestMode) -> Result<(), BacktestError> {
         if self.mode_provenance.trim().is_empty() {
-            return Err("mode_provenance cannot be empty".to_string());
+            return Err(BacktestError::Empty("mode_provenance"));
         }
         if self.trials_count == 0 {
-            return Err("trials_count must be > 0".to_string());
+            return Err(BacktestError::Invalid { name: "trials_count", requirement: "> 0" });
         }
         self.safeguards.validate()?;
         match mode {
@@ -468,32 +519,32 @@ impl BacktestRunConfig {
     }
 }
 
-fn validate_embargo(pct_embargo: f64) -> Result<(), String> {
+fn validate_embargo(pct_embargo: f64) -> Result<(), BacktestError> {
     if !(0.0..1.0).contains(&pct_embargo) {
-        return Err("pct_embargo must be in [0,1)".to_string());
+        return Err(BacktestError::Invalid { name: "pct_embargo", requirement: "in [0,1)" });
     }
     Ok(())
 }
 
-fn validate_cpcv_params(n_groups: usize, test_groups: usize) -> Result<(), String> {
+fn validate_cpcv_params(n_groups: usize, test_groups: usize) -> Result<(), BacktestError> {
     if n_groups < 2 {
-        return Err("n_groups must be >= 2".to_string());
+        return Err(BacktestError::Invalid { name: "n_groups", requirement: ">= 2" });
     }
     if test_groups == 0 {
-        return Err("test_groups must be > 0".to_string());
+        return Err(BacktestError::Invalid { name: "test_groups", requirement: "> 0" });
     }
     if test_groups >= n_groups {
-        return Err("test_groups must be < n_groups".to_string());
+        return Err(BacktestError::TestGroupsNotBelowGroups);
     }
     Ok(())
 }
 
-fn contiguous_folds(n_samples: usize, n_folds: usize) -> Result<Vec<Vec<usize>>, String> {
+fn contiguous_folds(n_samples: usize, n_folds: usize) -> Result<Vec<Vec<usize>>, BacktestError> {
     if n_folds == 0 {
-        return Err("n_folds must be > 0".to_string());
+        return Err(BacktestError::Invalid { name: "n_folds", requirement: "> 0" });
     }
     if n_folds > n_samples {
-        return Err("n_folds cannot exceed number of samples".to_string());
+        return Err(BacktestError::TooManyFolds);
     }
 
     let mut fold_sizes = vec![n_samples / n_folds; n_folds];
@@ -573,9 +624,9 @@ fn apply_purge_and_embargo(
     (train_indices, purged_count, embargo_count)
 }
 
-fn n_choose_k(n: usize, k: usize) -> Result<usize, String> {
+fn n_choose_k(n: usize, k: usize) -> Result<usize, BacktestError> {
     if k > n {
-        return Err("k cannot exceed n".to_string());
+        return Err(BacktestError::CombinationSizeTooLarge);
     }
     let k_eff = k.min(n - k);
     let mut numerator: u128 = 1;
@@ -585,7 +636,7 @@ fn n_choose_k(n: usize, k: usize) -> Result<usize, String> {
         denominator *= (i + 1) as u128;
     }
     let comb = numerator / denominator;
-    usize::try_from(comb).map_err(|_| "combination count overflowed usize".to_string())
+    usize::try_from(comb).map_err(|_| BacktestError::CombinationCountOverflow)
 }
 
 fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
@@ -617,12 +668,12 @@ fn build_cpcv_path_assignments(
     n_groups: usize,
     splits: &[SplitDefinition],
     path_count: usize,
-) -> Result<Vec<CpcvPathAssignment>, String> {
+) -> Result<Vec<CpcvPathAssignment>, BacktestError> {
     let mut group_occurrences: Vec<Vec<usize>> = vec![Vec::new(); n_groups];
     for split in splits {
         for g in &split.test_groups {
             if *g >= n_groups {
-                return Err("split references out-of-range test group".to_string());
+                return Err(BacktestError::TestGroupOutOfRange);
             }
             group_occurrences[*g].push(split.split_id);
         }
@@ -630,10 +681,11 @@ fn build_cpcv_path_assignments(
 
     for (group_idx, occurrences) in group_occurrences.iter().enumerate() {
         if occurrences.len() != path_count {
-            return Err(format!(
-                "group {group_idx} has {} occurrences, expected {path_count}",
-                occurrences.len()
-            ));
+            return Err(BacktestError::GroupOccurrences {
+                group: group_idx,
+                found: occurrences.len(),
+                expected: path_count,
+            });
         }
     }
 
@@ -654,11 +706,11 @@ fn build_path_distribution(
     assignments: &[CpcvPathAssignment],
     splits: &[SplitDefinition],
     split_returns: &HashMap<usize, Vec<f64>>,
-) -> Result<Vec<CpcvPathPerformance>, String> {
+) -> Result<Vec<CpcvPathPerformance>, BacktestError> {
     let mut out = Vec::with_capacity(assignments.len());
     for assignment in assignments {
         if assignment.split_for_group.len() != n_groups {
-            return Err("invalid path assignment length".to_string());
+            return Err(BacktestError::InvalidPathAssignmentLength);
         }
 
         let mut path_returns = Vec::new();
@@ -666,15 +718,14 @@ fn build_path_distribution(
             let split = splits
                 .iter()
                 .find(|s| s.split_id == *split_id)
-                .ok_or_else(|| "path references unknown split".to_string())?;
+                .ok_or(BacktestError::UnknownSplitInPath)?;
             if !split.test_groups.contains(&group_id) {
-                return Err("path assignment references split not containing group".to_string());
+                return Err(BacktestError::PathSplitMissingGroup);
             }
-            let split_path_returns = split_returns
-                .get(split_id)
-                .ok_or_else(|| "missing split returns for CPCV path construction".to_string())?;
+            let split_path_returns =
+                split_returns.get(split_id).ok_or(BacktestError::MissingSplitReturns)?;
             if split_path_returns.len() != split.test_indices.len() {
-                return Err("split return count must match split test indices length".to_string());
+                return Err(BacktestError::SplitReturnCountMismatch);
             }
             let return_by_index: HashMap<usize, f64> = split
                 .test_indices
@@ -685,9 +736,7 @@ fn build_path_distribution(
 
             for idx in &group_index_map[group_id] {
                 if split.test_indices.contains(idx) {
-                    let r = return_by_index
-                        .get(idx)
-                        .ok_or_else(|| "split returns missing group test index".to_string())?;
+                    let r = return_by_index.get(idx).ok_or(BacktestError::MissingGroupTestIndex)?;
                     path_returns.push(*r);
                 }
             }

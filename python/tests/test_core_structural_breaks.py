@@ -97,9 +97,9 @@ def test_sadf_constant_series_is_negative_infinity():
 def test_structural_breaks_reject_invalid_inputs():
     # Mirrors the error cases of test_chu_stinchcombe_white_test and test_sadf_test
     log_prices = _log_prices()[:60]
-    with pytest.raises(ValueError, match="InvalidTestType"):
+    with pytest.raises(ValueError, match="unknown test type"):
         structural_breaks.get_chu_stinchcombe_white_statistics(log_prices, "rubbish text")
-    with pytest.raises(ValueError, match="InvalidModel"):
+    with pytest.raises(ValueError, match="unknown model"):
         structural_breaks.get_sadf(log_prices, "rubbish_string", True, 20, 5)
-    with pytest.raises(ValueError, match="InputTooShort"):
+    with pytest.raises(ValueError, match="too short"):
         structural_breaks.get_sadf([1.0, 2.0, 3.0], "linear", True, 20, 5)

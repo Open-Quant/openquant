@@ -1,14 +1,21 @@
 use chrono::NaiveDate;
 use nalgebra::{DMatrix, DVector};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ClaError {
+    #[error("supply asset prices, or expected returns and a covariance matrix")]
     MissingInputs,
+    #[error("invalid asset prices: {0}")]
     InvalidAssetPrices(&'static str),
+    #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    #[error("unknown solution: {0}")]
     UnknownSolution(String),
+    #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
+    #[error("asset index out of range")]
     IndexError,
+    #[error("no data")]
     NoData,
 }
 

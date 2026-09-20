@@ -2,6 +2,12 @@ use chrono::NaiveDateTime;
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum SampleWeightsError {
+    #[error("NaN values in triple_barrier_events, delete nans")]
+    NanInEvents,
+}
+
 /// Compute number of concurrent events for each timestamp.
 fn num_concurrent_events(
     close_index: &[NaiveDateTime],
@@ -50,7 +56,7 @@ fn get_av_uniqueness_from_triple_barrier(
 pub fn get_weights_by_return(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close: &[(NaiveDateTime, f64)],
-) -> Result<Vec<(NaiveDateTime, f64)>, String> {
+) -> Result<Vec<(NaiveDateTime, f64)>, SampleWeightsError> {
     if triple_barrier_events.is_empty() {
         return Ok(Vec::new());
     }
@@ -59,7 +65,7 @@ pub fn get_weights_by_return(
         .iter()
         .any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
     {
-        return Err("NaN values in triple_barrier_events, delete nans".into());
+        return Err(SampleWeightsError::NanInEvents);
     }
 
     let num_conc = num_concurrent_events(
@@ -99,12 +105,12 @@ pub fn get_weights_by_time_decay(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close: &[(NaiveDateTime, f64)],
     decay: f64,
-) -> Result<Vec<(NaiveDateTime, f64)>, String> {
+) -> Result<Vec<(NaiveDateTime, f64)>, SampleWeightsError> {
     if triple_barrier_events
         .iter()
         .any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
     {
-        return Err("NaN values in triple_barrier_events, delete nans".into());
+        return Err(SampleWeightsError::NanInEvents);
     }
     let close_index: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
 

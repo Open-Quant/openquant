@@ -1,9 +1,12 @@
 use nalgebra::DMatrix;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum HrpError {
+    #[error("no data: supply asset prices, returns or a covariance matrix")]
     NoData,
+    #[error("dimension mismatch: {0}")]
     DimensionMismatch(&'static str),
+    #[error("no clusters yet: call allocate first")]
     MissingClusters,
 }
 

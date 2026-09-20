@@ -4,10 +4,13 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum OncError {
+    #[error("the correlation matrix must be square with at least two rows")]
     InvalidCorrelationMatrix,
+    #[error("repeat must be positive")]
     InvalidRepeat,
+    #[error("clustering failed to produce a partition")]
     ClusteringFailed,
 }
 

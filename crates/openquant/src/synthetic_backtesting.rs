@@ -11,6 +11,42 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_distr::{Distribution, StandardNormal};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum SyntheticBacktestError {
+    #[error("prices must include at least 3 observations")]
+    TooFewPrices,
+    #[error("{name} must be {requirement}")]
+    Invalid { name: &'static str, requirement: &'static str },
+    #[error("cannot calibrate O-U from constant price series")]
+    ConstantPrices,
+    #[error("estimated innovation sigma must be positive")]
+    NonPositiveInnovationSigma,
+    #[error("n_paths must be > 0 and horizon must be >= 2")]
+    InvalidPathShape,
+    #[error("O-U parameters must be finite")]
+    NonFiniteOuParameters,
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("profit_taking and stop_loss must be > 0")]
+    NonPositiveBarriers,
+    #[error("annualization_factor must be finite and > 0")]
+    InvalidAnnualizationFactor,
+    #[error("every path must have at least 2 points")]
+    PathTooShort,
+    #[error("paths must contain only finite values")]
+    NonFinitePaths,
+    #[error("no sharpe values")]
+    NoSharpeValues,
+    #[error("profit_taking_grid and stop_loss_grid must be non-empty")]
+    EmptyGrid,
+    #[error("response surface is empty")]
+    EmptyResponseSurface,
+    #[error("profit_taking_grid values must be finite and > 0")]
+    InvalidProfitTakingGrid,
+    #[error("stop_loss_grid values must be finite and > 0")]
+    InvalidStopLossGrid,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OuProcessParams {
     pub phi: f64,
@@ -89,12 +125,12 @@ pub struct SyntheticBacktestConfig {
     pub stability_criteria: StabilityCriteria,
 }
 
-pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, String> {
+pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, SyntheticBacktestError> {
     if prices.len() < 3 {
-        return Err("prices must include at least 3 observations".to_string());
+        return Err(SyntheticBacktestError::TooFewPrices);
     }
     if prices.iter().any(|p| !p.is_finite()) {
-        return Err("prices must be finite".to_string());
+        return Err(SyntheticBacktestError::Invalid { name: "prices", requirement: "finite" });
     }
 
     let n = prices.len() - 1;
@@ -112,7 +148,7 @@ pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, String> {
         cov_xy += dx * (y[i] - mean_y);
     }
     if var_x <= 0.0 {
-        return Err("cannot calibrate O-U from constant price series".to_string());
+        return Err(SyntheticBacktestError::ConstantPrices);
     }
 
     let phi = cov_xy / var_x;
@@ -128,7 +164,7 @@ pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, String> {
 
     let sigma = std_dev(&residuals);
     if !sigma.is_finite() || sigma <= 0.0 {
-        return Err("estimated innovation sigma must be positive".to_string());
+        return Err(SyntheticBacktestError::NonPositiveInnovationSigma);
     }
 
     let ss_res = residuals.iter().map(|e| e * e).sum::<f64>();
@@ -157,22 +193,25 @@ pub fn generate_ou_paths(
     n_paths: usize,
     horizon: usize,
     seed: u64,
-) -> Result<Vec<Vec<f64>>, String> {
+) -> Result<Vec<Vec<f64>>, SyntheticBacktestError> {
     if !initial_price.is_finite() {
-        return Err("initial_price must be finite".to_string());
+        return Err(SyntheticBacktestError::Invalid {
+            name: "initial_price",
+            requirement: "finite",
+        });
     }
     if n_paths == 0 || horizon < 2 {
-        return Err("n_paths must be > 0 and horizon must be >= 2".to_string());
+        return Err(SyntheticBacktestError::InvalidPathShape);
     }
     if !params.phi.is_finite()
         || !params.intercept.is_finite()
         || !params.equilibrium.is_finite()
         || !params.sigma.is_finite()
     {
-        return Err("O-U parameters must be finite".to_string());
+        return Err(SyntheticBacktestError::NonFiniteOuParameters);
     }
     if params.sigma < 0.0 {
-        return Err("sigma must be non-negative".to_string());
+        return Err(SyntheticBacktestError::Invalid { name: "sigma", requirement: "non-negative" });
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
@@ -199,18 +238,21 @@ pub fn evaluate_rule_on_paths(
     rule: TradingRule,
     max_holding_steps: usize,
     annualization_factor: f64,
-) -> Result<RuleSurfacePoint, String> {
+) -> Result<RuleSurfacePoint, SyntheticBacktestError> {
     if paths.is_empty() {
-        return Err("paths cannot be empty".to_string());
+        return Err(SyntheticBacktestError::Empty("paths"));
     }
     if rule.profit_taking <= 0.0 || rule.stop_loss <= 0.0 {
-        return Err("profit_taking and stop_loss must be > 0".to_string());
+        return Err(SyntheticBacktestError::NonPositiveBarriers);
     }
     if max_holding_steps == 0 {
-        return Err("max_holding_steps must be > 0".to_string());
+        return Err(SyntheticBacktestError::Invalid {
+            name: "max_holding_steps",
+            requirement: "> 0",
+        });
     }
     if annualization_factor <= 0.0 || !annualization_factor.is_finite() {
-        return Err("annualization_factor must be finite and > 0".to_string());
+        return Err(SyntheticBacktestError::InvalidAnnualizationFactor);
     }
 
     let mut terminal_returns = Vec::with_capacity(paths.len());
@@ -218,10 +260,10 @@ pub fn evaluate_rule_on_paths(
 
     for path in paths {
         if path.len() < 2 {
-            return Err("every path must have at least 2 points".to_string());
+            return Err(SyntheticBacktestError::PathTooShort);
         }
         if path.iter().any(|p| !p.is_finite()) {
-            return Err("paths must contain only finite values".to_string());
+            return Err(SyntheticBacktestError::NonFinitePaths);
         }
 
         let entry = path[0];
@@ -263,15 +305,15 @@ pub fn detect_no_stable_optimum(
     response_surface: &[RuleSurfacePoint],
     estimated_phi: f64,
     criteria: StabilityCriteria,
-) -> Result<StabilityDiagnostics, String> {
+) -> Result<StabilityDiagnostics, SyntheticBacktestError> {
     if response_surface.is_empty() {
-        return Err("response_surface cannot be empty".to_string());
+        return Err(SyntheticBacktestError::Empty("response_surface"));
     }
 
     let mut sharpes = response_surface.iter().map(|p| p.sharpe).collect::<Vec<_>>();
     sharpes.sort_by(|a, b| a.total_cmp(b));
 
-    let best_sharpe = *sharpes.last().ok_or_else(|| "no sharpe values".to_string())?;
+    let best_sharpe = *sharpes.last().ok_or(SyntheticBacktestError::NoSharpeValues)?;
     let median_sharpe = median_sorted(&sharpes);
     let peak_margin = best_sharpe - median_sharpe;
     let surface_std = std_dev(&sharpes);
@@ -314,9 +356,9 @@ pub fn search_optimal_trading_rule(
     max_holding_steps: usize,
     annualization_factor: f64,
     stability_criteria: StabilityCriteria,
-) -> Result<OtrSearchResult, String> {
+) -> Result<OtrSearchResult, SyntheticBacktestError> {
     if profit_taking_grid.is_empty() || stop_loss_grid.is_empty() {
-        return Err("profit_taking_grid and stop_loss_grid must be non-empty".to_string());
+        return Err(SyntheticBacktestError::EmptyGrid);
     }
 
     let mut response_surface = Vec::with_capacity(profit_taking_grid.len() * stop_loss_grid.len());
@@ -337,7 +379,7 @@ pub fn search_optimal_trading_rule(
     });
 
     let best_point =
-        response_surface.first().cloned().ok_or_else(|| "response surface is empty".to_string())?;
+        response_surface.first().cloned().ok_or(SyntheticBacktestError::EmptyResponseSurface)?;
     let best_rule = best_point.rule;
     let diagnostics = detect_no_stable_optimum(&response_surface, params.phi, stability_criteria)?;
 
@@ -347,12 +389,12 @@ pub fn search_optimal_trading_rule(
 pub fn run_synthetic_otr_workflow(
     historical_prices: &[f64],
     config: &SyntheticBacktestConfig,
-) -> Result<OtrSearchResult, String> {
+) -> Result<OtrSearchResult, SyntheticBacktestError> {
     if config.profit_taking_grid.iter().any(|v| *v <= 0.0 || !v.is_finite()) {
-        return Err("profit_taking_grid values must be finite and > 0".to_string());
+        return Err(SyntheticBacktestError::InvalidProfitTakingGrid);
     }
     if config.stop_loss_grid.iter().any(|v| *v <= 0.0 || !v.is_finite()) {
-        return Err("stop_loss_grid values must be finite and > 0".to_string());
+        return Err(SyntheticBacktestError::InvalidStopLossGrid);
     }
 
     let params = calibrate_ou_params(historical_prices)?;

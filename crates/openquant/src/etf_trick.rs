@@ -4,6 +4,37 @@ use std::path::Path;
 use chrono::NaiveDate;
 use csv::StringRecord;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum EtfTrickError {
+    /// Reading a CSV failed; `reason` is the underlying I/O or parse error.
+    #[error("failed to {action} {path}: {reason}")]
+    Csv { action: &'static str, path: String, reason: String },
+    #[error("csv {path} must have at least index + 1 value column")]
+    TooFewColumns { path: String },
+    #[error("missing index column in {path}")]
+    MissingIndexColumn { path: String },
+    #[error("failed to parse float '{cell}' in {path}: {reason}")]
+    ParseFloat { cell: String, path: String, reason: String },
+    #[error("missing column '{0}' in table")]
+    MissingColumn(String),
+    #[error("Batch size should be >= 3")]
+    BatchTooSmall,
+    #[error("DataFrames indices are different")]
+    IndexMismatch,
+    #[error("DataFrames columns are different")]
+    ColumnMismatch,
+    #[error("missing previous h")]
+    MissingPreviousHoldings,
+    #[error("The method must be either absolute or relative, Check spelling.")]
+    UnknownRollMethod,
+}
+
+impl EtfTrickError {
+    fn csv(action: &'static str, path: &Path, err: csv::Error) -> Self {
+        Self::Csv { action, path: path.display().to_string(), reason: err.to_string() }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Table {
     pub index: Vec<String>,
@@ -12,21 +43,16 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn from_csv(path: &Path) -> Result<Self, String> {
+    pub fn from_csv(path: &Path) -> Result<Self, EtfTrickError> {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
             .from_path(path)
-            .map_err(|e| format!("failed to open {}: {e}", path.display()))?;
-        let headers = rdr
-            .headers()
-            .map_err(|e| format!("failed to read headers {}: {e}", path.display()))?
-            .clone();
+            .map_err(|e| EtfTrickError::csv("open", path, e))?;
+        let headers =
+            rdr.headers().map_err(|e| EtfTrickError::csv("read headers", path, e))?.clone();
 
         if headers.len() < 2 {
-            return Err(format!(
-                "csv {} must have at least index + 1 value column",
-                path.display()
-            ));
+            return Err(EtfTrickError::TooFewColumns { path: path.display().to_string() });
         }
 
         let columns = headers.iter().skip(1).map(ToString::to_string).collect::<Vec<_>>();
@@ -34,8 +60,7 @@ impl Table {
         let mut values = Vec::new();
 
         for rec in rdr.records() {
-            let record =
-                rec.map_err(|e| format!("failed to read record {}: {e}", path.display()))?;
+            let record = rec.map_err(|e| EtfTrickError::csv("read record", path, e))?;
             let (idx, row) = parse_row(&record, path)?;
             index.push(idx);
             values.push(row);
@@ -44,7 +69,7 @@ impl Table {
         Ok(Self { index, columns, values })
     }
 
-    fn align_columns(&self, ordered_columns: &[String]) -> Result<Self, String> {
+    fn align_columns(&self, ordered_columns: &[String]) -> Result<Self, EtfTrickError> {
         let mut col_to_idx = HashMap::new();
         for (i, c) in self.columns.iter().enumerate() {
             col_to_idx.insert(c.as_str(), i);
@@ -56,7 +81,7 @@ impl Table {
             for c in ordered_columns {
                 let idx = col_to_idx
                     .get(c.as_str())
-                    .ok_or_else(|| format!("missing column '{c}' in table"))?;
+                    .ok_or_else(|| EtfTrickError::MissingColumn(c.clone()))?;
                 out_row.push(row[*idx]);
             }
             aligned_values.push(out_row);
@@ -104,7 +129,7 @@ impl EtfTrick {
         alloc: Table,
         costs: Table,
         rates: Option<Table>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, EtfTrickError> {
         validate_shapes(&open, &close, &alloc, &costs, rates.as_ref())?;
         Ok(Self {
             source: Source::InMemory(Box::new(InMemoryTables { open, close, alloc, costs, rates })),
@@ -117,7 +142,7 @@ impl EtfTrick {
         alloc_path: &str,
         costs_path: &str,
         rates_path: Option<&str>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, EtfTrickError> {
         Ok(Self {
             source: Source::Csv {
                 open_path: open_path.to_string(),
@@ -129,7 +154,7 @@ impl EtfTrick {
         })
     }
 
-    pub fn get_etf_series(&self, batch_size: usize) -> Result<Vec<(String, f64)>, String> {
+    pub fn get_etf_series(&self, batch_size: usize) -> Result<Vec<(String, f64)>, EtfTrickError> {
         match &self.source {
             Source::InMemory(tables) => compute_etf_series(
                 &tables.open,
@@ -140,7 +165,7 @@ impl EtfTrick {
             ),
             Source::Csv { open_path, close_path, alloc_path, costs_path, rates_path } => {
                 if batch_size < 3 {
-                    return Err("Batch size should be >= 3".to_string());
+                    return Err(EtfTrickError::BatchTooSmall);
                 }
 
                 let open = Table::from_csv(Path::new(open_path))?;
@@ -161,16 +186,18 @@ impl EtfTrick {
     pub fn reset(&mut self) {}
 }
 
-fn parse_row(record: &StringRecord, path: &Path) -> Result<(String, Vec<f64>), String> {
+fn parse_row(record: &StringRecord, path: &Path) -> Result<(String, Vec<f64>), EtfTrickError> {
     let idx = record
         .get(0)
-        .ok_or_else(|| format!("missing index column in {}", path.display()))?
+        .ok_or_else(|| EtfTrickError::MissingIndexColumn { path: path.display().to_string() })?
         .to_string();
     let mut row = Vec::with_capacity(record.len().saturating_sub(1));
     for cell in record.iter().skip(1) {
-        let v = cell
-            .parse::<f64>()
-            .map_err(|e| format!("failed to parse float '{}' in {}: {e}", cell, path.display()))?;
+        let v = cell.parse::<f64>().map_err(|e| EtfTrickError::ParseFloat {
+            cell: cell.to_string(),
+            path: path.display().to_string(),
+            reason: e.to_string(),
+        })?;
         row.push(v);
     }
     Ok((idx, row))
@@ -182,22 +209,22 @@ fn validate_shapes(
     alloc: &Table,
     costs: &Table,
     rates: Option<&Table>,
-) -> Result<(), String> {
+) -> Result<(), EtfTrickError> {
     let pairs = [close, alloc, costs];
     for t in pairs {
         if open.index != t.index || open.values.len() != t.values.len() {
-            return Err("DataFrames indices are different".to_string());
+            return Err(EtfTrickError::IndexMismatch);
         }
         if open.columns.len() != t.columns.len() {
-            return Err("DataFrames columns are different".to_string());
+            return Err(EtfTrickError::ColumnMismatch);
         }
     }
     if let Some(r) = rates {
         if open.index != r.index || open.values.len() != r.values.len() {
-            return Err("DataFrames indices are different".to_string());
+            return Err(EtfTrickError::IndexMismatch);
         }
         if open.columns.len() != r.columns.len() {
-            return Err("DataFrames columns are different".to_string());
+            return Err(EtfTrickError::ColumnMismatch);
         }
     }
     Ok(())
@@ -209,7 +236,7 @@ fn compute_etf_series(
     alloc: &Table,
     costs: &Table,
     rates: Option<&Table>,
-) -> Result<Vec<(String, f64)>, String> {
+) -> Result<Vec<(String, f64)>, EtfTrickError> {
     validate_shapes(open, close, alloc, costs, rates)?;
 
     let securities = alloc.columns.clone();
@@ -277,7 +304,7 @@ fn compute_etf_series(
             prev_h = Some(h_t.iter().map(|v| v * prev_k).collect());
         }
 
-        let h_prev = prev_h.as_ref().ok_or_else(|| "missing previous h".to_string())?;
+        let h_prev = prev_h.as_ref().ok_or(EtfTrickError::MissingPreviousHoldings)?;
         let mut k = prev_k;
         for j in 0..n_cols {
             k += h_prev[j] * rates.values[i][j] * (delta[j] + costs.values[i][j]);
@@ -307,7 +334,7 @@ pub fn get_futures_roll_series(
     rows: &[FuturesRollRow],
     method: &str,
     roll_backward: bool,
-) -> Result<Vec<f64>, String> {
+) -> Result<Vec<f64>, EtfTrickError> {
     if rows.is_empty() {
         return Ok(Vec::new());
     }
@@ -369,6 +396,6 @@ pub fn get_futures_roll_series(
             }
             Ok(out)
         }
-        _ => Err("The method must be either absolute or relative, Check spelling.".to_string()),
+        _ => Err(EtfTrickError::UnknownRollMethod),
     }
 }

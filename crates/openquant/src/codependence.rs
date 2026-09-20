@@ -1,9 +1,14 @@
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CodependenceError {
+    #[error("the two series have different lengths")]
     InputLengthMismatch,
+    #[error("the series are too short")]
     InputTooShort,
+    #[error("the number of bins must be positive")]
     InvalidBins,
+    #[error("a series has zero variance")]
     ZeroVariance,
+    #[error("a series has zero distance variance")]
     ZeroDistanceVariance,
 }
 

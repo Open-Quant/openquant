@@ -1,9 +1,14 @@
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum StructuralBreakError {
+    #[error("unknown test type: {0}")]
     InvalidTestType(String),
+    #[error("unknown model: {0}")]
     InvalidModel(String),
+    #[error("not implemented: {0}")]
     NotImplemented(&'static str),
+    #[error("the series is too short for the requested lags and window")]
     InputTooShort,
+    #[error("index out of bounds")]
     IndexOutOfBounds,
 }
 

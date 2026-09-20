@@ -54,11 +54,11 @@ def test_optimal_number_of_bins_match_mlfinlab():
 
 
 def test_codependence_rejects_invalid_inputs():
-    with pytest.raises(ValueError, match="InputLengthMismatch"):
+    with pytest.raises(ValueError, match="different lengths"):
         codependence.angular_distance([1.0, 2.0, 3.0], [1.0, 2.0])
-    with pytest.raises(ValueError, match="InputLengthMismatch"):
+    with pytest.raises(ValueError, match="different lengths"):
         codependence.get_mutual_info([1.0, 2.0, 3.0], [1.0, 2.0])
-    with pytest.raises(ValueError, match="InputTooShort"):
+    with pytest.raises(ValueError, match="too short"):
         codependence.distance_correlation([], [])
-    with pytest.raises(ValueError, match="InputTooShort"):
+    with pytest.raises(ValueError, match="too short"):
         codependence.get_optimal_number_of_bins(0)

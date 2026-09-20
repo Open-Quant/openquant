@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{input_err, pair_timestamps_values};
+use crate::helpers::{pair_timestamps_values, to_py_err};
 
 #[pyfunction(name = "get_daily_vol")]
 fn volatility_get_daily_vol(
@@ -20,7 +20,7 @@ fn volatility_get_parkinson_vol(
     low: Vec<f64>,
     window: usize,
 ) -> PyResult<Vec<f64>> {
-    openquant::util::volatility::get_parkinson_vol(&high, &low, window).map_err(input_err)
+    openquant::util::volatility::get_parkinson_vol(&high, &low, window).map_err(to_py_err)
 }
 
 #[pyfunction(name = "get_garman_class_vol")]
@@ -32,7 +32,7 @@ fn volatility_get_garman_class_vol(
     window: usize,
 ) -> PyResult<Vec<f64>> {
     openquant::util::volatility::get_garman_class_vol(&open, &high, &low, &close, window)
-        .map_err(input_err)
+        .map_err(to_py_err)
 }
 
 #[pyfunction(name = "get_yang_zhang_vol")]
@@ -44,7 +44,7 @@ fn volatility_get_yang_zhang_vol(
     window: usize,
 ) -> PyResult<Vec<f64>> {
     openquant::util::volatility::get_yang_zhang_vol(&open, &high, &low, &close, window)
-        .map_err(input_err)
+        .map_err(to_py_err)
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -81,9 +81,9 @@ def test_hrp_rejects_invalid_inputs():
     # Mirrors crates/openquant/tests/hrp.rs::test_all_inputs_none and
     # test_value_error_for_incorrect_dimensions
     prices, names = _load_prices_and_names()
-    with pytest.raises(ValueError, match="NoData"):
+    with pytest.raises(ValueError, match="no data"):
         hrp.allocate_hrp(names)
-    with pytest.raises(ValueError, match="DimensionMismatch"):
+    with pytest.raises(ValueError, match="dimension mismatch"):
         hrp.allocate_hrp(names[:-1], asset_prices=prices)
     with pytest.raises(ValueError, match="rectangular"):
         hrp.allocate_hrp(["a", "b"], asset_returns=[[0.1, 0.2], [0.1]])

@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{format_naive_datetimes, input_err, pair_timestamps_values};
+use crate::helpers::{format_naive_datetimes, pair_timestamps_values, to_py_err};
 
 #[pyfunction(name = "sharpe_ratio")]
 fn bs_sharpe_ratio(returns: Vec<f64>, entries_per_year: f64, risk_free_rate: f64) -> f64 {
@@ -57,7 +57,7 @@ fn bs_deflated_sharpe_ratio(
         estimates_param,
         benchmark_out,
     )
-    .map_err(input_err)
+    .map_err(to_py_err)
 }
 
 #[pyfunction(name = "minimum_track_record_length")]
@@ -75,7 +75,7 @@ fn bs_minimum_track_record_length(
         kurtosis,
         alpha,
     )
-    .map_err(input_err)
+    .map_err(to_py_err)
 }
 
 #[pyfunction(name = "timing_of_flattening_and_flips")]
