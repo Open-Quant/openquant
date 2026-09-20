@@ -3,7 +3,7 @@ title: "strategy_risk"
 description: "AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -35,15 +35,21 @@ Use it at strategy-approval time and then as a standing monitor: the implied pre
 
 ### Symmetric Sharpe
 
-$$\theta=\frac{2p-1}{2\sqrt{p(1-p)}}\sqrt{n}$$
+$$
+\theta=\frac{2p-1}{2\sqrt{p(1-p)}}\sqrt{n}
+$$
 
 ### Asymmetric Sharpe
 
-$$\theta=\frac{(\pi_+-\pi_-)p+\pi_-}{(\pi_+-\pi_-)\sqrt{p(1-p)}}\sqrt{n}$$
+$$
+\theta=\frac{(\pi_+-\pi_-)p+\pi_-}{(\pi_+-\pi_-)\sqrt{p(1-p)}}\sqrt{n}
+$$
 
 ### Strategy Failure Probability
 
-$$P_{fail}=\Pr[p\le p^*],\quad p^*=\text{impliedPrecision}(\theta^*,\pi_+,\pi_-,n)$$
+$$
+P_{fail}=\Pr[p\le p^*],\quad p^*=\text{impliedPrecision}(\theta^*,\pi_+,\pi_-,n)
+$$
 
 ## Usage Examples
 

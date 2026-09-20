@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner_v4.svg" alt="OpenQuant" width="100%" />
+  <img src="assets/openquant-banner.svg" alt="OpenQuant" width="100%" />
 </p>
 
 <h1 align="center">OpenQuant</h1>

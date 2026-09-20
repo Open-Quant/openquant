@@ -73,7 +73,9 @@ for (const doc of moduleDocs) {
     ? doc.formulas
         .map(
           (f) =>
-            `### ${f.label}\n\n$$${f.latex}$$` +
+            // `$$` on lines of their own: remark-math reads a one-line `$$x$$` as *inline* math, which
+            // sets the formula in text style and lets it overflow the page on a phone.
+            `### ${f.label}\n\n$$\n${f.latex}\n$$` +
             (f.where ? `\n\nwhere ${f.where}` : '')
         )
         .join('\n\n')

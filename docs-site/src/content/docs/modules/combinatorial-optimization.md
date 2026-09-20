@@ -3,7 +3,7 @@ title: "combinatorial_optimization"
 description: "AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -37,15 +37,21 @@ Use exact enumeration on small instances as a correctness oracle: `compare_exact
 
 ### Finite Integer Program
 
-$$x^*=\arg\max_{x\in\mathcal X\subset\mathbb Z^d} f(x),\quad |\mathcal X|<\infty$$
+$$
+x^*=\arg\max_{x\in\mathcal X\subset\mathbb Z^d} f(x),\quad |\mathcal X|<\infty
+$$
 
 ### Path-Dependent Objective
 
-$$J(\tau)=\sum_{t=1}^{T}\left(q_t r_t-\lambda q_t^2-c_t|\Delta q_t|-\kappa\,\mathbf 1_{\Delta q_t\ne0}\right)-\eta(q_T-q^*)^2$$
+$$
+J(\tau)=\sum_{t=1}^{T}\left(q_t r_t-\lambda q_t^2-c_t|\Delta q_t|-\kappa\,\mathbf 1_{\Delta q_t\ne0}\right)-\eta(q_T-q^*)^2
+$$
 
 ### Adapter Gap vs Exact
 
-$$\Delta_{alg}=\begin{cases}f(x^*)-f(\hat x) & \text{maximize}\\f(\hat x)-f(x^*) & \text{minimize}\end{cases}$$
+$$
+\Delta_{alg}=\begin{cases}f(x^*)-f(\hat x) & \text{maximize}\\f(\hat x)-f(x^*) & \text{minimize}\end{cases}
+$$
 
 ## Usage Examples
 

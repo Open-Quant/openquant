@@ -3,7 +3,7 @@ title: "cla"
 description: "Critical Line Algorithm implementation for constrained mean-variance optimization."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,11 +29,15 @@ Use it when you need the full efficient frontier, when weight bounds are binding
 
 ### MVO Objective
 
-$$\min_w\;\frac{1}{2}w^T\Sigma w-\lambda\mu^T w$$
+$$
+\min_w\;\frac{1}{2}w^T\Sigma w-\lambda\mu^T w
+$$
 
 ### Budget Constraint
 
-$$\mathbf{1}^T w=1$$
+$$
+\mathbf{1}^T w=1
+$$
 
 ## Usage Examples
 

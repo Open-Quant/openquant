@@ -3,7 +3,7 @@ title: "risk_metrics"
 description: "Portfolio and return-distribution risk measures for downside control."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,11 +30,15 @@ Use it for portfolio-level guardrails and risk budgets, and as the input when `h
 
 ### VaR
 
-$$VaR_\alpha = -Q_\alpha(R)$$
+$$
+VaR_\alpha = -Q_\alpha(R)
+$$
 
 ### Expected Shortfall
 
-$$ES_\alpha = -E[R \mid R \le Q_\alpha(R)]$$
+$$
+ES_\alpha = -E[R \mid R \le Q_\alpha(R)]
+$$
 
 ## Usage Examples
 

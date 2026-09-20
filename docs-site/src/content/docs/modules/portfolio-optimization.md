@@ -3,7 +3,7 @@ title: "portfolio_optimization"
 description: "Mean-variance and constrained allocation methods with ergonomic APIs."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -31,15 +31,21 @@ Use it when you have expected returns you are willing to defend, and `hrp` or `h
 
 ### Constrained Mean-Variance Program
 
-$$\begin{aligned}\min_{w}\;&\frac{1}{2}w^T\Sigma w-\lambda\mu^T w\\\text{s.t. }&\mathbf 1^T w=1,\quad l_i\le w_i\le u_i\end{aligned}$$
+$$
+\begin{aligned}\min_{w}\;&\frac{1}{2}w^T\Sigma w-\lambda\mu^T w\\\text{s.t. }&\mathbf 1^T w=1,\quad l_i\le w_i\le u_i\end{aligned}
+$$
 
 ### Minimum Variance / Maximum Sharpe / Efficient Return
 
-$$\begin{aligned}w_{MV}&=\arg\min_w\;w^T\Sigma w\\w_{MSR}&=\arg\max_w\;\frac{w^T(\mu-r_f\mathbf 1)}{\sqrt{w^T\Sigma w}}\\w_{ER}(r^*)&=\arg\min_w\;w^T\Sigma w\;\text{s.t. }w^T\mu\ge r^*\end{aligned}$$
+$$
+\begin{aligned}w_{MV}&=\arg\min_w\;w^T\Sigma w\\w_{MSR}&=\arg\max_w\;\frac{w^T(\mu-r_f\mathbf 1)}{\sqrt{w^T\Sigma w}}\\w_{ER}(r^*)&=\arg\min_w\;w^T\Sigma w\;\text{s.t. }w^T\mu\ge r^*\end{aligned}
+$$
 
 ### Exponential Mean Estimator
 
-$$\mu_t=\frac{\sum_{k=0}^{T-1}(1-\alpha)^k r_{t-k}}{\sum_{k=0}^{T-1}(1-\alpha)^k},\qquad \alpha=\frac{2}{\text{span}+1}$$
+$$
+\mu_t=\frac{\sum_{k=0}^{T-1}(1-\alpha)^k r_{t-k}}{\sum_{k=0}^{T-1}(1-\alpha)^k},\qquad \alpha=\frac{2}{\text{span}+1}
+$$
 
 ## Usage Examples
 

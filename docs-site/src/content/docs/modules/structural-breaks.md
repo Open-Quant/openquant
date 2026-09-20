@@ -3,7 +3,7 @@ title: "structural_breaks"
 description: "Regime change and bubble diagnostics (Chow, CUSUM variants, SADF)."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,11 +30,15 @@ Use SADF as a regime guard on any model whose parameters are estimated: a break 
 
 ### ADF Regression
 
-$$\Delta y_t=\alpha+\beta y_{t-1}+\sum_{i=1}^{k}\phi_i\Delta y_{t-i}+\epsilon_t$$
+$$
+\Delta y_t=\alpha+\beta y_{t-1}+\sum_{i=1}^{k}\phi_i\Delta y_{t-i}+\epsilon_t
+$$
 
 ### SADF
 
-$$SADF=\sup_{r_2\in[r_0,1]} ADF_0^{r_2}$$
+$$
+SADF=\sup_{r_2\in[r_0,1]} ADF_0^{r_2}
+$$
 
 ## Usage Examples
 

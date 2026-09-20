@@ -27,11 +27,15 @@ Use it instead of writing a rolling loop, so that everything downstream — `uti
 
 ### EWMA
 
-$$m_t=\alpha x_t + (1-\alpha)m_{t-1}$$
+$$
+m_t=\alpha x_t + (1-\alpha)m_{t-1}
+$$
 
 ### Smoothing
 
-$$\alpha=\frac{2}{w+1}$$
+$$
+\alpha=\frac{2}{w+1}
+$$
 
 ## Usage Examples
 

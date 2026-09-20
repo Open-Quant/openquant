@@ -3,7 +3,7 @@ title: "hcaa"
 description: "Hierarchical Clustering Asset Allocation variant with cluster-level constraints."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -28,13 +28,17 @@ Use it in place of `hrp` when your risk budget is not variance: expected shortfa
 
 ### Cluster Risk
 
-$$\sigma_C^2=w_C^{\top}\Sigma_C w_C$$
+$$
+\sigma_C^2=w_C^{\top}\Sigma_C w_C
+$$
 
 where $\Sigma_C$ is the covariance sub-matrix of cluster $C$ and $w_C$ its inverse-variance weights, normalised to sum to one within the cluster.
 
 ### Recursive Bisection Split
 
-$$\alpha=1-\frac{m_{\text{left}}}{m_{\text{left}}+m_{\text{right}}},\qquad w_{\text{left}}\mathrel{*}=\alpha,\quad w_{\text{right}}\mathrel{*}=1-\alpha$$
+$$
+\alpha=1-\frac{m_{\text{left}}}{m_{\text{left}}+m_{\text{right}}},\qquad w_{\text{left}}\mathrel{*}=\alpha,\quad w_{\text{right}}\mathrel{*}=1-\alpha
+$$
 
 where $m_C$ is the risk of cluster $C$ under the chosen `allocation_metric`: cluster variance ($\sigma_C^2$), standard deviation ($\sigma_C$), expected shortfall, or conditional drawdown. Lower risk on one side means a larger $\alpha$ for that side. This generalises the HRP split, which is the `minimum_variance` case. Two branches invert the sign: `sharpe_ratio` allocates $\alpha=\mathrm{SR}_{\text{left}}/(\mathrm{SR}_{\text{left}}+\mathrm{SR}_{\text{right}})$ because higher is better there, and `equal_weighting` skips the split entirely.
 

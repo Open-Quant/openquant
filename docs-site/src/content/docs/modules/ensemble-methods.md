@@ -3,7 +3,7 @@ title: "ensemble_methods"
 description: "Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -34,15 +34,21 @@ Use it before scaling an ensemble. If measured rho is 0.9, going from 20 to 200 
 
 ### Error Decomposition
 
-$$\operatorname{MSE}=\operatorname{Bias}^2+\operatorname{Var}+\operatorname{Noise}$$
+$$
+\operatorname{MSE}=\operatorname{Bias}^2+\operatorname{Var}+\operatorname{Noise}
+$$
 
 ### Bagging Variance Under Average Correlation
 
-$$\sigma^2_{bag}=\sigma^2\left(\rho+\frac{1-\rho}{N}\right)$$
+$$
+\sigma^2_{bag}=\sigma^2\left(\rho+\frac{1-\rho}{N}\right)
+$$
 
 ### Majority Vote and Mean Probability
 
-$$\hat y=\mathbf 1\left(\frac{1}{N}\sum_{m=1}^N \hat p_m \ge \tau\right),\quad \hat p=\frac{1}{N}\sum_{m=1}^N \hat p_m$$
+$$
+\hat y=\mathbf 1\left(\frac{1}{N}\sum_{m=1}^N \hat p_m \ge \tau\right),\quad \hat p=\frac{1}{N}\sum_{m=1}^N \hat p_m
+$$
 
 ## Usage Examples
 
