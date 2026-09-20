@@ -1,14 +1,23 @@
 use nalgebra::{DMatrix, DVector};
+
+use crate::util::qp::{solve_qp, QpError};
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AllocError {
+    #[error("no data: supply asset prices, or expected returns and a covariance matrix")]
     NoData,
+    #[error("unknown solution: {0}")]
     UnknownSolution(String),
+    #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    #[error("weight bounds cannot sum to 1: lower bounds sum to {lower_sum}, upper bounds to {upper_sum}")]
     InfeasibleBounds { lower_sum: f64, upper_sum: f64 },
+    #[error("optimization failed: {0}")]
     OptimizationFailed(&'static str),
+    #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
+    #[error("result is NaN: {0}")]
     NaNResult(&'static str),
 }
 
@@ -194,10 +203,6 @@ fn quad_risk(cov: &DMatrix<f64>, w: &[f64]) -> f64 {
     (wv.transpose() * cov * wv)[(0, 0)]
 }
 
-fn ones(n: usize) -> DVector<f64> {
-    DVector::from_element(n, 1.0)
-}
-
 fn build_bounds(
     n: usize,
     bounds: &Option<HashMap<usize, (f64, f64)>>,
@@ -294,28 +299,44 @@ fn inverse_variance(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64
     Ok(ivp)
 }
 
-fn solve_min_vol(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
-    check_bounds_feasible(bounds)?;
-    let n = cov.nrows();
-    if n == 0 {
-        return Err(AllocError::NoData);
+/// Budget row `1'w = 1` followed by one box row per asset.
+fn budget_and_box(bounds: &[(f64, f64)]) -> (DMatrix<f64>, Vec<f64>, Vec<f64>) {
+    let n = bounds.len();
+    let mut a = DMatrix::zeros(n + 1, n);
+    let (mut lower, mut upper) = (vec![1.0], vec![1.0]);
+    for (j, (lo, hi)) in bounds.iter().enumerate() {
+        a[(0, j)] = 1.0;
+        a[(j + 1, j)] = 1.0;
+        lower.push(*lo);
+        upper.push(hi.min(1.0));
     }
-    // Closed form: w = inv(C)1 / (1^T inv(C) 1)
-    let inv = cov
-        .clone()
-        .try_inverse()
-        .ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
-    let ones = ones(n);
-    let num = &inv * &ones;
-    let denom = (ones.transpose() * &inv * &ones)[(0, 0)];
-    if denom.abs() < 1e-12 {
-        return Err(AllocError::OptimizationFailed("degenerate covariance"));
-    }
-    let mut w: Vec<f64> = num.iter().map(|v| v / denom).collect();
-    project_to_bounds(&mut w, bounds)?;
-    Ok(w)
+    (a, lower, upper)
 }
 
+fn qp_failure(err: QpError) -> AllocError {
+    match err {
+        QpError::Malformed => AllocError::OptimizationFailed("covariance is not positive definite"),
+        QpError::NotConverged => {
+            AllocError::OptimizationFailed("no portfolio satisfies the constraints")
+        }
+    }
+}
+
+/// `min w'Cw` subject to the budget and the bounds. The bounds are part of the problem: the
+/// unconstrained closed form shorts assets, and clamping it afterwards is not the long-only
+/// optimum.
+fn solve_min_vol(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
+    check_bounds_feasible(bounds)?;
+    if cov.nrows() == 0 {
+        return Err(AllocError::NoData);
+    }
+    let (a, lower, upper) = budget_and_box(bounds);
+    solve_qp(cov, &a, &lower, &upper).map_err(qp_failure)
+}
+
+/// Maximum Sharpe ratio by the usual homogenising substitution `y = kappa * w`, `kappa > 0`:
+/// `min y'Cy` subject to `(mu - rf)'y = 1` and `lo_i * 1'y <= y_i <= hi_i * 1'y`, which keeps
+/// the bounds linear in `y`; then `w = y / 1'y`.
 fn solve_max_sharpe(
     cov: &DMatrix<f64>,
     exp_ret: &[f64],
@@ -328,26 +349,40 @@ fn solve_max_sharpe(
         return Err(AllocError::DimensionMismatch);
     }
     let excess: Vec<f64> = exp_ret.iter().map(|r| r - risk_free).collect();
-    let excess_vec = DVector::from_vec(excess.clone());
-    let inv = cov
-        .clone()
-        .try_inverse()
-        .ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
-    let mut w: Vec<f64> = (inv.clone() * excess_vec).data.as_vec().clone();
-    // normalize to sum 1
-    let sum: f64 = w.iter().sum();
-    if sum.abs() > 1e-12 {
-        for wi in w.iter_mut() {
-            *wi /= sum;
+    if excess.iter().all(|e| *e <= 0.0) {
+        return Err(AllocError::OptimizationFailed(
+            "no asset has a return above the risk-free rate",
+        ));
+    }
+
+    let mut a = DMatrix::zeros(2 * n + 1, n);
+    let (mut lower, mut upper) = (vec![1.0], vec![1.0]);
+    for j in 0..n {
+        a[(0, j)] = excess[j];
+    }
+    for (i, (lo, hi)) in bounds.iter().enumerate() {
+        for j in 0..n {
+            let unit = if i == j { 1.0 } else { 0.0 };
+            a[(1 + i, j)] = unit - lo; // y_i - lo * 1'y >= 0
+            a[(1 + n + i, j)] = unit - hi.min(1.0); // y_i - hi * 1'y <= 0
         }
     }
-    if w.iter().all(|v| !v.is_finite()) {
+    lower.extend(std::iter::repeat_n(0.0, n));
+    upper.extend(std::iter::repeat_n(f64::INFINITY, n));
+    lower.extend(std::iter::repeat_n(f64::NEG_INFINITY, n));
+    upper.extend(std::iter::repeat_n(0.0, n));
+
+    let y = solve_qp(cov, &a, &lower, &upper).map_err(qp_failure)?;
+    let kappa: f64 = y.iter().sum();
+    if kappa.is_nan() || kappa <= 1e-12 {
         return Err(AllocError::NaNResult("weights not finite"));
     }
-    project_to_bounds(&mut w, bounds)?;
-    Ok(w)
+    Ok(y.iter().map(|v| v / kappa).collect())
 }
 
+/// `min w'Cw` subject to the budget, the bounds and `mu'w >= target_return`. The inequality
+/// keeps the answer on the efficient branch: a target below the minimum-variance portfolio's
+/// return yields that portfolio, not a dominated one.
 fn efficient_risk_from_inputs(
     exp_ret: &[f64],
     cov: &DMatrix<f64>,
@@ -360,25 +395,15 @@ fn efficient_risk_from_inputs(
     if n == 0 || exp_ret.len() != n {
         return Err(AllocError::DimensionMismatch);
     }
-    let inv = cov
-        .clone()
-        .try_inverse()
-        .ok_or(AllocError::OptimizationFailed("covariance not invertible"))?;
-    let ones = ones(n);
-    let mu = DVector::from_vec(exp_ret.to_vec());
-    let a = (ones.transpose() * &inv * &ones)[(0, 0)];
-    let b = (ones.transpose() * &inv * &mu)[(0, 0)];
-    let c = (mu.transpose() * &inv * &mu)[(0, 0)];
-    let denom = a * c - b * b;
-    if denom.abs() < 1e-12 {
-        return Err(AllocError::OptimizationFailed("degenerate frontier"));
+    let (box_rows, mut lower, mut upper) = budget_and_box(bounds);
+    let mut a = DMatrix::zeros(n + 2, n);
+    a.view_mut((0, 0), (n + 1, n)).copy_from(&box_rows);
+    for j in 0..n {
+        a[(n + 1, j)] = exp_ret[j];
     }
-    let lambda = (c - b * target_return) / denom;
-    let gamma = (a * target_return - b) / denom;
-    let w_vec = (&inv * (&mu * lambda + &ones * gamma)).data.as_vec().clone();
-    let mut w = w_vec;
-    project_to_bounds(&mut w, bounds)?;
-    Ok(w)
+    lower.push(target_return);
+    upper.push(f64::INFINITY);
+    solve_qp(cov, &a, &lower, &upper).map_err(qp_failure)
 }
 
 pub fn allocate_inverse_variance(prices: &DMatrix<f64>) -> Result<MeanVariance, AllocError> {

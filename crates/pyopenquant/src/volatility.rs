@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::pair_timestamps_values;
+use crate::helpers::{pair_timestamps_values, to_py_err};
 
 #[pyfunction(name = "get_daily_vol")]
 fn volatility_get_daily_vol(
@@ -15,8 +15,12 @@ fn volatility_get_daily_vol(
 }
 
 #[pyfunction(name = "get_parkinson_vol")]
-fn volatility_get_parkinson_vol(high: Vec<f64>, low: Vec<f64>, window: usize) -> Vec<f64> {
-    openquant::util::volatility::get_parkinson_vol(&high, &low, window)
+fn volatility_get_parkinson_vol(
+    high: Vec<f64>,
+    low: Vec<f64>,
+    window: usize,
+) -> PyResult<Vec<f64>> {
+    openquant::util::volatility::get_parkinson_vol(&high, &low, window).map_err(to_py_err)
 }
 
 #[pyfunction(name = "get_garman_class_vol")]
@@ -26,8 +30,9 @@ fn volatility_get_garman_class_vol(
     low: Vec<f64>,
     close: Vec<f64>,
     window: usize,
-) -> Vec<f64> {
+) -> PyResult<Vec<f64>> {
     openquant::util::volatility::get_garman_class_vol(&open, &high, &low, &close, window)
+        .map_err(to_py_err)
 }
 
 #[pyfunction(name = "get_yang_zhang_vol")]
@@ -37,8 +42,9 @@ fn volatility_get_yang_zhang_vol(
     low: Vec<f64>,
     close: Vec<f64>,
     window: usize,
-) -> Vec<f64> {
+) -> PyResult<Vec<f64>> {
     openquant::util::volatility::get_yang_zhang_vol(&open, &high, &low, &close, window)
+        .map_err(to_py_err)
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

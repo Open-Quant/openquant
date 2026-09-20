@@ -1,8 +1,8 @@
 ---
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
-status: reviewed
-last_validated: '2026-08-30'
+status: authored
+last_authored: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-08-30**.
+Numbers below were regenerated on **2026-09-20**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,9 +41,10 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 40 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
+| `generated` | 35 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `reviewed` | 12 | A human read the page end to end. |
+| `authored` | 6 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `reviewed` | 11 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
 <!-- coverage:end:status-tally -->
@@ -55,17 +56,20 @@ literal in the page generator rather than a record of anyone's review.
 
 ## Module documentation depth
 
-Module pages are emitted from `src/data/moduleDocs.ts`. Every entry now fills
-in `conceptOverview`, `whenToUse` and `relatedModules`, so every page carries
-those sections; the split below is over the two optional ones,
-`keyParameters` and `commonPitfalls`.
+Module pages began as output of `src/data/moduleDocs.ts` and are being replaced, one AFML
+chapter at a time, by pages written by hand: each cites its source, runs at least one example
+whose printed output the docs checks compare, and has only the sections it needs. The first
+row below counts those. For the pages still generated, every entry fills in
+`conceptOverview`, `whenToUse` and `relatedModules`, so each carries those sections; the
+split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
 | Modules with a documentation page | 39 |
-| …carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 10 |
-| …carrying the base template only | 29 |
+| …written by hand, with a citation and executed examples | 5 |
+| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 7 |
+| …generated, carrying the base template only | 27 |
 <!-- coverage:end:module-depth -->
 
 A base-template page is not a stub — it has a concept overview, mathematical

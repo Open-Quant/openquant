@@ -3,7 +3,7 @@ title: "sampling"
 description: "Indicator matrix and sequential bootstrap tooling."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,11 +42,15 @@ Use sequential bootstrap whenever you're bagging or bootstrapping with overlappi
 
 ### Average Uniqueness
 
-$$u_i=\frac{1}{|T_i|}\sum_{t\in T_i}\frac{1}{c_t}$$
+$$
+u_i=\frac{1}{|T_i|}\sum_{t\in T_i}\frac{1}{c_t}
+$$
 
 ### Sequential Draw Prob
 
-$$P(i)\propto E[u_i \mid \mathcal{S}]$$
+$$
+P(i)\propto E[u_i \mid \mathcal{S}]
+$$
 
 ## Key Parameters
 
@@ -91,7 +95,7 @@ drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
 use openquant::sampling::seq_bootstrap;
 
 let ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];
-let idx = seq_bootstrap(&ind, Some(3), None);
+let idx = seq_bootstrap(&ind, Some(3), None)?;
 ```
 
 ## Common Pitfalls

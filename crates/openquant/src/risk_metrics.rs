@@ -1,9 +1,12 @@
 use nalgebra::DMatrix;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum RiskMetricsError {
+    #[error("returns must not be empty")]
     EmptyInput,
+    #[error("confidence level must be in [0, 1]")]
     InvalidConfidenceLevel,
+    #[error("inputs have different lengths")]
     DimensionMismatch,
 }
 

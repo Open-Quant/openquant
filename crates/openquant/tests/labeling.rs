@@ -68,7 +68,8 @@ fn test_vertical_barriers() {
         &close.iter().map(|(_, p)| *p).collect::<Vec<_>>(),
         &timestamps,
         Threshold::Scalar(0.02),
-    );
+    )
+    .unwrap();
 
     for days in 1..=5 {
         let vbars = add_vertical_barrier(&cusum_events, &close, days, 0, 0, 0);
@@ -101,7 +102,8 @@ fn test_triple_barrier_events() {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let daily_vol = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
 
@@ -162,7 +164,8 @@ fn test_triple_barrier_labeling() {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let daily_vol = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
 
@@ -204,7 +207,8 @@ fn test_pt_sl_levels() {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let target = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
 
@@ -253,7 +257,8 @@ fn test_drop_labels() {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let target = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
     let events = get_events(
@@ -280,7 +285,8 @@ fn test_triple_barrier_disabled_barrier_configurations() {
     let close = load_close();
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let target = get_daily_vol(&close, 100);
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 1, 0, 0, 0);
 

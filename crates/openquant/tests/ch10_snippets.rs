@@ -126,19 +126,18 @@ fn test_bet_size_power() {
     let x_div: f64 = 0.4;
     let w_param: f64 = 1.5;
     let m_test = x_div.signum() * x_div.abs().powf(w_param);
-    let res = bet_size_power(w_param, x_div);
+    let res = bet_size_power(w_param, x_div).unwrap();
     assert!((res - m_test).abs() < 1e-7);
 }
 
 #[test]
-#[should_panic]
 fn test_bet_size_power_value_error() {
-    let _ = bet_size_power(2.0, 1.5);
+    assert!(bet_size_power(2.0, 1.5).is_err());
 }
 
 #[test]
 fn test_bet_size_power_return_zero() {
-    let res = bet_size_power(2.0, 0.0);
+    let res = bet_size_power(2.0, 0.0).unwrap();
     assert_eq!(res, 0.0);
 }
 
@@ -147,25 +146,24 @@ fn test_bet_size() {
     let x_div_sig: f64 = 25.0;
     let w_param_sig: f64 = 3.5;
     let m_test_sig = x_div_sig / (w_param_sig + x_div_sig * x_div_sig).sqrt();
-    let res_sig = bet_size(w_param_sig, x_div_sig, "sigmoid");
+    let res_sig = bet_size(w_param_sig, x_div_sig, "sigmoid").unwrap();
     assert!((res_sig - m_test_sig).abs() < 1e-7);
 
     let x_div_pow: f64 = 0.7;
     let w_param_pow: f64 = 2.1;
     let m_test_pow = x_div_pow.signum() * x_div_pow.abs().powf(w_param_pow);
-    let res_pow = bet_size(w_param_pow, x_div_pow, "power");
+    let res_pow = bet_size(w_param_pow, x_div_pow, "power").unwrap();
     assert!((res_pow - m_test_pow).abs() < 1e-7);
 }
 
 #[test]
-#[should_panic]
 fn test_bet_size_key_error() {
-    let _ = bet_size(2.0, 3.0, "NotAFunction");
+    assert!(bet_size(2.0, 3.0, "NotAFunction").is_err());
 }
 
 #[test]
 fn test_bet_size_checked_invalid_function_error() {
-    let err = bet_size_checked(2.0, 0.4, "NotAFunction").expect_err("should return typed error");
+    let err = bet_size(2.0, 0.4, "NotAFunction").expect_err("should return typed error");
     assert_eq!(
         err,
         BetSizingError::InvalidFunction { context: "bet size", func: "NotAFunction".to_string() }
@@ -193,7 +191,7 @@ fn test_get_target_pos_power() {
     let w_param: f64 = 2.1;
     let max_pos: f64 = 100.0;
     let pos_test = (max_pos * x_div.signum() * x_div.abs().powf(w_param)).trunc();
-    let res = get_target_pos_power(w_param, f_i, m_p, max_pos);
+    let res = get_target_pos_power(w_param, f_i, m_p, max_pos).unwrap();
     assert!((res - pos_test).abs() < 1e-7);
 }
 
@@ -206,7 +204,7 @@ fn test_get_target_pos() {
     let max_pos_sig: f64 = 220.0;
     let pos_test_sig =
         (max_pos_sig * x_div_sig / (w_param_sig + x_div_sig * x_div_sig).sqrt()).trunc();
-    let res_sig = get_target_pos(w_param_sig, f_i_sig, m_p_sig, max_pos_sig, "sigmoid");
+    let res_sig = get_target_pos(w_param_sig, f_i_sig, m_p_sig, max_pos_sig, "sigmoid").unwrap();
     assert!((res_sig - pos_test_sig).abs() < 1e-7);
 
     let f_i_pow: f64 = 34.8;
@@ -216,20 +214,19 @@ fn test_get_target_pos() {
     let max_pos_pow: f64 = 175.0;
     let pos_test_pow =
         (max_pos_pow * x_div_pow.signum() * x_div_pow.abs().powf(w_param_pow)).trunc();
-    let res_pow = get_target_pos(w_param_pow, f_i_pow, m_p_pow, max_pos_pow, "power");
+    let res_pow = get_target_pos(w_param_pow, f_i_pow, m_p_pow, max_pos_pow, "power").unwrap();
     assert!((res_pow - pos_test_pow).abs() < 1e-7);
 }
 
 #[test]
-#[should_panic]
 fn test_get_target_pos_key_error() {
-    let _ = get_target_pos(1.0, 2.0, 1.0, 5.0, "NotAFunction");
+    assert!(get_target_pos(1.0, 2.0, 1.0, 5.0, "NotAFunction").is_err());
 }
 
 #[test]
 fn test_get_target_pos_checked_invalid_function_error() {
-    let err = get_target_pos_checked(1.0, 2.0, 1.0, 5.0, "NotAFunction")
-        .expect_err("should return typed error");
+    let err =
+        get_target_pos(1.0, 2.0, 1.0, 5.0, "NotAFunction").expect_err("should return typed error");
     assert_eq!(
         err,
         BetSizingError::InvalidFunction {
@@ -254,33 +251,31 @@ fn test_get_w_power() {
     let x_pow: f64 = 0.9;
     let m_pow: f64 = 0.76;
     let w_pow = (m_pow / x_pow.signum()).ln() / x_pow.abs().ln();
-    let res = get_w_power(x_pow, m_pow);
+    let res = get_w_power(x_pow, m_pow).unwrap();
     assert!((res - w_pow).abs() < 1e-7);
 }
 
 #[test]
-#[should_panic]
 fn test_get_w_power_value_error() {
-    let _ = get_w_power(1.2, 0.8);
+    assert!(get_w_power(1.2, 0.8).is_err());
 }
 
 #[test]
 fn test_get_w_power_checked_range_error() {
-    let err = get_w_power_checked(1.2, 0.8).expect_err("should return typed error");
+    let err = get_w_power(1.2, 0.8).expect_err("should return typed error");
     assert_eq!(err, BetSizingError::PriceDivergenceOutOfRange { value: 1.2 });
     assert!(err.to_string().contains("price divergence"));
 }
 
 #[test]
 fn test_get_w_power_warning() {
-    let res = get_w_power(0.1, 2.0);
+    let res = get_w_power(0.1, 2.0).unwrap();
     assert_eq!(res, 0.0);
 }
 
 #[test]
-#[should_panic]
 fn test_get_w_key_error() {
-    let _ = get_w(0.6, 0.9, "NotAFunction");
+    assert!(get_w(0.6, 0.9, "NotAFunction").is_err());
 }
 
 #[test]
@@ -310,27 +305,25 @@ fn test_inv_price() {
     let w_sig: f64 = 7.34;
     let m_sig: f64 = 0.82;
     let inv_sig = f_i_sig - m_sig * (w_sig / (1.0 - m_sig * m_sig)).sqrt();
-    let res_sig = inv_price(f_i_sig, w_sig, m_sig, "sigmoid");
+    let res_sig = inv_price(f_i_sig, w_sig, m_sig, "sigmoid").unwrap();
     assert!((res_sig - inv_sig).abs() < 1e-7);
 
     let f_i_pow: f64 = 129.19;
     let w_pow: f64 = 4.02;
     let m_pow: f64 = 0.81;
     let inv_pow = f_i_pow - m_pow.signum() * m_pow.abs().powf(1.0 / w_pow);
-    let res_pow = inv_price(f_i_pow, w_pow, m_pow, "power");
+    let res_pow = inv_price(f_i_pow, w_pow, m_pow, "power").unwrap();
     assert!((res_pow - inv_pow).abs() < 1e-7);
 }
 
 #[test]
-#[should_panic]
 fn test_inv_price_key_error() {
-    let _ = inv_price(12.0, 1.5, 0.7, "NotAFunction");
+    assert!(inv_price(12.0, 1.5, 0.7, "NotAFunction").is_err());
 }
 
 #[test]
 fn test_inv_price_checked_invalid_function_error() {
-    let err =
-        inv_price_checked(12.0, 1.5, 0.7, "NotAFunction").expect_err("should return typed error");
+    let err = inv_price(12.0, 1.5, 0.7, "NotAFunction").expect_err("should return typed error");
     assert_eq!(
         err,
         BetSizingError::InvalidFunction { context: "inv_price", func: "NotAFunction".to_string() }
@@ -383,14 +376,13 @@ fn test_limit_price_power() {
 }
 
 #[test]
-#[should_panic]
 fn test_limit_price_key_error() {
-    let _ = limit_price(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction");
+    assert!(limit_price(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction").is_err());
 }
 
 #[test]
 fn test_limit_price_checked_invalid_function_error() {
-    let err = limit_price_checked(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction")
+    let err = limit_price(231.0, 221.0, 110.0, 3.4, 250.0, "NotAFunction")
         .expect_err("should return typed error");
     assert_eq!(
         err,

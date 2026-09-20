@@ -132,3 +132,56 @@ fn test_input_exceptions() {
         EtfTrick::from_csv(&open_path, &close_path, &alloc_path, &costs_path, None).unwrap();
     assert!(csv_etf_trick.get_etf_series(2).is_err());
 }
+
+/// The numbers printed on docs-site/src/content/docs/modules/etf-trick.md. The docs gate only
+/// compiles Rust examples, so the output shown there is pinned here instead.
+#[test]
+fn test_docs_page_example_values() {
+    use chrono::NaiveDate;
+    use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};
+
+    let days = ["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09"];
+    let build = |values: [[f64; 2]; 6]| Table {
+        index: days.iter().map(|d| d.to_string()).collect(),
+        columns: vec!["CL".to_string(), "NG".to_string()],
+        values: values.iter().map(|v| v.to_vec()).collect(),
+    };
+    let etf = EtfTrick::from_tables(
+        build([[70.0, 2.50], [70.5, 2.52], [71.4, 2.49], [71.0, 2.55], [72.2, 2.60], [72.0, 2.58]]),
+        build([[70.4, 2.51], [71.2, 2.50], [71.1, 2.54], [72.0, 2.61], [72.1, 2.57], [72.6, 2.59]]),
+        build([[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.8, 0.2], [0.8, 0.2], [0.8, 0.2]]),
+        build([[0.0, 0.0]; 6]),
+        None,
+    )
+    .unwrap();
+    let series = etf.get_etf_series(100).unwrap();
+    let values: Vec<f64> = series.iter().map(|(_, k)| *k).collect();
+    assert_eq!(series[0].0, "2024-01-03");
+    for (got, want) in values.iter().zip([1.0, 1.007332, 1.023143, 1.019626]) {
+        assert!((got - want).abs() < 5e-7, "got {got}, page says {want}");
+    }
+    // The hand calculation on the page.
+    let by_hand = 1.0 + 0.5 / 71.4 * (71.1 - 71.2) + 0.5 / 2.49 * (2.54 - 2.50);
+    assert!((values[1] - by_hand).abs() < 1e-12);
+
+    let chain: Vec<FuturesRollRow> = [
+        (2, 70.0, 70.4, "CLG4"),
+        (3, 70.5, 71.2, "CLG4"),
+        (4, 71.4, 71.1, "CLG4"),
+        (5, 72.0, 72.9, "CLH4"),
+        (8, 73.1, 73.0, "CLH4"),
+    ]
+    .into_iter()
+    .map(|(day, open, close, contract)| FuturesRollRow {
+        date: NaiveDate::from_ymd_opt(2024, 1, day).unwrap(),
+        open,
+        close,
+        security: contract.to_string(),
+        current_security: contract.to_string(),
+    })
+    .collect();
+    let gaps = get_futures_roll_series(&chain, "absolute", true).unwrap();
+    for (got, want) in gaps.iter().zip([-0.9, -0.9, -0.9, 0.0, 0.0]) {
+        assert!((got - want).abs() < 1e-9, "got {got}, page says {want}");
+    }
+}

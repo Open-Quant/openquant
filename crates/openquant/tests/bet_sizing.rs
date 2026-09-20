@@ -90,7 +90,7 @@ fn test_bet_size_dynamic() {
     let max_pos = [55.0; 5];
     let m_p = [75.5, 76.9, 74.1, 67.75, 62.0];
     let f = [80.0, 75.0, 72.5, 65.0, 70.8];
-    let res = bet_size_dynamic(&pos, &max_pos, &m_p, &f);
+    let res = bet_size_dynamic(&pos, &max_pos, &m_p, &f).unwrap();
     assert_eq!(res.len(), pos.len());
     let fixture = load_prob_dynamic_budget_fixture();
     let exp_bs: Vec<f64> = fixture["dynamic"]["bet_size"]
@@ -118,7 +118,7 @@ fn test_bet_size_budget() {
     let t1: Vec<(NaiveDateTime, NaiveDateTime)> =
         dates(5, "2000-01-01", 1).iter().zip(shift.iter()).map(|(d, s)| (*d, *d + *s)).collect();
     let side = [1.0, -1.0, 1.0, -1.0, 1.0];
-    let res = bet_size_budget(&t1, &side);
+    let res = bet_size_budget(&t1, &side).unwrap();
     assert_eq!(res.len(), t1.len());
     let fixture = load_prob_dynamic_budget_fixture();
     let exp = fixture["budget"]["bet_size"]
@@ -139,7 +139,7 @@ fn test_bet_size_budget_div_zero_short_side() {
     let t1: Vec<(NaiveDateTime, NaiveDateTime)> =
         dates(5, "2000-01-01", 1).iter().zip(shift.iter()).map(|(d, s)| (*d, *d + *s)).collect();
     let side = [1.0, 1.0, 1.0, 1.0, 1.0];
-    let res = bet_size_budget(&t1, &side);
+    let res = bet_size_budget(&t1, &side).unwrap();
     assert_eq!(res.len(), t1.len());
     for (_, v) in res {
         assert!(v >= 0.0);
@@ -155,7 +155,7 @@ fn test_get_concurrent_sides_counts() {
         (dates_vec[2], dates_vec[2] + Duration::days(1)),
     ];
     let side = [1.0, -1.0, 1.0];
-    let res = get_concurrent_sides(&t1, &side);
+    let res = get_concurrent_sides(&t1, &side).unwrap();
     assert_eq!(res.len(), 3);
     assert_eq!(res[0].1, 1.0);
     assert_eq!(res[0].2, 0.0);
@@ -171,7 +171,7 @@ fn test_confirm_and_cast_to_df_all_arrays() {
     let max_pos = [55.0, 55.0, 55.0];
     let m_p = [75.5, 76.9, 74.1];
     let f = [80.0, 75.0, 72.5];
-    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f);
+    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f).unwrap();
     assert_eq!(res.len(), 3);
     assert_eq!(res[0], (25.0, 55.0, 75.5, 80.0));
     assert_eq!(res[2], (45.0, 55.0, 74.1, 72.5));
@@ -183,7 +183,7 @@ fn test_confirm_and_cast_to_df_scalar_like() {
     let max_pos = [55.0];
     let m_p = [75.0];
     let f = [80.0];
-    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f);
+    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f).unwrap();
     assert_eq!(res, vec![(35.0, 55.0, 75.0, 80.0)]);
 }
 
@@ -193,7 +193,7 @@ fn test_confirm_and_cast_to_df_one_series_broadcast() {
     let max_pos = [55.0];
     let m_p = [75.0];
     let f = [80.0];
-    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f);
+    let res = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f).unwrap();
     assert_eq!(res.len(), 5);
     assert_eq!(res[0], (25.0, 55.0, 75.0, 80.0));
     assert_eq!(res[4], (30.0, 55.0, 75.0, 80.0));
@@ -205,7 +205,7 @@ fn test_confirm_and_cast_to_df_checked_shape_mismatch_error() {
     let max_pos = [55.0, 56.0];
     let m_p = [75.0];
     let f = [80.0];
-    let err = confirm_and_cast_to_df_checked(&pos, &max_pos, &m_p, &f)
+    let err = confirm_and_cast_to_df(&pos, &max_pos, &m_p, &f)
         .expect_err("shape mismatch should return typed error");
     assert_eq!(err, BetSizingError::ShapeMismatch { name: "max_pos", len: 2, expected: 3 });
     assert!(err.to_string().contains("expected 1 or 3"));
@@ -232,7 +232,7 @@ fn test_single_bet_size_mixed_below_zero() {
 
 #[test]
 fn test_power_helpers_and_limit_price_equal_pos() {
-    let b = bet_size_power(2.0, 0.5);
+    let b = bet_size_power(2.0, 0.5).unwrap();
     assert!((b - 0.25).abs() < 1e-12);
     let m = inv_price_power(100.0, 2.0, 0.25);
     assert!((m - 99.5).abs() < 1e-12);
@@ -285,7 +285,7 @@ fn test_bet_size_reserve_stub() {
 
     // test full reserve output when fit is supplied
     let side = vec![1.0; t1_vec.len()];
-    let reserve_rows = bet_size_reserve_with_fit(&t1_vec, &side, &fit);
+    let reserve_rows = bet_size_reserve_with_fit(&t1_vec, &side, &fit).unwrap();
     assert_eq!(reserve_rows.len(), t1_vec.len());
     for row in reserve_rows.iter().take(5) {
         let expected = single_bet_size_mixed(row.3, &fit);
@@ -308,7 +308,7 @@ fn test_bet_size_reserve_fit_and_return_parameters() {
     ];
     let side = [1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0];
 
-    let (rows, params_opt) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 500, true);
+    let (rows, params_opt) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 500, true).unwrap();
     assert_eq!(rows.len(), t1.len());
     let params = params_opt.expect("expected fit parameters");
     assert!(params[2] > 0.0);

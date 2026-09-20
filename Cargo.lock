@@ -1116,6 +1116,7 @@ dependencies = [
  "serde",
  "serde_json",
  "statrs",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

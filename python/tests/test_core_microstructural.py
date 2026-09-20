@@ -117,13 +117,6 @@ def test_sigma_mapping_rejects_oversized_alphabet():
         microstructural.sigma_mapping([float(i) for i in range(1000)], 0.001)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: these microstructural bindings index out of bounds on short or "
-        "mismatched input and surface pyo3 PanicException instead of ValueError"
-    ),
-)
 @pytest.mark.parametrize(
     "call",
     [

@@ -50,6 +50,23 @@ const PER_BLOCK_TIMEOUT_MS = Number(process.env.DOC_PYTHON_TIMEOUT_MS ?? 180_000
 const PY_FENCE = /^```python[^\S\n]*([^\n]*)\n([\s\S]*?)^```[^\S\n]*$/gm;
 const SKIP_COMMENT = /^\s*#\s*doc-check:\s*skip\b[^\n]*/im;
 
+// A ```text fence that follows a python block, before the next python block, is
+// that block's documented output, and must be what the block prints. Executing an
+// example proves the API exists; it does not prove the numbers under it are still
+// true, and three library fixes in a row changed numbers a page was quoting. A
+// text fence that is not program output opts out with ```text doc-output=skip.
+const ANY_FENCE = /^```([a-z]*)[^\S\n]*([^\n]*)\n([\s\S]*?)^```[^\S\n]*$/gm;
+const documentedOutputAfter = (text, from) => {
+  ANY_FENCE.lastIndex = from;
+  let f;
+  while ((f = ANY_FENCE.exec(text)) !== null) {
+    if (f[1] === 'python') return null;
+    if (f[1] === 'text') return /(^|\s)doc-output=skip(\s|$)/.test(f[2]) ? null : f[3];
+  }
+  return null;
+};
+const normalise = (out) => out.replace(/\r\n/g, '\n').split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').trim();
+
 const walkPages = (dir) => {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -72,7 +89,8 @@ for (const file of walkPages(pagesRoot)) {
     const commentSkip = SKIP_COMMENT.exec(code);
     const skip = /(^|\s)doc-check=skip(\s|$)/.test(meta) || Boolean(commentSkip);
     const reason = (meta.match(/(^|\s)doc-check-reason="([^"]*)"/)?.[2] ?? commentSkip?.[0]?.replace(/^\s*#\s*doc-check:\s*skip\b[\s:—-]*/i, '') ?? '').trim();
-    blocks.push({ page, index: n++, code, skip, reason });
+    const expected = skip ? null : documentedOutputAfter(text, PY_FENCE.lastIndex);
+    blocks.push({ page, index: n++, code, skip, reason, expected });
   }
 }
 
@@ -200,8 +218,22 @@ for (const b of runnable) {
   } else if (run.status !== 0) {
     failures.push({ label, file: b.file, detail: (run.stderr || run.stdout || '').trim() });
     console.log(`  FAIL     ${label}`);
+  } else if (b.expected !== null && normalise(run.stdout) !== normalise(b.expected)) {
+    const got = normalise(run.stdout).split('\n');
+    const want = normalise(b.expected).split('\n');
+    const at = got.findIndex((line, i) => line !== want[i]);
+    const i = at === -1 ? Math.min(got.length, want.length) : at;
+    failures.push({
+      label,
+      file: b.file,
+      detail:
+        `the page's documented output no longer matches what the example prints (line ${i + 1}):\n` +
+        `  page : ${want[i] ?? '<nothing>'}\n  now  : ${got[i] ?? '<nothing>'}\n` +
+        'Update the ```text block, or mark it ```text doc-output=skip if it is not program output.',
+    });
+    console.log(`  STALE    ${label}`);
   } else {
-    console.log(`  ok       ${label}`);
+    console.log(`  ok       ${label}${b.expected !== null ? '  (output matches the page)' : ''}`);
   }
 }
 

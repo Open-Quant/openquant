@@ -3,7 +3,7 @@ title: "util::volatility"
 description: "Volatility estimators used across labeling and risk workflows."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,13 +30,17 @@ Use `get_daily_vol` whenever volatility is a scaling target for barriers or posi
 
 ### Parkinson
 
-$$\sigma_P^2=\frac{1}{4\ln 2}\cdot\frac{1}{n}\sum_{t}\left(\ln\frac{H_t}{L_t}\right)^2$$
+$$
+\sigma_P^2=\frac{1}{4\ln 2}\cdot\frac{1}{n}\sum_{t}\left(\ln\frac{H_t}{L_t}\right)^2
+$$
 
 where $H_t,L_t$ are the bar high and low and $n$ the `window` length. It uses the range rather than the close, so it is far more efficient than close-to-close on the same sample — but it ignores overnight gaps and assumes no drift.
 
 ### Yang-Zhang
 
-$$\sigma_{YZ}^2=\sigma_o^2+k\,\sigma_c^2+(1-k)\,\sigma_{rs}^2,\qquad k=\frac{0.34}{1.34+\frac{n+1}{n-1}}$$
+$$
+\sigma_{YZ}^2=\sigma_o^2+k\,\sigma_c^2+(1-k)\,\sigma_{rs}^2,\qquad k=\frac{0.34}{1.34+\frac{n+1}{n-1}}
+$$
 
 where $\sigma_o^2$ is the overnight (close-to-open) variance, $\sigma_c^2$ the open-to-close variance, and $\sigma_{rs}^2$ the Rogers-Satchell estimator; $n$ is the `window` length. $k$ is not a free parameter — it is the weight that minimises the estimator's variance, which is what makes Yang-Zhang the only one of these four that handles both overnight gaps and intraday drift. For a 20-bar window $k\approx0.14$, so the overnight and Rogers-Satchell terms carry most of the estimate.
 
@@ -60,7 +64,7 @@ let low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();
 // Close-to-close EWMA vol on a timestamped series; `lookback` is the EWMA span.
 let daily = get_daily_vol(&close, 100);
 // Parkinson uses the high/low range, so it needs no timestamps — `window` bars.
-let parkinson = get_parkinson_vol(&high, &low, 20);
+let parkinson = get_parkinson_vol(&high, &low, 20)?;
 
 println!("daily vol tail = {:?}", daily.last());
 println!("parkinson vol tail = {:?}", parkinson.last());

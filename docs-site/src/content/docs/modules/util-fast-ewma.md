@@ -3,7 +3,7 @@ title: "util::fast_ewma"
 description: "Fast EWMA primitive shared across feature and volatility routines."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -27,11 +27,15 @@ Use it instead of writing a rolling loop, so that everything downstream — `uti
 
 ### EWMA
 
-$$m_t=\alpha x_t + (1-\alpha)m_{t-1}$$
+$$
+m_t=\alpha x_t + (1-\alpha)m_{t-1}
+$$
 
 ### Smoothing
 
-$$\alpha=\frac{2}{w+1}$$
+$$
+\alpha=\frac{2}{w+1}
+$$
 
 ## Usage Examples
 
@@ -43,7 +47,7 @@ $$\alpha=\frac{2}{w+1}$$
 use openquant::util::fast_ewma::ewma;
 
 let x = vec![1.0, 2.0, 3.0, 4.0];
-let y = ewma(&x, 3);
+let y = ewma(&x, 3)?;
 ```
 
 ## API Reference

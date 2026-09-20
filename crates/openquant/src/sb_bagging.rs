@@ -5,15 +5,23 @@ use rand::{Rng, SeedableRng};
 
 use crate::sampling::seq_bootstrap;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SbBaggingError {
+    #[error("input must not be empty")]
     EmptyInput,
+    #[error("inputs disagree on the number of samples")]
     DimensionMismatch,
+    #[error("max_samples is out of range")]
     MaxSamplesOutOfRange,
+    #[error("max_features is out of range")]
     MaxFeaturesOutOfRange,
+    #[error("out-of-bag scoring is not supported with warm_start")]
     WarmStartWithOob,
+    #[error("n_estimators must not decrease when warm_start is set")]
     DecreasingEstimators,
+    #[error("n_estimators must be positive")]
     InvalidEstimators,
+    #[error("the base estimator does not support sample weights")]
     SampleWeightNotSupported,
 }
 
@@ -183,7 +191,8 @@ impl SequentiallyBootstrappedBaggingClassifier {
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
                 max_samples,
             );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
+            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+                .map_err(|_| SbBaggingError::DimensionMismatch)?;
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
 
@@ -331,7 +340,8 @@ impl SequentiallyBootstrappedBaggingRegressor {
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
                 max_samples,
             );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
+            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+                .map_err(|_| SbBaggingError::DimensionMismatch)?;
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
             let n = samples.len() as f64;

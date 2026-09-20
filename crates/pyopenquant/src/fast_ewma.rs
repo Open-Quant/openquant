@@ -1,8 +1,10 @@
 use pyo3::prelude::*;
 
+use crate::helpers::to_py_err;
+
 #[pyfunction(name = "ewma")]
-fn fast_ewma_ewma(arr: Vec<f64>, window: usize) -> Vec<f64> {
-    openquant::util::fast_ewma::ewma(&arr, window)
+fn fast_ewma_ewma(arr: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
+    openquant::util::fast_ewma::ewma(&arr, window).map_err(to_py_err)
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

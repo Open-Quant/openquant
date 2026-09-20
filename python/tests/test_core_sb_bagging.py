@@ -88,11 +88,11 @@ def test_sb_regressor_single_feature():
 def test_sb_bagging_rejects_invalid_inputs():
     # Mirrors crates/openquant/tests/sb_bagging.rs::test_value_error_raise
     x, y, _, ind_mat = _synthetic_dataset()
-    with pytest.raises(ValueError, match="InvalidEstimators"):
+    with pytest.raises(ValueError, match="n_estimators must be positive"):
         sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=0)
-    with pytest.raises(ValueError, match="MaxSamplesOutOfRange"):
+    with pytest.raises(ValueError, match="max_samples is out of range"):
         sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, max_samples=2.0)
-    with pytest.raises(ValueError, match="DimensionMismatch"):
+    with pytest.raises(ValueError, match="disagree on the number of samples"):
         sb_bagging.fit_predict_sb_classifier(x, y[:-1], ind_mat)
     with pytest.raises(ValueError, match="rectangular"):
         sb_bagging.fit_predict_sb_regressor([[1.0, 2.0], [1.0]], [0.0, 1.0], ind_mat)

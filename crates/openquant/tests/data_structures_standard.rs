@@ -19,7 +19,7 @@ fn sample_trades() -> Vec<Trade> {
 fn tick_volume_dollar_bars() {
     let trades = sample_trades();
 
-    let tick_bars = standard_bars(&trades, 2.0, StandardBarType::Tick);
+    let tick_bars = standard_bars(&trades, 2.0, StandardBarType::Tick).unwrap();
     assert_eq!(tick_bars.len(), 2);
     assert_eq!(tick_bars[0].open, 100.0);
     assert_eq!(tick_bars[0].close, 101.0);
@@ -37,7 +37,7 @@ fn tick_volume_dollar_bars() {
     assert_eq!(tick_bars[1].dollar_value, 718.0);
     assert_eq!(tick_bars[1].tick_count, 2);
 
-    let volume_bars = standard_bars(&trades, 5.0, StandardBarType::Volume);
+    let volume_bars = standard_bars(&trades, 5.0, StandardBarType::Volume).unwrap();
     assert_eq!(volume_bars.len(), 2);
     assert_eq!(volume_bars[0].close, 102.0);
     assert_eq!(volume_bars[0].volume, 6.0);
@@ -48,7 +48,7 @@ fn tick_volume_dollar_bars() {
     assert_eq!(volume_bars[1].dollar_value, 932.0);
     assert_eq!(volume_bars[1].tick_count, 2);
 
-    let dollar_bars = standard_bars(&trades, 500.0, StandardBarType::Dollar);
+    let dollar_bars = standard_bars(&trades, 500.0, StandardBarType::Dollar).unwrap();
     assert_eq!(dollar_bars.len(), 2);
     assert_eq!(dollar_bars[0].close, 102.0);
     assert_eq!(dollar_bars[0].dollar_value, 608.0);
@@ -61,7 +61,7 @@ fn tick_volume_dollar_bars() {
 #[test]
 fn time_bars_split_on_interval() {
     let trades = sample_trades();
-    let bars = time_bars(&trades, Duration::seconds(120));
+    let bars = time_bars(&trades, Duration::seconds(120)).unwrap();
     assert_eq!(bars.len(), 2);
 
     // First bar closes on the trade at 150s (crosses the 120s threshold from start at 0s).

@@ -12,6 +12,52 @@ use rand::{Rng, SeedableRng};
 
 use crate::cross_validation::{PurgedKFold, SimpleClassifier};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum TuningError {
+    #[error("param_grid entry '{0}' cannot be empty")]
+    EmptyGridEntry(String),
+    #[error("missing distribution for key '{0}'")]
+    MissingDistribution(String),
+    #[error(transparent)]
+    CrossValidation(#[from] crate::cross_validation::CrossValidationError),
+    #[error("log-uniform bounds must be strictly positive")]
+    NonPositiveLogUniformBounds,
+    #[error("log-uniform low must be < high")]
+    InvalidLogUniformOrder,
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("probabilities/y_true length mismatch")]
+    ProbabilitiesLabelsLengthMismatch,
+    #[error("{0} length mismatch")]
+    LengthMismatch(&'static str),
+    #[error("sample_weight cannot contain negative values")]
+    NegativeSampleWeight,
+    #[error("probabilities must be finite and in [0,1]")]
+    InvalidProbabilities,
+    #[error("y_true must contain only binary labels in {{0,1}}")]
+    NonBinaryLabels,
+    #[error("sum of sample_weight must be > 0")]
+    ZeroSampleWeightSum,
+    #[error("balanced accuracy requires at least one labeled sample")]
+    NoLabeledSamples,
+    #[error("{name} must be {requirement}")]
+    Invalid { name: &'static str, requirement: &'static str },
+    #[error("choice distribution cannot be empty")]
+    EmptyChoice,
+    #[error("uniform bounds must be finite and satisfy low < high")]
+    InvalidUniformBounds,
+    #[error("IntRangeInclusive requires low <= high")]
+    InvalidIntRange,
+    #[error("no trials produced")]
+    NoTrials,
+    #[error("x/y length mismatch")]
+    XyLengthMismatch,
+    #[error("samples_info_sets length must match x length")]
+    SamplesInfoSetsLengthMismatch,
+    #[error("PurgedKFold generated an empty train/test fold")]
+    EmptyFold,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum HyperParamValue {
     Int(i64),
@@ -78,12 +124,12 @@ pub fn sample_log_uniform<R: Rng + ?Sized>(
     low: f64,
     high: f64,
     rng: &mut R,
-) -> Result<f64, String> {
+) -> Result<f64, TuningError> {
     if low <= 0.0 || high <= 0.0 {
-        return Err("log-uniform bounds must be strictly positive".to_string());
+        return Err(TuningError::NonPositiveLogUniformBounds);
     }
     if low >= high {
-        return Err("log-uniform low must be < high".to_string());
+        return Err(TuningError::InvalidLogUniformOrder);
     }
     let log_low = low.ln();
     let log_high = high.ln();
@@ -96,26 +142,26 @@ pub fn classification_score(
     probabilities: &[f64],
     sample_weight: Option<&[f64]>,
     scoring: SearchScoring,
-) -> Result<f64, String> {
+) -> Result<f64, TuningError> {
     if y_true.is_empty() {
-        return Err("y_true cannot be empty".to_string());
+        return Err(TuningError::Empty("y_true"));
     }
     if probabilities.len() != y_true.len() {
-        return Err("probabilities/y_true length mismatch".to_string());
+        return Err(TuningError::ProbabilitiesLabelsLengthMismatch);
     }
     if let Some(sw) = sample_weight {
         if sw.len() != y_true.len() {
-            return Err("sample_weight length mismatch".to_string());
+            return Err(TuningError::LengthMismatch("sample_weight"));
         }
         if sw.iter().any(|w| *w < 0.0) {
-            return Err("sample_weight cannot contain negative values".to_string());
+            return Err(TuningError::NegativeSampleWeight);
         }
     }
     if probabilities.iter().any(|p| !p.is_finite() || *p < 0.0 || *p > 1.0) {
-        return Err("probabilities must be finite and in [0,1]".to_string());
+        return Err(TuningError::InvalidProbabilities);
     }
     if y_true.iter().any(|y| (*y - 0.0).abs() > 1e-12 && (*y - 1.0).abs() > 1e-12) {
-        return Err("y_true must contain only binary labels in {0,1}".to_string());
+        return Err(TuningError::NonBinaryLabels);
     }
 
     let mut sum_w = 0.0;
@@ -158,7 +204,7 @@ pub fn classification_score(
     }
 
     if sum_w <= 0.0 {
-        return Err("sum of sample_weight must be > 0".to_string());
+        return Err(TuningError::ZeroSampleWeightSum);
     }
 
     let accuracy = weighted_correct / sum_w;
@@ -177,7 +223,7 @@ pub fn classification_score(
                 recalls.push(neg_correct / neg_total);
             }
             if recalls.is_empty() {
-                return Err("balanced accuracy requires at least one labeled sample".to_string());
+                return Err(TuningError::NoLabeledSamples);
             }
             Ok(recalls.iter().sum::<f64>() / recalls.len() as f64)
         }
@@ -186,13 +232,13 @@ pub fn classification_score(
 
 pub fn expand_param_grid(
     param_grid: &BTreeMap<String, Vec<HyperParamValue>>,
-) -> Result<Vec<ParamSet>, String> {
+) -> Result<Vec<ParamSet>, TuningError> {
     if param_grid.is_empty() {
-        return Err("param_grid cannot be empty".to_string());
+        return Err(TuningError::Empty("param_grid"));
     }
     for (name, values) in param_grid {
         if values.is_empty() {
-            return Err(format!("param_grid entry '{name}' cannot be empty"));
+            return Err(TuningError::EmptyGridEntry(name.clone()));
         }
     }
 
@@ -238,7 +284,7 @@ pub fn grid_search<C, F>(
     n_splits: usize,
     pct_embargo: f64,
     scoring: SearchScoring,
-) -> Result<SearchResult, String>
+) -> Result<SearchResult, TuningError>
 where
     C: SimpleClassifier,
     F: Fn(&ParamSet) -> C,
@@ -258,16 +304,16 @@ pub fn randomized_search<C, F>(
     n_splits: usize,
     pct_embargo: f64,
     scoring: SearchScoring,
-) -> Result<SearchResult, String>
+) -> Result<SearchResult, TuningError>
 where
     C: SimpleClassifier,
     F: Fn(&ParamSet) -> C,
 {
     if param_space.is_empty() {
-        return Err("param_space cannot be empty".to_string());
+        return Err(TuningError::Empty("param_space"));
     }
     if n_iter == 0 {
-        return Err("n_iter must be > 0".to_string());
+        return Err(TuningError::Invalid { name: "n_iter", requirement: "> 0" });
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
@@ -278,7 +324,7 @@ where
         for key in &keys {
             let dist = param_space
                 .get(key)
-                .ok_or_else(|| format!("missing distribution for key '{key}'"))?;
+                .ok_or_else(|| TuningError::MissingDistribution(key.clone()))?;
             let value = sample_distribution(dist, &mut rng)?;
             draw.insert(key.clone(), value);
         }
@@ -291,18 +337,18 @@ where
 fn sample_distribution<R: Rng + ?Sized>(
     dist: &RandomParamDistribution,
     rng: &mut R,
-) -> Result<HyperParamValue, String> {
+) -> Result<HyperParamValue, TuningError> {
     match dist {
         RandomParamDistribution::Choice(values) => {
             if values.is_empty() {
-                return Err("choice distribution cannot be empty".to_string());
+                return Err(TuningError::EmptyChoice);
             }
             let idx = rng.gen_range(0..values.len());
             Ok(values[idx].clone())
         }
         RandomParamDistribution::Uniform { low, high } => {
             if !low.is_finite() || !high.is_finite() || low >= high {
-                return Err("uniform bounds must be finite and satisfy low < high".to_string());
+                return Err(TuningError::InvalidUniformBounds);
             }
             Ok(HyperParamValue::Float(rng.gen_range(*low..*high)))
         }
@@ -312,7 +358,7 @@ fn sample_distribution<R: Rng + ?Sized>(
         }
         RandomParamDistribution::IntRangeInclusive { low, high } => {
             if low > high {
-                return Err("IntRangeInclusive requires low <= high".to_string());
+                return Err(TuningError::InvalidIntRange);
             }
             Ok(HyperParamValue::Int(rng.gen_range(*low..=*high)))
         }
@@ -326,7 +372,7 @@ fn search_over_params<C, F>(
     n_splits: usize,
     pct_embargo: f64,
     scoring: SearchScoring,
-) -> Result<SearchResult, String>
+) -> Result<SearchResult, TuningError>
 where
     C: SimpleClassifier,
     F: Fn(&ParamSet) -> C,
@@ -354,33 +400,33 @@ where
         .iter()
         .max_by(|a, b| a.mean_score.partial_cmp(&b.mean_score).unwrap_or(std::cmp::Ordering::Equal))
         .cloned()
-        .ok_or_else(|| "no trials produced".to_string())?;
+        .ok_or(TuningError::NoTrials)?;
 
     Ok(SearchResult { best_params: best.params, best_score: best.mean_score, trials })
 }
 
-fn validate_search_data(data: &SearchData<'_>, n_splits: usize) -> Result<(), String> {
+fn validate_search_data(data: &SearchData<'_>, n_splits: usize) -> Result<(), TuningError> {
     if data.x.is_empty() {
-        return Err("x cannot be empty".to_string());
+        return Err(TuningError::Empty("x"));
     }
     if data.y.is_empty() {
-        return Err("y cannot be empty".to_string());
+        return Err(TuningError::Empty("y"));
     }
     if data.x.len() != data.y.len() {
-        return Err("x/y length mismatch".to_string());
+        return Err(TuningError::XyLengthMismatch);
     }
     if data.samples_info_sets.len() != data.x.len() {
-        return Err("samples_info_sets length must match x length".to_string());
+        return Err(TuningError::SamplesInfoSetsLengthMismatch);
     }
     if n_splits < 2 {
-        return Err("n_splits must be >= 2".to_string());
+        return Err(TuningError::Invalid { name: "n_splits", requirement: ">= 2" });
     }
     if let Some(sw) = data.sample_weight {
         if sw.len() != data.y.len() {
-            return Err("sample_weight length mismatch".to_string());
+            return Err(TuningError::LengthMismatch("sample_weight"));
         }
         if sw.iter().any(|w| *w < 0.0) {
-            return Err("sample_weight cannot contain negative values".to_string());
+            return Err(TuningError::NegativeSampleWeight);
         }
     }
     Ok(())
@@ -394,7 +440,7 @@ fn evaluate_params<C, F>(
     y: &[f64],
     sample_weight: Option<&[f64]>,
     scoring: SearchScoring,
-) -> Result<Vec<f64>, String>
+) -> Result<Vec<f64>, TuningError>
 where
     C: SimpleClassifier,
     F: Fn(&ParamSet) -> C,
@@ -403,7 +449,7 @@ where
 
     for (train_idx, test_idx) in splits {
         if train_idx.is_empty() || test_idx.is_empty() {
-            return Err("PurgedKFold generated an empty train/test fold".to_string());
+            return Err(TuningError::EmptyFold);
         }
 
         let x_train: Vec<Vec<f64>> = train_idx.iter().map(|i| x[*i].clone()).collect();

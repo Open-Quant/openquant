@@ -1,11 +1,18 @@
+use crate::util::InputError;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::thread_rng;
 
 /// Indicator matrix (rows=bar_index, cols=labels), values 0/1.
-pub fn get_ind_matrix(label_endtime: &[(usize, usize)], bar_index: &[usize]) -> Vec<Vec<u8>> {
-    // validate
-    for (s, e) in label_endtime {
-        assert!(s <= e, "label endtime out of order");
+pub fn get_ind_matrix(
+    label_endtime: &[(usize, usize)],
+    bar_index: &[usize],
+) -> Result<Vec<Vec<u8>>, InputError> {
+    if let Some((_, e)) = label_endtime.iter().find(|(s, e)| s > e) {
+        return Err(InputError::OutOfRange {
+            name: "label_endtime",
+            value: *e as f64,
+            expected: "an end at or after the label's start",
+        });
     }
     let mut ind = vec![vec![0u8; label_endtime.len()]; bar_index.len()];
     for (col, (start, end)) in label_endtime.iter().enumerate() {
@@ -15,14 +22,25 @@ pub fn get_ind_matrix(label_endtime: &[(usize, usize)], bar_index: &[usize]) -> 
             }
         }
     }
-    ind
+    Ok(ind)
+}
+
+/// Number of label columns, after checking that every row has that many.
+fn label_count(ind_mat: &[Vec<u8>]) -> Result<usize, InputError> {
+    let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+    match ind_mat.iter().find(|row| row.len() != cols) {
+        Some(row) => {
+            Err(InputError::LengthMismatch { name: "ind_mat row", len: row.len(), expected: cols })
+        }
+        None => Ok(cols),
+    }
 }
 
 /// Average uniqueness of indicator matrix (single value).
-pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> f64 {
-    let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> Result<f64, InputError> {
+    let cols = label_count(ind_mat)?;
     if cols == 0 {
-        return 0.0;
+        return Ok(0.0);
     }
     let mut uniq_sum = 0.0;
     let mut count = 0;
@@ -41,16 +59,12 @@ pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> f64 {
             count += 1;
         }
     }
-    if count > 0 {
-        uniq_sum / count as f64
-    } else {
-        0.0
-    }
+    Ok(if count > 0 { uniq_sum / count as f64 } else { 0.0 })
 }
 
 /// Per-label uniqueness series.
-pub fn get_ind_mat_label_uniqueness(ind_mat: &[Vec<u8>]) -> Vec<Vec<f64>> {
-    let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+pub fn get_ind_mat_label_uniqueness(ind_mat: &[Vec<u8>]) -> Result<Vec<Vec<f64>>, InputError> {
+    let cols = label_count(ind_mat)?;
     let mut out = vec![Vec::new(); cols];
     for col in 0..cols {
         let mut vals = Vec::new();
@@ -64,12 +78,22 @@ pub fn get_ind_mat_label_uniqueness(ind_mat: &[Vec<u8>]) -> Vec<Vec<f64>> {
         }
         out[col] = vals;
     }
-    out
+    Ok(out)
 }
 
 /// Core step from sequential bootstrap: average uniqueness given current concurrency.
-pub fn bootstrap_loop_run(ind_mat: &[Vec<u8>], prev_concurrency: &[f64]) -> Vec<f64> {
-    let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+pub fn bootstrap_loop_run(
+    ind_mat: &[Vec<u8>],
+    prev_concurrency: &[f64],
+) -> Result<Vec<f64>, InputError> {
+    let cols = label_count(ind_mat)?;
+    if prev_concurrency.len() != ind_mat.len() {
+        return Err(InputError::LengthMismatch {
+            name: "prev_concurrency",
+            len: prev_concurrency.len(),
+            expected: ind_mat.len(),
+        });
+    }
     let mut avg_unique = vec![0.0; cols];
     for i in 0..cols {
         let mut prev_avg = 0.0;
@@ -85,7 +109,7 @@ pub fn bootstrap_loop_run(ind_mat: &[Vec<u8>], prev_concurrency: &[f64]) -> Vec<
         }
         avg_unique[i] = prev_avg;
     }
-    avg_unique
+    Ok(avg_unique)
 }
 
 /// Sequential bootstrap (indices of samples).
@@ -93,18 +117,32 @@ pub fn seq_bootstrap(
     ind_mat: &[Vec<u8>],
     sample_length: Option<usize>,
     warmup_samples: Option<Vec<usize>>,
-) -> Vec<usize> {
-    let n_labels = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+) -> Result<Vec<usize>, InputError> {
+    let n_labels = label_count(ind_mat)?;
     let target_len = sample_length.unwrap_or(n_labels);
+    if target_len == 0 {
+        return Ok(Vec::new());
+    }
+    if n_labels == 0 {
+        return Err(InputError::TooShort { name: "ind_mat", len: 0, min: 1 });
+    }
     let mut phi: Vec<usize> = Vec::new();
     let mut warm = warmup_samples.unwrap_or_default();
+    if let Some(&bad) = warm.iter().find(|&&w| w >= n_labels) {
+        return Err(InputError::OutOfRange {
+            name: "warmup_samples",
+            value: bad as f64,
+            expected: "a label index below the number of labels",
+        });
+    }
     let mut prev_conc = vec![0.0; ind_mat.len()];
 
     while phi.len() < target_len {
-        let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc);
+        let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc)?;
         let sum: f64 = avg_unique.iter().sum();
         let prob_iter = avg_unique.iter().map(|p| if sum > 0.0 { *p / sum } else { 1.0 });
-        let dist = WeightedIndex::new(prob_iter).unwrap();
+        // Weights are non-negative, finite and not all zero by construction.
+        let dist = WeightedIndex::new(prob_iter).expect("valid sampling weights");
         let mut rng = thread_rng();
         let choice = warm.pop().unwrap_or_else(|| dist.sample(&mut rng));
         phi.push(choice);
@@ -112,18 +150,19 @@ pub fn seq_bootstrap(
             prev_conc[i] += row[choice] as f64;
         }
     }
-    phi
+    Ok(phi)
 }
 
 /// Average uniqueness from triple barrier events (index + t1).
 pub fn get_av_uniqueness_from_triple_barrier(
     samples_info: &[(usize, usize)],
     price_bars_len: usize,
-) -> Vec<f64> {
+) -> Result<Vec<f64>, InputError> {
     let bars: Vec<usize> = (0..price_bars_len).collect();
-    let ind = get_ind_matrix(samples_info, &bars);
-    let uniq = get_ind_mat_label_uniqueness(&ind);
-    uniq.iter()
+    let ind = get_ind_matrix(samples_info, &bars)?;
+    let uniq = get_ind_mat_label_uniqueness(&ind)?;
+    Ok(uniq
+        .iter()
         .map(|u| {
             let sum: f64 = u.iter().filter(|v| **v > 0.0).sum();
             let cnt = u.iter().filter(|v| **v > 0.0).count() as f64;
@@ -133,7 +172,7 @@ pub fn get_av_uniqueness_from_triple_barrier(
                 0.0
             }
         })
-        .collect()
+        .collect())
 }
 
 /// Number of concurrent events per bar.
@@ -142,6 +181,9 @@ pub fn num_concurrent_events(
     t1: &[(usize, usize)],
     _t_events: &[usize],
 ) -> Vec<usize> {
+    if price_index_len == 0 {
+        return Vec::new();
+    }
     let mut counts = vec![0usize; price_index_len];
     for &(start, end) in t1 {
         if start > end {

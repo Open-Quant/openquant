@@ -3,7 +3,7 @@ title: "hpc_parallel"
 description: "AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -34,19 +34,25 @@ Use it for any embarrassingly parallel research loop: per-asset feature computat
 
 ### Linear Partition Boundary
 
-$$b_i=\left\lfloor\frac{iN}{M}\right\rfloor,\;i=0,\dots,M$$
+$$
+b_i=\left\lfloor\frac{iN}{M}\right\rfloor,\;i=0,\dots,M
+$$
 
 where $N$ is the number of atoms, $M$ the number of molecules (`mp_batches` x workers), and molecule $i$ covers atoms $[b_{i-1},b_i)$. Every molecule gets the same *count* of atoms, which is correct only when atoms cost the same.
 
 ### Nested Partition Boundary
 
-$$b_i=\left\lfloor N\sqrt{\frac{i}{M}}\right\rfloor,\;i=0,\dots,M$$
+$$
+b_i=\left\lfloor N\sqrt{\frac{i}{M}}\right\rfloor,\;i=0,\dots,M
+$$
 
 where The same $N$ and $M$, for the triangular workloads that dominate this library — building an overlap or codependence matrix, where atom $k$ touches $k$ earlier observations, so its cost grows linearly with $k$. Later molecules therefore hold fewer atoms.
 
 ### Equal-Cost Condition
 
-$$\text{cost}(i)\;\propto\;\frac{b_i^2-b_{i-1}^2}{2}=\frac{N^2}{2M}\quad\text{for every }i$$
+$$
+\text{cost}(i)\;\propto\;\frac{b_i^2-b_{i-1}^2}{2}=\frac{N^2}{2M}\quad\text{for every }i
+$$
 
 where $b_i$ and $M$ are as above. This is why the square root is there: if atom $k$ costs $\propto k$, a molecule spanning $[b_{i-1},b_i)$ costs $\propto(b_i^2-b_{i-1}^2)/2$; substituting $b_i=N\sqrt{i/M}$ makes that $N^2/(2M)$, the same for every molecule. Linear partitioning on the same workload leaves the last molecule roughly $2M-1$ times more expensive than the first, and the run is only as fast as that straggler.
 

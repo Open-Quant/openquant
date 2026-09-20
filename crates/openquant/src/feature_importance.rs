@@ -4,6 +4,26 @@ use nalgebra::{DMatrix, SymmetricEigen};
 
 use crate::cross_validation::{ml_cross_val_score, Scoring, SimpleClassifier};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum FeatureImportanceError {
+    #[error("failed to write output file: {0}")]
+    WriteOutput(String),
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("importance row length mismatch")]
+    ImportanceRowLengthMismatch,
+    #[error("{0} length mismatch")]
+    LengthMismatch(&'static str),
+    #[error("ragged feature rows")]
+    RaggedFeatureRows,
+    #[error("x and y cannot be empty")]
+    EmptyXy,
+    #[error("x/y length mismatch")]
+    XyLengthMismatch,
+    #[error("ragged x rows")]
+    RaggedX,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ImportanceStats {
     pub mean: f64,
@@ -21,16 +41,16 @@ pub struct PcaCorrelation {
 pub fn mean_decrease_impurity(
     per_tree_importances: &[Vec<f64>],
     feature_names: &[String],
-) -> Result<BTreeMap<String, ImportanceStats>, String> {
+) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
     if per_tree_importances.is_empty() {
-        return Err("per_tree_importances cannot be empty".to_string());
+        return Err(FeatureImportanceError::Empty("per_tree_importances"));
     }
     let n_features = feature_names.len();
     if n_features == 0 {
-        return Err("feature_names cannot be empty".to_string());
+        return Err(FeatureImportanceError::Empty("feature_names"));
     }
     if per_tree_importances.iter().any(|r| r.len() != n_features) {
-        return Err("importance row length mismatch".to_string());
+        return Err(FeatureImportanceError::ImportanceRowLengthMismatch);
     }
 
     let mut means = vec![0.0; n_features];
@@ -63,7 +83,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     splits: &[(Vec<usize>, Vec<usize>)],
     sample_weight: Option<&[f64]>,
     scoring: Scoring,
-) -> Result<BTreeMap<String, ImportanceStats>, String> {
+) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
     validate_xy(x, y, feature_names)?;
 
     let n_features = feature_names.len();
@@ -116,7 +136,7 @@ pub fn single_feature_importance<C: SimpleClassifier>(
     splits: &[(Vec<usize>, Vec<usize>)],
     sample_weight: Option<&[f64]>,
     scoring: Scoring,
-) -> Result<BTreeMap<String, ImportanceStats>, String> {
+) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
     validate_xy(x, y, feature_names)?;
     let mut out = BTreeMap::new();
     for (j, name) in feature_names.iter().enumerate() {
@@ -134,7 +154,7 @@ pub fn single_feature_importance<C: SimpleClassifier>(
 pub fn get_orthogonal_features(
     feature_rows: &[Vec<f64>],
     variance_thresh: f64,
-) -> Result<Vec<Vec<f64>>, String> {
+) -> Result<Vec<Vec<f64>>, FeatureImportanceError> {
     if feature_rows.is_empty() {
         return Ok(Vec::new());
     }
@@ -146,13 +166,13 @@ pub fn feature_pca_analysis(
     feature_rows: &[Vec<f64>],
     feature_importance_mean: &[f64],
     variance_thresh: f64,
-) -> Result<PcaCorrelation, String> {
+) -> Result<PcaCorrelation, FeatureImportanceError> {
     if feature_rows.is_empty() {
-        return Err("feature_rows cannot be empty".to_string());
+        return Err(FeatureImportanceError::Empty("feature_rows"));
     }
     let n_features = feature_rows[0].len();
     if feature_importance_mean.len() != n_features {
-        return Err("feature_importance_mean length mismatch".to_string());
+        return Err(FeatureImportanceError::LengthMismatch("feature_importance_mean"));
     }
 
     let (eval, evec, _) = compute_pca(feature_rows, variance_thresh)?;
@@ -193,13 +213,13 @@ pub fn plot_feature_importance(
     oob_score: f64,
     oos_score: f64,
     output_path: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), FeatureImportanceError> {
     if let Some(path) = output_path {
         let mut s = format!("oob_score,{oob_score}\noos_score,{oos_score}\nfeature,mean,std\n");
         for (k, v) in importance {
             s.push_str(&format!("{k},{},{}\n", v.mean, v.std));
         }
-        std::fs::write(path, s).map_err(|e| format!("failed to write output file: {e}"))?;
+        std::fs::write(path, s).map_err(|e| FeatureImportanceError::WriteOutput(e.to_string()))?;
     }
     Ok(())
 }
@@ -210,9 +230,9 @@ type PcaDecomposition = (Vec<f64>, DMatrix<f64>, Vec<Vec<f64>>);
 fn compute_pca(
     feature_rows: &[Vec<f64>],
     variance_thresh: f64,
-) -> Result<PcaDecomposition, String> {
+) -> Result<PcaDecomposition, FeatureImportanceError> {
     if feature_rows.iter().any(|r| r.len() != feature_rows[0].len()) {
-        return Err("ragged feature rows".to_string());
+        return Err(FeatureImportanceError::RaggedFeatureRows);
     }
     let x_std = standardize(feature_rows);
     let x = to_dmatrix(&x_std);
@@ -248,18 +268,22 @@ fn compute_pca(
     Ok((eval, evec, x_std))
 }
 
-fn validate_xy(x: &[Vec<f64>], y: &[f64], feature_names: &[String]) -> Result<(), String> {
+fn validate_xy(
+    x: &[Vec<f64>],
+    y: &[f64],
+    feature_names: &[String],
+) -> Result<(), FeatureImportanceError> {
     if x.is_empty() || y.is_empty() {
-        return Err("x and y cannot be empty".to_string());
+        return Err(FeatureImportanceError::EmptyXy);
     }
     if x.len() != y.len() {
-        return Err("x/y length mismatch".to_string());
+        return Err(FeatureImportanceError::XyLengthMismatch);
     }
     if x[0].len() != feature_names.len() {
-        return Err("feature_names length mismatch".to_string());
+        return Err(FeatureImportanceError::LengthMismatch("feature_names"));
     }
     if x.iter().any(|r| r.len() != x[0].len()) {
-        return Err("ragged x rows".to_string());
+        return Err(FeatureImportanceError::RaggedX);
     }
     Ok(())
 }

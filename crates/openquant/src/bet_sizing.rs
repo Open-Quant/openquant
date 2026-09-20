@@ -9,6 +9,7 @@ pub enum BetSizingError {
     PriceDivergenceOutOfRange { value: f64 },
     EmptyInput(&'static str),
     ShapeMismatch { name: &'static str, len: usize, expected: usize },
+    LengthMismatch { name: &'static str, len: usize, expected: usize },
 }
 
 impl fmt::Display for BetSizingError {
@@ -24,6 +25,9 @@ impl fmt::Display for BetSizingError {
             BetSizingError::ShapeMismatch { name, len, expected } => {
                 write!(f, "input '{name}' has length {len}, expected 1 or {expected} for broadcast")
             }
+            BetSizingError::LengthMismatch { name, len, expected } => {
+                write!(f, "input '{name}' has length {len}, expected {expected}")
+            }
         }
     }
 }
@@ -34,12 +38,7 @@ pub fn bet_size_sigmoid(w_param: f64, price_div: f64) -> f64 {
     price_div * (w_param + price_div * price_div).powf(-0.5)
 }
 
-pub fn bet_size_power(w_param: f64, price_div: f64) -> f64 {
-    bet_size_power_checked(w_param, price_div)
-        .expect("Price divergence must be between -1 and 1, inclusive when using function 'power'.")
-}
-
-pub fn bet_size_power_checked(w_param: f64, price_div: f64) -> Result<f64, BetSizingError> {
+pub fn bet_size_power(w_param: f64, price_div: f64) -> Result<f64, BetSizingError> {
     if !(-1.0..=1.0).contains(&price_div) {
         return Err(BetSizingError::PriceDivergenceOutOfRange { value: price_div });
     }
@@ -49,14 +48,10 @@ pub fn bet_size_power_checked(w_param: f64, price_div: f64) -> Result<f64, BetSi
     Ok(price_div.signum() * price_div.abs().powf(w_param))
 }
 
-pub fn bet_size(w_param: f64, price_div: f64, func: &str) -> f64 {
-    bet_size_checked(w_param, price_div, func).expect("invalid bet size function")
-}
-
-pub fn bet_size_checked(w_param: f64, price_div: f64, func: &str) -> Result<f64, BetSizingError> {
+pub fn bet_size(w_param: f64, price_div: f64, func: &str) -> Result<f64, BetSizingError> {
     match func {
         "sigmoid" => Ok(bet_size_sigmoid(w_param, price_div)),
-        "power" => bet_size_power_checked(w_param, price_div),
+        "power" => bet_size_power(w_param, price_div),
         _ => Err(BetSizingError::InvalidFunction { context: "bet size", func: func.to_string() }),
     }
 }
@@ -72,12 +67,7 @@ pub fn inv_price_power(forecast_price: f64, w_param: f64, m_bet_size: f64) -> f6
     forecast_price - m_bet_size.signum() * m_bet_size.abs().powf(1.0 / w_param)
 }
 
-pub fn inv_price(forecast_price: f64, w_param: f64, m_bet_size: f64, func: &str) -> f64 {
-    inv_price_checked(forecast_price, w_param, m_bet_size, func)
-        .expect("invalid inv_price function")
-}
-
-pub fn inv_price_checked(
+pub fn inv_price(
     forecast_price: f64,
     w_param: f64,
     m_bet_size: f64,
@@ -175,16 +165,6 @@ pub fn confirm_and_cast_to_df(
     max_pos: &[f64],
     m_p: &[f64],
     f: &[f64],
-) -> Vec<(f64, f64, f64, f64)> {
-    confirm_and_cast_to_df_checked(pos, max_pos, m_p, f)
-        .expect("invalid inputs for confirm_and_cast_to_df")
-}
-
-pub fn confirm_and_cast_to_df_checked(
-    pos: &[f64],
-    max_pos: &[f64],
-    m_p: &[f64],
-    f: &[f64],
 ) -> Result<Vec<(f64, f64, f64, f64)>, BetSizingError> {
     let lengths = [pos.len(), max_pos.len(), m_p.len(), f.len()];
     let target_len = lengths.into_iter().max().unwrap_or(0);
@@ -214,23 +194,15 @@ pub fn confirm_and_cast_to_df_checked(
     Ok((0..target_len).map(|i| (pos_v[i], max_pos_v[i], m_p_v[i], f_v[i])).collect())
 }
 
-pub fn get_w(price_div: f64, m_bet_size: f64, func: &str) -> f64 {
-    get_w_checked(price_div, m_bet_size, func).expect("invalid get_w function")
-}
-
-pub fn get_w_checked(price_div: f64, m_bet_size: f64, func: &str) -> Result<f64, BetSizingError> {
+pub fn get_w(price_div: f64, m_bet_size: f64, func: &str) -> Result<f64, BetSizingError> {
     match func {
         "sigmoid" => Ok(get_w_sigmoid(price_div, m_bet_size)),
-        "power" => get_w_power_checked(price_div, m_bet_size),
+        "power" => get_w_power(price_div, m_bet_size),
         _ => Err(BetSizingError::InvalidFunction { context: "get_w", func: func.to_string() }),
     }
 }
 
-pub fn get_target_pos(w: f64, f: f64, m_p: f64, max_pos: f64, func: &str) -> f64 {
-    get_target_pos_checked(w, f, m_p, max_pos, func).expect("invalid get_target_pos function")
-}
-
-pub fn get_target_pos_checked(
+pub fn get_target_pos(
     w: f64,
     f: f64,
     m_p: f64,
@@ -239,7 +211,7 @@ pub fn get_target_pos_checked(
 ) -> Result<f64, BetSizingError> {
     match func {
         "sigmoid" => Ok(get_target_pos_sigmoid(w, f, m_p, max_pos)),
-        "power" => Ok(get_target_pos_power(w, f, m_p, max_pos)),
+        "power" => get_target_pos_power(w, f, m_p, max_pos),
         _ => Err(BetSizingError::InvalidFunction {
             context: "get_target_pos",
             func: func.to_string(),
@@ -247,11 +219,7 @@ pub fn get_target_pos_checked(
     }
 }
 
-pub fn limit_price(t_pos: f64, pos: f64, f: f64, w: f64, max_pos: f64, func: &str) -> f64 {
-    limit_price_checked(t_pos, pos, f, w, max_pos, func).expect("invalid limit_price function")
-}
-
-pub fn limit_price_checked(
+pub fn limit_price(
     t_pos: f64,
     pos: f64,
     f: f64,
@@ -272,13 +240,7 @@ pub fn get_w_sigmoid(price_div: f64, m_bet_size: f64) -> f64 {
     (price_div * price_div) * ((1.0 / (m_bet_size * m_bet_size)) - 1.0)
 }
 
-pub fn get_w_power(price_div: f64, m_bet_size: f64) -> f64 {
-    get_w_power_checked(price_div, m_bet_size).expect(
-        "Price divergence argument 'x' must be between -1 and 1, inclusive when using function 'power'.",
-    )
-}
-
-pub fn get_w_power_checked(price_div: f64, m_bet_size: f64) -> Result<f64, BetSizingError> {
+pub fn get_w_power(price_div: f64, m_bet_size: f64) -> Result<f64, BetSizingError> {
     if !(-1.0..=1.0).contains(&price_div) {
         return Err(BetSizingError::PriceDivergenceOutOfRange { value: price_div });
     }
@@ -303,8 +265,8 @@ pub fn get_target_pos_power(
     forecast_price: f64,
     market_price: f64,
     max_pos: f64,
-) -> f64 {
-    (bet_size_power(w_param, forecast_price - market_price) * max_pos).trunc()
+) -> Result<f64, BetSizingError> {
+    Ok((bet_size_power(w_param, forecast_price - market_price)? * max_pos).trunc())
 }
 
 pub fn limit_price_sigmoid(t_pos: f64, pos: f64, f: f64, w: f64, max_pos: f64) -> f64 {
@@ -346,24 +308,15 @@ pub fn bet_size_dynamic(
     max_pos: &[f64],
     m_p: &[f64],
     f: &[f64],
-) -> Vec<(f64, f64, f64)> {
-    bet_size_dynamic_checked(pos, max_pos, m_p, f).expect("invalid inputs for bet_size_dynamic")
-}
-
-pub fn bet_size_dynamic_checked(
-    pos: &[f64],
-    max_pos: &[f64],
-    m_p: &[f64],
-    f: &[f64],
 ) -> Result<Vec<(f64, f64, f64)>, BetSizingError> {
-    let w_param = get_w(10.0, 0.95, "sigmoid");
-    let rows = confirm_and_cast_to_df_checked(pos, max_pos, m_p, f)?;
+    let w_param = get_w_sigmoid(10.0, 0.95);
+    let rows = confirm_and_cast_to_df(pos, max_pos, m_p, f)?;
     Ok(rows
         .into_iter()
         .map(|(p, m, mp, forecast)| {
-            let t_pos = get_target_pos(w_param, forecast, mp, m, "sigmoid");
-            let l_p = limit_price(t_pos, p, forecast, w_param, m, "sigmoid");
-            let b = bet_size(w_param, forecast - mp, "sigmoid");
+            let t_pos = get_target_pos_sigmoid(w_param, forecast, mp, m);
+            let l_p = limit_price_sigmoid(t_pos, p, forecast, w_param, m);
+            let b = bet_size_sigmoid(w_param, forecast - mp);
             (b, t_pos, l_p)
         })
         .collect())
@@ -372,8 +325,15 @@ pub fn bet_size_dynamic_checked(
 pub fn get_concurrent_sides(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
-) -> Vec<(NaiveDateTime, f64, f64)> {
+) -> Result<Vec<(NaiveDateTime, f64, f64)>, BetSizingError> {
     // returns (index, active_long, active_short)
+    if side.len() != t1.len() {
+        return Err(BetSizingError::LengthMismatch {
+            name: "side",
+            len: side.len(),
+            expected: t1.len(),
+        });
+    }
     let mut out = Vec::new();
     for (start, _end) in t1.iter() {
         let mut long = 0.0;
@@ -389,23 +349,24 @@ pub fn get_concurrent_sides(
         }
         out.push((*start, long, short));
     }
-    out
+    Ok(out)
 }
 
 pub fn bet_size_budget(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
-) -> Vec<(NaiveDateTime, f64)> {
-    let conc = get_concurrent_sides(t1, side);
+) -> Result<Vec<(NaiveDateTime, f64)>, BetSizingError> {
+    let conc = get_concurrent_sides(t1, side)?;
     let max_long = conc.iter().map(|(_, l, _)| *l).fold(0.0, f64::max);
     let max_short = conc.iter().map(|(_, _, s)| *s).fold(0.0, f64::max);
-    conc.iter()
+    Ok(conc
+        .iter()
         .map(|(ts, l, s)| {
             let avg_long = if max_long > 0.0 { l / max_long } else { 0.0 };
             let avg_short = if max_short > 0.0 { s / max_short } else { 0.0 };
             (*ts, avg_long - avg_short)
         })
-        .collect()
+        .collect())
 }
 
 pub fn cdf_mixture(mu1: f64, mu2: f64, sigma1: f64, sigma2: f64, p1: f64, x: f64) -> f64 {
@@ -426,7 +387,7 @@ fn fit_two_normal_mixture_em(
     epsilon: f64,
     max_iter: usize,
 ) -> [f64; 5] {
-    assert!(!samples.is_empty(), "samples must be non-empty");
+    debug_assert!(!samples.is_empty(), "callers reject empty input");
     let n = samples.len() as f64;
     let mean = samples.iter().sum::<f64>() / n;
     let var = samples.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / n.max(1.0);
@@ -513,15 +474,15 @@ pub fn bet_size_reserve_with_fit(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
     fit: &[f64; 5],
-) -> Vec<(NaiveDateTime, f64, f64, f64, f64)> {
-    get_concurrent_sides(t1, side)
+) -> Result<Vec<ReserveBetSizeRow>, BetSizingError> {
+    Ok(get_concurrent_sides(t1, side)?
         .into_iter()
         .map(|(ts, l, s)| {
             let c_t = l - s;
             let b = single_bet_size_mixed(c_t, fit);
             (ts, l, s, c_t, b)
         })
-        .collect()
+        .collect())
 }
 
 /// Reserve bet-size row: `(timestamp, active_long, active_short, c_t, bet_size)`.
@@ -536,8 +497,11 @@ pub fn bet_size_reserve_full(
     epsilon: f64,
     max_iter: usize,
     return_parameters: bool,
-) -> (Vec<ReserveBetSizeRow>, Option<MixtureParams>) {
-    let concurrent = get_concurrent_sides(t1, side);
+) -> Result<(Vec<ReserveBetSizeRow>, Option<MixtureParams>), BetSizingError> {
+    if t1.is_empty() {
+        return Err(BetSizingError::EmptyInput("t1"));
+    }
+    let concurrent = get_concurrent_sides(t1, side)?;
     let c_t: Vec<f64> = concurrent.iter().map(|(_, l, s)| l - s).collect();
     let fit = fit_two_normal_mixture_em(&c_t, fit_runs, epsilon, max_iter);
     let events = concurrent
@@ -549,16 +513,16 @@ pub fn bet_size_reserve_full(
         })
         .collect();
     let params = if return_parameters { Some(fit) } else { None };
-    (events, params)
+    Ok((events, params))
 }
 
 pub fn bet_size_reserve(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
     fit: &[f64; 5],
-) -> Vec<(NaiveDateTime, f64, f64, f64)> {
-    bet_size_reserve_with_fit(t1, side, fit)
+) -> Result<Vec<(NaiveDateTime, f64, f64, f64)>, BetSizingError> {
+    Ok(bet_size_reserve_with_fit(t1, side, fit)?
         .into_iter()
         .map(|(ts, l, s, _c_t, b)| (ts, l, s, b))
-        .collect()
+        .collect())
 }

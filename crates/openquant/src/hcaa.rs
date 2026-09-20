@@ -1,12 +1,18 @@
 use nalgebra::DMatrix;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum HcaaError {
+    #[error("no data: supply asset prices or returns")]
     NoData,
+    #[error("unknown allocation metric: {0}")]
     UnknownAllocationMetric(String),
+    #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    #[error("the sharpe_ratio metric needs expected returns")]
     MissingExpectedReturnsForSharpe,
+    #[error("tail-risk metrics need asset returns")]
     MissingReturnsForTailRisk,
+    #[error("dimension mismatch: {0}")]
     DimensionMismatch(&'static str),
 }
 

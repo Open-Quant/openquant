@@ -33,6 +33,12 @@ export type ParameterDoc = {
 };
 
 export type ModuleDoc = {
+  /**
+   * The module's page is a hand-written .md file. The generator leaves it alone, and this
+   * entry keeps only what the module index needs: slug, module, subject, summary, surface.
+   * Every content field below is then unused. Issue #53 ends when every entry looks like this.
+   */
+  handwritten?: true;
   slug: string;
   module: string;
   subject: string;
@@ -43,11 +49,11 @@ export type ModuleDoc = {
    * so the 39 existing entries still type-check, and safe to delete once
    * something has been done with the one-liners.
    */
-  whyItExists: string;
-  keyApis: string[];
-  formulas: Formula[];
-  examples: ExampleBlock[];
-  notes: string[];
+  whyItExists?: string;
+  keyApis?: string[];
+  formulas?: Formula[];
+  examples?: ExampleBlock[];
+  notes?: string[];
   /**
    * The three fields below are REQUIRED, and the generator asserts them.
    * They used to be optional, and 27 of the 39 modules simply omitted them:
@@ -55,9 +61,9 @@ export type ModuleDoc = {
    * so a missing overview shipped as a 130-word page instead of failing the
    * build. A new module with none of these is now a loud generator error.
    */
-  conceptOverview: string;
-  whenToUse: string;
-  relatedModules: string[];
+  conceptOverview?: string;
+  whenToUse?: string;
+  relatedModules?: string[];
   keyParameters?: ParameterDoc[];
   commonPitfalls?: string[];
   afmlChapters?: number[];
@@ -173,58 +179,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "bet-sizing",
-    conceptOverview:
-      "The layer between a model's confidence and an order. `bet_size_probability` maps class probabilities to a signed size in [-1, 1] through the t-statistic of the probability against the null of no edge, averages sizes across bets that are still active, and discretises to your execution granularity. `bet_size_dynamic` works from a price forecast instead: given the current and maximum position it returns the target position and the limit price at which that size is justified. `bet_size_reserve` sizes from a fitted mixture of long/short concurrency rather than from any model score.",
-    whenToUse:
-      "Between signal generation and execution, always — a raw model score is not a position. Use the probability path when a classifier emits calibrated probabilities, the dynamic path when you have a price forecast and want a limit-order boundary, and reserve sizing when overlapping books or stacked strategies can accumulate hidden gross exposure. Set `step_size` to real lot or contract granularity, not an arbitrary decimal, and treat the limit price as a decision boundary rather than a fill you will get.",
-    relatedModules: ["labeling", "sample-weights", "strategy-risk", "portfolio-optimization"],
     module: "bet_sizing",
     subject: "Position Sizing and Trade Construction",
-    summary: "Transforms model confidence and constraints into executable position sizes.",
-    whyItExists: "A model signal is not tradable until converted into bounded, discrete, and risk-aware position sizes.",
-    keyApis: [
-      "bet_size_probability",
-      "bet_size_dynamic",
-      "bet_size_budget",
-      "bet_size_reserve",
-      "bet_size_reserve_full",
-      "get_target_pos",
-      "limit_price",
-    ],
-    formulas: [
-      {
-        label: "From Classification Probability to Signed Bet",
-        latex:
-          "\\begin{aligned}z_t&=\\frac{p_t-1/K}{\\sqrt{p_t(1-p_t)}}\\\\m_t&=\\operatorname{side}_t\\left(2\\Phi(z_t)-1\\right)\\\\\\tilde m_t&=\\operatorname{clip}_{[-1,1]}\\!\\left(\\Delta\\,\\mathrm{round}\\!\\left(\\frac{m_t}{\\Delta}\\right)\\right)\\end{aligned}",
-      },
-      {
-        label: "Dynamic Position Target and Limit Price",
-        latex:
-          "\\begin{aligned}w&=\\frac{x^2(1-m^2)}{m^2}\\quad (x=f-m_p)\\\\m(x)&=\\frac{x}{\\sqrt{w+x^2}}\\\\\\text{target}&=\\operatorname{maxPos}\\cdot m(f-m_p)\\\\\\text{limitPrice}&=\\frac{1}{|q^*-q|}\\sum_{j=q}^{q^*}\\operatorname{invPrice}(j)\\end{aligned}",
-      },
-      {
-        label: "Budget and Reserve Concurrency Sizing",
-        latex:
-          "\\begin{aligned}b_t^{budget}&=\\frac{L_t}{\\max_s L_s}-\\frac{S_t}{\\max_s S_s}\\\\c_t&=L_t-S_t\\\\b_t^{reserve}&=\\frac{F(c_t)-F(0)}{1-F(0)}\\;\\mathbf 1_{c_t\\ge0}+\\frac{F(c_t)-F(0)}{F(0)}\\;\\mathbf 1_{c_t<0}\\end{aligned}",
-      },
-    ],
-    examples: [
-      {
-        title: "End-to-end: Probability Forecasts -> Discrete Executable Bet Sizes",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::bet_size_probability;\n\n// 1) Build event stream: (start, end, class probability, trade side)\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet events = vec![\n    (t0, t0 + Duration::minutes(20), 0.56,  1.0),\n    (t0 + Duration::minutes(5), t0 + Duration::minutes(35), 0.62,  1.0),\n    (t0 + Duration::minutes(10), t0 + Duration::minutes(30), 0.48, -1.0),\n    (t0 + Duration::minutes(15), t0 + Duration::minutes(45), 0.67,  1.0),\n];\n\n// 2) Convert probabilities -> signed signal -> discretized size (step=0.1)\nlet sizes = bet_size_probability(&events, 2, 0.1, true);\n\n// 3) sizes are directly executable as timestamped target exposure in [-1, 1]\nassert!(!sizes.is_empty());`,
-      },
-      {
-        title: "End-to-end: Dynamic + Reserve Sizing for Execution and Inventory Control",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::{bet_size_dynamic, bet_size_reserve_full};\n\n// Dynamic sizing inputs (position, max position, market price, forecast price)\nlet pos = vec![0.0, 1.0, 1.0, 2.0, 1.0];\nlet max_pos = vec![10.0; 5];\nlet market = vec![100.0, 100.1, 100.0, 100.2, 100.15];\nlet forecast = vec![100.3, 100.4, 100.2, 100.5, 100.45];\n\nlet dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast);\n// tuple: (bet_size, target_position, limit_price)\n\n// Reserve sizing from overlapping long/short events\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet t1 = vec![\n  (t0, t0 + Duration::minutes(30)),\n  (t0 + Duration::minutes(10), t0 + Duration::minutes(40)),\n  (t0 + Duration::minutes(20), t0 + Duration::minutes(50)),\n];\nlet side = vec![1.0, -1.0, 1.0];\nlet (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true);\n\nassert_eq!(dynamic.len(), 5);\nassert!(fit.is_some());\nassert!(!reserve.is_empty());`,
-      },
-    ],
-    notes: [
-      "Keep sizing logic coupled to latency and fill assumptions; limit price from dynamic sizing is a decision boundary, not a guaranteed fill.",
-      "Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure.",
-      "Calibrate step_size to real execution granularity (lots/contracts), not arbitrary decimals.",
-    ],
+    summary: "From a probability or a price forecast to a position size, averaged over live bets and discretised.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["bet_sizing.get_signal", "bet_sizing.discrete_signal", "bet_sizing.bet_size", "bet_sizing.bet_size_sigmoid", "bet_sizing.bet_size_power", "bet_sizing.inv_price", "bet_sizing.inv_price_sigmoid", "bet_sizing.inv_price_power", "bet_sizing.get_w", "bet_sizing.get_w_sigmoid", "bet_sizing.get_w_power", "bet_sizing.get_target_pos", "bet_sizing.get_target_pos_sigmoid", "bet_sizing.get_target_pos_power", "bet_sizing.limit_price", "bet_sizing.limit_price_sigmoid", "bet_sizing.limit_price_power", "bet_sizing.avg_active_signals", "bet_sizing.bet_size_dynamic", "bet_sizing.cdf_mixture", "bet_sizing.single_bet_size_mixed", "bet_sizing.get_concurrent_sides", "bet_sizing.bet_size_budget", "bet_sizing.bet_size_probability", "bet_sizing.mp_avg_active_signals", "bet_sizing.bet_size_reserve", "bet_sizing.bet_size_reserve_with_fit", "bet_sizing.bet_size_reserve_full"],
   },
@@ -320,85 +278,11 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "data-structures",
     module: "data_structures",
     subject: "Event-Driven Data and Labeling",
-    summary: "Constructs standard/time/run/imbalance bars from trade streams.",
-    whyItExists: "Event-based bars reduce heteroskedasticity and improve stationarity versus fixed-time sampling.",
-    keyApis: ["standard_bars", "time_bars", "run_bars", "imbalance_bars", "Trade", "StandardBar", "StandardBarType", "ImbalanceBarType"],
-    formulas: [
-      { label: "Dollar Bar Trigger", latex: "\\sum_{i=t_0}^{t} p_i v_i \\ge \\theta" },
-      { label: "Imbalance Trigger", latex: "\\left|\\sum b_i\\right| \\ge E[|\\sum b_i|]" },
-    ],
-    examples: [
-      {
-        title: "Build dollar bars from a Polars DataFrame",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant.bars import build_dollar_bars, bar_diagnostics
-import polars as pl
-
-# Input: Polars DataFrame with ts, symbol, open, high, low, close, volume columns
-df = pl.read_parquet("trades.parquet")
-
-# Dollar bars: each bar aggregates ~$5M of notional
-bars = build_dollar_bars(df, dollar_value_per_bar=5_000_000.0)
-# Returns: Polars DataFrame with ts, symbol, open, high, low, close, volume, adj_close, start_ts, n_obs, dollar_value
-
-# Check bar quality: low autocorrelation = good
-diag = bar_diagnostics(bars)
-print(diag)  # {"n_bars": 482.0, "lag1_return_autocorr": -0.02, ...}`,
-      },
-      {
-        title: "Build tick and volume bars",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant.bars import build_tick_bars, build_volume_bars, build_time_bars
-
-tick_bars = build_tick_bars(df, ticks_per_bar=50)
-vol_bars = build_volume_bars(df, volume_per_bar=100_000.0)
-time_bars = build_time_bars(df, interval="5m")`,
-      },
-      {
-        title: "Build bars from Rust",
-        language: "rust",
-        code: `use chrono::Duration;\nuse openquant::data_structures::{\n    standard_bars, time_bars, run_bars, imbalance_bars,\n    Trade, StandardBarType, ImbalanceBarType,\n};\n\nlet trades: Vec<Trade> = vec![];\n\n// Fixed-time bars\nlet t_bars = time_bars(&trades, Duration::minutes(5));\n\n// Dollar bars via standard_bars\nlet d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);\n\n// Run bars (Rust-only)\nlet r_bars = run_bars(&trades, 100);\n\n// Tick imbalance bars (Rust-only)\nlet ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);`,
-      },
-    ],
-    notes: [
-      "Threshold selection controls bar frequency and noise level.",
-      "Keep OHLCV semantics consistent across downstream features.",
-      "Run bars and imbalance bars are available via bars.build_run_bars and bars.build_imbalance_bars.",
-      "`bar_diagnostics` is Python-only; use it to verify low return autocorrelation after bar construction.",
-    ],
-    conceptOverview: `Traditional financial data uses fixed-time bars (1-minute, daily), but these sample uniformly regardless of market activity. During quiet periods you get noise; during volatile periods you under-sample important information.
-
-Information-driven bars (AFML Chapter 2) sample based on market activity instead of clock time. **Dollar bars** trigger a new bar when cumulative traded dollar volume reaches a threshold, producing roughly equal-information observations. **Volume bars** trigger on cumulative share volume. **Tick bars** trigger on trade count.
-
-**Imbalance bars** go further: they detect when the net signed trade flow (buy minus sell) exceeds its expected magnitude, capturing points where informed trading pressure shifts. **Run bars** detect runs of same-signed trades exceeding expectations.
-
-The key insight is that information-driven bars produce returns that are closer to IID normal, which makes downstream ML models (labeling, feature importance, cross-validation) better behaved. All AFML workflows assume information-driven bars as input.`,
-    whenToUse: `This is the first module in any AFML pipeline. Raw tick or trade data goes in; structured OHLCV bars come out. Everything downstream — labeling, features, sampling — consumes these bars.
-
-**Prerequisites**: Raw trade or tick data with timestamps, prices, and volumes.
-
-**Alternatives**: Standard time bars if your data is already aggregated. For pre-aggregated OHLCV data, use the \`data\` module's \`load_ohlcv\` and \`clean_ohlcv\` functions instead.`,
-    keyParameters: [
-      { name: "dollar_value_per_bar", type: "float", description: "Dollar notional threshold for dollar bars (Python)", default: "5_000_000.0" },
-      { name: "volume_per_bar", type: "float", description: "Cumulative volume threshold for volume bars (Python)", default: "100_000.0" },
-      { name: "ticks_per_bar", type: "int", description: "Trade count threshold for tick bars (Python)", default: "50" },
-      { name: "interval", type: "str", description: "Time interval for time bars, e.g. '1d', '5m', '1h' (Python)", default: "'1d'" },
-      { name: "threshold", type: "f64", description: "Bar trigger threshold for standard_bars, run_bars, imbalance_bars (Rust)", default: "—" },
-      { name: "bar_type", type: "StandardBarType", description: "Tick, Volume, or Dollar — selects accumulation metric (Rust)", default: "—" },
-    ],
-    commonPitfalls: [
-      "Using time bars when your data has highly variable activity — dollar or volume bars will produce more stationary returns.",
-      "Setting the threshold too low, creating extremely noisy high-frequency bars, or too high, losing intraday resolution.",
-      "Forgetting to assign trade direction (buy/sell sign) before constructing imbalance or run bars — these require signed volume.",
-      "Mixing bar types across train and inference: if you train on dollar bars, your live pipeline must also use dollar bars with the same threshold.",
-      "Run bars and imbalance bars are available in Python via bars.build_run_bars and bars.build_imbalance_bars.",
-    ],
-    relatedModules: ["filters", "labeling", "fracdiff"],
+    summary: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.",
+    handwritten: true,
     afmlChapters: [2],
     apiSurface: "both",
-    pythonApis: ["bars.build_time_bars", "bars.build_tick_bars", "bars.build_volume_bars", "bars.build_dollar_bars", "bars.build_run_bars", "bars.build_imbalance_bars"],
+    pythonApis: ["bars.build_time_bars", "bars.build_tick_bars", "bars.build_volume_bars", "bars.build_dollar_bars", "bars.bar_diagnostics"],
   },
   {
     slug: "hyperparameter-tuning",
@@ -469,7 +353,7 @@ The key insight is that information-driven bars produce returns that are closer 
       {
         title: "Estimate moments",
         language: "rust",
-        code: `use openquant::ef3m::centered_moment;\n\nlet moments = vec![0.0, 1.0, 0.1, 3.0];\nlet m3 = centered_moment(&moments, 3);`,
+        code: `use openquant::ef3m::centered_moment;\n\nlet moments = vec![0.0, 1.0, 0.1, 3.0];\nlet m3 = centered_moment(&moments, 3)?;`,
       },
     ],
     notes: ["Use as initialization for more expensive optimizers.", "Sensitive to higher-moment estimation noise."],
@@ -535,37 +419,11 @@ The key insight is that information-driven bars produce returns that are closer 
   },
   {
     slug: "etf-trick",
-    conceptOverview:
-      "The ETF trick turns a series of futures contracts — each with its own roll, financing cost and carry — into one continuous, reinvestable price series that a backtest can treat like a tradable instrument. `EtfTrick` consumes aligned open, close, allocation and cost tables plus optional financing rates and produces a NAV series; `get_futures_roll_series` applies backward or forward roll adjustment to a single contract chain. Both exist because naively concatenating contract prices manufactures a return at every roll.",
-    whenToUse:
-      "Use it whenever a backtest spans a contract roll, or whenever the traded object is a basket whose weights change over time. Suspiciously smooth PnL around roll dates is the symptom of skipping it. Costs and financing rates must come from the same clock as the price data, and the contract calendar assumptions are worth verifying against the exchange rather than inferring from the data. This module is Rust-only — no Python bindings are exposed.",
-    relatedModules: ["data-structures", "backtesting-engine", "backtest-statistics", "bet-sizing"],
     module: "etf_trick",
     subject: "Position Sizing and Trade Construction",
-    summary: "Synthetic ETF and futures roll utilities for realistic PnL path construction.",
-    whyItExists: "Backtests must include financing, carry, and contract-roll mechanics to avoid optimistic bias.",
-    keyApis: ["EtfTrick", "EtfTrick::from_tables", "EtfTrick::from_csv", "EtfTrick::get_etf_series", "get_futures_roll_series", "FuturesRollRow", "Table"],
-    formulas: [
-      { label: "ETF NAV Update", latex: "NAV_t=NAV_{t-1}(1+r_t-c_t)" },
-      { label: "Roll Return", latex: "r^{roll}_t=\\frac{F^{near}_t-F^{far}_t}{F^{far}_t}" },
-    ],
-    examples: [
-      {
-        title: "Construct synthetic ETF series",
-        language: "rust",
-        code: `use openquant::etf_trick::{EtfTrick, Table};\n\n// Load open/close/allocation/cost tables from CSV\nlet etf = EtfTrick::from_csv(\n    "open.csv", "close.csv", "alloc.csv", "costs.csv", Some("rates.csv"),\n).unwrap();\n\n// Generate synthetic ETF NAV series\nlet series = etf.get_etf_series(252).unwrap();\n// Returns Vec<(date_string, nav_value)>`,
-      },
-      {
-        title: "Compute futures roll-adjusted series",
-        language: "rust",
-        code: `use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};\n\nlet rows: Vec<FuturesRollRow> = vec![/* ... */];\nlet adjusted = get_futures_roll_series(&rows, "backward", true).unwrap();`,
-      },
-    ],
-    notes: [
-      "Verify contract calendar assumptions.",
-      "Costs and rates should come from the same clock as price data.",
-      "This module is Rust-only — no Python bindings are currently exposed.",
-    ],
+    summary: "A rebalanced futures basket, or one rolled contract, as a single continuous value series.",
+    handwritten: true,
+    afmlChapters: [2],
     apiSurface: "rust-only",
   },
   {
@@ -606,85 +464,8 @@ The key insight is that information-driven bars produce returns that are closer 
     slug: "filters",
     module: "filters",
     subject: "Event-Driven Data and Labeling",
-    summary: "CUSUM and z-score event filters for event-driven sampling.",
-    whyItExists: "Extracts informative events from noisy high-frequency sequences.",
-    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "cusum_filter_indices_checked", "cusum_filter_timestamps_checked", "z_score_filter_indices", "z_score_filter_timestamps", "z_score_filter_timestamps_checked", "Threshold", "FilterError"],
-    formulas: [
-      {
-        label: "Symmetric CUSUM Filter",
-        latex: "S_t^{+}=\\max\\!\\left(0,\\,S_{t-1}^{+}+r_t\\right),\\qquad S_t^{-}=\\min\\!\\left(0,\\,S_{t-1}^{-}+r_t\\right),\\qquad \\text{event at }t\\iff S_t^{+}>h_t\\;\\lor\\;S_t^{-}<-h_t",
-        where: "$r_t=\\ln(p_t/p_{t-1})$ is the log return and $h_t$ the threshold — a constant for `Threshold::Scalar`, a per-bar series for `Threshold::Dynamic`. Both arms are needed: $S^{+}$ alone only ever detects upward runs. Whichever arm breaches is reset to $0$ and the bar is emitted as an event, so the filter measures *runs* away from the last event rather than a cumulative level.",
-      },
-      {
-        label: "Z-score Filter",
-        latex: "z_t=\\frac{x_t-\\mu_t}{\\sigma_t},\\qquad \\text{event at }t\\iff|z_t|>h",
-        where: "$\\mu_t$ and $\\sigma_t$ are the rolling mean and standard deviation over the lookback window ending at $t$.",
-      },
-    ],
-    examples: [
-      {
-        title: "CUSUM and z-score event detection",
-        language: "python",
-        code: `import openquant
-
-close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-# The filters bindings parse "%Y-%m-%d %H:%M:%S" — a space, not an ISO "T".
-timestamps = [
-    "2024-01-02 09:30:00", "2024-01-02 09:31:00",
-    "2024-01-02 09:32:00", "2024-01-02 09:33:00",
-    "2024-01-02 09:34:00", "2024-01-02 09:35:00",
-    "2024-01-02 09:36:00", "2024-01-02 09:37:00",
-]
-
-# CUSUM filter: fires when cumulative deviation exceeds threshold
-event_indices = openquant.filters.cusum_filter_indices(close, 0.02)
-
-# With timestamps: returns event timestamps directly
-event_ts = openquant.filters.cusum_filter_timestamps(close, timestamps, 0.02)
-
-# Z-score filter: fires when z-score exceeds threshold
-z_indices = openquant.filters.z_score_filter_indices(close, mean_window=20, std_window=20, threshold=2.0)
-z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_window=20, std_window=20, threshold=2.0)`,
-      },
-      {
-        title: "CUSUM with static and dynamic thresholds",
-        language: "rust",
-        code: `use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\n\n// Static threshold\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));\n\n// Dynamic threshold (e.g. volatility-scaled per bar)\nlet dynamic_h = vec![0.02, 0.025, 0.018, 0.022];\nlet idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();`,
-      },
-    ],
-    notes: [
-      "Calibrate thresholds to target event frequency, not just sensitivity.",
-      "Use identical filtering in train and live pipelines.",
-      "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.",
-      "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.",
-    ],
-    conceptOverview: `Instead of sampling at fixed intervals, AFML Chapter 2 uses structural event filters to detect when something meaningful happens in the price process. This produces training examples that correspond to real market inflection points rather than arbitrary calendar dates.
-
-The **CUSUM filter** tracks a cumulative sum of returns (or price changes). It resets to zero when the cumulative deviation exceeds a threshold h, and the reset point becomes an event. This captures points where the price has moved "enough" since the last event. The filter is directional: it tracks both positive and negative cumulative deviations separately.
-
-The **z-score filter** standardizes the current value against a rolling mean and standard deviation, firing when the z-score exceeds a threshold. This is useful for mean-reverting signals where you want events when the price deviates significantly from its recent average.
-
-Both filters replace the naive approach of labeling every bar, which creates highly correlated and redundant training examples.`,
-    whenToUse: `Apply event filters immediately after bar construction and before labeling. They bridge raw bars to the labeling module: bars go in, event timestamps come out.
-
-**Prerequisites**: A price series (close prices from bars), and optionally timestamps.
-
-**Alternatives**: Fixed-interval sampling (simpler but creates redundant events), or custom event logic for strategy-specific triggers.`,
-    keyParameters: [
-      { name: "close", type: "list[float]", description: "Input price series (close prices)", default: "—" },
-      { name: "threshold", type: "float", description: "CUSUM trigger level; controls event frequency (Python: scalar only)", default: "—" },
-      { name: "threshold", type: "Threshold", description: "CUSUM trigger: Threshold::Scalar(f64) or Threshold::Dynamic(Vec<f64>) (Rust)", default: "—" },
-      { name: "mean_window", type: "int", description: "Rolling mean lookback for z-score filter", default: "—" },
-      { name: "std_window", type: "int", description: "Rolling std lookback for z-score filter", default: "—" },
-      { name: "timestamps", type: "list[str]", description: "Optional timestamps; use _timestamps variants to get event times instead of indices", default: "—" },
-    ],
-    commonPitfalls: [
-      "Setting the CUSUM threshold too tight in volatile regimes — you get too many events and labels become noisy. Scale h by recent volatility.",
-      "Using different thresholds in training vs live inference — the event distribution shifts and the model sees a different regime.",
-      "Applying CUSUM to non-stationary raw prices instead of returns or log-returns — the filter becomes meaningless as the price drifts.",
-      "Python bindings only support scalar thresholds — use the Rust API directly if you need dynamic (per-bar) thresholds.",
-    ],
-    relatedModules: ["data-structures", "labeling", "sample-weights"],
+    summary: "The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.",
+    handwritten: true,
     afmlChapters: [2],
     apiSurface: "both",
     pythonApis: ["filters.cusum_filter_indices", "filters.cusum_filter_timestamps", "filters.z_score_filter_indices", "filters.z_score_filter_timestamps"],
@@ -838,118 +619,11 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
     slug: "labeling",
     module: "labeling",
     subject: "Event-Driven Data and Labeling",
-    summary: "Triple-barrier event labeling and metadata generation.",
-    whyItExists: "Converts event outcomes into ML labels with controlled horizon and risk barriers.",
-    keyApis: ["add_vertical_barrier", "get_events", "get_bins", "drop_labels", "Event"],
-    formulas: [
-      {
-        label: "Triple-Barrier Event Time",
-        latex:
-          "\\tau=\\min\\left(\\tau_{pt},\\tau_{sl},t_1\\right),\\quad\\tau_{pt}=\\inf\\{u>t:r_{t,u}\\ge pt\\cdot\\sigma_t\\},\\quad\\tau_{sl}=\\inf\\{u>t:r_{t,u}\\le-sl\\cdot\\sigma_t\\}",
-      },
-      {
-        label: "Labeling Rule",
-        latex:
-          "y_t=\\begin{cases}1,&r_{t,\\tau}>0\\\\0,&r_{t,\\tau}=0\\\\-1,&r_{t,\\tau}<0\\end{cases},\\qquad\\text{meta label: }y_t^{meta}=\\mathbf 1\\{\\operatorname{side}_t\\cdot r_{t,\\tau}>0\\}",
-      },
-      {
-        label: "Target Volatility Scaling",
-        latex:
-          "\\sigma_t=\\operatorname{EWMA}\\big(|r_t|\\big),\\qquad\\text{barrier widths }\\propto \\sigma_t",
-      },
-    ],
-    examples: [
-      {
-        title: "Triple-barrier labels from price series",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant._core import labeling, filters
-
-# 1) Detect events with CUSUM filter
-timestamps = ["2024-01-01T09:30:00", "2024-01-01T09:31:00", ...]
-close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, ...]
-event_ts = filters.cusum_filter_timestamps(close, timestamps, 0.02)
-
-# 2) Estimate target volatility (use your own EWMA or rolling std)
-target_ts = event_ts
-target_vals = [0.02] * len(event_ts)  # simplified constant target
-
-# 3) Compute triple-barrier labels
-labels = labeling.triple_barrier_labels(
-    close_timestamps=timestamps,
-    close_prices=close,
-    t_events=event_ts,
-    target_timestamps=target_ts,
-    target_values=target_vals,
-    pt=1.0, sl=1.0, min_ret=0.005,
-)
-# Each label: (event_ts, return, target, label_int, touch_ts)`,
-      },
-      {
-        title: "Meta-labeling: learn when to act on a primary signal",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant._core import labeling
-
-# Primary model gives side predictions (+1 or -1) at each event
-side_prediction = [1.0, -1.0, 1.0, 1.0, -1.0, ...]
-
-meta_labels = labeling.meta_labels(
-    close_timestamps=timestamps,
-    close_prices=close,
-    t_events=event_ts,
-    target_timestamps=target_ts,
-    target_values=target_vals,
-    side_prediction=side_prediction,
-    pt=1.0, sl=1.0, min_ret=0.005,
-)
-# Train a secondary classifier on meta_labels to filter false signals`,
-      },
-      {
-        title: "End-to-end: Event Filter -> Vertical Barrier -> Triple Barrier Labels",
-        language: "rust",
-        code: `use chrono::NaiveDateTime;\nuse openquant::filters::{cusum_filter_timestamps, Threshold};\nuse openquant::labeling::{add_vertical_barrier, get_events, get_bins};\nuse openquant::util::volatility::get_daily_vol;\n\n// 1) price series and timestamps\nlet close: Vec<(NaiveDateTime, f64)> = /* load bars */ vec![];\nlet prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();\nlet ts: Vec<NaiveDateTime> = close.iter().map(|(t, _)| *t).collect();\n\n// 2) detect candidate events via CUSUM filter\nlet events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02));\n\n// 3) estimate target volatility and add max-holding horizon\nlet target = get_daily_vol(&close, 100);\nlet vbars = add_vertical_barrier(&events, &close, 1, 0, 0, 0);\n\n// 4) compute barrier touches and labels\nlet ev = get_events(&close, &events, (1.0, 1.0), &target, 0.005, 3, Some(&vbars), None);\nlet bins = get_bins(&ev, &close);\nassert!(!bins.is_empty());`,
-      },
-      {
-        title: "Meta-Labeling Workflow with Side Signal",
-        language: "rust",
-        code: `use chrono::NaiveDateTime;\nuse openquant::labeling::{get_events, get_bins};\n\nlet close: Vec<(NaiveDateTime, f64)> = /* bars */ vec![];\nlet events: Vec<NaiveDateTime> = /* primary event timestamps */ vec![];\nlet target: Vec<(NaiveDateTime, f64)> = /* vol target */ vec![];\nlet vbars: Vec<(NaiveDateTime, NaiveDateTime)> = /* horizon */ vec![];\n\n// Primary model side forecast (+1 / -1)\nlet side: Vec<(NaiveDateTime, f64)> = events.iter().map(|t| (*t, 1.0)).collect();\n\nlet meta_events = get_events(\n    &close,\n    &events,\n    (1.0, 1.0),\n    &target,\n    0.005,\n    3,\n    Some(&vbars),\n    Some(&side),\n);\nlet meta_bins = get_bins(&meta_events, &close);\n// Use meta_bins to train a second-stage filter (take/skip decision)\nassert!(!meta_bins.is_empty());`,
-      },
-    ],
-    notes: [
-      "Label stability is dominated by event quality and volatility-target quality; calibrate these before tuning ML models.",
-      "Always audit class balance and average holding time after labeling; both drive downstream model behavior.",
-      "In meta-labeling, side alignment and timestamp joins are a frequent hidden bug source.",
-    ],
-    conceptOverview: `The triple-barrier method (AFML Chapter 3) replaces fixed-horizon labeling with a path-dependent approach. Instead of asking "did the price go up in 10 days?", it asks "which barrier did the price hit first — a profit-taking ceiling, a stop-loss floor, or a maximum holding horizon?"
-
-This matters because fixed-horizon labels create artifacts: a trade that hits +5% then reverses to -1% at the horizon gets labeled as a loss. Triple-barrier labels capture the actual trade outcome under realistic exit rules.
-
-**Meta-labeling** is a two-stage extension: a primary model predicts direction (side), while a secondary model learns *when to act* on that signal. The secondary model's label is binary (1 = the primary model was correct, 0 = it wasn't). This separation lets you combine a simple directional model with a sophisticated sizing/filtering model.
-
-Barrier widths are scaled by a volatility target (typically EWMA of returns), making them adaptive across regimes. Events are sourced from structural filters like CUSUM rather than calendar time.`,
-    whenToUse: `Use this module immediately after event detection (CUSUM/z-score filters) and volatility estimation. It sits at the start of the ML pipeline: raw price events go in, labeled training examples come out.
-
-**Prerequisites**: A price series with timestamps, filtered event timestamps, and a volatility target series.
-
-**Alternatives**: Fixed-horizon labeling (simpler but regime-blind), or trend-scanning labels for continuous-valued targets instead of classification.`,
-    keyParameters: [
-      { name: "pt", type: "f64", description: "Profit-taking barrier multiplier (× volatility target)", default: "1.0" },
-      { name: "sl", type: "f64", description: "Stop-loss barrier multiplier (× volatility target)", default: "1.0" },
-      { name: "min_ret", type: "f64", description: "Minimum return threshold; events with smaller absolute returns are labeled 0", default: "0.0" },
-      { name: "vertical_barrier_times", type: "Option<Vec>", description: "Maximum holding period timestamps; events expire if neither profit nor stop barrier is hit", default: "None" },
-      { name: "side_prediction", type: "Option<Vec<f64>>", description: "Primary model side forecasts (+1/−1) for meta-labeling mode", default: "None" },
-    ],
-    commonPitfalls: [
-      "Setting symmetric barriers (pt=sl=1) when the strategy has asymmetric payoff — calibrate each barrier width independently.",
-      "Using calendar-time vertical barriers with information-driven bars — the holding period should match bar frequency, not wall time.",
-      "Ignoring class imbalance after labeling: if 80% of events hit the vertical barrier, the model learns to predict 'no movement' and the labels need recalibration.",
-      "Forgetting that meta-labeling requires aligned timestamps between the primary model's side predictions and the event set — off-by-one joins silently corrupt labels.",
-    ],
-    relatedModules: ["filters", "sample-weights", "sampling", "bet-sizing"],
+    summary: "Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.",
+    handwritten: true,
     afmlChapters: [3],
-    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels", "labeling.add_vertical_barrier", "labeling.get_events", "labeling.get_bins", "labeling.drop_labels"],
     apiSurface: "both",
+    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels", "labeling.add_vertical_barrier", "labeling.get_events", "labeling.get_bins", "labeling.drop_labels"],
   },
   {
     slug: "microstructural-features",
@@ -985,12 +659,12 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         title: "End-to-end: Build Core Liquidity Feature Panel",
         language: "rust",
-        code: `use openquant::microstructural_features::{\n    get_roll_measure,\n    get_corwin_schultz_estimator,\n    get_bar_based_kyle_lambda,\n    get_bar_based_amihud_lambda,\n    get_vpin,\n};\n\n// 1) Inputs from bar construction\nlet close = vec![100.0, 100.2, 100.1, 100.3, 100.25, 100.4];\nlet high = vec![100.1, 100.25, 100.2, 100.35, 100.3, 100.45];\nlet low = vec![99.9, 100.0, 99.95, 100.1, 100.05, 100.2];\nlet volume = vec![1000.0, 1200.0, 900.0, 1100.0, 1300.0, 1250.0];\nlet dollar_volume: Vec<f64> = close.iter().zip(volume.iter()).map(|(p, v)| p * v).collect();\nlet buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];\n\n// 2) Liquidity and spread proxies\nlet roll = get_roll_measure(&close, 3);\nlet cs_spread = get_corwin_schultz_estimator(&high, &low, 3);\nlet kyle = get_bar_based_kyle_lambda(&close, &volume, 3);\nlet amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3);\nlet vpin = get_vpin(&volume, &buy_volume, 3);\n\n// 3) Feature panel is ready for regime model / execution model\nassert_eq!(roll.len(), close.len());\nassert_eq!(vpin.len(), close.len());`,
+        code: `use openquant::microstructural_features::{\n    get_roll_measure,\n    get_corwin_schultz_estimator,\n    get_bar_based_kyle_lambda,\n    get_bar_based_amihud_lambda,\n    get_vpin,\n};\n\n// 1) Inputs from bar construction\nlet close = vec![100.0, 100.2, 100.1, 100.3, 100.25, 100.4];\nlet high = vec![100.1, 100.25, 100.2, 100.35, 100.3, 100.45];\nlet low = vec![99.9, 100.0, 99.95, 100.1, 100.05, 100.2];\nlet volume = vec![1000.0, 1200.0, 900.0, 1100.0, 1300.0, 1250.0];\nlet dollar_volume: Vec<f64> = close.iter().zip(volume.iter()).map(|(p, v)| p * v).collect();\nlet buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];\n\n// 2) Liquidity and spread proxies\nlet roll = get_roll_measure(&close, 3);\nlet cs_spread = get_corwin_schultz_estimator(&high, &low, 3)?;\nlet kyle = get_bar_based_kyle_lambda(&close, &volume, 3)?;\nlet amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3)?;\nlet vpin = get_vpin(&volume, &buy_volume, 3)?;\n\n// 3) Feature panel is ready for regime model / execution model\nassert_eq!(roll.len(), close.len());\nassert_eq!(vpin.len(), close.len());`,
       },
       {
         title: "From Encoded Tick Signs to Entropy Features",
         language: "rust",
-        code: `use openquant::microstructural_features::{\n    encode_tick_rule_array,\n    get_shannon_entropy,\n    get_lempel_ziv_entropy,\n    get_plug_in_entropy,\n};\n\nlet tick_rule = vec![1, 1, -1, -1, 1, -1, 1, 1, 1, -1];\nlet msg = encode_tick_rule_array(&tick_rule)?;\n\nlet h_shannon = get_shannon_entropy(&msg);\nlet h_lz = get_lempel_ziv_entropy(&msg);\nlet h_plugin = get_plug_in_entropy(&msg, 2);\n\nassert!(h_shannon.is_finite());\nassert!(h_lz.is_finite());\nassert!(h_plugin.is_finite());`,
+        code: `use openquant::microstructural_features::{\n    encode_tick_rule_array,\n    get_shannon_entropy,\n    get_lempel_ziv_entropy,\n    get_plug_in_entropy,\n};\n\nlet tick_rule = vec![1, 1, -1, -1, 1, -1, 1, 1, 1, -1];\nlet msg = encode_tick_rule_array(&tick_rule)?;\n\nlet h_shannon = get_shannon_entropy(&msg);\nlet h_lz = get_lempel_ziv_entropy(&msg);\nlet h_plugin = get_plug_in_entropy(&msg, 2)?;\n\nassert!(h_shannon.is_finite());\nassert!(h_lz.is_finite());\nassert!(h_plugin.is_finite());`,
       },
     ],
     notes: [
@@ -1429,7 +1103,7 @@ drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
       {
         title: "Run sequential bootstrap",
         language: "rust",
-        code: `use openquant::sampling::seq_bootstrap;\n\nlet ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];\nlet idx = seq_bootstrap(&ind, Some(3), None);`,
+        code: `use openquant::sampling::seq_bootstrap;\n\nlet ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];\nlet idx = seq_bootstrap(&ind, Some(3), None)?;`,
       },
     ],
     notes: ["Indicator matrix quality drives bootstrap quality.", "Use average uniqueness as a diagnostics KPI."],
@@ -1589,7 +1263,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute EWMA vector",
         language: "rust",
-        code: `use openquant::util::fast_ewma::ewma;\n\nlet x = vec![1.0, 2.0, 3.0, 4.0];\nlet y = ewma(&x, 3);`,
+        code: `use openquant::util::fast_ewma::ewma;\n\nlet x = vec![1.0, 2.0, 3.0, 4.0];\nlet y = ewma(&x, 3)?;`,
       },
     ],
     notes: ["Window length controls responsiveness vs smoothness.", "Prefer this helper over ad-hoc loops for consistency."],
@@ -1624,7 +1298,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute daily and range-based volatility",
         language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::util::volatility::{get_daily_vol, get_parkinson_vol};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet close: Vec<(NaiveDateTime, f64)> = (0..300)\n    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))\n    .collect();\nlet high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();\nlet low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();\n\n// Close-to-close EWMA vol on a timestamped series; \`lookback\` is the EWMA span.\nlet daily = get_daily_vol(&close, 100);\n// Parkinson uses the high/low range, so it needs no timestamps — \`window\` bars.\nlet parkinson = get_parkinson_vol(&high, &low, 20);\n\nprintln!("daily vol tail = {:?}", daily.last());\nprintln!("parkinson vol tail = {:?}", parkinson.last());`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::util::volatility::{get_daily_vol, get_parkinson_vol};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet close: Vec<(NaiveDateTime, f64)> = (0..300)\n    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))\n    .collect();\nlet high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();\nlet low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();\n\n// Close-to-close EWMA vol on a timestamped series; \`lookback\` is the EWMA span.\nlet daily = get_daily_vol(&close, 100);\n// Parkinson uses the high/low range, so it needs no timestamps — \`window\` bars.\nlet parkinson = get_parkinson_vol(&high, &low, 20)?;\n\nprintln!("daily vol tail = {:?}", daily.last());\nprintln!("parkinson vol tail = {:?}", parkinson.last());`,
       },
     ],
     notes: ["Choose estimator based on available fields and microstructure noise.", "Daily-vol lookback should be matched to event horizon."],

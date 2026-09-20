@@ -30,7 +30,8 @@ fn bench_bet_sizing_reserve_fit(c: &mut Criterion) {
         b.iter_batched(
             || (t1.clone(), sides.clone()),
             |(events, dirs)| {
-                let (out, params) = bet_size_reserve_full(&events, &dirs, 100, 1e-5, 200, true);
+                let (out, params) =
+                    bet_size_reserve_full(&events, &dirs, 100, 1e-5, 200, true).unwrap();
                 assert_eq!(out.len(), dirs.len());
                 assert!(params.is_some());
             },
@@ -42,12 +43,12 @@ fn bench_bet_sizing_reserve_fit(c: &mut Criterion) {
 fn bench_bet_sizing_reserve_reuse_fit(c: &mut Criterion) {
     let (t1, sides) = synthetic_events(500);
 
-    let (_, params) = bet_size_reserve_full(&t1, &sides, 100, 1e-5, 200, true);
+    let (_, params) = bet_size_reserve_full(&t1, &sides, 100, 1e-5, 200, true).unwrap();
     let params = params.expect("fit params");
 
     c.bench_function("bet_sizing/bet_size_reserve_reuse_fit", |b| {
         b.iter(|| {
-            let out = bet_size_reserve(&t1, &sides, &params);
+            let out = bet_size_reserve(&t1, &sides, &params).unwrap();
             assert_eq!(out.len(), sides.len());
         });
     });

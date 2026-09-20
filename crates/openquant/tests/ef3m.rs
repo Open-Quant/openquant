@@ -114,11 +114,11 @@ fn test_single_fit_loop_and_mp_fit_types() {
     let moments = vec![0.7, 2.6, 0.4, 25.0, -59.8];
 
     let mut s = M2N::new(moments.clone(), 1e-2, 5.0, 3, 2, 1000, 1);
-    let out = s.single_fit_loop(None);
+    let out = s.single_fit_loop(None).unwrap();
     assert!(out.len() <= 1);
 
     let m = M2N::new(moments, 1e-2, 5.0, 3, 2, 1000, 1);
-    let out_mp = m.mp_fit();
+    let out_mp = m.mp_fit().unwrap();
     assert!(out_mp.len() <= 3);
 }
 
@@ -136,7 +136,7 @@ fn test_centered_moment_result() {
             c
         };
     }
-    let centered_5th = centered_moment(&raw, 5);
+    let centered_5th = centered_moment(&raw, 5).unwrap();
     assert!((centered_5th - centered_5th_correct).abs() < 1e-7);
 }
 

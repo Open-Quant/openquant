@@ -22,7 +22,7 @@ fn load_prices() -> Vec<f64> {
 #[test]
 fn test_ewma() {
     let price_arr = load_prices();
-    let ewma_res = ewma(&price_arr, 20);
+    let ewma_res = ewma(&price_arr, 20).unwrap();
 
     assert_eq!(ewma_res.len(), price_arr.len());
     assert_eq!(ewma_res[0], price_arr[0]);

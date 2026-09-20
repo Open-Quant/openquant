@@ -49,36 +49,20 @@ def test_cla_efficient_frontier_shapes():
 
 def test_cla_rejects_invalid_inputs():
     # Mirrors the error cases of crates/openquant/tests/cla.rs
-    with pytest.raises(ValueError, match="MissingInputs"):
+    with pytest.raises(ValueError, match="supply asset prices"):
         cla.allocate_cla()
-    with pytest.raises(ValueError, match="UnknownSolution"):
+    with pytest.raises(ValueError, match="unknown solution"):
         cla.allocate_cla(expected_returns=MU, covariance_matrix=COV, solution="rubbish")
     with pytest.raises(ValueError, match="rectangular"):
         cla.allocate_cla(expected_returns=MU, covariance_matrix=[[0.04, 0.006], [0.006]])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: allocate_cla(asset_prices=...) can never succeed: the binding wraps prices "
-        "as AssetPricesInput::RawMatrix, which CLA::allocate rejects unconditionally with "
-        "InvalidAssetPrices('Asset prices matrix must be a dataframe')"
-    ),
-)
 def test_cla_accepts_asset_prices():
     prices = [[100.0, 50.0], [101.0, 50.5], [100.5, 51.5], [102.0, 51.0], [103.0, 52.5]]
     out = cla.allocate_cla(asset_prices=prices, solution="min_volatility")
     assert abs(sum(out["weights"][0]) - 1.0) < 1e-6
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: with expected_returns + covariance_matrix inputs CLA reports a single "
-        "turning point (the minimum-variance portfolio) and an efficient frontier of 100 "
-        "identical points; the maximum-return turning point [0, 1] is missing"
-    ),
-)
 def test_cla_turning_points_start_at_max_return_asset():
     out = cla.allocate_cla(expected_returns=MU, covariance_matrix=COV)
     assert out["weights"][0] == pytest.approx([0.0, 1.0], abs=1e-9)

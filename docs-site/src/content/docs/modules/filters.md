@@ -1,156 +1,182 @@
 ---
 title: "filters"
-description: "CUSUM and z-score event filters for event-driven sampling."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+description: "The symmetric CUSUM filter and a rolling z-score filter, for sampling events from a price series."
+status: authored
+last_authored: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
 module: "filters"
 api_surface: "both"
-afml_chapters:
-  - 2
+afml_chapter:
+  - "2"
+citation:
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 2, §2.5.2 Event-Based Sampling; §2.5.2.1 The CUSUM Filter; Snippet 2.4."
+  - "Page, E. S. (1954). Continuous inspection schemes. Biometrika 41(1/2), 100–115."
+  - "Lam, K. and Yam, H. C. (1997). CUSUM techniques for technical trading in financial markets. Financial Engineering and the Japanese Markets 4(3), 257–274."
 rust_api:
   - "cusum_filter_indices"
   - "cusum_filter_timestamps"
-  - "cusum_filter_indices_checked"
-  - "cusum_filter_timestamps_checked"
   - "z_score_filter_indices"
   - "z_score_filter_timestamps"
-  - "z_score_filter_timestamps_checked"
   - "Threshold"
   - "FilterError"
+python_api:
+  - "filters.cusum_filter_indices"
+  - "filters.cusum_filter_timestamps"
+  - "filters.z_score_filter_indices"
+  - "filters.z_score_filter_timestamps"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+Even on well-built bars, most bars are uneventful, and a classifier trained on every one of
+them spends its capacity learning that nothing happened. AFML's answer (§2.5.2) is to sample:
+keep only the bars at which something measurable occurred, and label those. The filter that
+decides *which* bars is the first modelling choice in the pipeline, and everything downstream
+— labels, sample weights, cross-validation — inherits its timestamps.
 
-Instead of sampling at fixed intervals, AFML Chapter 2 uses structural event filters to detect when something meaningful happens in the price process. This produces training examples that correspond to real market inflection points rather than arbitrary calendar dates.
+## The symmetric CUSUM filter
 
-The **CUSUM filter** tracks a cumulative sum of returns (or price changes). It resets to zero when the cumulative deviation exceeds a threshold h, and the reset point becomes an event. This captures points where the price has moved "enough" since the last event. The filter is directional: it tracks both positive and negative cumulative deviations separately.
+CUSUM is a quality-control method (Page, 1954) for detecting that the mean of a process has
+shifted away from a target. Applied to returns with a target of zero, it accumulates upward
+and downward drift separately and floors each accumulator at zero:
 
-The **z-score filter** standardizes the current value against a rolling mean and standard deviation, firing when the z-score exceeds a threshold. This is useful for mean-reverting signals where you want events when the price deviates significantly from its recent average.
+$$
+\begin{aligned}
+S_t^{+} &= \max\bigl(0,\; S_{t-1}^{+} + r_t\bigr) \\
+S_t^{-} &= \min\bigl(0,\; S_{t-1}^{-} + r_t\bigr)
+\end{aligned}
+$$
 
-Both filters replace the naive approach of labeling every bar, which creates highly correlated and redundant training examples.
+where $r_t=\ln(p_t/p_{t-1})$. Bar $t$ is an event when $S_t^{+} > h$ or $S_t^{-} < -h$, and
+the accumulator that fired is reset to zero. This is AFML's Snippet 2.4 with one difference:
+the snippet differences whatever series it is given, and this implementation always takes
+log returns of `close`. Pass prices, not returns.
 
-## When to Use
-
-Apply event filters immediately after bar construction and before labeling. They bridge raw bars to the labeling module: bars go in, event timestamps come out.
-
-**Prerequisites**: A price series (close prices from bars), and optionally timestamps.
-
-**Alternatives**: Fixed-interval sampling (simpler but creates redundant events), or custom event logic for strategy-specific triggers.
-
-## Mathematical Foundations
-
-### Symmetric CUSUM Filter
-
-$$S_t^{+}=\max\!\left(0,\,S_{t-1}^{+}+r_t\right),\qquad S_t^{-}=\min\!\left(0,\,S_{t-1}^{-}+r_t\right),\qquad \text{event at }t\iff S_t^{+}>h_t\;\lor\;S_t^{-}<-h_t$$
-
-where $r_t=\ln(p_t/p_{t-1})$ is the log return and $h_t$ the threshold — a constant for `Threshold::Scalar`, a per-bar series for `Threshold::Dynamic`. Both arms are needed: $S^{+}$ alone only ever detects upward runs. Whichever arm breaches is reset to $0$ and the bar is emitted as an event, so the filter measures *runs* away from the last event rather than a cumulative level.
-
-### Z-score Filter
-
-$$z_t=\frac{x_t-\mu_t}{\sigma_t},\qquad \text{event at }t\iff|z_t|>h$$
-
-where $\mu_t$ and $\sigma_t$ are the rolling mean and standard deviation over the lookback window ending at $t$.
-
-## Key Parameters
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `close` | `list[float]` | Input price series (close prices) | — |
-| `threshold` | `float` | CUSUM trigger level; controls event frequency (Python: scalar only) | — |
-| `threshold` | `Threshold` | CUSUM trigger: Threshold::Scalar(f64) or Threshold::Dynamic(Vec<f64>) (Rust) | — |
-| `mean_window` | `int` | Rolling mean lookback for z-score filter | — |
-| `std_window` | `int` | Rolling std lookback for z-score filter | — |
-| `timestamps` | `list[str]` | Optional timestamps; use _timestamps variants to get event times instead of indices | — |
-
-## Usage Examples
-
-### Python
-
-#### CUSUM and z-score event detection
+The floor is what makes the filter useful. A price that wanders up 0.9% and back down does
+not trigger it and leaves no residue, whereas a Bollinger-band rule fires repeatedly while a
+price hovers at the band. CUSUM needs a full run of length $h$ from the last reset, in one
+direction net of reversals, so it fires once per move.
 
 ```python
-import openquant
+import math
+import random
+from datetime import datetime, timedelta
+from statistics import median
 
-close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-# The filters bindings parse "%Y-%m-%d %H:%M:%S" — a space, not an ISO "T".
-timestamps = [
-    "2024-01-02 09:30:00", "2024-01-02 09:31:00",
-    "2024-01-02 09:32:00", "2024-01-02 09:33:00",
-    "2024-01-02 09:34:00", "2024-01-02 09:35:00",
-    "2024-01-02 09:36:00", "2024-01-02 09:37:00",
-]
+from openquant import filters
 
-# CUSUM filter: fires when cumulative deviation exceeds threshold
-event_indices = openquant.filters.cusum_filter_indices(close, 0.02)
+# 600 one-minute closes. Minutes 300-399 are four times as volatile as the rest.
+rng = random.Random(11)
+start, price, close, stamps = datetime(2024, 1, 2, 9, 30), 100.0, [], []
+for i in range(600):
+    price *= math.exp(rng.gauss(0, 0.004 if 300 <= i < 400 else 0.001))
+    close.append(price)
+    stamps.append((start + timedelta(minutes=i)).strftime("%Y-%m-%d %H:%M:%S"))
 
-# With timestamps: returns event timestamps directly
-event_ts = openquant.filters.cusum_filter_timestamps(close, timestamps, 0.02)
+h = 0.01  # fire when the cumulative log return since the last event reaches 1%
+events = filters.cusum_filter_indices(close, h)
+volatile = [i for i in events if 300 <= i < 400]
+print(f"{len(events)} events from {len(close)} bars; {len(volatile)} of them in the volatile 100")
 
-# Z-score filter: fires when z-score exceeds threshold
-z_indices = openquant.filters.z_score_filter_indices(close, mean_window=20, std_window=20, threshold=2.0)
-z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_window=20, std_window=20, threshold=2.0)
+gaps = [(a, b - a) for a, b in zip(events, events[1:])]
+print("median bars between events: "
+      f"calm {median(g for a, g in gaps if not 300 <= a < 400):.0f}, "
+      f"volatile {median(g for a, g in gaps if 300 <= a < 400):.0f}")
+
+print("first three:", filters.cusum_filter_timestamps(close, stamps, h)[:3])
 ```
 
-### Rust
+```text
+22 events from 600 bars; 13 of them in the volatile 100
+median bars between events: calm 44, volatile 6
+first three: ['2024-01-02 10:32:00', '2024-01-02 10:55:00', '2024-01-02 11:30:00']
+```
 
-#### CUSUM with static and dynamic thresholds
+A sixth of the bars produce more than half the events, which is the behaviour you want from a
+sampler and also the problem with a fixed $h$: in the volatile stretch an event arrives every
+six bars, and their labels will overlap heavily.
+
+<figure>
+<img class="dark:sl-hidden" src="/figures/ch2-cusum-light.svg" alt="A synthetic one-minute price series of 600 bars with 22 CUSUM events marked on it. Thirteen of the markers fall inside a shaded stretch of 100 bars where volatility is four times higher." />
+<img class="light:sl-hidden" src="/figures/ch2-cusum-dark.svg" alt="A synthetic one-minute price series of 600 bars with 22 CUSUM events marked on it. Thirteen of the markers fall inside a shaded stretch of 100 bars where volatility is four times higher." />
+<figcaption>Events at <em>h</em> = 1%. The filter is quiet while the price drifts and busy when it moves.</figcaption>
+</figure>
+
+## Choosing h
+
+$h$ is in log-return units and means "a move worth labelling". Two practical anchors:
+
+- **Tie it to the label.** If the triple-barrier profit target is 1.5%, an $h$ near 1.5% asks
+  the classifier about moves of the size it is being paid to predict. An $h$ far below the
+  barrier width mostly samples noise that never reaches a barrier.
+- **Tie it to volatility.** A constant $h$ fires too often in turbulent regimes and rarely in
+  calm ones. In Rust, `Threshold::Dynamic` takes one threshold per bar — typically a multiple
+  of [`get_daily_vol`](/modules/util-volatility/) — and bar $t$ is compared with element $t$.
+  A dynamic vector shorter than the series is a `FilterError::MissingDynamicThreshold`, not a
+  silent truncation. The Python binding accepts a scalar only.
+
+Whichever you use, count the events and look at their spacing before labelling. Events closer
+together than the label horizon produce overlapping labels; [`sampling`](/modules/sampling/)
+measures that overlap and [`sample-weights`](/modules/sample-weights/) corrects for it, but
+neither removes it.
+
+## The z-score filter
+
+`z_score_filter_indices(close, mean_window, std_window, threshold)` marks bar $t$ when
+
+$$
+p_t \;\ge\; \bar p_{t}^{(m)} + k\,\sigma_{t}^{(s)}
+$$
+
+with $\bar p^{(m)}$ the rolling mean over `mean_window` bars, $\sigma^{(s)}$ the rolling sample
+standard deviation (ddof = 1) over `std_window` bars, both including bar $t$, and $k$ the
+`threshold`. It is not from AFML; it is ported from mlfinlab. Three properties to know before
+using it:
+
+- It is **one-sided**. Only upward excursions are events; a crash three deviations below the
+  mean is not. Negate the series to sample the downside.
+- It works on **price levels**, not returns, so on a trending series the price sits above its
+  trailing mean and the filter fires in runs rather than once per move.
+- It has no reset, so consecutive bars above the band are consecutive events.
+
+## From Rust
 
 ```rust
-use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};
+use openquant::filters::{cusum_filter_indices, FilterError, Threshold};
 
-let close = vec![100.0, 100.1, 99.9, 100.2];
+let close = vec![100.0, 100.4, 100.9, 101.3, 101.0, 100.2, 99.6, 99.9];
 
-// Static threshold
-let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));
+// Fixed 1% threshold: one upward event, then one downward.
+let events = cusum_filter_indices(&close, Threshold::Scalar(0.01))?;
+assert_eq!(events, vec![3, 5]);
 
-// Dynamic threshold (e.g. volatility-scaled per bar)
-let dynamic_h = vec![0.02, 0.025, 0.018, 0.022];
-let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();
+// Per-bar thresholds must cover the series.
+let too_short = cusum_filter_indices(&close, Threshold::Dynamic(vec![0.01; 3]));
+assert!(matches!(too_short, Err(FilterError::MissingDynamicThreshold { index: 3, available: 3 })));
 ```
 
-## Common Pitfalls
+`cusum_filter_timestamps` and `z_score_filter_timestamps` return the timestamps at the event
+positions instead, and report a timestamp slice that is too short as
+`FilterError::TimestampIndexOutOfBounds`.
 
-- Setting the CUSUM threshold too tight in volatile regimes — you get too many events and labels become noisy. Scale h by recent volatility.
-- Using different thresholds in training vs live inference — the event distribution shifts and the model sees a different regime.
-- Applying CUSUM to non-stationary raw prices instead of returns or log-returns — the filter becomes meaningless as the price drifts.
-- Python bindings only support scalar thresholds — use the Rust API directly if you need dynamic (per-bar) thresholds.
+## What to watch for
 
-## API Reference
+- **No look-ahead, but no warm-up either.** The filter uses only returns up to bar $t$, so its
+  events are safe to label. Its accumulators start at zero at the first bar, so the first
+  event on a series that starts mid-move comes late; drop a burn-in stretch if that matters.
+- **Both accumulators can be non-zero at once.** Only the side that fires is reset. After an
+  upward event, $S^{-}$ keeps whatever downward drift it had.
+- **Events are bars, not trades.** An event at bar $t$ is known at the *close* of bar $t$.
+  Entering at that close is optimistic; [`labeling`](/modules/labeling/) measures outcomes
+  from the event bar's close, so any execution delay is yours to model.
 
-### Python API
+## Related modules
 
-- `filters.cusum_filter_indices`
-- `filters.cusum_filter_timestamps`
-- `filters.z_score_filter_indices`
-- `filters.z_score_filter_timestamps`
-
-### Rust API
-
-- `cusum_filter_indices`
-- `cusum_filter_timestamps`
-- `cusum_filter_indices_checked`
-- `cusum_filter_timestamps_checked`
-- `z_score_filter_indices`
-- `z_score_filter_timestamps`
-- `z_score_filter_timestamps_checked`
-- `Threshold`
-- `FilterError`
-
-## Risk Notes and Caveats
-
-- Calibrate thresholds to target event frequency, not just sensitivity.
-- Use identical filtering in train and live pipelines.
-- Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.
-- Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.
-
-## Related Modules
-
-- [`data-structures`](/modules/data-structures/)
-- [`labeling`](/modules/labeling/)
-- [`sample-weights`](/modules/sample-weights/)
+- [`data-structures`](/modules/data-structures/) — the bars this filter samples from.
+- [`labeling`](/modules/labeling/) — triple-barrier labels at the sampled events.
+- [`util-volatility`](/modules/util-volatility/) — the volatility estimate behind a dynamic
+  threshold.
+- [`structural-breaks`](/modules/structural-breaks/) — CUSUM *tests* for a change in regime,
+  which share the name and the statistic but answer a different question.

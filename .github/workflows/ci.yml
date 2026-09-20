@@ -54,6 +54,9 @@ jobs:
       - name: Check content schema
         run: bun run check:content-schema
         working-directory: docs-site
+      - name: Check identity colour contrast (AA)
+        run: bun run check:contrast
+        working-directory: docs-site
       # check:coverage recomputes the coverage dashboard's tables from the tree
       # and fails if the page disagrees, so its numbers cannot go stale the way
       # they did when they were hand-transcribed. Python only; no extra setup

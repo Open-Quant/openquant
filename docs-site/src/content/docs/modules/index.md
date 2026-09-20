@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -27,9 +27,9 @@ For the AFML chapter each module implements, see
 
 ### Event-Driven Data and Labeling
 
-- [`data_structures`](/modules/data-structures/) — Constructs standard/time/run/imbalance bars from trade streams.
-- [`filters`](/modules/filters/) — CUSUM and z-score event filters for event-driven sampling.
-- [`labeling`](/modules/labeling/) — Triple-barrier event labeling and metadata generation.
+- [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
+- [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
+- [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`sample_weights`](/modules/sample-weights/) — Sample weighting utilities for overlapping event structure.
 
 ### Market Microstructure, Dependence and Regime Detection
@@ -54,8 +54,8 @@ For the AFML chapter each module implements, see
 
 ### Position Sizing and Trade Construction
 
-- [`bet_sizing`](/modules/bet-sizing/) — Transforms model confidence and constraints into executable position sizes.
-- [`etf_trick`](/modules/etf-trick/) — Synthetic ETF and futures roll utilities for realistic PnL path construction.
+- [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
+- [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 
 ### Research Workflows
 
@@ -89,25 +89,25 @@ For the AFML chapter each module implements, see
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Performance diagnostics for strategy returns and position trajectories.
 - [`backtesting_engine`](/modules/backtesting-engine/) — Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.
-- [`bet_sizing`](/modules/bet-sizing/) — Transforms model confidence and constraints into executable position sizes.
+- [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
 - [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
 - [`cross_validation`](/modules/cross-validation/) — Purged cross-validation utilities designed for label overlap and leakage control.
 - [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
-- [`data_structures`](/modules/data-structures/) — Constructs standard/time/run/imbalance bars from trade streams.
+- [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.
-- [`etf_trick`](/modules/etf-trick/) — Synthetic ETF and futures roll utilities for realistic PnL path construction.
+- [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 - [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
-- [`filters`](/modules/filters/) — CUSUM and z-score event filters for event-driven sampling.
+- [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation to improve stationarity while retaining memory.
 - [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.
-- [`labeling`](/modules/labeling/) — Triple-barrier event labeling and metadata generation.
+- [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
@@ -127,7 +127,7 @@ For the AFML chapter each module implements, see
 
 - [`adapters`](/modules/adapters/) — `to_polars_signal_frame`, `to_polars_event_frame`, `to_polars_backtest_frame`, `to_polars_weights_frame`, `to_polars_indicator_matrix`, `to_polars_frontier_frame`, `SignalStreamBuffer`, `to_pandas`
 - [`backtest_stats`](/modules/backtest-statistics/) — `sharpe_ratio`, `information_ratio`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`, `timing_of_flattening_and_flips`, `average_holding_period`, `bets_concentration`, `all_bets_concentration`, `drawdown_and_time_under_water`
-- [`bars`](/modules/data-structures/) — `build_time_bars`, `build_tick_bars`, `build_volume_bars`, `build_dollar_bars`, `build_run_bars`, `build_imbalance_bars`
+- [`bars`](/modules/data-structures/) — `build_time_bars`, `build_tick_bars`, `build_volume_bars`, `build_dollar_bars`, `bar_diagnostics`
 - [`bet_sizing`](/modules/bet-sizing/) — `get_signal`, `discrete_signal`, `bet_size`, `bet_size_sigmoid`, `bet_size_power`, `inv_price`, `inv_price_sigmoid`, `inv_price_power`, `get_w`, `get_w_sigmoid`, `get_w_power`, `get_target_pos`, `get_target_pos_sigmoid`, `get_target_pos_power`, `limit_price`, `limit_price_sigmoid`, `limit_price_power`, `avg_active_signals`, `bet_size_dynamic`, `cdf_mixture`, `single_bet_size_mixed`, `get_concurrent_sides`, `bet_size_budget`, `bet_size_probability`, `mp_avg_active_signals`, `bet_size_reserve`, `bet_size_reserve_with_fit`, `bet_size_reserve_full`
 - [`cla`](/modules/cla/) — `allocate_cla`
 - [`codependence`](/modules/codependence/) — `angular_distance`, `absolute_angular_distance`, `squared_angular_distance`, `distance_correlation`, `get_optimal_number_of_bins`, `get_mutual_info`, `variation_of_information_score`

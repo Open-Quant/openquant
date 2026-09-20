@@ -1,12 +1,14 @@
 use pyo3::prelude::*;
+
+use crate::helpers::to_py_err;
 use pyo3::types::PyDict;
 
 /// One M2N fit: `(mu_1, mu_2, sigma_1, sigma_2, p_1, error)`.
 type M2nFitRow = (f64, f64, f64, f64, f64, f64);
 
 #[pyfunction(name = "centered_moment")]
-fn ef3m_centered_moment(moments: Vec<f64>, order: usize) -> f64 {
-    openquant::ef3m::centered_moment(&moments, order)
+fn ef3m_centered_moment(moments: Vec<f64>, order: usize) -> PyResult<f64> {
+    openquant::ef3m::centered_moment(&moments, order).map_err(to_py_err)
 }
 
 #[pyfunction(name = "raw_moment")]
@@ -45,7 +47,7 @@ fn ef3m_most_likely_parameters(
     epsilon=1e-5,
     factor=5.0,
     n_runs=1,
-    variant=4,
+    variant=1,
     max_iter=100_000
 ))]
 fn ef3m_fit_m2n(
@@ -57,7 +59,7 @@ fn ef3m_fit_m2n(
     max_iter: usize,
 ) -> PyResult<Vec<M2nFitRow>> {
     let mut m2n = openquant::ef3m::M2N::new(moments, epsilon, factor, n_runs, variant, max_iter, 1);
-    let results = m2n.single_fit_loop(None);
+    let results = m2n.single_fit_loop(None).map_err(to_py_err)?;
     Ok(results
         .into_iter()
         .map(|r| (r.mu_1, r.mu_2, r.sigma_1, r.sigma_2, r.p_1, r.error))

@@ -3,7 +3,7 @@ title: "hrp"
 description: "Hierarchical Risk Parity allocation with recursive bisection."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -28,11 +28,15 @@ Use it when the asset count is large relative to the sample, when the covariance
 
 ### IVP Weight
 
-$$w_i\propto\frac{1}{\sigma_i^2}$$
+$$
+w_i\propto\frac{1}{\sigma_i^2}
+$$
 
 ### Bisection Split
 
-$$\alpha=1-\frac{\sigma_{left}^2}{\sigma_{left}^2+\sigma_{right}^2}$$
+$$
+\alpha=1-\frac{\sigma_{left}^2}{\sigma_{left}^2+\sigma_{right}^2}
+$$
 
 ## Usage Examples
 

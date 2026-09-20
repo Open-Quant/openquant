@@ -31,14 +31,14 @@ fn synthetic_indicator_matrix(n_bars: usize, n_labels: usize) -> Vec<Vec<u8>> {
         let end = (start + 5 + (i % 17)).min(n_bars - 1);
         events.push((start, end));
     }
-    get_ind_matrix(&events, &bar_index)
+    get_ind_matrix(&events, &bar_index).unwrap()
 }
 
 fn bench_ewma_on_ticker(c: &mut Criterion) {
     let prices = synthetic_prices(100_000);
     c.bench_function("synthetic_ticker/ewma_100k", |b| {
         b.iter(|| {
-            let v = ewma(black_box(&prices), black_box(64));
+            let v = ewma(black_box(&prices), black_box(64)).unwrap();
             black_box(v);
         });
     });
@@ -63,7 +63,7 @@ fn bench_seq_bootstrap_on_ticker_events(c: &mut Criterion) {
     let ind = synthetic_indicator_matrix(2000, 600);
     c.bench_function("synthetic_ticker/seq_bootstrap_2k_600", |b| {
         b.iter(|| {
-            let sampled = seq_bootstrap(black_box(&ind), Some(240), None);
+            let sampled = seq_bootstrap(black_box(&ind), Some(240), None).unwrap();
             black_box(sampled);
         });
     });
@@ -79,7 +79,7 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 (prices, rets, ind)
             },
             |(prices, rets, ind)| {
-                let _ewma = ewma(&prices, 32);
+                let _ewma = ewma(&prices, 32).unwrap();
                 let rm = RiskMetrics;
                 let _ = rm.calculate_value_at_risk(&rets, 0.05).unwrap();
                 let _ = rm.calculate_expected_shortfall(&rets, 0.05).unwrap();
@@ -107,7 +107,7 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 }
                 let _ = rm.calculate_variance(&cov, &[0.4, 0.3, 0.3]).unwrap();
 
-                let sampled = seq_bootstrap(&ind, Some(200), None);
+                let sampled = seq_bootstrap(&ind, Some(200), None).unwrap();
                 black_box(sampled);
             },
             BatchSize::SmallInput,

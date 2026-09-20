@@ -3,7 +3,7 @@ title: "microstructural_features"
 description: "Price-impact, spread, entropy, and flow toxicity estimators."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -31,15 +31,21 @@ Use them as features when the edge or its cost depends on liquidity — executio
 
 ### Kyle / Amihud / Hasbrouck Impact Families
 
-$$\Delta p_t=\lambda_K q_t+\epsilon_t,\qquad r_t=\lambda_A\frac{1}{DV_t}+\epsilon_t,\qquad r_t=\lambda_H\frac{q_t}{\sqrt{DV_t}}+\epsilon_t$$
+$$
+\Delta p_t=\lambda_K q_t+\epsilon_t,\qquad r_t=\lambda_A\frac{1}{DV_t}+\epsilon_t,\qquad r_t=\lambda_H\frac{q_t}{\sqrt{DV_t}}+\epsilon_t
+$$
 
 ### Spread and Volatility Proxies
 
-$$\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1})},\qquad\sigma_{CS}=f(H_t,L_t,H_{t-1},L_{t-1})$$
+$$
+\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1})},\qquad\sigma_{CS}=f(H_t,L_t,H_{t-1},L_{t-1})
+$$
 
 ### Flow Toxicity and Entropy
 
-$$\mathrm{VPIN}_t=\frac{1}{V_t}\cdot\frac{1}{n}\sum_{i=t-n+1}^{t}\left|V_i^{B}-V_i^{S}\right|,\qquad H=-\sum_j p_j\log p_j$$
+$$
+\mathrm{VPIN}_t=\frac{1}{V_t}\cdot\frac{1}{n}\sum_{i=t-n+1}^{t}\left|V_i^{B}-V_i^{S}\right|,\qquad H=-\sum_j p_j\log p_j
+$$
 
 where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bar $i$ (`get_bvc_buy_volume` will estimate the split when it is not observed), $V_t$ the current bar's total volume, and $n$ the rolling `window`. The normaliser sits *outside* the sum because bars are not equal-volume: `get_vpin` averages the imbalance over the window and then scales by the latest bar. The equal-volume-bucket form used by [`streaming-hpc`](/modules/streaming-hpc/) divides each term by the same constant bucket size instead; the two agree when bars carry equal volume. $H$ is the entropy of the tick-sign message, with $p_j$ the empirical frequency of symbol $j$.
 
@@ -68,10 +74,10 @@ let buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];
 
 // 2) Liquidity and spread proxies
 let roll = get_roll_measure(&close, 3);
-let cs_spread = get_corwin_schultz_estimator(&high, &low, 3);
-let kyle = get_bar_based_kyle_lambda(&close, &volume, 3);
-let amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3);
-let vpin = get_vpin(&volume, &buy_volume, 3);
+let cs_spread = get_corwin_schultz_estimator(&high, &low, 3)?;
+let kyle = get_bar_based_kyle_lambda(&close, &volume, 3)?;
+let amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3)?;
+let vpin = get_vpin(&volume, &buy_volume, 3)?;
 
 // 3) Feature panel is ready for regime model / execution model
 assert_eq!(roll.len(), close.len());
@@ -93,7 +99,7 @@ let msg = encode_tick_rule_array(&tick_rule)?;
 
 let h_shannon = get_shannon_entropy(&msg);
 let h_lz = get_lempel_ziv_entropy(&msg);
-let h_plugin = get_plug_in_entropy(&msg, 2);
+let h_plugin = get_plug_in_entropy(&msg, 2)?;
 
 assert!(h_shannon.is_finite());
 assert!(h_lz.is_finite());

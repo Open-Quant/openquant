@@ -1,243 +1,498 @@
-/* Fonts loaded via <link> in astro.config.mjs head to avoid FOUC */
+/* OpenQuant identity — A · Monograph.
+   Source of truth: docs/design/identity/tokens.md (frozen). The colour pairs below are checked
+   for AA contrast by scripts/check-contrast.mjs, which reads the --oq-* declarations from this
+   file; change a value here and the gate re-measures it.
 
-:root {
-  --sl-color-accent-low: #d6e8f8;
-  --sl-color-accent: #0f5f9a;
-  --sl-color-accent-high: #083a60;
+   Fonts are loaded by <link> in astro.config.mjs to avoid a flash of fallback type. */
 
-  --sl-color-bg: #f3f6fb;
-  --sl-color-bg-nav: #ffffff;
-  --sl-color-bg-sidebar: #ebf1f8;
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
 
-  --sl-color-text: #132232;
-  --sl-color-text-accent: #0d4f80;
-  --sl-color-text-invert: #f7fbff;
-
-  --sl-color-hairline-light: #c9d8e8;
-  --sl-color-hairline: #b9cde0;
-
-  --sl-font: 'Manrope', 'Segoe UI', sans-serif;
-  --sl-font-system: 'Manrope', 'Segoe UI', sans-serif;
-  --sl-font-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
+:root,
+:root[data-theme='light'] {
+  --oq-ground: #fbf9f4;
+  --oq-surface: #f2eee4;
+  --oq-text: #1d1a16;
+  --oq-muted: #5c554b;
+  --oq-accent: #97196a;
+  --oq-rule: #cdc4b1;
+  color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  --sl-color-accent-low: #16344e;
-  --sl-color-accent: #69b7ef;
-  --sl-color-accent-high: #d7eeff;
-
-  --sl-color-bg: #0f1725;
-  --sl-color-bg-nav: #121d2d;
-  --sl-color-bg-sidebar: #0d1928;
-
-  --sl-color-text: #e6f0fb;
-  --sl-color-text-accent: #9cd5ff;
-  --sl-color-text-invert: #0f1725;
-
-  --sl-color-hairline-light: #294156;
-  --sl-color-hairline: #35536d;
+  --oq-ground: #17140f;
+  --oq-surface: #221e17;
+  --oq-text: #ece6d8;
+  --oq-muted: #aaa190;
+  --oq-accent: #f29ad6;
+  --oq-rule: #4c4536;
+  color-scheme: dark;
 }
 
 :root,
+:root[data-theme='light'],
 :root[data-theme='dark'] {
-  scroll-behavior: smooth;
+  --oq-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --oq-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --oq-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
+  --oq-measure: 52ch;
+
+  /* Starlight's palette, expressed in the six tokens. Its greys run from strongest text
+     (white) to page ground (black) in both themes. */
+  --sl-color-white: var(--oq-text);
+  --sl-color-gray-1: var(--oq-text);
+  --sl-color-gray-2: var(--oq-text);
+  --sl-color-gray-3: var(--oq-muted);
+  --sl-color-gray-4: var(--oq-muted);
+  --sl-color-gray-5: var(--oq-rule);
+  --sl-color-gray-6: var(--oq-surface);
+  --sl-color-gray-7: var(--oq-surface);
+  --sl-color-black: var(--oq-ground);
+
+  --sl-color-accent-low: var(--oq-surface);
+  --sl-color-accent: var(--oq-accent);
+  --sl-color-accent-high: var(--oq-accent);
+
+  --sl-color-text: var(--oq-text);
+  --sl-color-text-accent: var(--oq-accent);
+  --sl-color-text-invert: var(--oq-ground);
+  --sl-color-bg: var(--oq-ground);
+  --sl-color-bg-nav: var(--oq-ground);
+  --sl-color-bg-sidebar: var(--oq-ground);
+  --sl-color-bg-inline-code: var(--oq-surface);
+  --sl-color-bg-accent: var(--oq-accent);
+  --sl-color-hairline-light: var(--oq-rule);
+  --sl-color-hairline: var(--oq-rule);
+  --sl-color-hairline-shade: var(--oq-rule);
+
+  /* One accent. Starlight's aside and badge hues collapse onto it. */
+  --sl-color-orange-low: var(--oq-surface);
+  --sl-color-orange: var(--oq-accent);
+  --sl-color-orange-high: var(--oq-text);
+  --sl-color-green-low: var(--oq-surface);
+  --sl-color-green: var(--oq-accent);
+  --sl-color-green-high: var(--oq-text);
+  --sl-color-blue-low: var(--oq-surface);
+  --sl-color-blue: var(--oq-accent);
+  --sl-color-blue-high: var(--oq-text);
+  --sl-color-purple-low: var(--oq-surface);
+  --sl-color-purple: var(--oq-accent);
+  --sl-color-purple-high: var(--oq-text);
+  --sl-color-red-low: var(--oq-surface);
+  --sl-color-red: var(--oq-accent);
+  --sl-color-red-high: var(--oq-text);
+
+  --sl-shadow-sm: none;
+  --sl-shadow-md: none;
+  --sl-shadow-lg: none;
+
+  --sl-font: var(--oq-sans);
+  --sl-font-system: var(--oq-sans);
+  --sl-font-mono: var(--oq-mono);
+
+  --sl-text-h1: 3.1rem;
+  --sl-text-h2: 1.7rem;
+  --sl-text-h3: 1.3rem;
+  --sl-text-h4: 1.1rem;
+  --sl-text-code: 0.86rem;
+  --sl-search-corners: 3px;
 }
 
+@media (max-width: 760px) {
+  :root,
+  :root[data-theme='light'],
+  :root[data-theme='dark'] {
+    --sl-text-h1: 2.1rem;
+    --sl-text-h2: 1.5rem;
+  }
+}
+
+/* ── Page chrome (IBM Plex Sans) ─────────────────────────────────────────── */
+
 body {
-  font-family: var(--sl-font-system);
-  letter-spacing: 0.01em;
+  background: var(--oq-ground);
+  font-feature-settings: 'kern', 'liga';
 }
 
 header.header {
-  backdrop-filter: saturate(140%) blur(6px);
+  border-bottom: 1px solid var(--oq-rule);
 }
 
-.main-pane {
-  background:
-    radial-gradient(1000px 420px at 85% -10%, #b4d2ed42, transparent),
-    radial-gradient(850px 380px at -10% 110%, #c9ddf34d, transparent);
+.site-title {
+  font-weight: 600;
+  color: var(--oq-text);
 }
 
-:root[data-theme='dark'] .main-pane {
-  background:
-    radial-gradient(900px 420px at 85% -10%, #1f4b7340, transparent),
-    radial-gradient(800px 380px at -10% 110%, #1b3e5c33, transparent);
+/* Sidebar: small-cap group labels; the current page is marked by a rule, not a filled pill. */
+.sidebar-content .large,
+.sidebar-content summary .large {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--oq-muted);
 }
 
-h1,
-h2,
-h3,
-h4 {
-  letter-spacing: -0.015em;
-  font-weight: 750;
+.sidebar-content a {
+  border-radius: 0;
+  border-inline-start: 2px solid transparent;
+  font-size: 0.92rem;
 }
 
-h1 {
-  font-size: clamp(2rem, 3.2vw, 2.8rem);
-}
-
-.hero {
-  border: 1px solid var(--sl-color-hairline);
-  border-radius: 16px;
-  padding: 2rem 2.5rem;
-  background: linear-gradient(165deg, #ffffffcc, #eaf2fb7f);
-}
-
-:root[data-theme='dark'] .hero {
-  background: linear-gradient(165deg, #132135d6, #0f1a2aab);
-}
-
-.hero img {
-  max-width: 180px;
-  filter: drop-shadow(0 4px 24px rgba(15, 95, 154, 0.18));
-}
-
-:root[data-theme='dark'] .hero img {
-  filter: drop-shadow(0 4px 24px rgba(105, 183, 239, 0.25));
-}
-
-/* Top banner bar */
-.sl-banner {
-  background: linear-gradient(90deg, #1b1648, #36257b, #0d64c8) !important;
-  border-bottom: none !important;
-}
-
-.sl-banner a {
-  color: #e6f0fb !important;
-  text-decoration: none !important;
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  background: transparent;
+  border-inline-start-color: var(--oq-accent);
+  color: var(--oq-accent);
   font-weight: 600;
 }
 
-.sl-banner a:hover {
-  color: #9bd3ff !important;
+/* Table of contents */
+starlight-toc a[aria-current='true'],
+mobile-starlight-toc a[aria-current='true'] {
+  color: var(--oq-accent);
 }
 
-.sl-markdown-content blockquote {
-  border-left: 4px solid var(--sl-color-accent);
-  background: color-mix(in srgb, var(--sl-color-accent-low) 45%, transparent);
-  border-radius: 10px;
-  padding: 0.4rem 0.85rem;
+/* Search */
+site-search > button,
+site-search dialog,
+site-search kbd {
+  border-radius: 3px;
 }
 
-.sl-markdown-content table {
-  border-radius: 12px;
-  overflow: hidden;
+site-search dialog {
+  border: 1px solid var(--oq-rule);
 }
 
-.sl-markdown-content th {
-  font-weight: 700;
+starlight-menu-button button {
+  border-radius: 3px;
 }
 
-.sl-markdown-content pre {
-  border-radius: 12px;
-  border: 1px solid var(--sl-color-hairline);
+starlight-theme-select select,
+starlight-lang-select select {
+  border-radius: 3px;
 }
 
-.sl-markdown-content code {
-  font-family: var(--sl-font-mono);
-  font-size: 0.9em;
-}
-
-.sidebar-content a[aria-current='page'] {
-  font-weight: 700;
-}
-
+/* Pagination */
 .pagination-links a {
-  border-radius: 10px;
+  border-radius: 3px;
+  box-shadow: none;
+  border: 1px solid var(--oq-rule);
 }
 
-/* ── Page status badge ───────────────────────────────────────────────────────
-   Every doc page declares a `status` in its frontmatter, and the Starlight
-   `Banner` override in src/components/DocStatusBanner.astro renders the pill
-   from that field, so a reader can always tell whether a page was
-   machine-generated, is an unfinished draft, or has actually been read by a
-   human. The badge is derived from `status`, never written beside it, so the
-   two cannot drift.
-   The `:has()` guard keeps the site-wide banner gradient above intact for any
-   non-status banner. */
-.sl-banner:has(.doc-status) {
-  background: var(--doc-status-bg) !important;
-  color: var(--doc-status-fg) !important;
-  border-bottom: 1px solid var(--doc-status-border) !important;
-  font-size: var(--sl-text-sm);
-  font-weight: 500;
+.pagination-links a:hover {
+  border-color: var(--oq-accent);
+}
+
+.pagination-links .link-title {
+  font-family: var(--oq-serif);
+  font-size: 1.3rem;
+}
+
+/* ── Reading column (Newsreader) ─────────────────────────────────────────── */
+
+.sl-markdown-content {
+  font-family: var(--oq-serif);
+  font-size: 1.19rem;
+  line-height: 1.62;
+  font-optical-sizing: auto;
+}
+
+/* Prose holds the measure; tables, code and figures may use the full content width. */
+.sl-markdown-content :is(p, ul, ol, blockquote, dl):not(:where(.not-content *)) {
+  max-width: var(--oq-measure);
+}
+
+.sl-markdown-content :is(td, th, .starlight-aside) :is(p, ul, ol) {
+  max-width: none;
+}
+
+h1,
+.sl-markdown-content :is(h1, h2, h3, h4):not(:where(.not-content *)) {
+  font-family: var(--oq-serif);
+  font-weight: 600;
+  color: var(--oq-text);
+}
+
+h1 {
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+}
+
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  line-height: 1.2;
+  border-top: 1px solid var(--oq-rule);
+  padding-top: 1.4rem;
+  margin-top: 3rem;
+}
+
+/* Starlight wraps each heading in a shrink-to-fit box to attach its anchor link, so a rule on
+   the h2 would be only as wide as the words. The rule goes on the wrapper, at full width. */
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  display: block;
+  border-top: 1px solid var(--oq-rule);
+  padding-top: 1.4rem;
+  margin-top: 3rem;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 h2 {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.sl-markdown-content > .sl-heading-wrapper.level-h2:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--oq-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.sl-markdown-content blockquote:not(:where(.not-content *)) {
+  border-inline-start: 3px solid var(--oq-accent);
+  padding: 0.2rem 0 0.2rem 1.1rem;
+  color: var(--oq-muted);
+  font-style: italic;
+}
+
+.sl-markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--oq-rule);
+}
+
+/* ── Code (IBM Plex Mono) ────────────────────────────────────────────────── */
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  font-family: var(--oq-mono);
+  font-size: 0.88em;
+  background: var(--oq-surface);
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+}
+
+.sl-markdown-content pre:not(:where(.not-content *)) {
+  border: 1px solid var(--oq-rule);
+  border-radius: 3px;
+  background: var(--oq-surface);
+}
+
+/* Output blocks (```text) carry the accent rule that marks "what the code printed". */
+.expressive-code pre[data-language='text'],
+.expressive-code pre[data-language='plaintext'] {
+  border-inline-start: 3px solid var(--oq-accent);
+}
+
+/* ── Tables: a ledger ────────────────────────────────────────────────────── */
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border-top: 2px solid var(--oq-text);
+  border-bottom: 2px solid var(--oq-text);
+  font-size: 0.95em;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--oq-rule);
+  border-inline-end: 1px solid var(--oq-rule);
+  vertical-align: top;
+}
+
+.sl-markdown-content :is(th, td):last-child {
+  border-inline-end: 0;
+}
+
+.sl-markdown-content tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  font-family: var(--oq-sans);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--oq-muted);
+}
+
+.sl-markdown-content tr:nth-child(2n):not(:where(.not-content *)) {
+  background: transparent;
+}
+
+/* A right-aligned markdown column (`---:`) is a numeric column. */
+.sl-markdown-content td:is([align='right'], [style*='text-align:right'], [style*='text-align: right']) {
+  font-family: var(--oq-mono);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Asides ──────────────────────────────────────────────────────────────── */
+
+.starlight-aside {
+  background: transparent;
+  border: 0;
+  border-inline-start: 3px solid var(--oq-accent);
+  border-radius: 0;
+  padding: 0.2rem 0 0.2rem 1.1rem;
+  color: var(--oq-muted);
+}
+
+.starlight-aside__title {
+  font-family: var(--oq-sans);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--oq-accent);
+}
+
+/* ── Formulas ────────────────────────────────────────────────────────────── */
+
+.sl-markdown-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.4rem 0;
+  max-width: 100%;
+}
+
+.sl-markdown-content .katex {
+  font-size: 1.05em;
+}
+
+/* ── Landing hero ────────────────────────────────────────────────────────── */
+
+.hero {
+  padding-block: 3rem 2rem;
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 5vw, 3.1rem);
+}
+
+.hero .tagline {
+  font-family: var(--oq-serif);
+  font-style: italic;
+  font-size: 1.45rem;
+  line-height: 1.45;
+  color: var(--oq-text);
+  max-width: 34rem;
+}
+
+.hero img {
+  max-width: 200px;
+}
+
+.sl-link-button {
+  border-radius: 3px;
+  font-family: var(--oq-sans);
+  font-weight: 600;
+}
+
+.sl-link-button.primary {
+  background: var(--oq-accent);
+  border-color: var(--oq-accent);
+  color: var(--oq-ground);
+}
+
+.sl-link-button.minimal {
+  color: var(--oq-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+/* ── Page status line ────────────────────────────────────────────────────────
+   Every doc page declares a `status` in its frontmatter, and the Starlight `Banner` override in
+   src/components/DocStatusBanner.astro renders the pill from that field, so a reader can tell
+   whether a page was machine-generated, is a draft, or has been read by a human. The status is
+   carried by the word in the pill; all three use the one accent. */
+.sl-banner {
+  background: var(--oq-ground);
+  color: var(--oq-muted);
+  border-bottom: 1px solid var(--oq-rule);
+  box-shadow: none;
+  font-family: var(--oq-sans);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
   text-wrap: balance;
-}
-
-.sl-banner:has(.doc-status--generated) {
-  --doc-status-bg: #e7edf5;
-  --doc-status-fg: #2c3f55;
-  --doc-status-border: #c9d8e8;
-  --doc-status-pill: #5c728c;
-}
-
-.sl-banner:has(.doc-status--draft) {
-  --doc-status-bg: #fdf1dc;
-  --doc-status-fg: #5a4209;
-  --doc-status-border: #ecd39a;
-  --doc-status-pill: #a8760d;
-}
-
-.sl-banner:has(.doc-status--reviewed) {
-  --doc-status-bg: #e3f1e7;
-  --doc-status-fg: #1d4429;
-  --doc-status-border: #b7ddc3;
-  --doc-status-pill: #2f7d4a;
-}
-
-:root[data-theme='dark'] .sl-banner:has(.doc-status--generated) {
-  --doc-status-bg: #1a2536;
-  --doc-status-fg: #c3d3e6;
-  --doc-status-border: #294156;
-  --doc-status-pill: #55708f;
-}
-
-:root[data-theme='dark'] .sl-banner:has(.doc-status--draft) {
-  --doc-status-bg: #2e2716;
-  --doc-status-fg: #ecd7a4;
-  --doc-status-border: #4d3f1d;
-  --doc-status-pill: #a8790f;
-}
-
-:root[data-theme='dark'] .sl-banner:has(.doc-status--reviewed) {
-  --doc-status-bg: #16301f;
-  --doc-status-fg: #b9dcc5;
-  --doc-status-border: #27563a;
-  --doc-status-pill: #2f7d4a;
 }
 
 .doc-status {
   display: inline-block;
-  margin-right: 0.5rem;
-  padding: 0.08rem 0.55rem;
-  border-radius: 999px;
-  background: var(--doc-status-pill);
-  color: #ffffff;
-  font-family: var(--sl-font-mono);
-  font-size: 0.72em;
+  margin-inline-end: 0.6rem;
+  padding: 0.32rem 0.5rem;
+  border-radius: 2px;
+  background: var(--oq-accent);
+  color: var(--oq-ground);
+  font-family: var(--oq-mono);
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  line-height: 1;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  vertical-align: 0.1em;
+  vertical-align: middle;
 }
 
-.sl-banner:has(.doc-status) code {
+.sl-banner code {
   padding: 0.05rem 0.3rem;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--doc-status-fg) 12%, transparent);
-  font-family: var(--sl-font-mono);
+  border-radius: 2px;
+  background: var(--oq-surface);
+  font-family: var(--oq-mono);
   font-size: 0.92em;
 }
 
-/* The landing page shares its banner between the status badge and a call to
-   action, so links there take the status colours rather than the gradient
-   banner's near-white. */
-.sl-banner:has(.doc-status) a {
-  color: var(--doc-status-fg) !important;
-  text-decoration: underline !important;
-  text-underline-offset: 0.2em;
+.sl-banner a {
+  color: var(--oq-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
 
-.sl-banner:has(.doc-status) a:hover {
-  color: var(--doc-status-pill) !important;
+/* Starlight softens the page behind the search dialog; the identity uses flat overlays only. */
+site-search dialog::backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+mobile-starlight-toc .toggle {
+  border-radius: 3px;
+}
+
+/* ── Figures ─────────────────────────────────────────────────────────────────
+   Drawn by docs-site/scripts/figures/ in both palettes; a page carries one <img> per theme. */
+/* Expressive Code frames are <figure class="frame"> too; these rules are for pictures only. */
+.sl-markdown-content figure:not(.frame) {
+  margin: 2rem 0;
+}
+
+.sl-markdown-content figure:not(.frame) img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--oq-rule);
+  border-radius: 3px;
+}
+
+/* Starlight's theme utilities set display:none; this keeps them winning over the rule above. */
+:root[data-theme='light'] .sl-markdown-content figure:not(.frame) img.light\:sl-hidden,
+:root[data-theme='dark'] .sl-markdown-content figure:not(.frame) img.dark\:sl-hidden {
+  display: none;
+}
+
+.sl-markdown-content figure:not(.frame) figcaption {
+  margin-top: 0.6rem;
+  font-family: var(--oq-sans);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--oq-muted);
 }

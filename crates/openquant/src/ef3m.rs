@@ -1,3 +1,4 @@
+use crate::util::InputError;
 use rand::Rng;
 use std::collections::{BTreeMap, HashSet};
 
@@ -206,7 +207,7 @@ impl M2N {
         vec![mu_1, mu_2_new, sigma_1, sigma_2, p_1_new]
     }
 
-    pub fn fit(&mut self, mut mu_2: f64) -> Result<(), String> {
+    pub fn fit(&mut self, mut mu_2: f64) -> Result<(), InputError> {
         let mut rng = rand::thread_rng();
         let mut p_1 = rng.gen_range(0.0..1.0);
         let mut num_iter = 0usize;
@@ -216,7 +217,13 @@ impl M2N {
             let parameters_new = match self.variant {
                 1 => self.iter_4(mu_2, p_1),
                 2 => self.iter_5(mu_2, p_1),
-                _ => return Err("Value of argument 'variant' must be either 1 or 2.".to_string()),
+                _ => {
+                    return Err(InputError::OutOfRange {
+                        name: "variant",
+                        value: self.variant as f64,
+                        expected: "1 (four moments) or 2 (five moments)",
+                    })
+                }
             };
             if parameters_new.is_empty() {
                 return Ok(());
@@ -248,7 +255,27 @@ impl M2N {
         Ok(())
     }
 
-    pub fn single_fit_loop(&mut self, epsilon_override: Option<f64>) -> Vec<FitResultRow> {
+    /// The fit reads five raw moments and dispatches on `variant`; say so up front instead of
+    /// indexing out of bounds or discarding every `fit` error.
+    fn validate(&self) -> Result<(), InputError> {
+        if self.moments.len() < 5 {
+            return Err(InputError::TooShort { name: "moments", len: self.moments.len(), min: 5 });
+        }
+        if !matches!(self.variant, 1 | 2) {
+            return Err(InputError::OutOfRange {
+                name: "variant",
+                value: self.variant as f64,
+                expected: "1 (four moments) or 2 (five moments)",
+            });
+        }
+        Ok(())
+    }
+
+    pub fn single_fit_loop(
+        &mut self,
+        epsilon_override: Option<f64>,
+    ) -> Result<Vec<FitResultRow>, InputError> {
+        self.validate()?;
         if let Some(eps) = epsilon_override {
             if eps > 0.0 {
                 self.epsilon = eps;
@@ -257,7 +284,7 @@ impl M2N {
         self.parameters = vec![0.0; 5];
         self.error = self.moments.iter().map(|m| m * m).sum();
 
-        let std_dev = centered_moment(&self.moments, 2).sqrt();
+        let std_dev = centered_moment(&self.moments, 2)?.sqrt();
         let upper = (1.0 / self.epsilon).max(1.0) as usize;
         let mut err_min = self.error;
         let mut best: Option<FitResultRow> = None;
@@ -278,27 +305,35 @@ impl M2N {
             }
         }
 
-        best.into_iter().collect()
+        Ok(best.into_iter().collect())
     }
 
-    pub fn mp_fit(&self) -> Vec<FitResultRow> {
+    pub fn mp_fit(&self) -> Result<Vec<FitResultRow>, InputError> {
         let mut out = Vec::new();
         for _ in 0..self.n_runs {
             let mut worker = self.clone();
-            out.extend(worker.single_fit_loop(Some(worker.epsilon)));
+            out.extend(worker.single_fit_loop(Some(worker.epsilon))?);
         }
-        out
+        Ok(out)
     }
 }
 
-pub fn centered_moment(moments: &[f64], order: usize) -> f64 {
+pub fn centered_moment(moments: &[f64], order: usize) -> Result<f64, InputError> {
+    // The order-th centred moment is built from the first `order` raw moments.
+    if moments.len() < order.max(1) {
+        return Err(InputError::TooShort {
+            name: "moments",
+            len: moments.len(),
+            min: order.max(1),
+        });
+    }
     let mut moment_c = 0.0;
     for j in 0..=order {
         let combin = comb(order, j);
         let a_1 = if j == order { 1.0 } else { moments[order - j - 1] };
         moment_c += (-1.0f64).powi(j as i32) * combin * moments[0].powi(j as i32) * a_1;
     }
-    moment_c
+    Ok(moment_c)
 }
 
 pub fn raw_moment(central_moments: &[f64], dist_mean: f64) -> Vec<f64> {
