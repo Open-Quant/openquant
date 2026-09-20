@@ -2,7 +2,7 @@
 title: Python Core Workflow
 description: One runnable Python script from raw OHLCV to a promotion decision, with its output.
 status: reviewed
-last_validated: '2026-08-30'
+last_validated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -84,7 +84,7 @@ stage 2  diagnostics: {'n_bars': 4.0, 'lag1_return_autocorr': 0.0, 'lag1_sq_retu
 stage 3  207 CUSUM events
 stage 3  leakage checks: {'inputs_aligned': True, 'event_indices_sorted': True, 'has_forward_look_bias': False}
 stage 4  realized_sharpe -0.3277   VaR(5%) -0.000201   ES(5%) -0.000330
-stage 4  weights {'CL': 0.403, 'NG': 0.471, 'RB': 0.043, 'GC': 0.082}   portfolio_sharpe 2.0040
+stage 4  weights {'CL': 0.238, 'NG': 0.314, 'RB': 0.214, 'GC': 0.234}   portfolio_sharpe 28.6867
 stage 4  turnover 9.40   cost 0.003441
 stage 4  gross -0.001254 -> net -0.004695   net_sharpe -0.2951
 stage 4  promotion gates:
@@ -101,8 +101,10 @@ Four things in that output are worth pausing on.
 roughly 43% of bars here. On real data that ratio is your event-rate
 knob, and it trades statistical power against label overlap.
 
-**`portfolio_sharpe` 2.00 sits next to `realized_sharpe` -0.33.** These
-answer different questions and are not comparable. The first is the
+**`portfolio_sharpe` 28.69 sits next to `realized_sharpe` -0.33.** These
+answer different questions and are not comparable, and a number like 28.69
+is itself the warning: it is an optimiser fitted to the same sample it is
+scored on. The first is the
 allocator's in-sample optimum across the four assets; the second is what
 the traded strategy returned. Confusing them is the easiest way to
 believe a dead strategy is alive.
