@@ -9,10 +9,14 @@ const docs = defineCollection({
       // which additionally enforces that the date backing a status is real and is
       // not older than the page's last change. Required, not optional: a page with
       // no status is a page making an unexamined claim by omission.
-      status: z.enum(['generated', 'draft', 'reviewed', 'validated']),
+      status: z.enum(['generated', 'draft', 'authored', 'reviewed', 'validated']),
       last_generated: z.string().optional(),
       generated_from: z.string().optional(),
       last_validated: z.string().optional(),
+      last_authored: z.string().optional(),
+      // Where the method comes from: AFML chapter/section/snippet and the original paper.
+      // Required on every hand-written module page by scripts/check-content-schema.mjs.
+      citation: z.array(z.string()).optional(),
       module: z.string().optional(),
       afml_chapter: z.array(z.string()).optional(),
       rust_api: z.array(z.string()).optional(),

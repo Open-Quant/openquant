@@ -25,6 +25,7 @@ const banner = entry.data.banner;
 const LABELS = {
   generated: 'Generated',
   draft: 'Draft',
+  authored: 'Authored',
   reviewed: 'Reviewed',
   validated: 'Validated',
 };
@@ -33,6 +34,8 @@ const NOTES = {
   generated:
     'Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.',
   draft: 'This page is known to be incomplete. Treat its contents as provisional.',
+  authored:
+    'Written by hand against the code; every example on it is executed by the docs checks. No human has reviewed this page yet.',
   reviewed:
     'A human has read this page end to end. It has not been verified line by line against the code.',
   validated:

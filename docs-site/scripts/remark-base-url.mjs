@@ -4,6 +4,10 @@
  *
  * Only rewrites links that start with "/" and don't already start with the base.
  * Does not touch external URLs, anchors, or relative paths.
+ *
+ * Raw-HTML `<img src="/…">` gets the same treatment. Figures are written as two `<img>`
+ * tags, one per theme, so that Starlight's `light:sl-hidden` / `dark:sl-hidden` classes can
+ * switch them with the theme toggle; markdown image syntax cannot carry a class.
  */
 import { visit } from 'unist-util-visit';
 
@@ -20,6 +24,11 @@ export function remarkBaseUrl({ base = '/' } = {}) {
       ) {
         node.url = prefix + node.url;
       }
+    });
+    visit(tree, 'html', (node) => {
+      node.value = node.value.replace(/(<img\b[^>]*?\ssrc=")(\/[^"]*)"/g, (all, head, url) =>
+        url.startsWith(prefix + '/') ? all : `${head}${prefix}${url}"`
+      );
     });
   };
 }
