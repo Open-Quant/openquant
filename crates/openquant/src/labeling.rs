@@ -79,7 +79,8 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
         let mut first_touch = None;
         for &(ts, price) in &close[(start_idx + 1)..=end_idx] {
             let ret = (price / start_price - 1.0) * side;
-            if ret >= pt_level || ret <= sl_level {
+            // Snippet 3.2: a barrier is touched when the path goes strictly beyond it.
+            if ret > pt_level || ret < sl_level {
                 first_touch = Some(ts);
                 break;
             }
@@ -89,7 +90,9 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
             (Some(vertical), Some(touched)) => Some(vertical.min(touched)),
             (Some(vertical), None) => Some(vertical),
             (None, Some(touched)) => Some(touched),
-            (None, None) => Some(end_ts),
+            // No vertical barrier and nothing touched: the outcome is not known yet. Snippet 3.2
+            // leaves t1 empty; filling in the last bar would label an unresolved event.
+            (None, None) => None,
         };
         ev.t1 = resolved;
     }
@@ -123,7 +126,8 @@ pub fn triple_barrier_events(
         let Some(&trgt) = target_map.get(&ts) else {
             continue;
         };
-        if trgt <= config.min_ret {
+        // `target[target > min_ret]`, which in pandas also drops a NaN target.
+        if trgt.is_nan() || trgt <= config.min_ret {
             continue;
         }
 
