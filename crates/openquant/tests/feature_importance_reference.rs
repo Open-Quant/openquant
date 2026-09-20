@@ -88,6 +88,8 @@ fn mdi_standard_error_is_symmetric_for_mirrored_columns() {
 // MDA (AFML snippet 8.3) and SFI (snippet 8.4)
 // ---------------------------------------------------------------------------------------------
 
+type Splits = Vec<(Vec<usize>, Vec<usize>)>;
+
 /// Two folds whose test sets have two rows each, so "permute the column" can only mean "swap the
 /// two values": the expected numbers do not depend on how the library shuffles.
 ///
@@ -98,7 +100,7 @@ fn mdi_standard_error_is_symmetric_for_mirrored_columns() {
 ///   row 3    -1   +1   1
 ///
 /// The classifier looks at f0 only.
-fn mda_data() -> (Vec<Vec<f64>>, Vec<f64>, Vec<(Vec<usize>, Vec<usize>)>) {
+fn mda_data() -> (Vec<Vec<f64>>, Vec<f64>, Splits) {
     let x = vec![vec![1.0, -1.0], vec![-1.0, 1.0], vec![1.0, 1.0], vec![-1.0, 1.0]];
     let y = vec![1.0, 0.0, 1.0, 1.0];
     let splits = vec![(vec![2, 3], vec![0, 1]), (vec![0, 1], vec![2, 3])];
