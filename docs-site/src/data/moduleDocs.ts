@@ -179,58 +179,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "bet-sizing",
-    conceptOverview:
-      "The layer between a model's confidence and an order. `bet_size_probability` maps class probabilities to a signed size in [-1, 1] through the t-statistic of the probability against the null of no edge, averages sizes across bets that are still active, and discretises to your execution granularity. `bet_size_dynamic` works from a price forecast instead: given the current and maximum position it returns the target position and the limit price at which that size is justified. `bet_size_reserve` sizes from a fitted mixture of long/short concurrency rather than from any model score.",
-    whenToUse:
-      "Between signal generation and execution, always — a raw model score is not a position. Use the probability path when a classifier emits calibrated probabilities, the dynamic path when you have a price forecast and want a limit-order boundary, and reserve sizing when overlapping books or stacked strategies can accumulate hidden gross exposure. Set `step_size` to real lot or contract granularity, not an arbitrary decimal, and treat the limit price as a decision boundary rather than a fill you will get.",
-    relatedModules: ["labeling", "sample-weights", "strategy-risk", "portfolio-optimization"],
     module: "bet_sizing",
     subject: "Position Sizing and Trade Construction",
-    summary: "Transforms model confidence and constraints into executable position sizes.",
-    whyItExists: "A model signal is not tradable until converted into bounded, discrete, and risk-aware position sizes.",
-    keyApis: [
-      "bet_size_probability",
-      "bet_size_dynamic",
-      "bet_size_budget",
-      "bet_size_reserve",
-      "bet_size_reserve_full",
-      "get_target_pos",
-      "limit_price",
-    ],
-    formulas: [
-      {
-        label: "From Classification Probability to Signed Bet",
-        latex:
-          "\\begin{aligned}z_t&=\\frac{p_t-1/K}{\\sqrt{p_t(1-p_t)}}\\\\m_t&=\\operatorname{side}_t\\left(2\\Phi(z_t)-1\\right)\\\\\\tilde m_t&=\\operatorname{clip}_{[-1,1]}\\!\\left(\\Delta\\,\\mathrm{round}\\!\\left(\\frac{m_t}{\\Delta}\\right)\\right)\\end{aligned}",
-      },
-      {
-        label: "Dynamic Position Target and Limit Price",
-        latex:
-          "\\begin{aligned}w&=\\frac{x^2(1-m^2)}{m^2}\\quad (x=f-m_p)\\\\m(x)&=\\frac{x}{\\sqrt{w+x^2}}\\\\\\text{target}&=\\operatorname{maxPos}\\cdot m(f-m_p)\\\\\\text{limitPrice}&=\\frac{1}{|q^*-q|}\\sum_{j=q}^{q^*}\\operatorname{invPrice}(j)\\end{aligned}",
-      },
-      {
-        label: "Budget and Reserve Concurrency Sizing",
-        latex:
-          "\\begin{aligned}b_t^{budget}&=\\frac{L_t}{\\max_s L_s}-\\frac{S_t}{\\max_s S_s}\\\\c_t&=L_t-S_t\\\\b_t^{reserve}&=\\frac{F(c_t)-F(0)}{1-F(0)}\\;\\mathbf 1_{c_t\\ge0}+\\frac{F(c_t)-F(0)}{F(0)}\\;\\mathbf 1_{c_t<0}\\end{aligned}",
-      },
-    ],
-    examples: [
-      {
-        title: "End-to-end: Probability Forecasts -> Discrete Executable Bet Sizes",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::bet_size_probability;\n\n// 1) Build event stream: (start, end, class probability, trade side)\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet events = vec![\n    (t0, t0 + Duration::minutes(20), 0.56,  1.0),\n    (t0 + Duration::minutes(5), t0 + Duration::minutes(35), 0.62,  1.0),\n    (t0 + Duration::minutes(10), t0 + Duration::minutes(30), 0.48, -1.0),\n    (t0 + Duration::minutes(15), t0 + Duration::minutes(45), 0.67,  1.0),\n];\n\n// 2) Convert probabilities -> signed signal -> discretized size (step=0.1)\nlet sizes = bet_size_probability(&events, 2, 0.1, true);\n\n// 3) sizes are directly executable as timestamped target exposure in [-1, 1]\nassert!(!sizes.is_empty());`,
-      },
-      {
-        title: "End-to-end: Dynamic + Reserve Sizing for Execution and Inventory Control",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::{bet_size_dynamic, bet_size_reserve_full};\n\n// Dynamic sizing inputs (position, max position, market price, forecast price)\nlet pos = vec![0.0, 1.0, 1.0, 2.0, 1.0];\nlet max_pos = vec![10.0; 5];\nlet market = vec![100.0, 100.1, 100.0, 100.2, 100.15];\nlet forecast = vec![100.3, 100.4, 100.2, 100.5, 100.45];\n\nlet dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast)?;\n// tuple: (bet_size, target_position, limit_price)\n\n// Reserve sizing from overlapping long/short events\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet t1 = vec![\n  (t0, t0 + Duration::minutes(30)),\n  (t0 + Duration::minutes(10), t0 + Duration::minutes(40)),\n  (t0 + Duration::minutes(20), t0 + Duration::minutes(50)),\n];\nlet side = vec![1.0, -1.0, 1.0];\nlet (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true)?;\n\nassert_eq!(dynamic.len(), 5);\nassert!(fit.is_some());\nassert!(!reserve.is_empty());`,
-      },
-    ],
-    notes: [
-      "Keep sizing logic coupled to latency and fill assumptions; limit price from dynamic sizing is a decision boundary, not a guaranteed fill.",
-      "Use reserve sizing when overlapping books or strategy stacking can create hidden gross exposure.",
-      "Calibrate step_size to real execution granularity (lots/contracts), not arbitrary decimals.",
-    ],
+    summary: "From a probability or a price forecast to a position size, averaged over live bets and discretised.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["bet_sizing.get_signal", "bet_sizing.discrete_signal", "bet_sizing.bet_size", "bet_sizing.bet_size_sigmoid", "bet_sizing.bet_size_power", "bet_sizing.inv_price", "bet_sizing.inv_price_sigmoid", "bet_sizing.inv_price_power", "bet_sizing.get_w", "bet_sizing.get_w_sigmoid", "bet_sizing.get_w_power", "bet_sizing.get_target_pos", "bet_sizing.get_target_pos_sigmoid", "bet_sizing.get_target_pos_power", "bet_sizing.limit_price", "bet_sizing.limit_price_sigmoid", "bet_sizing.limit_price_power", "bet_sizing.avg_active_signals", "bet_sizing.bet_size_dynamic", "bet_sizing.cdf_mixture", "bet_sizing.single_bet_size_mixed", "bet_sizing.get_concurrent_sides", "bet_sizing.bet_size_budget", "bet_sizing.bet_size_probability", "bet_sizing.mp_avg_active_signals", "bet_sizing.bet_size_reserve", "bet_sizing.bet_size_reserve_with_fit", "bet_sizing.bet_size_reserve_full"],
   },
@@ -667,118 +619,11 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
     slug: "labeling",
     module: "labeling",
     subject: "Event-Driven Data and Labeling",
-    summary: "Triple-barrier event labeling and metadata generation.",
-    whyItExists: "Converts event outcomes into ML labels with controlled horizon and risk barriers.",
-    keyApis: ["add_vertical_barrier", "get_events", "get_bins", "drop_labels", "Event"],
-    formulas: [
-      {
-        label: "Triple-Barrier Event Time",
-        latex:
-          "\\tau=\\min\\left(\\tau_{pt},\\tau_{sl},t_1\\right),\\quad\\tau_{pt}=\\inf\\{u>t:r_{t,u}\\ge pt\\cdot\\sigma_t\\},\\quad\\tau_{sl}=\\inf\\{u>t:r_{t,u}\\le-sl\\cdot\\sigma_t\\}",
-      },
-      {
-        label: "Labeling Rule",
-        latex:
-          "y_t=\\begin{cases}1,&r_{t,\\tau}>0\\\\0,&r_{t,\\tau}=0\\\\-1,&r_{t,\\tau}<0\\end{cases},\\qquad\\text{meta label: }y_t^{meta}=\\mathbf 1\\{\\operatorname{side}_t\\cdot r_{t,\\tau}>0\\}",
-      },
-      {
-        label: "Target Volatility Scaling",
-        latex:
-          "\\sigma_t=\\operatorname{EWMA}\\big(|r_t|\\big),\\qquad\\text{barrier widths }\\propto \\sigma_t",
-      },
-    ],
-    examples: [
-      {
-        title: "Triple-barrier labels from price series",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant._core import labeling, filters
-
-# 1) Detect events with CUSUM filter
-timestamps = ["2024-01-01T09:30:00", "2024-01-01T09:31:00", ...]
-close = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, ...]
-event_ts = filters.cusum_filter_timestamps(close, timestamps, 0.02)
-
-# 2) Estimate target volatility (use your own EWMA or rolling std)
-target_ts = event_ts
-target_vals = [0.02] * len(event_ts)  # simplified constant target
-
-# 3) Compute triple-barrier labels
-labels = labeling.triple_barrier_labels(
-    close_timestamps=timestamps,
-    close_prices=close,
-    t_events=event_ts,
-    target_timestamps=target_ts,
-    target_values=target_vals,
-    pt=1.0, sl=1.0, min_ret=0.005,
-)
-# Each label: (event_ts, return, target, label_int, touch_ts)`,
-      },
-      {
-        title: "Meta-labeling: learn when to act on a primary signal",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant._core import labeling
-
-# Primary model gives side predictions (+1 or -1) at each event
-side_prediction = [1.0, -1.0, 1.0, 1.0, -1.0, ...]
-
-meta_labels = labeling.meta_labels(
-    close_timestamps=timestamps,
-    close_prices=close,
-    t_events=event_ts,
-    target_timestamps=target_ts,
-    target_values=target_vals,
-    side_prediction=side_prediction,
-    pt=1.0, sl=1.0, min_ret=0.005,
-)
-# Train a secondary classifier on meta_labels to filter false signals`,
-      },
-      {
-        title: "End-to-end: Event Filter -> Vertical Barrier -> Triple Barrier Labels",
-        language: "rust",
-        code: `use chrono::NaiveDateTime;\nuse openquant::filters::{cusum_filter_timestamps, Threshold};\nuse openquant::labeling::{add_vertical_barrier, get_events, get_bins};\nuse openquant::util::volatility::get_daily_vol;\n\n// 1) price series and timestamps\nlet close: Vec<(NaiveDateTime, f64)> = /* load bars */ vec![];\nlet prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();\nlet ts: Vec<NaiveDateTime> = close.iter().map(|(t, _)| *t).collect();\n\n// 2) detect candidate events via CUSUM filter\nlet events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02))?;\n\n// 3) estimate target volatility and add max-holding horizon\nlet target = get_daily_vol(&close, 100);\nlet vbars = add_vertical_barrier(&events, &close, 1, 0, 0, 0);\n\n// 4) compute barrier touches and labels\nlet ev = get_events(&close, &events, (1.0, 1.0), &target, 0.005, 3, Some(&vbars), None);\nlet bins = get_bins(&ev, &close);\nassert!(!bins.is_empty());`,
-      },
-      {
-        title: "Meta-Labeling Workflow with Side Signal",
-        language: "rust",
-        code: `use chrono::NaiveDateTime;\nuse openquant::labeling::{get_events, get_bins};\n\nlet close: Vec<(NaiveDateTime, f64)> = /* bars */ vec![];\nlet events: Vec<NaiveDateTime> = /* primary event timestamps */ vec![];\nlet target: Vec<(NaiveDateTime, f64)> = /* vol target */ vec![];\nlet vbars: Vec<(NaiveDateTime, NaiveDateTime)> = /* horizon */ vec![];\n\n// Primary model side forecast (+1 / -1)\nlet side: Vec<(NaiveDateTime, f64)> = events.iter().map(|t| (*t, 1.0)).collect();\n\nlet meta_events = get_events(\n    &close,\n    &events,\n    (1.0, 1.0),\n    &target,\n    0.005,\n    3,\n    Some(&vbars),\n    Some(&side),\n);\nlet meta_bins = get_bins(&meta_events, &close);\n// Use meta_bins to train a second-stage filter (take/skip decision)\nassert!(!meta_bins.is_empty());`,
-      },
-    ],
-    notes: [
-      "Label stability is dominated by event quality and volatility-target quality; calibrate these before tuning ML models.",
-      "Always audit class balance and average holding time after labeling; both drive downstream model behavior.",
-      "In meta-labeling, side alignment and timestamp joins are a frequent hidden bug source.",
-    ],
-    conceptOverview: `The triple-barrier method (AFML Chapter 3) replaces fixed-horizon labeling with a path-dependent approach. Instead of asking "did the price go up in 10 days?", it asks "which barrier did the price hit first — a profit-taking ceiling, a stop-loss floor, or a maximum holding horizon?"
-
-This matters because fixed-horizon labels create artifacts: a trade that hits +5% then reverses to -1% at the horizon gets labeled as a loss. Triple-barrier labels capture the actual trade outcome under realistic exit rules.
-
-**Meta-labeling** is a two-stage extension: a primary model predicts direction (side), while a secondary model learns *when to act* on that signal. The secondary model's label is binary (1 = the primary model was correct, 0 = it wasn't). This separation lets you combine a simple directional model with a sophisticated sizing/filtering model.
-
-Barrier widths are scaled by a volatility target (typically EWMA of returns), making them adaptive across regimes. Events are sourced from structural filters like CUSUM rather than calendar time.`,
-    whenToUse: `Use this module immediately after event detection (CUSUM/z-score filters) and volatility estimation. It sits at the start of the ML pipeline: raw price events go in, labeled training examples come out.
-
-**Prerequisites**: A price series with timestamps, filtered event timestamps, and a volatility target series.
-
-**Alternatives**: Fixed-horizon labeling (simpler but regime-blind), or trend-scanning labels for continuous-valued targets instead of classification.`,
-    keyParameters: [
-      { name: "pt", type: "f64", description: "Profit-taking barrier multiplier (× volatility target)", default: "1.0" },
-      { name: "sl", type: "f64", description: "Stop-loss barrier multiplier (× volatility target)", default: "1.0" },
-      { name: "min_ret", type: "f64", description: "Minimum return threshold; events with smaller absolute returns are labeled 0", default: "0.0" },
-      { name: "vertical_barrier_times", type: "Option<Vec>", description: "Maximum holding period timestamps; events expire if neither profit nor stop barrier is hit", default: "None" },
-      { name: "side_prediction", type: "Option<Vec<f64>>", description: "Primary model side forecasts (+1/−1) for meta-labeling mode", default: "None" },
-    ],
-    commonPitfalls: [
-      "Setting symmetric barriers (pt=sl=1) when the strategy has asymmetric payoff — calibrate each barrier width independently.",
-      "Using calendar-time vertical barriers with information-driven bars — the holding period should match bar frequency, not wall time.",
-      "Ignoring class imbalance after labeling: if 80% of events hit the vertical barrier, the model learns to predict 'no movement' and the labels need recalibration.",
-      "Forgetting that meta-labeling requires aligned timestamps between the primary model's side predictions and the event set — off-by-one joins silently corrupt labels.",
-    ],
-    relatedModules: ["filters", "sample-weights", "sampling", "bet-sizing"],
+    summary: "Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.",
+    handwritten: true,
     afmlChapters: [3],
-    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels", "labeling.add_vertical_barrier", "labeling.get_events", "labeling.get_bins", "labeling.drop_labels"],
     apiSurface: "both",
+    pythonApis: ["labeling.triple_barrier_labels", "labeling.triple_barrier_events", "labeling.meta_labels", "labeling.add_vertical_barrier", "labeling.get_events", "labeling.get_bins", "labeling.drop_labels"],
   },
   {
     slug: "microstructural-features",

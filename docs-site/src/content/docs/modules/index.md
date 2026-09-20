@@ -29,7 +29,7 @@ For the AFML chapter each module implements, see
 
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
-- [`labeling`](/modules/labeling/) — Triple-barrier event labeling and metadata generation.
+- [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`sample_weights`](/modules/sample-weights/) — Sample weighting utilities for overlapping event structure.
 
 ### Market Microstructure, Dependence and Regime Detection
@@ -54,7 +54,7 @@ For the AFML chapter each module implements, see
 
 ### Position Sizing and Trade Construction
 
-- [`bet_sizing`](/modules/bet-sizing/) — Transforms model confidence and constraints into executable position sizes.
+- [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 
 ### Research Workflows
@@ -89,7 +89,7 @@ For the AFML chapter each module implements, see
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Performance diagnostics for strategy returns and position trajectories.
 - [`backtesting_engine`](/modules/backtesting-engine/) — Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.
-- [`bet_sizing`](/modules/bet-sizing/) — Transforms model confidence and constraints into executable position sizes.
+- [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
 - [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
@@ -107,7 +107,7 @@ For the AFML chapter each module implements, see
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.
-- [`labeling`](/modules/labeling/) — Triple-barrier event labeling and metadata generation.
+- [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
