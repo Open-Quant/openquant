@@ -7,7 +7,7 @@
 
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use openquant::backtesting_engine::{
-    cpcv_path_count, run_cpcv, run_cross_validation, run_walk_forward, BacktestData,
+    cpcv_path_count, run_cpcv, run_cross_validation, run_walk_forward, BacktestData, BacktestError,
     BacktestRunConfig, BacktestSafeguards, CpcvConfig, CrossValidationConfig, SplitDefinition,
     WalkForwardConfig,
 };
@@ -71,7 +71,7 @@ fn expected_purged_train(candidates: &[usize], test: &[usize], spans: &[Span]) -
         .collect()
 }
 
-fn echo_test_indices(split: &SplitDefinition) -> Result<Vec<f64>, String> {
+fn echo_test_indices(split: &SplitDefinition) -> Result<Vec<f64>, BacktestError> {
     Ok(split.test_indices.iter().map(|i| *i as f64).collect())
 }
 

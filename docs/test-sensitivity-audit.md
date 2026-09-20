@@ -21,7 +21,8 @@ that function's value at all.
 * Mutations never touch the checkout: the harness edits the copy and restores it.
 * State measured: `main` at `3cc8df0` (includes #80) for everything except `labeling`,
   `sample_weights` and `util::volatility`, which #81 changed and which were re-measured after
-  merging `bb1c1a6`. 36 controls + 92 realistic mutations.
+  merging `bb1c1a6`. 36 controls + 92 realistic mutations. Source line numbers below were
+  refreshed against `d0c7da0`; the mutation runs were not repeated after that merge.
 * Order of work: two sessions were lost mid-task, so the new tests were committed before this
   document. The "before" column was still measured honestly: it runs only the pre-existing test
   targets against each mutation.
@@ -125,15 +126,16 @@ mutations.
 ## Findings from the new tests (library unchanged; tests are `#[ignore = "FINDING: ..."]`)
 
 1. **hrp / hcaa weekly and monthly resampling scrambles the price matrix - library bug.**
-   `src/hrp.rs:140` and `src/hcaa.rs:169` fill a `Vec` row by row and hand it to the
+   `src/hrp.rs:143` and `src/hcaa.rs:175` fill a `Vec` row by row and hand it to the
    column-major `DMatrix::from_vec`. Same class of defect as #79, in a code path no test
    exercised (the existing test passes `"B"`, which short-circuits). Evidence: allocating with
    `resample_by = "W"` differs from allocating on rows 4, 9, 14, ... directly; leaf order is
    completely different. Tests: `hrp_reference.rs:110`, `:123`, `hcaa_reference.rs:227`.
-   `src/cla.rs:362` and `src/portfolio_optimization.rs:93` contain the same construction; they
-   are out of scope here and were **not** checked.
+   `src/cla.rs:373` and `src/portfolio_optimization.rs:102` contain the same construction,
+   confirmed by reading (row-major fill into `from_vec`); no test here exercises them.
+   Tracked in #93.
 2. **backtesting_engine embargoes before the test block as well as after - deviation from AFML
-   7.4.2, conservative.** `src/backtesting_engine.rs:551` (`test_idx.saturating_sub(width)`).
+   7.4.2, conservative.** `src/backtesting_engine.rs:602` (`test_idx.saturating_sub(embargo_width)`).
    AFML embargoes only the samples that follow a test set. Not a leak; it discards training data
    (2 x h per fold). Could be a deliberate design choice, but it is undocumented and
    `cross_validation::PurgedKFold` in this same crate has the same two-sided shape, so I lean
@@ -144,12 +146,12 @@ mutations.
    as is and is pinned by a passing test. Tests: `feature_importance_reference.rs:64`, `:164`.
 4. **feature_pca_analysis Spearman / Kendall mishandle ties - library bug.** The importance vector
    is tiled once per principal component, so ties are guaranteed whenever more than one component
-   is kept; `rank_desc` (`src/feature_importance.rs:440`) assigns ordinal rather than average
-   ranks and `kendall_tau` (`:456`) is tau-a over untied pairs. scipy gives Spearman -0.0123,
+   is kept; `rank_desc` (`src/feature_importance.rs:464`) assigns ordinal rather than average
+   ranks and `kendall_tau` (`:480`) is tau-a over untied pairs. scipy gives Spearman -0.0123,
    the library 0.0662 (sign differs). With one component (no ties) both match scipy to 1e-9.
    Test: `feature_importance_reference.rs:308`.
 5. **feature_pca_analysis weighted Kendall is not `scipy.stats.weightedtau` - wrong algorithm.**
-   `weighted_kendall_tau` (`:482`) weights pair (i, j) by `1 / (1 + i + j)` using input positions.
+   `weighted_kendall_tau` (`:506`) weights pair (i, j) by `1 / (1 + i + j)` using input positions.
    AFML 8.4.2 / mlfinlab use weightedtau (hyperbolic weights by rank). 0.179 vs scipy 0.354 on
    the reference case. Test: `feature_importance_reference.rs:325`.
 
