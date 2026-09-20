@@ -3,7 +3,7 @@ title: "onc"
 description: "Optimal Number of Clusters utilities for clustering stability and allocation workflows."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,11 +29,15 @@ Use it before any hierarchical allocation to decide how many clusters the univer
 
 ### Cluster Score
 
-$$J(k)=\text{intra}(k)-\text{inter}(k)$$
+$$
+J(k)=\text{intra}(k)-\text{inter}(k)
+$$
 
 ### Selection
 
-$$k^*=\arg\min_k J(k)$$
+$$
+k^*=\arg\min_k J(k)
+$$
 
 ## Usage Examples
 

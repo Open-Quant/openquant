@@ -3,6 +3,7 @@ import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
+import { monographDark, monographLight } from './src/styles/code-themes.mjs';
 
 export default defineConfig({
   site: 'https://open-quant.github.io',
@@ -17,7 +18,7 @@ export default defineConfig({
       title: 'OpenQuant',
       description: 'Rust implementations of the methods in Advances in Financial Machine Learning, with Python bindings.',
       logo: {
-        src: './src/assets/openquant-icon.svg',
+        src: './src/assets/openquant-mark.svg',
         alt: 'OpenQuant',
       },
       head: [
@@ -40,10 +41,34 @@ export default defineConfig({
           tag: 'link',
           attrs: {
             rel: 'stylesheet',
-            href: 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap',
+            // Exactly the weights in docs/design/identity/tokens.md; no others may be requested.
+            href: 'https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap',
           },
         },
       ],
+      expressiveCode: {
+        themes: [monographDark, monographLight],
+        styleOverrides: {
+          borderRadius: '3px',
+          borderColor: 'var(--oq-rule)',
+          codeFontFamily: 'var(--oq-mono)',
+          codeFontSize: '0.86rem',
+          codeLineHeight: '1.6',
+          uiFontFamily: 'var(--oq-sans)',
+          frames: {
+            frameBoxShadowCssValue: 'none',
+            terminalBackground: 'var(--oq-surface)',
+            terminalTitlebarBackground: 'var(--oq-surface)',
+            terminalTitlebarBorderBottomColor: 'var(--oq-rule)',
+            terminalTitlebarDotsForeground: 'var(--oq-muted)',
+            editorBackground: 'var(--oq-surface)',
+            editorTabBarBackground: 'var(--oq-surface)',
+            editorTabBarBorderBottomColor: 'var(--oq-rule)',
+            editorActiveTabBackground: 'var(--oq-surface)',
+            editorActiveTabIndicatorTopColor: 'var(--oq-accent)',
+          },
+        },
+      },
       customCss: [
         'katex/dist/katex.min.css',
         './src/styles/starlight.css',

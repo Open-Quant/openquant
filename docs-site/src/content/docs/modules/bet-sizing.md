@@ -33,15 +33,21 @@ Between signal generation and execution, always — a raw model score is not a p
 
 ### From Classification Probability to Signed Bet
 
-$$\begin{aligned}z_t&=\frac{p_t-1/K}{\sqrt{p_t(1-p_t)}}\\m_t&=\operatorname{side}_t\left(2\Phi(z_t)-1\right)\\\tilde m_t&=\operatorname{clip}_{[-1,1]}\!\left(\Delta\,\mathrm{round}\!\left(\frac{m_t}{\Delta}\right)\right)\end{aligned}$$
+$$
+\begin{aligned}z_t&=\frac{p_t-1/K}{\sqrt{p_t(1-p_t)}}\\m_t&=\operatorname{side}_t\left(2\Phi(z_t)-1\right)\\\tilde m_t&=\operatorname{clip}_{[-1,1]}\!\left(\Delta\,\mathrm{round}\!\left(\frac{m_t}{\Delta}\right)\right)\end{aligned}
+$$
 
 ### Dynamic Position Target and Limit Price
 
-$$\begin{aligned}w&=\frac{x^2(1-m^2)}{m^2}\quad (x=f-m_p)\\m(x)&=\frac{x}{\sqrt{w+x^2}}\\\text{target}&=\operatorname{maxPos}\cdot m(f-m_p)\\\text{limitPrice}&=\frac{1}{|q^*-q|}\sum_{j=q}^{q^*}\operatorname{invPrice}(j)\end{aligned}$$
+$$
+\begin{aligned}w&=\frac{x^2(1-m^2)}{m^2}\quad (x=f-m_p)\\m(x)&=\frac{x}{\sqrt{w+x^2}}\\\text{target}&=\operatorname{maxPos}\cdot m(f-m_p)\\\text{limitPrice}&=\frac{1}{|q^*-q|}\sum_{j=q}^{q^*}\operatorname{invPrice}(j)\end{aligned}
+$$
 
 ### Budget and Reserve Concurrency Sizing
 
-$$\begin{aligned}b_t^{budget}&=\frac{L_t}{\max_s L_s}-\frac{S_t}{\max_s S_s}\\c_t&=L_t-S_t\\b_t^{reserve}&=\frac{F(c_t)-F(0)}{1-F(0)}\;\mathbf 1_{c_t\ge0}+\frac{F(c_t)-F(0)}{F(0)}\;\mathbf 1_{c_t<0}\end{aligned}$$
+$$
+\begin{aligned}b_t^{budget}&=\frac{L_t}{\max_s L_s}-\frac{S_t}{\max_s S_s}\\c_t&=L_t-S_t\\b_t^{reserve}&=\frac{F(c_t)-F(0)}{1-F(0)}\;\mathbf 1_{c_t\ge0}+\frac{F(c_t)-F(0)}{F(0)}\;\mathbf 1_{c_t<0}\end{aligned}
+$$
 
 ## Usage Examples
 

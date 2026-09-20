@@ -8,7 +8,7 @@ hero:
   title: OpenQuant
   tagline: The methods from López de Prado's Advances in Financial Machine Learning, implemented in Rust and callable from Python.
   image:
-    file: ../../assets/openquant-icon.svg
+    file: ../../assets/openquant-mark.svg
   actions:
     - text: Quickstart
       link: /openquant/quickstart/

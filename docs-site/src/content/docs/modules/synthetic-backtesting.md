@@ -3,7 +3,7 @@ title: "synthetic_backtesting"
 description: "Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -32,15 +32,21 @@ Use it before committing to any exit rule. Its most valuable output is often the
 
 ### Discrete O-U (AR(1))
 
-$$P_t=\alpha+\phi P_{t-1}+\sigma\epsilon_t,\quad \epsilon_t\sim\mathcal N(0,1)$$
+$$
+P_t=\alpha+\phi P_{t-1}+\sigma\epsilon_t,\quad \epsilon_t\sim\mathcal N(0,1)
+$$
 
 ### Equilibrium Level
 
-$$\bar P=\frac{\alpha}{1-\phi}$$
+$$
+\bar P=\frac{\alpha}{1-\phi}
+$$
 
 ### OTR Objective over Rule Mesh
 
-$$R^*=\arg\max_{R\in\Omega}\frac{\mathbb E[\pi\mid R]}{\sigma[\pi\mid R]}$$
+$$
+R^*=\arg\max_{R\in\Omega}\frac{\mathbb E[\pi\mid R]}{\sigma[\pi\mid R]}
+$$
 
 ## Usage Examples
 

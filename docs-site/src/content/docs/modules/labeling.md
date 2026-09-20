@@ -43,15 +43,21 @@ Use this module immediately after event detection (CUSUM/z-score filters) and vo
 
 ### Triple-Barrier Event Time
 
-$$\tau=\min\left(\tau_{pt},\tau_{sl},t_1\right),\quad\tau_{pt}=\inf\{u>t:r_{t,u}\ge pt\cdot\sigma_t\},\quad\tau_{sl}=\inf\{u>t:r_{t,u}\le-sl\cdot\sigma_t\}$$
+$$
+\tau=\min\left(\tau_{pt},\tau_{sl},t_1\right),\quad\tau_{pt}=\inf\{u>t:r_{t,u}\ge pt\cdot\sigma_t\},\quad\tau_{sl}=\inf\{u>t:r_{t,u}\le-sl\cdot\sigma_t\}
+$$
 
 ### Labeling Rule
 
-$$y_t=\begin{cases}1,&r_{t,\tau}>0\\0,&r_{t,\tau}=0\\-1,&r_{t,\tau}<0\end{cases},\qquad\text{meta label: }y_t^{meta}=\mathbf 1\{\operatorname{side}_t\cdot r_{t,\tau}>0\}$$
+$$
+y_t=\begin{cases}1,&r_{t,\tau}>0\\0,&r_{t,\tau}=0\\-1,&r_{t,\tau}<0\end{cases},\qquad\text{meta label: }y_t^{meta}=\mathbf 1\{\operatorname{side}_t\cdot r_{t,\tau}>0\}
+$$
 
 ### Target Volatility Scaling
 
-$$\sigma_t=\operatorname{EWMA}\big(|r_t|\big),\qquad\text{barrier widths }\propto \sigma_t$$
+$$
+\sigma_t=\operatorname{EWMA}\big(|r_t|\big),\qquad\text{barrier widths }\propto \sigma_t
+$$
 
 ## Key Parameters
 

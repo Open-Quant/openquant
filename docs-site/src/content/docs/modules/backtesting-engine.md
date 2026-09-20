@@ -3,7 +3,7 @@ title: "backtesting_engine"
 description: "Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -34,15 +34,21 @@ Use walk-forward when the question is "would this have worked as deployed"; use 
 
 ### CPCV Path Count
 
-$$\phi[N,k]=\binom{N}{k}\frac{k}{N}=\binom{N-1}{k-1}$$
+$$
+\phi[N,k]=\binom{N}{k}\frac{k}{N}=\binom{N-1}{k-1}
+$$
 
 ### Purge + Embargo Train Set
 
-$$\mathcal T_{train}^{*}=\mathcal T_{train}\setminus\{i: \exists j\in\mathcal T_{test},\;I_i\cap I_j\neq\varnothing\}\setminus\mathcal E(\mathcal T_{test},p)$$
+$$
+\mathcal T_{train}^{*}=\mathcal T_{train}\setminus\{i: \exists j\in\mathcal T_{test},\;I_i\cap I_j\neq\varnothing\}\setminus\mathcal E(\mathcal T_{test},p)
+$$
 
 ### Per-Path Sharpe
 
-$$S_{path}=\frac{\bar r_{path}}{\sigma_{path}}\sqrt{T_{path}}$$
+$$
+S_{path}=\frac{\bar r_{path}}{\sigma_{path}}\sqrt{T_{path}}
+$$
 
 ## Usage Examples
 

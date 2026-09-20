@@ -46,6 +46,20 @@ Loaded from Google Fonts: `Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6
 - `openquant-mark.svg` — flat pinwheel, no tile. Use from 16px up.
 - `openquant-banner.svg` — 1280×320, paper ground, heavy-rule / hairline pair. Text is live SVG text and falls back to the viewer's serif on GitHub; outline it in #57 if exact type matters there.
 
-## Carried into #57 as unverified
+## Implementation (#57, 2026-09-20)
 
-The candidate is a static mock. Starlight's own chrome — search modal, table of contents, pagination, asides, KaTeX, the status banner slot — has not been styled or checked.
+Implemented in `docs-site/src/styles/starlight.css` (tokens as `--oq-*`, mapped onto Starlight's `--sl-*`
+palette) and `docs-site/src/styles/code-themes.mjs` (Expressive Code themes). `bun run check:contrast`
+reads the tokens from that stylesheet and fails CI if a text pair drops below AA or the code themes
+use a colour that is not a token.
+
+Starlight chrome checked in the browser, both themes (`evidence/site/chrome-*.jpeg`): search modal,
+table of contents, pagination, asides, KaTeX display formulas, tables, code frames, the status line.
+Departures from the static mock, all forced by Starlight's markup:
+
+- The three status words (generated / draft / reviewed) share the one accent pill; the word carries
+  the status. The old per-status colours included the pair that failed AA.
+- Starlight's five aside hues collapse onto the accent; asides differ by title and icon.
+- Numeric table columns are detected from markdown alignment (`---:`), not a class.
+
+Banner text is still live SVG text and falls back to the viewer's serif on GitHub.

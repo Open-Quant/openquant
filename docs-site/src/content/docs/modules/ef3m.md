@@ -30,11 +30,15 @@ Use it when a return or bet-outcome distribution is visibly bimodal — two regi
 
 ### Raw Moment
 
-$$m_k=E[X^k]$$
+$$
+m_k=E[X^k]
+$$
 
 ### Mixture Mean
 
-$$\mu=p\mu_1+(1-p)\mu_2$$
+$$
+\mu=p\mu_1+(1-p)\mu_2
+$$
 
 ## Usage Examples
 

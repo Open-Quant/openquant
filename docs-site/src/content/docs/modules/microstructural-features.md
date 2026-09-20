@@ -31,15 +31,21 @@ Use them as features when the edge or its cost depends on liquidity — executio
 
 ### Kyle / Amihud / Hasbrouck Impact Families
 
-$$\Delta p_t=\lambda_K q_t+\epsilon_t,\qquad r_t=\lambda_A\frac{1}{DV_t}+\epsilon_t,\qquad r_t=\lambda_H\frac{q_t}{\sqrt{DV_t}}+\epsilon_t$$
+$$
+\Delta p_t=\lambda_K q_t+\epsilon_t,\qquad r_t=\lambda_A\frac{1}{DV_t}+\epsilon_t,\qquad r_t=\lambda_H\frac{q_t}{\sqrt{DV_t}}+\epsilon_t
+$$
 
 ### Spread and Volatility Proxies
 
-$$\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1})},\qquad\sigma_{CS}=f(H_t,L_t,H_{t-1},L_{t-1})$$
+$$
+\text{Roll spread}\approx 2\sqrt{-\operatorname{cov}(\Delta p_t,\Delta p_{t-1})},\qquad\sigma_{CS}=f(H_t,L_t,H_{t-1},L_{t-1})
+$$
 
 ### Flow Toxicity and Entropy
 
-$$\mathrm{VPIN}_t=\frac{1}{V_t}\cdot\frac{1}{n}\sum_{i=t-n+1}^{t}\left|V_i^{B}-V_i^{S}\right|,\qquad H=-\sum_j p_j\log p_j$$
+$$
+\mathrm{VPIN}_t=\frac{1}{V_t}\cdot\frac{1}{n}\sum_{i=t-n+1}^{t}\left|V_i^{B}-V_i^{S}\right|,\qquad H=-\sum_j p_j\log p_j
+$$
 
 where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bar $i$ (`get_bvc_buy_volume` will estimate the split when it is not observed), $V_t$ the current bar's total volume, and $n$ the rolling `window`. The normaliser sits *outside* the sum because bars are not equal-volume: `get_vpin` averages the imbalance over the window and then scales by the latest bar. The equal-volume-bucket form used by [`streaming-hpc`](/modules/streaming-hpc/) divides each term by the same constant bucket size instead; the two agree when bars carry equal volume. $H$ is the entropy of the tick-sign message, with $p_j$ the empirical frequency of symbol $j$.
 

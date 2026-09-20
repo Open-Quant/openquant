@@ -3,7 +3,7 @@ title: "fracdiff"
 description: "Fractional differentiation to improve stationarity while retaining memory."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -40,11 +40,15 @@ Apply fractional differentiation to price or spread series *before* feature engi
 
 ### FFD Weights
 
-$$w_k = -w_{k-1}\frac{d-k+1}{k}$$
+$$
+w_k = -w_{k-1}\frac{d-k+1}{k}
+$$
 
 ### Fractional Difference
 
-$$y_t=\sum_{k=0}^{\infty}w_k x_{t-k}$$
+$$
+y_t=\sum_{k=0}^{\infty}w_k x_{t-k}
+$$
 
 ## Key Parameters
 

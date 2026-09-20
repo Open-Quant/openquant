@@ -3,7 +3,7 @@ title: "etf_trick"
 description: "Synthetic ETF and futures roll utilities for realistic PnL path construction."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -33,11 +33,15 @@ Use it whenever a backtest spans a contract roll, or whenever the traded object 
 
 ### ETF NAV Update
 
-$$NAV_t=NAV_{t-1}(1+r_t-c_t)$$
+$$
+NAV_t=NAV_{t-1}(1+r_t-c_t)
+$$
 
 ### Roll Return
 
-$$r^{roll}_t=\frac{F^{near}_t-F^{far}_t}{F^{far}_t}$$
+$$
+r^{roll}_t=\frac{F^{near}_t-F^{far}_t}{F^{far}_t}
+$$
 
 ## Usage Examples
 

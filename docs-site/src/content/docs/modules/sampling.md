@@ -42,11 +42,15 @@ Use sequential bootstrap whenever you're bagging or bootstrapping with overlappi
 
 ### Average Uniqueness
 
-$$u_i=\frac{1}{|T_i|}\sum_{t\in T_i}\frac{1}{c_t}$$
+$$
+u_i=\frac{1}{|T_i|}\sum_{t\in T_i}\frac{1}{c_t}
+$$
 
 ### Sequential Draw Prob
 
-$$P(i)\propto E[u_i \mid \mathcal{S}]$$
+$$
+P(i)\propto E[u_i \mid \mathcal{S}]
+$$
 
 ## Key Parameters
 

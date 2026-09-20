@@ -46,11 +46,15 @@ This is the first module in any AFML pipeline. Raw tick or trade data goes in; s
 
 ### Dollar Bar Trigger
 
-$$\sum_{i=t_0}^{t} p_i v_i \ge \theta$$
+$$
+\sum_{i=t_0}^{t} p_i v_i \ge \theta
+$$
 
 ### Imbalance Trigger
 
-$$\left|\sum b_i\right| \ge E[|\sum b_i|]$$
+$$
+\left|\sum b_i\right| \ge E[|\sum b_i|]
+$$
 
 ## Key Parameters
 

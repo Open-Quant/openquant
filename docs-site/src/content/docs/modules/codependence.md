@@ -3,7 +3,7 @@ title: "codependence"
 description: "Dependence metrics beyond linear correlation for feature and asset relationships."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,11 +30,15 @@ Use it upstream of any clustering or feature-pruning step: `hrp`, `hcaa` and `on
 
 ### Mutual Information
 
-$$I(X;Y)=\sum_{x,y}p(x,y)\log\frac{p(x,y)}{p(x)p(y)}$$
+$$
+I(X;Y)=\sum_{x,y}p(x,y)\log\frac{p(x,y)}{p(x)p(y)}
+$$
 
 ### Variation of Information
 
-$$VI(X,Y)=H(X)+H(Y)-2I(X;Y)$$
+$$
+VI(X,Y)=H(X)+H(Y)-2I(X;Y)
+$$
 
 ## Usage Examples
 

@@ -3,7 +3,7 @@ title: "hyperparameter_tuning"
 description: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -33,15 +33,21 @@ Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilit
 
 ### Purged CV Objective
 
-$$\hat\theta=\arg\max_{\theta\in\Theta}\frac{1}{K}\sum_{k=1}^{K}\mathrm{Score}(f_\theta,\mathcal T_k^{train},\mathcal T_k^{test})$$
+$$
+\hat\theta=\arg\max_{\theta\in\Theta}\frac{1}{K}\sum_{k=1}^{K}\mathrm{Score}(f_\theta,\mathcal T_k^{train},\mathcal T_k^{test})
+$$
 
 ### Log-Uniform Draw
 
-$$\log x\sim U(\log a,\log b),\; a>0,\;x\in(a,b)$$
+$$
+\log x\sim U(\log a,\log b),\; a>0,\;x\in(a,b)
+$$
 
 ### Weighted Neg Log Loss
 
-$$-\frac{1}{\sum_i w_i}\sum_i w_i\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]$$
+$$
+-\frac{1}{\sum_i w_i}\sum_i w_i\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]
+$$
 
 ## Usage Examples
 

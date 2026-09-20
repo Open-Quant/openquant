@@ -3,7 +3,7 @@ title: "sample_weights"
 description: "Sample weighting utilities for overlapping event structure."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,11 +42,15 @@ Apply sample weights after labeling and before model training. They correct for 
 
 ### Uniqueness Weight
 
-$$w_i=\sum_t\frac{I_{t,i}}{\sum_j I_{t,j}}$$
+$$
+w_i=\sum_t\frac{I_{t,i}}{\sum_j I_{t,j}}
+$$
 
 ### Time Decay
 
-$$w_i=(\frac{i}{T})^\delta$$
+$$
+w_i=(\frac{i}{T})^\delta
+$$
 
 ## Key Parameters
 
