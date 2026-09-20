@@ -997,70 +997,8 @@ The **fixed-width window (FFD)** variant truncates the weight series once weight
     slug: "sample-weights",
     module: "sample_weights",
     subject: "Event-Driven Data and Labeling",
-    summary: "Sample weighting utilities for overlapping event structure.",
-    whyItExists: "Adjusts training influence to avoid overcounting dense overlapping labels.",
-    keyApis: ["get_weights_by_return", "get_weights_by_time_decay"],
-    formulas: [
-      { label: "Uniqueness Weight", latex: "w_i=\\sum_t\\frac{I_{t,i}}{\\sum_j I_{t,j}}" },
-      { label: "Time Decay", latex: "w_i=(\\frac{i}{T})^\\delta" },
-    ],
-    examples: [
-      {
-        title: "Compute sample weights for overlapping labels",
-        language: "python",
-        code: `from openquant._core import sample_weights
-
-# Both functions weight EVENTS, not raw returns: an event is
-# (t_in, t_out, label) and the return is attributed over the close series
-# between those two timestamps. Timestamps parse as "%Y-%m-%d %H:%M:%S".
-close_timestamps = [f"2024-01-02 09:3{i}:00" for i in range(8)]
-close_prices = [100.0, 100.1, 99.9, 100.2, 100.05, 100.3, 99.7, 100.1]
-
-events = [
-    (close_timestamps[0], close_timestamps[3], 1.0),
-    (close_timestamps[2], close_timestamps[5], -1.0),
-    (close_timestamps[4], close_timestamps[7], 1.0),
-]
-
-# Weight by uniqueness-adjusted return attribution
-w_return = sample_weights.get_weights_by_return(events, close_timestamps, close_prices)
-
-# Weight by time decay (oldest event decayed to 0.5 of the newest)
-w_decay = sample_weights.get_weights_by_time_decay(events, close_timestamps, close_prices, 0.5)
-
-# Each is a list of (event_timestamp, weight) pairs:
-# model.fit(X, y, sample_weight=[w for _, w in w_return])`,
-      },
-      {
-        title: "Compute event weights",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::sample_weights::get_weights_by_time_decay;\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\n\n// Weighting is driven by triple-barrier events (t_in, t_out, label) — the label\n// lifetimes — plus the close series they span. It is not a function of returns.\nlet triple_barrier_events: Vec<(NaiveDateTime, NaiveDateTime, f64)> = (0..20)\n    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2), 1.0))\n    .collect();\nlet close: Vec<(NaiveDateTime, f64)> =\n    (0..25).map(|i| (t0 + Duration::days(i), 100.0 + i as f64 * 0.1)).collect();\n\n// decay = 0.5: the oldest observation keeps half the weight of the newest.\n// decay <= 0 erases the oldest observations entirely.\nlet weights = get_weights_by_time_decay(&triple_barrier_events, &close, 0.5)?;\nprintln!("{} weights; newest = {:.4}", weights.len(), weights.last().map(|w| w.1).unwrap_or(0.0));`,
-      },
-    ],
-    notes: ["Pair with sequential bootstrap for robust label sampling.", "Time-decay controls recency bias explicitly."],
-    conceptOverview: `In AFML's event-driven framework (Chapter 4), labels are derived from overlapping price paths. When two events overlap in time, their labels share information — the price observations that determine event A's outcome also influence event B's outcome. Treating these labels as independent samples inflates effective sample size and biases model training.
-
-**Uniqueness-based weighting** addresses this by computing how unique each sample is at each time step. If a bar contributes to 3 concurrent events, each event gets 1/3 credit for that bar. The total weight of a sample is the sum of its per-bar uniqueness scores. Samples that overlap with many others get down-weighted; isolated samples get full weight.
-
-**Return-attribution weighting** weights samples by their absolute return, giving more training influence to economically significant events.
-
-**Time-decay weighting** applies a power-law decay so recent observations contribute more than older ones, useful when the data-generating process evolves over time.
-
-These weights should be passed as \`sample_weight\` to your classifier or loss function.`,
-    whenToUse: `Apply sample weights after labeling and before model training. They correct for the non-IID structure caused by overlapping triple-barrier labels.
-
-**Prerequisites**: Labeled events from the labeling module, with event start/end times.
-
-**Alternatives**: Equal weights (ignores overlap, biases toward dense clusters), or sequential bootstrap (sampling-based approach instead of weighting).`,
-    keyParameters: [
-      { name: "delta", type: "f64", description: "Time-decay exponent; 0 = uniform, 1 = linear decay, >1 = aggressive recency bias", default: "1.0" },
-    ],
-    commonPitfalls: [
-      "Training without any overlap correction — highly overlapping labels effectively duplicate data and overfit the dense-event regime.",
-      "Using uniqueness weights without the indicator matrix from the sampling module — the weights require knowledge of which bars each event spans.",
-      "Combining time-decay and uniqueness weights incorrectly — multiply them element-wise, don't add.",
-    ],
-    relatedModules: ["labeling", "sampling", "sb-bagging"],
+    summary: "Training weights for overlapping labels: return attribution and time decay.",
+    handwritten: true,
     afmlChapters: [4],
     apiSurface: "both",
     pythonApis: ["sample_weights.get_weights_by_return", "sample_weights.get_weights_by_time_decay"],
@@ -1069,102 +1007,18 @@ These weights should be passed as \`sample_weight\` to your classifier or loss f
     slug: "sampling",
     module: "sampling",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Indicator matrix and sequential bootstrap tooling.",
-    whyItExists: "Produces less correlated training samples when labels overlap heavily in time.",
-    keyApis: ["get_ind_matrix", "seq_bootstrap", "get_ind_mat_average_uniqueness", "num_concurrent_events"],
-    formulas: [
-      { label: "Average Uniqueness", latex: "u_i=\\frac{1}{|T_i|}\\sum_{t\\in T_i}\\frac{1}{c_t}" },
-      { label: "Sequential Draw Prob", latex: "P(i)\\propto E[u_i \\mid \\mathcal{S}]" },
-    ],
-    examples: [
-      {
-        title: "Sequential bootstrap with overlap-aware sampling",
-        language: "python",
-        code: `from openquant._core import sampling
-
-# Indicator matrix: rows=bars, cols=labels
-# 1 means bar i is active for label j
-ind_matrix = [
-    [1, 0, 1],
-    [1, 1, 1],
-    [0, 1, 1],
-    [0, 1, 0],
-    [1, 0, 0],
-]
-
-# Average uniqueness across the whole matrix (one scalar diagnostic)
-avg_u = sampling.get_ind_mat_average_uniqueness(ind_matrix)
-# e.g., 0.5556 — closer to 1.0 means less label overlap
-
-# Sequential bootstrap: draw sample_length indices favouring unique labels
-drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
-# Returns label indices selected with overlap-aware probabilities`,
-      },
-      {
-        title: "Run sequential bootstrap",
-        language: "rust",
-        code: `use openquant::sampling::seq_bootstrap;\n\nlet ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];\nlet idx = seq_bootstrap(&ind, Some(3), None)?;`,
-      },
-    ],
-    notes: ["Indicator matrix quality drives bootstrap quality.", "Use average uniqueness as a diagnostics KPI."],
-    conceptOverview: `Standard bootstrap assumes IID observations: draw N samples with replacement uniformly. But AFML labels overlap in time — event A might span bars 1-5 while event B spans bars 3-8. Drawing both A and B into the same bootstrap sample introduces information leakage between train/test, because they share bars 3-5.
-
-The **sequential bootstrap** (AFML Chapter 4) fixes this by making draws overlap-aware. It builds an **indicator matrix** that maps which bars each label spans. At each draw step, it computes the average uniqueness of each remaining label *given what's already been drawn*, then samples proportionally to uniqueness. Labels that would create heavy overlap with already-drawn samples have low uniqueness and are unlikely to be selected.
-
-The result is a bootstrap sample where the drawn labels are as independent as possible given the underlying overlap structure. This is critical for bagging classifiers trained on financial labels, where naive bootstrap produces ensembles with highly correlated base learners.
-
-**Average uniqueness** is the key diagnostic: it tells you what fraction of each label's information is non-redundant. Low average uniqueness (< 0.5) means heavy overlap and sequential bootstrap becomes essential.`,
-    whenToUse: `Use sequential bootstrap whenever you're bagging or bootstrapping with overlapping labels. It replaces standard \`np.random.choice\` in any ensemble or bootstrap workflow.
-
-**Prerequisites**: An indicator matrix from event start/end times, and optionally the concurrent event count per bar.
-
-**Alternatives**: Standard IID bootstrap (fast but leakage-prone), or sample weighting (correct expected value but doesn't reduce sample correlation).`,
-    keyParameters: [
-      { name: "ind_matrix", type: "Vec<Vec<i32>>", description: "Indicator matrix: rows=bars, cols=labels. Entry is 1 if bar i is active during label j", default: "—" },
-      { name: "sample_length", type: "Option<usize>", description: "Number of bootstrap draws; defaults to number of labels", default: "None (= n_labels)" },
-    ],
-    commonPitfalls: [
-      "Building the indicator matrix with wrong event boundaries — off-by-one errors silently break uniqueness calculations.",
-      "Using sequential bootstrap with very short labels that don't overlap — it degenerates to standard bootstrap and just adds overhead.",
-      "Forgetting to pass sequential bootstrap indices to the bagging estimator — the sampling module produces indices, your estimator must use them.",
-    ],
-    relatedModules: ["sample-weights", "sb-bagging", "labeling"],
+    summary: "Label concurrency, average uniqueness and the sequential bootstrap.",
+    handwritten: true,
     afmlChapters: [4],
     apiSurface: "both",
     pythonApis: ["sampling.get_ind_matrix", "sampling.seq_bootstrap", "sampling.get_ind_mat_average_uniqueness", "sampling.get_ind_mat_label_uniqueness", "sampling.bootstrap_loop_run", "sampling.get_av_uniqueness_from_triple_barrier", "sampling.num_concurrent_events"],
   },
   {
     slug: "sb-bagging",
-    conceptOverview:
-      "Bagging in which the resampling respects label overlap. The standard bootstrap assumes IID draws; with triple-barrier labels whose spans overlap, an IID bag is full of near-duplicates, the base learners end up correlated, and the variance reduction bagging promises never materialises. Sequential bootstrap instead draws each index with probability proportional to its average uniqueness *given what has already been drawn*, so each bag is as close to independent as the data permits.",
-    whenToUse:
-      "Use it in place of ordinary bagging whenever the labels come from `labeling` — that is, whenever observations overlap in time. Measure the benefit rather than assuming it: `ensemble_methods::average_pairwise_prediction_correlation` will tell you whether the base learners actually decorrelated, and if rho is still high the extra sampling cost bought nothing. Note that `new()` takes the random seed, not the ensemble size: `n_estimators` defaults to 10 and must be set explicitly.",
-    relatedModules: ["sampling", "ensemble-methods", "sample-weights", "labeling", "cross-validation"],
     module: "sb_bagging",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Sequentially bootstrapped bagging classifiers/regressors.",
-    whyItExists: "Combines ensemble variance reduction with overlap-aware sampling.",
-    keyApis: ["SequentiallyBootstrappedBaggingClassifier", "SequentiallyBootstrappedBaggingRegressor", "MaxSamples", "MaxFeatures"],
-    formulas: [
-      {
-        label: "Bagging Predictor",
-        latex: "\\hat f(x)=\\frac{1}{B}\\sum_{b=1}^{B} f_b(x)",
-        where: "$B$ = `n_estimators` and $f_b$ is the base learner fitted to the $b$-th resample. Note that $B$ defaults to $10$, not to the constructor argument, which is the random seed.",
-      },
-      {
-        label: "Sequential Bootstrap Draw",
-        latex: "\\Pr\\!\\left[i\\mid\\varphi\\right]=\\frac{\\bar u_i(\\varphi)}{\\sum_j \\bar u_j(\\varphi)},\\qquad \\bar u_i(\\varphi)=\\frac{1}{|T_i|}\\sum_{t\\in T_i}\\frac{1}{1+c_t(\\varphi)}",
-        where: "$\\varphi$ is the set of indices drawn so far, $T_i$ the bars spanned by observation $i$'s label, and $c_t(\\varphi)$ the number of already-drawn observations whose label also covers bar $t$. Drawing an observation that overlaps what is already in the bag drives $\\bar u_i$ down, so the next draw prefers something disjoint — this is what stops the standard IID bootstrap from silently resampling the same overlapping event $B$ times. Probabilities are recomputed after every draw. See [`sampling`](/modules/sampling/) for the uniqueness machinery.",
-      },
-    ],
-    examples: [
-      {
-        title: "Instantiate SB bagging classifier",
-        language: "rust",
-        code: `use openquant::sb_bagging::SequentiallyBootstrappedBaggingClassifier;\n\n// The single constructor argument is \`random_state\` — NOT the ensemble size.\n// n_estimators defaults to 10 and has to be set explicitly.\nlet mut bag = SequentiallyBootstrappedBaggingClassifier::new(42);\nbag.n_estimators = 100;\nbag.oob_score = true;\n\nprintln!("{} estimators, seed {}", bag.n_estimators, bag.random_state);`,
-      },
-    ],
-    notes: ["Sequential bootstrap improves diversity under event overlap.", "Tune max_samples/max_features with out-of-sample monitoring."],
+    summary: "A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor"],
   },

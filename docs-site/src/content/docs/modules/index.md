@@ -30,7 +30,7 @@ For the AFML chapter each module implements, see
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
-- [`sample_weights`](/modules/sample-weights/) — Sample weighting utilities for overlapping event structure.
+- [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
 
 ### Market Microstructure, Dependence and Regime Detection
 
@@ -73,8 +73,8 @@ For the AFML chapter each module implements, see
 - [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
 - [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.
-- [`sampling`](/modules/sampling/) — Indicator matrix and sequential bootstrap tooling.
-- [`sb_bagging`](/modules/sb-bagging/) — Sequentially bootstrapped bagging classifiers/regressors.
+- [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.
 
 ### Scaling, HPC and Infrastructure
@@ -113,9 +113,9 @@ For the AFML chapter each module implements, see
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
 - [`risk_metrics`](/modules/risk-metrics/) — Portfolio and return-distribution risk measures for downside control.
-- [`sample_weights`](/modules/sample-weights/) — Sample weighting utilities for overlapping event structure.
-- [`sampling`](/modules/sampling/) — Indicator matrix and sequential bootstrap tooling.
-- [`sb_bagging`](/modules/sb-bagging/) — Sequentially bootstrapped bagging classifiers/regressors.
+- [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
+- [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
 - [`strategy_risk`](/modules/strategy-risk/) — AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.
 - [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
 - [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
