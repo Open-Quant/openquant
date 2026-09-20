@@ -1,3 +1,4 @@
+use crate::util::InputError;
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
 
@@ -204,10 +205,22 @@ pub fn deflated_sharpe_ratio(
     kurtosis: f64,
     estimates_param: bool,
     benchmark_out: bool,
-) -> f64 {
+) -> Result<f64, InputError> {
+    // Both forms need two values: (std, number of trials), or at least two trial Sharpe ratios.
+    if sr_estimates.len() < 2 {
+        return Err(InputError::TooShort { name: "sr_estimates", len: sr_estimates.len(), min: 2 });
+    }
     let benchmark_sr = if estimates_param {
         let sd = sr_estimates[0];
         let n = sr_estimates[1];
+        // The expected maximum of n trials is only defined for more than one trial.
+        if n.is_nan() || n <= 1.0 {
+            return Err(InputError::OutOfRange {
+                name: "sr_estimates[1]",
+                value: n,
+                expected: "a number of trials above 1",
+            });
+        }
         let norm = Normal::new(0.0, 1.0).unwrap();
         sd * ((1.0 - EULER_GAMMA) * norm.inverse_cdf(1.0 - 1.0 / n)
             + EULER_GAMMA * norm.inverse_cdf(1.0 - 1.0 / n * (-1.0f64).exp()))
@@ -225,10 +238,10 @@ pub fn deflated_sharpe_ratio(
     };
 
     if benchmark_out {
-        return benchmark_sr;
+        return Ok(benchmark_sr);
     }
 
-    probabilistic_sharpe_ratio(observed_sr, benchmark_sr, number_of_returns, skewness, kurtosis)
+    Ok(probabilistic_sharpe_ratio(observed_sr, benchmark_sr, number_of_returns, skewness, kurtosis))
 }
 
 pub fn minimum_track_record_length(
@@ -237,9 +250,17 @@ pub fn minimum_track_record_length(
     skewness: f64,
     kurtosis: f64,
     alpha: f64,
-) -> f64 {
+) -> Result<f64, InputError> {
+    if !(0.0..=1.0).contains(&alpha) {
+        return Err(InputError::OutOfRange {
+            name: "alpha",
+            value: alpha,
+            expected: "a significance level in [0, 1]",
+        });
+    }
     let norm = Normal::new(0.0, 1.0).unwrap();
     let z = norm.inverse_cdf(1.0 - alpha);
-    1.0 + (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr)
-        * (z / (observed_sr - benchmark_sr)).powi(2)
+    Ok(1.0
+        + (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr)
+            * (z / (observed_sr - benchmark_sr)).powi(2))
 }

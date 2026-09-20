@@ -3,7 +3,7 @@ title: "sampling"
 description: "Indicator matrix and sequential bootstrap tooling."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -91,7 +91,7 @@ drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
 use openquant::sampling::seq_bootstrap;
 
 let ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];
-let idx = seq_bootstrap(&ind, Some(3), None);
+let idx = seq_bootstrap(&ind, Some(3), None)?;
 ```
 
 ## Common Pitfalls

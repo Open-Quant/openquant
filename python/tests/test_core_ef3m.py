@@ -65,13 +65,6 @@ def test_ef3m_rejects_wrongly_typed_input():
         ef3m.centered_moment([0.7, 2.6, 0.4, 25.0, -59.8], -1)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: ef3m.centered_moment with fewer moments than `order` indexes out of "
-        "bounds and surfaces pyo3 PanicException instead of ValueError"
-    ),
-)
 def test_centered_moment_too_few_moments_raises_value_error():
     with pytest.raises(ValueError):
         ef3m.centered_moment([0.7], 5)

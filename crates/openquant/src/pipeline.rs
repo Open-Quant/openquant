@@ -135,7 +135,8 @@ pub fn run_mid_frequency_pipeline(
     validate_input(&input, config)?;
 
     let event_indices =
-        cusum_filter_indices(input.close, Threshold::Scalar(config.cusum_threshold));
+        cusum_filter_indices(input.close, Threshold::Scalar(config.cusum_threshold))
+            .map_err(|_| PipelineError::InvalidParameter("cusum_threshold"))?;
     if event_indices.is_empty() {
         return Err(PipelineError::NoEvents);
     }

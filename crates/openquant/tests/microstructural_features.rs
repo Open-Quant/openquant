@@ -45,9 +45,9 @@ fn test_second_generation_intra_bar() {
         }
         v
     };
-    let kyle = get_bar_based_kyle_lambda(&close, &volume, 20);
-    let amihud = get_bar_based_amihud_lambda(&close, &cum_dollar, 20);
-    let hasbrouck = get_bar_based_hasbrouck_lambda(&close, &cum_dollar, 20);
+    let kyle = get_bar_based_kyle_lambda(&close, &volume, 20).unwrap();
+    let amihud = get_bar_based_amihud_lambda(&close, &cum_dollar, 20).unwrap();
+    let hasbrouck = get_bar_based_hasbrouck_lambda(&close, &cum_dollar, 20).unwrap();
     let max = |v: &[f64]| v.iter().cloned().fold(f64::NAN, f64::max);
     let mean = |v: &[f64]| {
         let mut sum = 0.0;
@@ -80,9 +80,9 @@ fn test_second_generation_intra_bar() {
 #[test]
 fn test_third_generation_features() {
     let (close, _high, _low, _cum_dollar, cum_vol) = load_dollar_bars();
-    let bvc = get_bvc_buy_volume(&close, &cum_vol, 20);
-    let vpin1 = get_vpin(&cum_vol, &bvc, 1);
-    let vpin20 = get_vpin(&cum_vol, &bvc, 20);
+    let bvc = get_bvc_buy_volume(&close, &cum_vol, 20).unwrap();
+    let vpin1 = get_vpin(&cum_vol, &bvc, 1).unwrap();
+    let vpin20 = get_vpin(&cum_vol, &bvc, 20).unwrap();
     let max = |v: &[f64]| v.iter().cloned().fold(f64::NAN, f64::max);
     let mean = |v: &[f64]| {
         let mut sum = 0.0;
@@ -120,9 +120,9 @@ fn test_entropy_calculations() {
     let message = "11100001";
     let message_array = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
     let shannon = get_shannon_entropy(message);
-    let plug_in = get_plug_in_entropy(message, 1);
+    let plug_in = get_plug_in_entropy(message, 1).unwrap();
     let qmap = quantile_mapping(&message_array, 2).unwrap();
-    let plug_in_arr = get_plug_in_entropy(&encode_array_f64(&message_array, &qmap), 1);
+    let plug_in_arr = get_plug_in_entropy(&encode_array_f64(&message_array, &qmap), 1).unwrap();
     let lempel = get_lempel_ziv_entropy(message);
     let konto = get_konto_entropy(message, 0);
     assert!((shannon - 1.0).abs() < 1e-3);
@@ -213,9 +213,9 @@ fn test_csv_format_validation() {
 fn test_first_generation_features() {
     let (close, high, low, cum_dollar, _cum_vol) = load_dollar_bars();
     let roll = get_roll_measure(&close, 20);
-    let roll_imp = get_roll_impact(&close, &cum_dollar, 20);
-    let cs = get_corwin_schultz_estimator(&high, &low, 20);
-    let bekker = get_bekker_parkinson_vol(&high, &low, 20);
+    let roll_imp = get_roll_impact(&close, &cum_dollar, 20).unwrap();
+    let cs = get_corwin_schultz_estimator(&high, &low, 20).unwrap();
+    let bekker = get_bekker_parkinson_vol(&high, &low, 20).unwrap();
 
     assert_eq!(roll.len(), close.len());
     assert_eq!(roll_imp.len(), close.len());

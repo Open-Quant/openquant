@@ -36,7 +36,7 @@ fn synthetic_dataset() -> (DMatrix<f64>, Vec<u8>, Vec<f64>, Vec<Vec<u8>>) {
     for start in (0..n - 6).step_by(3) {
         t1.push((start, start + 6));
     }
-    let ind = get_ind_matrix(&t1, &bar_index);
+    let ind = get_ind_matrix(&t1, &bar_index).unwrap();
 
     (x, y_clf, y_reg, ind)
 }
@@ -179,7 +179,7 @@ fn test_sb_classifier() {
     let bar_index: Vec<usize> = (0..split).collect();
     let t1: Vec<(usize, usize)> =
         (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
-    let ind_train = get_ind_matrix(&t1, &bar_index);
+    let ind_train = get_ind_matrix(&t1, &bar_index).unwrap();
 
     sb.fit(&x_train, y_train, &ind_train, None).unwrap();
     let preds = sb.predict(&x_test).unwrap();
@@ -203,7 +203,7 @@ fn test_sb_regressor() {
     let bar_index: Vec<usize> = (0..split).collect();
     let t1: Vec<(usize, usize)> =
         (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
-    let ind_train = get_ind_matrix(&t1, &bar_index);
+    let ind_train = get_ind_matrix(&t1, &bar_index).unwrap();
 
     let mut sb = SequentiallyBootstrappedBaggingRegressor::new(1);
     sb.n_estimators = 100;

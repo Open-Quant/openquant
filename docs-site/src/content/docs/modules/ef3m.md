@@ -3,7 +3,7 @@ title: "ef3m"
 description: "Moment-based mixture fitting utilities for two-normal components."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -46,7 +46,7 @@ $$\mu=p\mu_1+(1-p)\mu_2$$
 use openquant::ef3m::centered_moment;
 
 let moments = vec![0.0, 1.0, 0.1, 3.0];
-let m3 = centered_moment(&moments, 3);
+let m3 = centered_moment(&moments, 3)?;
 ```
 
 ## API Reference

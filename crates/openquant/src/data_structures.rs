@@ -2,6 +2,7 @@
 //! Additional bar types (run/imbalance) can be layered on top of these core
 //! primitives as we add fixtures and reference expectations.
 
+use crate::util::InputError;
 use chrono::{Duration, NaiveDateTime};
 
 /// Single trade input.
@@ -51,12 +52,18 @@ pub fn standard_bars(
     trades: &[Trade],
     threshold: f64,
     bar_type: StandardBarType,
-) -> Vec<StandardBar> {
-    assert!(threshold.is_sign_positive(), "threshold must be positive");
+) -> Result<Vec<StandardBar>, InputError> {
+    if threshold.is_nan() || threshold <= 0.0 {
+        return Err(InputError::OutOfRange {
+            name: "threshold",
+            value: threshold,
+            expected: "a positive number",
+        });
+    }
 
     let mut bars = Vec::new();
     if trades.is_empty() {
-        return bars;
+        return Ok(bars);
     }
 
     let mut start_idx = 0;
@@ -84,18 +91,24 @@ pub fn standard_bars(
         }
     }
 
-    bars
+    Ok(bars)
 }
 
 /// Construct time bars using a fixed interval. The interval applies from the start
 /// timestamp of the current bar; the trade that crosses the interval boundary is
 /// included in the closing bar, and accumulation restarts afterward.
-pub fn time_bars(trades: &[Trade], interval: Duration) -> Vec<StandardBar> {
-    assert!(interval.num_microseconds().unwrap_or(0) > 0, "interval must be positive");
+pub fn time_bars(trades: &[Trade], interval: Duration) -> Result<Vec<StandardBar>, InputError> {
+    if interval <= Duration::zero() {
+        return Err(InputError::OutOfRange {
+            name: "interval",
+            value: interval.num_milliseconds() as f64 / 1e3,
+            expected: "a positive duration (seconds)",
+        });
+    }
 
     let mut bars = Vec::new();
     if trades.is_empty() {
-        return bars;
+        return Ok(bars);
     }
 
     let mut start_idx = 0;
@@ -116,16 +129,22 @@ pub fn time_bars(trades: &[Trade], interval: Duration) -> Vec<StandardBar> {
         bars.push(build_bar(&trades[start_idx..]));
     }
 
-    bars
+    Ok(bars)
 }
 
 /// Construct run bars by counting consecutive price-direction runs. A bar closes when
 /// `threshold` consecutive moves occur in the same direction. Trailing partial bars
 /// that have not met the threshold are dropped.
-pub fn run_bars(trades: &[Trade], threshold: usize) -> Vec<StandardBar> {
-    assert!(threshold > 0, "threshold must be positive");
+pub fn run_bars(trades: &[Trade], threshold: usize) -> Result<Vec<StandardBar>, InputError> {
+    if threshold == 0 {
+        return Err(InputError::OutOfRange {
+            name: "threshold",
+            value: 0.0,
+            expected: "a positive integer",
+        });
+    }
     if trades.len() < 2 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut bars = Vec::new();
@@ -157,7 +176,7 @@ pub fn run_bars(trades: &[Trade], threshold: usize) -> Vec<StandardBar> {
         }
     }
 
-    bars
+    Ok(bars)
 }
 
 /// Construct imbalance bars by accumulating signed imbalance (tick, volume, or dollar)
@@ -167,10 +186,16 @@ pub fn imbalance_bars(
     trades: &[Trade],
     threshold: f64,
     bar_type: ImbalanceBarType,
-) -> Vec<StandardBar> {
-    assert!(threshold.is_sign_positive(), "threshold must be positive");
+) -> Result<Vec<StandardBar>, InputError> {
+    if threshold.is_nan() || threshold <= 0.0 {
+        return Err(InputError::OutOfRange {
+            name: "threshold",
+            value: threshold,
+            expected: "a positive number",
+        });
+    }
     if trades.len() < 2 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let mut bars = Vec::new();
@@ -204,16 +229,16 @@ pub fn imbalance_bars(
         }
     }
 
-    bars
+    Ok(bars)
 }
 
+/// `trades` is never empty: every caller passes `start_idx..=i` with `start_idx <= i`.
 fn build_bar(trades: &[Trade]) -> StandardBar {
-    assert!(!trades.is_empty(), "cannot build a bar from an empty trade slice");
-
-    let open = trades.first().expect("non-empty slice").price;
-    let close = trades.last().expect("non-empty slice").price;
-    let start_timestamp = trades.first().expect("non-empty slice").timestamp;
-    let timestamp = trades.last().expect("non-empty slice").timestamp;
+    let (first, last) = (&trades[0], &trades[trades.len() - 1]);
+    let open = first.price;
+    let close = last.price;
+    let start_timestamp = first.timestamp;
+    let timestamp = last.timestamp;
     let (high, low) = trades.iter().fold((f64::NEG_INFINITY, f64::INFINITY), |(h, l), trade| {
         (h.max(trade.price), l.min(trade.price))
     });

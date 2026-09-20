@@ -3,7 +3,7 @@ title: "filters"
 description: "CUSUM and z-score event filters for event-driven sampling."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -14,11 +14,8 @@ afml_chapters:
 rust_api:
   - "cusum_filter_indices"
   - "cusum_filter_timestamps"
-  - "cusum_filter_indices_checked"
-  - "cusum_filter_timestamps_checked"
   - "z_score_filter_indices"
   - "z_score_filter_timestamps"
-  - "z_score_filter_timestamps_checked"
   - "Threshold"
   - "FilterError"
 sidebar:
@@ -102,16 +99,16 @@ z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_windo
 #### CUSUM with static and dynamic thresholds
 
 ```rust
-use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};
+use openquant::filters::{cusum_filter_indices, Threshold};
 
 let close = vec![100.0, 100.1, 99.9, 100.2];
 
 // Static threshold
-let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));
+let idx = cusum_filter_indices(&close, Threshold::Scalar(0.02))?;
 
 // Dynamic threshold (e.g. volatility-scaled per bar)
 let dynamic_h = vec![0.02, 0.025, 0.018, 0.022];
-let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();
+let idx = cusum_filter_indices(&close, Threshold::Dynamic(dynamic_h))?;
 ```
 
 ## Common Pitfalls
@@ -134,11 +131,8 @@ let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).un
 
 - `cusum_filter_indices`
 - `cusum_filter_timestamps`
-- `cusum_filter_indices_checked`
-- `cusum_filter_timestamps_checked`
 - `z_score_filter_indices`
 - `z_score_filter_timestamps`
-- `z_score_filter_timestamps_checked`
 - `Threshold`
 - `FilterError`
 
@@ -147,7 +141,7 @@ let idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).un
 - Calibrate thresholds to target event frequency, not just sensitivity.
 - Use identical filtering in train and live pipelines.
 - Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.
-- Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.
+- The CUSUM filters and the timestamp variants return Result<..., FilterError>: a dynamic threshold shorter than the series, or too few timestamps, is an error. Python raises ValueError.
 
 ## Related Modules
 

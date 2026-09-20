@@ -1,11 +1,12 @@
 use openquant::filters::Threshold;
 use pyo3::prelude::*;
 
-use crate::helpers::{format_naive_datetimes, parse_naive_datetimes};
+use crate::helpers::{format_naive_datetimes, input_err, parse_naive_datetimes};
 
 #[pyfunction(name = "cusum_filter_indices")]
-fn filters_cusum_filter_indices(close: Vec<f64>, threshold: f64) -> Vec<usize> {
+fn filters_cusum_filter_indices(close: Vec<f64>, threshold: f64) -> PyResult<Vec<usize>> {
     openquant::filters::cusum_filter_indices(&close, Threshold::Scalar(threshold))
+        .map_err(input_err)
 }
 
 #[pyfunction(name = "cusum_filter_timestamps")]
@@ -23,7 +24,8 @@ fn filters_cusum_filter_timestamps(
         )));
     }
     let out =
-        openquant::filters::cusum_filter_timestamps(&close, &ts, Threshold::Scalar(threshold));
+        openquant::filters::cusum_filter_timestamps(&close, &ts, Threshold::Scalar(threshold))
+            .map_err(input_err)?;
     Ok(format_naive_datetimes(out))
 }
 
@@ -59,7 +61,8 @@ fn filters_z_score_filter_timestamps(
         mean_window,
         std_window,
         threshold,
-    );
+    )
+    .map_err(input_err)?;
     Ok(format_naive_datetimes(out))
 }
 

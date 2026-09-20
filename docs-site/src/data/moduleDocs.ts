@@ -217,7 +217,7 @@ export const moduleDocs: ModuleDoc[] = [
       {
         title: "End-to-end: Dynamic + Reserve Sizing for Execution and Inventory Control",
         language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::{bet_size_dynamic, bet_size_reserve_full};\n\n// Dynamic sizing inputs (position, max position, market price, forecast price)\nlet pos = vec![0.0, 1.0, 1.0, 2.0, 1.0];\nlet max_pos = vec![10.0; 5];\nlet market = vec![100.0, 100.1, 100.0, 100.2, 100.15];\nlet forecast = vec![100.3, 100.4, 100.2, 100.5, 100.45];\n\nlet dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast);\n// tuple: (bet_size, target_position, limit_price)\n\n// Reserve sizing from overlapping long/short events\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet t1 = vec![\n  (t0, t0 + Duration::minutes(30)),\n  (t0 + Duration::minutes(10), t0 + Duration::minutes(40)),\n  (t0 + Duration::minutes(20), t0 + Duration::minutes(50)),\n];\nlet side = vec![1.0, -1.0, 1.0];\nlet (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true);\n\nassert_eq!(dynamic.len(), 5);\nassert!(fit.is_some());\nassert!(!reserve.is_empty());`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::bet_sizing::{bet_size_dynamic, bet_size_reserve_full};\n\n// Dynamic sizing inputs (position, max position, market price, forecast price)\nlet pos = vec![0.0, 1.0, 1.0, 2.0, 1.0];\nlet max_pos = vec![10.0; 5];\nlet market = vec![100.0, 100.1, 100.0, 100.2, 100.15];\nlet forecast = vec![100.3, 100.4, 100.2, 100.5, 100.45];\n\nlet dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast)?;\n// tuple: (bet_size, target_position, limit_price)\n\n// Reserve sizing from overlapping long/short events\nlet t0 = NaiveDateTime::parse_from_str(\"2024-01-01 09:30:00\", \"%Y-%m-%d %H:%M:%S\")?;\nlet t1 = vec![\n  (t0, t0 + Duration::minutes(30)),\n  (t0 + Duration::minutes(10), t0 + Duration::minutes(40)),\n  (t0 + Duration::minutes(20), t0 + Duration::minutes(50)),\n];\nlet side = vec![1.0, -1.0, 1.0];\nlet (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true)?;\n\nassert_eq!(dynamic.len(), 5);\nassert!(fit.is_some());\nassert!(!reserve.is_empty());`,
       },
     ],
     notes: [
@@ -359,7 +359,7 @@ time_bars = build_time_bars(df, interval="5m")`,
       {
         title: "Build bars from Rust",
         language: "rust",
-        code: `use chrono::Duration;\nuse openquant::data_structures::{\n    standard_bars, time_bars, run_bars, imbalance_bars,\n    Trade, StandardBarType, ImbalanceBarType,\n};\n\nlet trades: Vec<Trade> = vec![];\n\n// Fixed-time bars\nlet t_bars = time_bars(&trades, Duration::minutes(5));\n\n// Dollar bars via standard_bars\nlet d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);\n\n// Run bars (Rust-only)\nlet r_bars = run_bars(&trades, 100);\n\n// Tick imbalance bars (Rust-only)\nlet ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);`,
+        code: `use chrono::Duration;\nuse openquant::data_structures::{\n    standard_bars, time_bars, run_bars, imbalance_bars,\n    Trade, StandardBarType, ImbalanceBarType,\n};\n\nlet trades: Vec<Trade> = vec![];\n\n// Fixed-time bars\nlet t_bars = time_bars(&trades, Duration::minutes(5))?;\n\n// Dollar bars via standard_bars\nlet d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar)?;\n\n// Run bars (Rust-only)\nlet r_bars = run_bars(&trades, 100)?;\n\n// Tick imbalance bars (Rust-only)\nlet ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick)?;`,
       },
     ],
     notes: [
@@ -469,7 +469,7 @@ The key insight is that information-driven bars produce returns that are closer 
       {
         title: "Estimate moments",
         language: "rust",
-        code: `use openquant::ef3m::centered_moment;\n\nlet moments = vec![0.0, 1.0, 0.1, 3.0];\nlet m3 = centered_moment(&moments, 3);`,
+        code: `use openquant::ef3m::centered_moment;\n\nlet moments = vec![0.0, 1.0, 0.1, 3.0];\nlet m3 = centered_moment(&moments, 3)?;`,
       },
     ],
     notes: ["Use as initialization for more expensive optimizers.", "Sensitive to higher-moment estimation noise."],
@@ -608,7 +608,7 @@ The key insight is that information-driven bars produce returns that are closer 
     subject: "Event-Driven Data and Labeling",
     summary: "CUSUM and z-score event filters for event-driven sampling.",
     whyItExists: "Extracts informative events from noisy high-frequency sequences.",
-    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "cusum_filter_indices_checked", "cusum_filter_timestamps_checked", "z_score_filter_indices", "z_score_filter_timestamps", "z_score_filter_timestamps_checked", "Threshold", "FilterError"],
+    keyApis: ["cusum_filter_indices", "cusum_filter_timestamps", "z_score_filter_indices", "z_score_filter_timestamps", "Threshold", "FilterError"],
     formulas: [
       {
         label: "Symmetric CUSUM Filter",
@@ -649,14 +649,14 @@ z_ts = openquant.filters.z_score_filter_timestamps(close, timestamps, mean_windo
       {
         title: "CUSUM with static and dynamic thresholds",
         language: "rust",
-        code: `use openquant::filters::{cusum_filter_indices, cusum_filter_indices_checked, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\n\n// Static threshold\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02));\n\n// Dynamic threshold (e.g. volatility-scaled per bar)\nlet dynamic_h = vec![0.02, 0.025, 0.018, 0.022];\nlet idx = cusum_filter_indices_checked(&close, Threshold::Dynamic(dynamic_h)).unwrap();`,
+        code: `use openquant::filters::{cusum_filter_indices, Threshold};\n\nlet close = vec![100.0, 100.1, 99.9, 100.2];\n\n// Static threshold\nlet idx = cusum_filter_indices(&close, Threshold::Scalar(0.02))?;\n\n// Dynamic threshold (e.g. volatility-scaled per bar)\nlet dynamic_h = vec![0.02, 0.025, 0.018, 0.022];\nlet idx = cusum_filter_indices(&close, Threshold::Dynamic(dynamic_h))?;`,
       },
     ],
     notes: [
       "Calibrate thresholds to target event frequency, not just sensitivity.",
       "Use identical filtering in train and live pipelines.",
       "Rust API supports dynamic (per-bar) thresholds via Threshold::Dynamic; Python bindings accept only a scalar threshold.",
-      "Rust _checked variants return Result<..., FilterError> for input validation; Python raises exceptions.",
+      "The CUSUM filters and the timestamp variants return Result<..., FilterError>: a dynamic threshold shorter than the series, or too few timestamps, is an error. Python raises ValueError.",
     ],
     conceptOverview: `Instead of sampling at fixed intervals, AFML Chapter 2 uses structural event filters to detect when something meaningful happens in the price process. This produces training examples that correspond to real market inflection points rather than arbitrary calendar dates.
 
@@ -908,7 +908,7 @@ meta_labels = labeling.meta_labels(
       {
         title: "End-to-end: Event Filter -> Vertical Barrier -> Triple Barrier Labels",
         language: "rust",
-        code: `use chrono::NaiveDateTime;\nuse openquant::filters::{cusum_filter_timestamps, Threshold};\nuse openquant::labeling::{add_vertical_barrier, get_events, get_bins};\nuse openquant::util::volatility::get_daily_vol;\n\n// 1) price series and timestamps\nlet close: Vec<(NaiveDateTime, f64)> = /* load bars */ vec![];\nlet prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();\nlet ts: Vec<NaiveDateTime> = close.iter().map(|(t, _)| *t).collect();\n\n// 2) detect candidate events via CUSUM filter\nlet events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02));\n\n// 3) estimate target volatility and add max-holding horizon\nlet target = get_daily_vol(&close, 100);\nlet vbars = add_vertical_barrier(&events, &close, 1, 0, 0, 0);\n\n// 4) compute barrier touches and labels\nlet ev = get_events(&close, &events, (1.0, 1.0), &target, 0.005, 3, Some(&vbars), None);\nlet bins = get_bins(&ev, &close);\nassert!(!bins.is_empty());`,
+        code: `use chrono::NaiveDateTime;\nuse openquant::filters::{cusum_filter_timestamps, Threshold};\nuse openquant::labeling::{add_vertical_barrier, get_events, get_bins};\nuse openquant::util::volatility::get_daily_vol;\n\n// 1) price series and timestamps\nlet close: Vec<(NaiveDateTime, f64)> = /* load bars */ vec![];\nlet prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();\nlet ts: Vec<NaiveDateTime> = close.iter().map(|(t, _)| *t).collect();\n\n// 2) detect candidate events via CUSUM filter\nlet events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02))?;\n\n// 3) estimate target volatility and add max-holding horizon\nlet target = get_daily_vol(&close, 100);\nlet vbars = add_vertical_barrier(&events, &close, 1, 0, 0, 0);\n\n// 4) compute barrier touches and labels\nlet ev = get_events(&close, &events, (1.0, 1.0), &target, 0.005, 3, Some(&vbars), None);\nlet bins = get_bins(&ev, &close);\nassert!(!bins.is_empty());`,
       },
       {
         title: "Meta-Labeling Workflow with Side Signal",
@@ -985,12 +985,12 @@ Barrier widths are scaled by a volatility target (typically EWMA of returns), ma
       {
         title: "End-to-end: Build Core Liquidity Feature Panel",
         language: "rust",
-        code: `use openquant::microstructural_features::{\n    get_roll_measure,\n    get_corwin_schultz_estimator,\n    get_bar_based_kyle_lambda,\n    get_bar_based_amihud_lambda,\n    get_vpin,\n};\n\n// 1) Inputs from bar construction\nlet close = vec![100.0, 100.2, 100.1, 100.3, 100.25, 100.4];\nlet high = vec![100.1, 100.25, 100.2, 100.35, 100.3, 100.45];\nlet low = vec![99.9, 100.0, 99.95, 100.1, 100.05, 100.2];\nlet volume = vec![1000.0, 1200.0, 900.0, 1100.0, 1300.0, 1250.0];\nlet dollar_volume: Vec<f64> = close.iter().zip(volume.iter()).map(|(p, v)| p * v).collect();\nlet buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];\n\n// 2) Liquidity and spread proxies\nlet roll = get_roll_measure(&close, 3);\nlet cs_spread = get_corwin_schultz_estimator(&high, &low, 3);\nlet kyle = get_bar_based_kyle_lambda(&close, &volume, 3);\nlet amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3);\nlet vpin = get_vpin(&volume, &buy_volume, 3);\n\n// 3) Feature panel is ready for regime model / execution model\nassert_eq!(roll.len(), close.len());\nassert_eq!(vpin.len(), close.len());`,
+        code: `use openquant::microstructural_features::{\n    get_roll_measure,\n    get_corwin_schultz_estimator,\n    get_bar_based_kyle_lambda,\n    get_bar_based_amihud_lambda,\n    get_vpin,\n};\n\n// 1) Inputs from bar construction\nlet close = vec![100.0, 100.2, 100.1, 100.3, 100.25, 100.4];\nlet high = vec![100.1, 100.25, 100.2, 100.35, 100.3, 100.45];\nlet low = vec![99.9, 100.0, 99.95, 100.1, 100.05, 100.2];\nlet volume = vec![1000.0, 1200.0, 900.0, 1100.0, 1300.0, 1250.0];\nlet dollar_volume: Vec<f64> = close.iter().zip(volume.iter()).map(|(p, v)| p * v).collect();\nlet buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];\n\n// 2) Liquidity and spread proxies\nlet roll = get_roll_measure(&close, 3);\nlet cs_spread = get_corwin_schultz_estimator(&high, &low, 3)?;\nlet kyle = get_bar_based_kyle_lambda(&close, &volume, 3)?;\nlet amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3)?;\nlet vpin = get_vpin(&volume, &buy_volume, 3)?;\n\n// 3) Feature panel is ready for regime model / execution model\nassert_eq!(roll.len(), close.len());\nassert_eq!(vpin.len(), close.len());`,
       },
       {
         title: "From Encoded Tick Signs to Entropy Features",
         language: "rust",
-        code: `use openquant::microstructural_features::{\n    encode_tick_rule_array,\n    get_shannon_entropy,\n    get_lempel_ziv_entropy,\n    get_plug_in_entropy,\n};\n\nlet tick_rule = vec![1, 1, -1, -1, 1, -1, 1, 1, 1, -1];\nlet msg = encode_tick_rule_array(&tick_rule)?;\n\nlet h_shannon = get_shannon_entropy(&msg);\nlet h_lz = get_lempel_ziv_entropy(&msg);\nlet h_plugin = get_plug_in_entropy(&msg, 2);\n\nassert!(h_shannon.is_finite());\nassert!(h_lz.is_finite());\nassert!(h_plugin.is_finite());`,
+        code: `use openquant::microstructural_features::{\n    encode_tick_rule_array,\n    get_shannon_entropy,\n    get_lempel_ziv_entropy,\n    get_plug_in_entropy,\n};\n\nlet tick_rule = vec![1, 1, -1, -1, 1, -1, 1, 1, 1, -1];\nlet msg = encode_tick_rule_array(&tick_rule)?;\n\nlet h_shannon = get_shannon_entropy(&msg);\nlet h_lz = get_lempel_ziv_entropy(&msg);\nlet h_plugin = get_plug_in_entropy(&msg, 2)?;\n\nassert!(h_shannon.is_finite());\nassert!(h_lz.is_finite());\nassert!(h_plugin.is_finite());`,
       },
     ],
     notes: [
@@ -1429,7 +1429,7 @@ drawn_indices = sampling.seq_bootstrap(ind_matrix, sample_length=3)
       {
         title: "Run sequential bootstrap",
         language: "rust",
-        code: `use openquant::sampling::seq_bootstrap;\n\nlet ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];\nlet idx = seq_bootstrap(&ind, Some(3), None);`,
+        code: `use openquant::sampling::seq_bootstrap;\n\nlet ind = vec![vec![1,0,1], vec![0,1,1], vec![1,1,0]];\nlet idx = seq_bootstrap(&ind, Some(3), None)?;`,
       },
     ],
     notes: ["Indicator matrix quality drives bootstrap quality.", "Use average uniqueness as a diagnostics KPI."],
@@ -1589,7 +1589,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute EWMA vector",
         language: "rust",
-        code: `use openquant::util::fast_ewma::ewma;\n\nlet x = vec![1.0, 2.0, 3.0, 4.0];\nlet y = ewma(&x, 3);`,
+        code: `use openquant::util::fast_ewma::ewma;\n\nlet x = vec![1.0, 2.0, 3.0, 4.0];\nlet y = ewma(&x, 3)?;`,
       },
     ],
     notes: ["Window length controls responsiveness vs smoothness.", "Prefer this helper over ad-hoc loops for consistency."],
@@ -1624,7 +1624,7 @@ The result is a bootstrap sample where the drawn labels are as independent as po
       {
         title: "Compute daily and range-based volatility",
         language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::util::volatility::{get_daily_vol, get_parkinson_vol};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet close: Vec<(NaiveDateTime, f64)> = (0..300)\n    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))\n    .collect();\nlet high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();\nlet low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();\n\n// Close-to-close EWMA vol on a timestamped series; \`lookback\` is the EWMA span.\nlet daily = get_daily_vol(&close, 100);\n// Parkinson uses the high/low range, so it needs no timestamps — \`window\` bars.\nlet parkinson = get_parkinson_vol(&high, &low, 20);\n\nprintln!("daily vol tail = {:?}", daily.last());\nprintln!("parkinson vol tail = {:?}", parkinson.last());`,
+        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::util::volatility::{get_daily_vol, get_parkinson_vol};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet close: Vec<(NaiveDateTime, f64)> = (0..300)\n    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))\n    .collect();\nlet high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();\nlet low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();\n\n// Close-to-close EWMA vol on a timestamped series; \`lookback\` is the EWMA span.\nlet daily = get_daily_vol(&close, 100);\n// Parkinson uses the high/low range, so it needs no timestamps — \`window\` bars.\nlet parkinson = get_parkinson_vol(&high, &low, 20)?;\n\nprintln!("daily vol tail = {:?}", daily.last());\nprintln!("parkinson vol tail = {:?}", parkinson.last());`,
       },
     ],
     notes: ["Choose estimator based on available fields and microstructure noise.", "Daily-vol lookback should be matched to event horizon."],

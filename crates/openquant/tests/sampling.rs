@@ -45,7 +45,7 @@ fn test_num_concurrent_events() {
 #[test]
 fn test_get_av_uniqueness() {
     let (price_bars, t1) = setup_labels();
-    let av = get_av_uniqueness_from_triple_barrier(&t1, price_bars.len());
+    let av = get_av_uniqueness_from_triple_barrier(&t1, price_bars.len()).unwrap();
     assert_eq!(av.len(), t1.len());
     assert!((av[0] - 0.66).abs() < 1e-2);
     assert!((av[2] - 0.83).abs() < 1e-2);
@@ -68,7 +68,7 @@ fn test_seq_bootstrap_and_ind_matrix() {
     bar_index.sort();
     bar_index.dedup();
 
-    let ind_mat = get_ind_matrix(&t1, &bar_index);
+    let ind_mat = get_ind_matrix(&t1, &bar_index).unwrap();
     let book_ind = book_ind_mat(&bar_index, &t1);
     assert_eq!(ind_mat, book_ind);
     assert_eq!(ind_mat.len(), 22);
@@ -77,9 +77,9 @@ fn test_seq_bootstrap_and_ind_matrix() {
     assert_eq!(ind_mat[4][2], 1);
     assert_eq!(ind_mat[14][6], 0);
 
-    let boot = seq_bootstrap(&ind_mat, None, None);
+    let boot = seq_bootstrap(&ind_mat, None, None).unwrap();
     assert_eq!(boot.len(), t1.len());
-    let boot2 = seq_bootstrap(&ind_mat, Some(100), None);
+    let boot2 = seq_bootstrap(&ind_mat, Some(100), None).unwrap();
     assert_eq!(boot2.len(), 100);
 
     // Book example
@@ -90,24 +90,30 @@ fn test_seq_bootstrap_and_ind_matrix() {
     ind[3] = vec![0, 1, 0];
     ind[4] = vec![0, 0, 1];
     ind[5] = vec![0, 0, 1];
-    let _ = seq_bootstrap(&ind, Some(3), Some(vec![1]));
+    let _ = seq_bootstrap(&ind, Some(3), Some(vec![1])).unwrap();
 
     // Monte Carlo uniqueness comparison
     let mut standard_unq = Vec::new();
     let mut seq_unq = Vec::new();
     for _ in 0..100 {
-        let boot_samp = seq_bootstrap(&ind, Some(3), None);
+        let boot_samp = seq_bootstrap(&ind, Some(3), None).unwrap();
         let random_samp: Vec<usize> = (0..3).map(|_| rand::random::<usize>() % 3).collect();
-        standard_unq.push(get_ind_mat_average_uniqueness(
-            &ind.iter()
-                .map(|row| random_samp.iter().map(|c| row[*c]).collect())
-                .collect::<Vec<Vec<u8>>>(),
-        ));
-        seq_unq.push(get_ind_mat_average_uniqueness(
-            &ind.iter()
-                .map(|row| boot_samp.iter().map(|c| row[*c]).collect())
-                .collect::<Vec<Vec<u8>>>(),
-        ));
+        standard_unq.push(
+            get_ind_mat_average_uniqueness(
+                &ind.iter()
+                    .map(|row| random_samp.iter().map(|c| row[*c]).collect())
+                    .collect::<Vec<Vec<u8>>>(),
+            )
+            .unwrap(),
+        );
+        seq_unq.push(
+            get_ind_mat_average_uniqueness(
+                &ind.iter()
+                    .map(|row| boot_samp.iter().map(|c| row[*c]).collect())
+                    .collect::<Vec<Vec<u8>>>(),
+            )
+            .unwrap(),
+        );
     }
     let avg_seq = seq_unq.iter().sum::<f64>() / seq_unq.len() as f64;
     let avg_std = standard_unq.iter().sum::<f64>() / standard_unq.len() as f64;
@@ -123,8 +129,8 @@ fn test_get_ind_mat_uniqueness() {
     ind[3] = vec![0, 1, 0];
     ind[4] = vec![0, 0, 1];
     ind[5] = vec![0, 0, 1];
-    let uniq = get_ind_mat_label_uniqueness(&ind);
-    let avg = get_ind_mat_average_uniqueness(&ind);
+    let uniq = get_ind_mat_label_uniqueness(&ind).unwrap();
+    let avg = get_ind_mat_average_uniqueness(&ind).unwrap();
     assert!(
         (uniq[0].iter().filter(|v| **v > 0.0).sum::<f64>()
             / uniq[0].iter().filter(|v| **v > 0.0).count() as f64
@@ -159,12 +165,12 @@ fn test_bootstrap_loop_run() {
     ind[4] = vec![0, 0, 1];
     ind[5] = vec![0, 0, 1];
     let mut prev_conc = vec![0.0; ind.len()];
-    let first = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc);
+    let first = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc).unwrap();
     assert_eq!(first, vec![1.0, 1.0, 1.0]);
     for i in 0..ind.len() {
         prev_conc[i] += ind[i][1] as f64;
     }
-    let second = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc);
+    let second = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc).unwrap();
     let sum: f64 = second.iter().sum();
     let probs: Vec<f64> = second.iter().map(|v| *v / sum).collect();
     let target = [0.35714286, 0.21428571, 0.42857143];
@@ -181,6 +187,6 @@ fn test_value_error_raise() {
     bad.push((9999, 1));
     // should panic or error
     let bar_index: Vec<usize> = (0..10).collect();
-    let res = std::panic::catch_unwind(|| get_ind_matrix(&bad, &bar_index));
+    let res = std::panic::catch_unwind(|| get_ind_matrix(&bad, &bar_index).unwrap());
     assert!(res.is_err());
 }

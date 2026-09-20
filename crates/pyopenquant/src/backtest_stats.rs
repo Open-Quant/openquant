@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{format_naive_datetimes, pair_timestamps_values};
+use crate::helpers::{format_naive_datetimes, input_err, pair_timestamps_values};
 
 #[pyfunction(name = "sharpe_ratio")]
 fn bs_sharpe_ratio(returns: Vec<f64>, entries_per_year: f64, risk_free_rate: f64) -> f64 {
@@ -47,7 +47,7 @@ fn bs_deflated_sharpe_ratio(
     kurtosis: f64,
     estimates_param: bool,
     benchmark_out: bool,
-) -> f64 {
+) -> PyResult<f64> {
     openquant::backtest_statistics::deflated_sharpe_ratio(
         observed_sr,
         &sr_estimates,
@@ -57,6 +57,7 @@ fn bs_deflated_sharpe_ratio(
         estimates_param,
         benchmark_out,
     )
+    .map_err(input_err)
 }
 
 #[pyfunction(name = "minimum_track_record_length")]
@@ -66,7 +67,7 @@ fn bs_minimum_track_record_length(
     skewness: f64,
     kurtosis: f64,
     alpha: f64,
-) -> f64 {
+) -> PyResult<f64> {
     openquant::backtest_statistics::minimum_track_record_length(
         observed_sr,
         benchmark_sr,
@@ -74,6 +75,7 @@ fn bs_minimum_track_record_length(
         kurtosis,
         alpha,
     )
+    .map_err(input_err)
 }
 
 #[pyfunction(name = "timing_of_flattening_and_flips")]

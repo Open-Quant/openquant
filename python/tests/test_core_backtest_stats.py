@@ -99,13 +99,6 @@ def test_backtest_stats_rejects_bad_timestamp_inputs():
         backtest_stats.drawdown_and_time_under_water(["2000-01-01"], [1.0])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: deflated_sharpe_ratio with no SR estimates panics "
-        "(pyo3 PanicException 'x must be in [0, 1]') instead of ValueError"
-    ),
-)
 def test_deflated_sharpe_ratio_without_estimates_raises_value_error():
     with pytest.raises(ValueError):
         backtest_stats.deflated_sharpe_ratio(1.14, [], 250, 0.0, 3.0)
