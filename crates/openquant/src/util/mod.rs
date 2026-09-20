@@ -1,5 +1,5 @@
 pub mod fast_ewma;
-pub(crate) mod input_error;
+pub mod input_error;
 pub(crate) mod qp;
 pub mod volatility;
 
