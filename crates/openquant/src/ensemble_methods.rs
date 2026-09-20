@@ -12,6 +12,30 @@ use rand::{Rng, SeedableRng};
 
 use crate::sampling::seq_bootstrap;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum EnsembleError {
+    #[error(transparent)]
+    Input(#[from] crate::util::InputError),
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("{0} length mismatch")]
+    LengthMismatch(&'static str),
+    #[error("n_samples and sample_size must be > 0")]
+    ZeroSampleCount,
+    #[error("{name} must be {requirement}")]
+    Invalid { name: &'static str, requirement: &'static str },
+    #[error("ind_mat must include at least one label column")]
+    NoLabelColumns,
+    #[error("prediction rows cannot be empty")]
+    EmptyPredictionRows,
+    #[error("classification vote expects binary labels in {{0,1}}")]
+    NonBinaryLabels,
+    #[error("at least two model prediction rows are required")]
+    TooFewModels,
+    #[error("prediction rows must have at least two samples")]
+    TooFewPredictionSamples,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnsembleMethod {
     Bagging,
@@ -36,15 +60,15 @@ pub struct BaggingBoostingDecision {
 pub fn bias_variance_noise(
     y_true: &[f64],
     per_model_predictions: &[Vec<f64>],
-) -> Result<BiasVarianceNoise, String> {
+) -> Result<BiasVarianceNoise, EnsembleError> {
     if y_true.is_empty() {
-        return Err("y_true cannot be empty".to_string());
+        return Err(EnsembleError::Empty("y_true"));
     }
     if per_model_predictions.is_empty() {
-        return Err("per_model_predictions cannot be empty".to_string());
+        return Err(EnsembleError::Empty("per_model_predictions"));
     }
     if per_model_predictions.iter().any(|row| row.len() != y_true.len()) {
-        return Err("prediction length mismatch".to_string());
+        return Err(EnsembleError::LengthMismatch("prediction"));
     }
 
     let n_models = per_model_predictions.len() as f64;
@@ -87,9 +111,9 @@ pub fn bootstrap_sample_indices(
     n_samples: usize,
     sample_size: usize,
     seed: u64,
-) -> Result<Vec<usize>, String> {
+) -> Result<Vec<usize>, EnsembleError> {
     if n_samples == 0 || sample_size == 0 {
-        return Err("n_samples and sample_size must be > 0".to_string());
+        return Err(EnsembleError::ZeroSampleCount);
     }
     let mut rng = StdRng::seed_from_u64(seed);
     Ok((0..sample_size).map(|_| rng.gen_range(0..n_samples)).collect())
@@ -99,33 +123,35 @@ pub fn sequential_bootstrap_sample_indices(
     ind_mat: &[Vec<u8>],
     sample_size: usize,
     seed: u64,
-) -> Result<Vec<usize>, String> {
+) -> Result<Vec<usize>, EnsembleError> {
     if sample_size == 0 {
-        return Err("sample_size must be > 0".to_string());
+        return Err(EnsembleError::Invalid { name: "sample_size", requirement: "> 0" });
     }
     if ind_mat.is_empty() {
-        return Err("ind_mat cannot be empty".to_string());
+        return Err(EnsembleError::Empty("ind_mat"));
     }
     let n_labels = ind_mat.first().map(|r| r.len()).unwrap_or(0);
     if n_labels == 0 {
-        return Err("ind_mat must include at least one label column".to_string());
+        return Err(EnsembleError::NoLabelColumns);
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
     let warmup: Vec<usize> = (0..sample_size).map(|_| rng.gen_range(0..n_labels)).collect();
-    seq_bootstrap(ind_mat, Some(sample_size), Some(warmup)).map_err(|err| err.to_string())
+    Ok(seq_bootstrap(ind_mat, Some(sample_size), Some(warmup))?)
 }
 
-pub fn aggregate_regression_mean(per_model_predictions: &[Vec<f64>]) -> Result<Vec<f64>, String> {
+pub fn aggregate_regression_mean(
+    per_model_predictions: &[Vec<f64>],
+) -> Result<Vec<f64>, EnsembleError> {
     if per_model_predictions.is_empty() {
-        return Err("per_model_predictions cannot be empty".to_string());
+        return Err(EnsembleError::Empty("per_model_predictions"));
     }
     let n = per_model_predictions[0].len();
     if n == 0 {
-        return Err("prediction rows cannot be empty".to_string());
+        return Err(EnsembleError::EmptyPredictionRows);
     }
     if per_model_predictions.iter().any(|row| row.len() != n) {
-        return Err("prediction length mismatch".to_string());
+        return Err(EnsembleError::LengthMismatch("prediction"));
     }
 
     let mut out = vec![0.0; n];
@@ -141,19 +167,21 @@ pub fn aggregate_regression_mean(per_model_predictions: &[Vec<f64>]) -> Result<V
     Ok(out)
 }
 
-pub fn aggregate_classification_vote(per_model_predictions: &[Vec<u8>]) -> Result<Vec<u8>, String> {
+pub fn aggregate_classification_vote(
+    per_model_predictions: &[Vec<u8>],
+) -> Result<Vec<u8>, EnsembleError> {
     if per_model_predictions.is_empty() {
-        return Err("per_model_predictions cannot be empty".to_string());
+        return Err(EnsembleError::Empty("per_model_predictions"));
     }
     let n = per_model_predictions[0].len();
     if n == 0 {
-        return Err("prediction rows cannot be empty".to_string());
+        return Err(EnsembleError::EmptyPredictionRows);
     }
     if per_model_predictions.iter().any(|row| row.len() != n) {
-        return Err("prediction length mismatch".to_string());
+        return Err(EnsembleError::LengthMismatch("prediction"));
     }
     if per_model_predictions.iter().flat_map(|row| row.iter()).any(|label| *label > 1) {
-        return Err("classification vote expects binary labels in {0,1}".to_string());
+        return Err(EnsembleError::NonBinaryLabels);
     }
 
     let mut out = vec![0u8; n];
@@ -167,13 +195,13 @@ pub fn aggregate_classification_vote(per_model_predictions: &[Vec<u8>]) -> Resul
 pub fn aggregate_classification_probability_mean(
     per_model_probabilities: &[Vec<f64>],
     threshold: f64,
-) -> Result<(Vec<f64>, Vec<u8>), String> {
+) -> Result<(Vec<f64>, Vec<u8>), EnsembleError> {
     if !(0.0..=1.0).contains(&threshold) {
-        return Err("threshold must be in [0,1]".to_string());
+        return Err(EnsembleError::Invalid { name: "threshold", requirement: "in [0,1]" });
     }
     let probs = aggregate_regression_mean(per_model_probabilities)?;
     if probs.iter().any(|p| !(0.0..=1.0).contains(p)) {
-        return Err("probabilities must be in [0,1]".to_string());
+        return Err(EnsembleError::Invalid { name: "probabilities", requirement: "in [0,1]" });
     }
     let labels = probs.iter().map(|p| if *p >= threshold { 1 } else { 0 }).collect();
     Ok((probs, labels))
@@ -181,16 +209,16 @@ pub fn aggregate_classification_probability_mean(
 
 pub fn average_pairwise_prediction_correlation(
     per_model_predictions: &[Vec<f64>],
-) -> Result<f64, String> {
+) -> Result<f64, EnsembleError> {
     if per_model_predictions.len() < 2 {
-        return Err("at least two model prediction rows are required".to_string());
+        return Err(EnsembleError::TooFewModels);
     }
     let n = per_model_predictions[0].len();
     if n < 2 {
-        return Err("prediction rows must have at least two samples".to_string());
+        return Err(EnsembleError::TooFewPredictionSamples);
     }
     if per_model_predictions.iter().any(|row| row.len() != n) {
-        return Err("prediction length mismatch".to_string());
+        return Err(EnsembleError::LengthMismatch("prediction"));
     }
 
     let mut corr_sum = 0.0;
@@ -208,15 +236,21 @@ pub fn bagging_ensemble_variance(
     single_estimator_variance: f64,
     average_correlation: f64,
     n_estimators: usize,
-) -> Result<f64, String> {
+) -> Result<f64, EnsembleError> {
     if single_estimator_variance < 0.0 {
-        return Err("single_estimator_variance must be non-negative".to_string());
+        return Err(EnsembleError::Invalid {
+            name: "single_estimator_variance",
+            requirement: "non-negative",
+        });
     }
     if !(-1.0..=1.0).contains(&average_correlation) {
-        return Err("average_correlation must be in [-1,1]".to_string());
+        return Err(EnsembleError::Invalid {
+            name: "average_correlation",
+            requirement: "in [-1,1]",
+        });
     }
     if n_estimators == 0 {
-        return Err("n_estimators must be > 0".to_string());
+        return Err(EnsembleError::Invalid { name: "n_estimators", requirement: "> 0" });
     }
 
     let n = n_estimators as f64;
@@ -230,12 +264,15 @@ pub fn recommend_bagging_vs_boosting(
     label_redundancy: f64,
     single_estimator_variance: f64,
     n_estimators: usize,
-) -> Result<BaggingBoostingDecision, String> {
+) -> Result<BaggingBoostingDecision, EnsembleError> {
     if !(0.0..=1.0).contains(&base_estimator_accuracy) {
-        return Err("base_estimator_accuracy must be in [0,1]".to_string());
+        return Err(EnsembleError::Invalid {
+            name: "base_estimator_accuracy",
+            requirement: "in [0,1]",
+        });
     }
     if !(0.0..=1.0).contains(&label_redundancy) {
-        return Err("label_redundancy must be in [0,1]".to_string());
+        return Err(EnsembleError::Invalid { name: "label_redundancy", requirement: "in [0,1]" });
     }
     let bag_var = bagging_ensemble_variance(
         single_estimator_variance,

@@ -73,9 +73,9 @@ def test_onc_output_is_a_consistent_reordering_of_the_input():
 
 
 def test_onc_rejects_invalid_inputs():
-    with pytest.raises(ValueError, match="InvalidRepeat"):
+    with pytest.raises(ValueError, match="repeat must be positive"):
         onc.get_onc_clusters(_block_correlation(6, 3), 0)
-    with pytest.raises(ValueError, match="InvalidCorrelationMatrix"):
+    with pytest.raises(ValueError, match="correlation matrix must be square"):
         onc.get_onc_clusters([[1.0, 0.5, 0.2], [0.5, 1.0, 0.1]], 5)
     with pytest.raises(ValueError, match="rectangular"):
         onc.get_onc_clusters([[1.0, 0.5], [0.5]], 5)

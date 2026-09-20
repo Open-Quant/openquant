@@ -49,9 +49,9 @@ def test_cla_efficient_frontier_shapes():
 
 def test_cla_rejects_invalid_inputs():
     # Mirrors the error cases of crates/openquant/tests/cla.rs
-    with pytest.raises(ValueError, match="MissingInputs"):
+    with pytest.raises(ValueError, match="supply asset prices"):
         cla.allocate_cla()
-    with pytest.raises(ValueError, match="UnknownSolution"):
+    with pytest.raises(ValueError, match="unknown solution"):
         cla.allocate_cla(expected_returns=MU, covariance_matrix=COV, solution="rubbish")
     with pytest.raises(ValueError, match="rectangular"):
         cla.allocate_cla(expected_returns=MU, covariance_matrix=[[0.04, 0.006], [0.006]])

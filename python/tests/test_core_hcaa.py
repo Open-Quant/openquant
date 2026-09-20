@@ -73,18 +73,18 @@ def test_hcaa_rejects_invalid_inputs():
     # test_value_error_for_allocation_metric, test_value_error_for_unknown_returns and
     # test_value_error_for_sharpe_ratio_without_prices_or_expected
     prices, names = _load_prices_and_names()
-    with pytest.raises(ValueError, match="NoData"):
+    with pytest.raises(ValueError, match="no data"):
         hcaa.allocate_hcaa(names)
-    with pytest.raises(ValueError, match="UnknownAllocationMetric"):
+    with pytest.raises(ValueError, match="unknown allocation metric"):
         hcaa.allocate_hcaa(names, asset_prices=prices, allocation_metric="random_metric")
-    with pytest.raises(ValueError, match="UnknownReturns"):
+    with pytest.raises(ValueError, match="unknown returns method"):
         hcaa.allocate_hcaa(
             names,
             asset_prices=prices,
             allocation_metric="sharpe_ratio",
             calculate_expected_returns="unknown_returns",
         )
-    with pytest.raises(ValueError, match="MissingExpectedReturnsForSharpe"):
+    with pytest.raises(ValueError, match="needs expected returns"):
         hcaa.allocate_hcaa(["a", "b"], covariance_matrix=COV_2, allocation_metric="sharpe_ratio")
 
 

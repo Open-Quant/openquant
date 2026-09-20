@@ -4,7 +4,7 @@ use openquant::data_structures::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use crate::helpers::{bars_to_rows, build_trades, input_err, BarRow};
+use crate::helpers::{bars_to_rows, build_trades, to_py_err, BarRow};
 
 #[pyfunction(name = "build_time_bars")]
 fn bars_build_time_bars(
@@ -18,7 +18,7 @@ fn bars_build_time_bars(
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
-        time_bars(&trades, chrono::Duration::seconds(interval_seconds)).map_err(input_err)?;
+        time_bars(&trades, chrono::Duration::seconds(interval_seconds)).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 
@@ -34,7 +34,7 @@ fn bars_build_tick_bars(
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
-        standard_bars(&trades, ticks_per_bar as f64, StandardBarType::Tick).map_err(input_err)?;
+        standard_bars(&trades, ticks_per_bar as f64, StandardBarType::Tick).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 
@@ -50,7 +50,7 @@ fn bars_build_volume_bars(
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
-        standard_bars(&trades, volume_per_bar, StandardBarType::Volume).map_err(input_err)?;
+        standard_bars(&trades, volume_per_bar, StandardBarType::Volume).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 
@@ -66,7 +66,7 @@ fn bars_build_dollar_bars(
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
-        standard_bars(&trades, dollar_value_per_bar, StandardBarType::Dollar).map_err(input_err)?;
+        standard_bars(&trades, dollar_value_per_bar, StandardBarType::Dollar).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 
@@ -81,7 +81,7 @@ fn bars_build_run_bars(
         return Err(PyValueError::new_err("threshold must be > 0"));
     }
     let trades = build_trades(timestamps, prices, volumes)?;
-    let bars = run_bars(&trades, threshold).map_err(input_err)?;
+    let bars = run_bars(&trades, threshold).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 
@@ -103,7 +103,7 @@ fn bars_build_imbalance_bars(
         _ => return Err(PyValueError::new_err("bar_type must be 'tick', 'volume', or 'dollar'")),
     };
     let trades = build_trades(timestamps, prices, volumes)?;
-    let bars = imbalance_bars(&trades, threshold, bt).map_err(input_err)?;
+    let bars = imbalance_bars(&trades, threshold, bt).map_err(to_py_err)?;
     Ok(bars_to_rows(bars))
 }
 

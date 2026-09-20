@@ -1,5 +1,15 @@
 use chrono::NaiveDateTime;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum CrossValidationError {
+    #[error("n_splits must be between 2 and the number of samples ({n_samples}), got {n_splits}")]
+    InvalidSplits { n_splits: usize, n_samples: usize },
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("Dataset length must match samples_info_sets")]
+    DatasetLengthMismatch,
+}
+
 /// Simple classifier interface for cross-validation.
 pub trait SimpleClassifier {
     fn fit(&mut self, x: &[Vec<f64>], y: &[f64], sample_weight: Option<&[f64]>);
@@ -122,22 +132,22 @@ impl PurgedKFold {
         n_splits: usize,
         samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)>,
         pct_embargo: f64,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, CrossValidationError> {
         if samples_info_sets.is_empty() {
-            return Err("samples_info_sets cannot be empty".into());
+            return Err(CrossValidationError::Empty("samples_info_sets"));
         }
         if n_splits < 2 || n_splits > samples_info_sets.len() {
-            return Err(format!(
-                "n_splits must be between 2 and the number of samples ({}), got {n_splits}",
-                samples_info_sets.len()
-            ));
+            return Err(CrossValidationError::InvalidSplits {
+                n_splits,
+                n_samples: samples_info_sets.len(),
+            });
         }
         Ok(Self { n_splits, samples_info_sets, pct_embargo })
     }
 
-    pub fn split(&self, n_samples: usize) -> Result<Vec<TrainTestSplit>, String> {
+    pub fn split(&self, n_samples: usize) -> Result<Vec<TrainTestSplit>, CrossValidationError> {
         if n_samples != self.samples_info_sets.len() {
-            return Err("Dataset length must match samples_info_sets".into());
+            return Err(CrossValidationError::DatasetLengthMismatch);
         }
         let n = n_samples;
         let mut fold_sizes = vec![n / self.n_splits; self.n_splits];

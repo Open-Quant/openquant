@@ -1,5 +1,19 @@
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum FingerprintError {
+    #[error("fit must be called before get_effects")]
+    NotFitted,
+    #[error("{0} cannot be empty")]
+    Empty(&'static str),
+    #[error("{name} must be {requirement}")]
+    Invalid { name: &'static str, requirement: &'static str },
+    #[error("x must have at least one feature")]
+    NoFeatures,
+    #[error("ragged x rows")]
+    RaggedX,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Effect {
     pub raw: BTreeMap<usize, f64>,
@@ -45,7 +59,7 @@ impl RegressionModelFingerprint {
         x: &[Vec<f64>],
         num_values: usize,
         pairwise_combinations: Option<&[(usize, usize)]>,
-    ) -> Result<(), String> {
+    ) -> Result<(), FingerprintError> {
         let (lin, nonlin, pair) =
             fit_impl(|data| model.predict(data), x, num_values, pairwise_combinations)?;
         self.linear_effect = Some(lin);
@@ -54,19 +68,15 @@ impl RegressionModelFingerprint {
         Ok(())
     }
 
-    pub fn get_effects(&self) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), String> {
-        let lin = self
-            .linear_effect
-            .as_ref()
-            .ok_or_else(|| "fit must be called before get_effects".to_string())?;
-        let nonlin = self
-            .non_linear_effect
-            .as_ref()
-            .ok_or_else(|| "fit must be called before get_effects".to_string())?;
+    pub fn get_effects(
+        &self,
+    ) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), FingerprintError> {
+        let lin = self.linear_effect.as_ref().ok_or(FingerprintError::NotFitted)?;
+        let nonlin = self.non_linear_effect.as_ref().ok_or(FingerprintError::NotFitted)?;
         Ok((lin, nonlin, self.pair_wise_effect.as_ref()))
     }
 
-    pub fn plot_effects(&self) -> Result<Vec<String>, String> {
+    pub fn plot_effects(&self) -> Result<Vec<String>, FingerprintError> {
         let (lin, nonlin, pair) = self.get_effects()?;
         let mut lines = vec![
             format!("linear:{} features", lin.raw.len()),
@@ -90,7 +100,7 @@ impl ClassificationModelFingerprint {
         x: &[Vec<f64>],
         num_values: usize,
         pairwise_combinations: Option<&[(usize, usize)]>,
-    ) -> Result<(), String> {
+    ) -> Result<(), FingerprintError> {
         let (lin, nonlin, pair) =
             fit_impl(|data| model.predict_proba(data), x, num_values, pairwise_combinations)?;
         self.linear_effect = Some(lin);
@@ -99,19 +109,15 @@ impl ClassificationModelFingerprint {
         Ok(())
     }
 
-    pub fn get_effects(&self) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), String> {
-        let lin = self
-            .linear_effect
-            .as_ref()
-            .ok_or_else(|| "fit must be called before get_effects".to_string())?;
-        let nonlin = self
-            .non_linear_effect
-            .as_ref()
-            .ok_or_else(|| "fit must be called before get_effects".to_string())?;
+    pub fn get_effects(
+        &self,
+    ) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), FingerprintError> {
+        let lin = self.linear_effect.as_ref().ok_or(FingerprintError::NotFitted)?;
+        let nonlin = self.non_linear_effect.as_ref().ok_or(FingerprintError::NotFitted)?;
         Ok((lin, nonlin, self.pair_wise_effect.as_ref()))
     }
 
-    pub fn plot_effects(&self) -> Result<Vec<String>, String> {
+    pub fn plot_effects(&self) -> Result<Vec<String>, FingerprintError> {
         let (lin, nonlin, pair) = self.get_effects()?;
         let mut lines = vec![
             format!("linear:{} features", lin.raw.len()),
@@ -129,22 +135,22 @@ fn fit_impl<F>(
     x: &[Vec<f64>],
     num_values: usize,
     pairwise_combinations: Option<&[(usize, usize)]>,
-) -> Result<(Effect, Effect, Option<PairwiseEffect>), String>
+) -> Result<(Effect, Effect, Option<PairwiseEffect>), FingerprintError>
 where
     F: Fn(&[Vec<f64>]) -> Vec<f64>,
 {
     if x.is_empty() {
-        return Err("x cannot be empty".to_string());
+        return Err(FingerprintError::Empty("x"));
     }
     if num_values < 2 {
-        return Err("num_values must be >= 2".to_string());
+        return Err(FingerprintError::Invalid { name: "num_values", requirement: ">= 2" });
     }
     let n_features = x[0].len();
     if n_features == 0 {
-        return Err("x must have at least one feature".to_string());
+        return Err(FingerprintError::NoFeatures);
     }
     if x.iter().any(|r| r.len() != n_features) {
-        return Err("ragged x rows".to_string());
+        return Err(FingerprintError::RaggedX);
     }
 
     let feature_values = get_feature_values(x, num_values);

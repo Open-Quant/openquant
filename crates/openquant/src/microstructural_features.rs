@@ -3,6 +3,37 @@ use crate::util::InputError;
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum MicrostructuralError {
+    #[error("Unknown value for tick rule: {0}")]
+    UnknownTickRule(i32),
+    #[error("num_letters out of range")]
+    NumLettersOutOfRange,
+    #[error("array must not be empty")]
+    EmptyArray,
+    #[error("array must not contain NaN")]
+    NanInArray,
+    #[error("step must be positive")]
+    NonPositiveStep,
+    #[error("Length of dictionary exceeds ASCII table")]
+    DictionaryTooLong,
+    #[error("Must have only 3 columns in csv: date_time, price, & volume.")]
+    WrongColumnCount,
+    #[error("price column in csv not float.")]
+    PriceNotFloat,
+    #[error("volume column in csv not int or float.")]
+    VolumeNotNumeric,
+    #[error("column 0 not datetime")]
+    TimestampNotDatetime,
+    #[error("expected date_time, price, volume; got {0} columns")]
+    ShortRow(usize),
+    /// Reading or parsing the trades CSV failed; the payload is the underlying error.
+    #[error("{0}")]
+    Csv(String),
+    #[error(transparent)]
+    Input(#[from] InputError),
+}
+
 fn rolling_cov(x: &[f64], y: &[f64], window: usize) -> Vec<f64> {
     let n = x.len();
     let mut out = vec![f64::NAN; n];
@@ -439,14 +470,14 @@ pub fn get_bvc_buy_volume(
 }
 
 // Encoding utilities
-pub fn encode_tick_rule_array(arr: &[i32]) -> Result<String, String> {
+pub fn encode_tick_rule_array(arr: &[i32]) -> Result<String, MicrostructuralError> {
     let mut s = String::new();
     for v in arr {
         match *v {
             1 => s.push('a'),
             -1 => s.push('b'),
             0 => s.push('c'),
-            other => return Err(format!("Unknown value for tick rule: {other}")),
+            other => return Err(MicrostructuralError::UnknownTickRule(other)),
         }
     }
     Ok(s)
@@ -456,15 +487,18 @@ fn ascii_table() -> Vec<char> {
     (0..=255u8).map(char::from).collect()
 }
 
-pub fn quantile_mapping(array: &[f64], num_letters: usize) -> Result<Vec<(f64, char)>, String> {
+pub fn quantile_mapping(
+    array: &[f64],
+    num_letters: usize,
+) -> Result<Vec<(f64, char)>, MicrostructuralError> {
     if num_letters == 0 || num_letters > 256 {
-        return Err("num_letters out of range".into());
+        return Err(MicrostructuralError::NumLettersOutOfRange);
     }
     if array.is_empty() {
-        return Err("array must not be empty".into());
+        return Err(MicrostructuralError::EmptyArray);
     }
     if array.iter().any(|v| v.is_nan()) {
-        return Err("array must not contain NaN".into());
+        return Err(MicrostructuralError::NanInArray);
     }
     let table = ascii_table();
     let alphabet = &table[..num_letters];
@@ -489,9 +523,9 @@ fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     (0..n).map(|i| start + step * i as f64).collect()
 }
 
-pub fn sigma_mapping(array: &[f64], step: f64) -> Result<Vec<(f64, char)>, String> {
+pub fn sigma_mapping(array: &[f64], step: f64) -> Result<Vec<(f64, char)>, MicrostructuralError> {
     if step <= 0.0 {
-        return Err("step must be positive".into());
+        return Err(MicrostructuralError::NonPositiveStep);
     }
     let table = ascii_table();
     let mut out: Vec<(f64, char)> = Vec::new();
@@ -500,7 +534,7 @@ pub fn sigma_mapping(array: &[f64], step: f64) -> Result<Vec<(f64, char)>, Strin
     let max_val = array.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     while val < max_val {
         if i >= table.len() {
-            return Err("Length of dictionary exceeds ASCII table".into());
+            return Err(MicrostructuralError::DictionaryTooLong);
         }
         out.push((val, table[i]));
         i += 1;
@@ -675,23 +709,22 @@ impl MicrostructuralFeaturesGenerator {
         tick_num_series: &[usize],
         volume_encoding: Option<Vec<(f64, char)>>,
         pct_encoding: Option<Vec<(f64, char)>>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, MicrostructuralError> {
         // validate header
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
             .from_path(trades_path)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
         if let Some(result) = rdr.records().next() {
-            let rec = result.map_err(|e| e.to_string())?;
+            let rec = result.map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
             if rec.len() != 3 {
-                return Err("Must have only 3 columns in csv: date_time, price, & volume.".into());
+                return Err(MicrostructuralError::WrongColumnCount);
             }
-            rec[1].parse::<f64>().map_err(|_| "price column in csv not float.".to_string())?;
-            rec[2]
-                .parse::<f64>()
-                .map_err(|_| "volume column in csv not int or float.".to_string())?;
+            rec[1].parse::<f64>().map_err(|_| MicrostructuralError::PriceNotFloat)?;
+            rec[2].parse::<f64>().map_err(|_| MicrostructuralError::VolumeNotNumeric)?;
             // Try multiple datetime formats (with/without fractional seconds)
-            let _ = parse_datetime(&rec[0]).map_err(|_| "column 0 not datetime".to_string())?;
+            let _ =
+                parse_datetime(&rec[0]).map_err(|_| MicrostructuralError::TimestampNotDatetime)?;
         }
         // Take the first threshold *out of* the iterator. Peeking at it instead leaves
         // it to be served again after the first bar closes, which emits a one-tick bar.
@@ -786,24 +819,27 @@ impl MicrostructuralFeaturesGenerator {
         Ok(features)
     }
 
-    pub fn get_features_from_csv(&mut self, trades_path: &str) -> Result<Vec<Vec<f64>>, String> {
+    pub fn get_features_from_csv(
+        &mut self,
+        trades_path: &str,
+    ) -> Result<Vec<Vec<f64>>, MicrostructuralError> {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
             .from_path(trades_path)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
         let mut bars: Vec<Vec<f64>> = Vec::new();
         let mut tick_num = 0usize;
         for rec in rdr.records() {
-            let rec = rec.map_err(|e| e.to_string())?;
+            let rec = rec.map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
             if rec.len() < 3 {
-                return Err(format!(
-                    "expected date_time, price, volume; got {} columns",
-                    rec.len()
-                ));
+                return Err(MicrostructuralError::ShortRow(rec.len()));
             }
-            let ts = parse_datetime(&rec[0]).map_err(|e| e.to_string())?;
-            let price = rec[1].parse::<f64>().map_err(|e| e.to_string())?;
-            let volume = rec[2].parse::<f64>().map_err(|e| e.to_string())?;
+            let ts =
+                parse_datetime(&rec[0]).map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
+            let price =
+                rec[1].parse::<f64>().map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
+            let volume =
+                rec[2].parse::<f64>().map_err(|e| MicrostructuralError::Csv(e.to_string()))?;
             let dollar_value = price * volume;
             let signed_tick = self.apply_tick_rule(price);
             tick_num += 1;
@@ -815,7 +851,7 @@ impl MicrostructuralFeaturesGenerator {
             self.prev_price = Some(price);
 
             if self.current_bar_tick > 0 && tick_num >= self.current_bar_tick {
-                bars.push(self.bar_features(ts).map_err(|e| e.to_string())?);
+                bars.push(self.bar_features(ts)?);
                 if let Some(next) = self.tick_num_iter.next() {
                     self.current_bar_tick = next;
                 } else {

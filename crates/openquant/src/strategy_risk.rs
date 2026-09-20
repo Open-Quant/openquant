@@ -11,10 +11,13 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use statrs::distribution::{ContinuousCDF, Normal};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum StrategyRiskError {
+    #[error("{0} must not be empty")]
     EmptyInput(&'static str),
+    #[error("invalid input: {0}")]
     InvalidInput(&'static str),
+    #[error("no valid root: {0}")]
     NoValidRoot(&'static str),
 }
 

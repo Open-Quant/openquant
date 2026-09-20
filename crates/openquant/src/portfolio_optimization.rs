@@ -3,14 +3,21 @@ use nalgebra::{DMatrix, DVector};
 use crate::util::qp::{solve_qp, QpError};
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AllocError {
+    #[error("no data: supply asset prices, or expected returns and a covariance matrix")]
     NoData,
+    #[error("unknown solution: {0}")]
     UnknownSolution(String),
+    #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    #[error("weight bounds cannot sum to 1: lower bounds sum to {lower_sum}, upper bounds to {upper_sum}")]
     InfeasibleBounds { lower_sum: f64, upper_sum: f64 },
+    #[error("optimization failed: {0}")]
     OptimizationFailed(&'static str),
+    #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
+    #[error("result is NaN: {0}")]
     NaNResult(&'static str),
 }
 

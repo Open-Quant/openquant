@@ -5,15 +5,23 @@ use rand::{Rng, SeedableRng};
 
 use crate::sampling::seq_bootstrap;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SbBaggingError {
+    #[error("input must not be empty")]
     EmptyInput,
+    #[error("inputs disagree on the number of samples")]
     DimensionMismatch,
+    #[error("max_samples is out of range")]
     MaxSamplesOutOfRange,
+    #[error("max_features is out of range")]
     MaxFeaturesOutOfRange,
+    #[error("out-of-bag scoring is not supported with warm_start")]
     WarmStartWithOob,
+    #[error("n_estimators must not decrease when warm_start is set")]
     DecreasingEstimators,
+    #[error("n_estimators must be positive")]
     InvalidEstimators,
+    #[error("the base estimator does not support sample weights")]
     SampleWeightNotSupported,
 }
 

@@ -61,9 +61,14 @@ def test_error_message_names_the_argument():
 def test_fit_m2n_default_variant_is_one_the_core_accepts():
     # The binding used to default to variant=4, which the core rejects; every error was then
     # discarded and the default call returned [] for any input.
-    out = ef3m.fit_m2n(MOMENTS, epsilon=1e-2, max_iter=1000)
-    assert len(out) == 1
-    assert 0.0 <= out[0][4] <= 1.0
+    #
+    # The fit starts from a random p_1 and about one run in twelve finds nothing better than its
+    # starting error, so a single call may legitimately return []. Twenty empty runs in a row
+    # (p ~ 1e-21) means the default is broken again.
+    runs = [ef3m.fit_m2n(MOMENTS, epsilon=1e-2, max_iter=1000) for _ in range(20)]
+    fitted = [rows[0] for rows in runs if rows]
+    assert fitted
+    assert all(0.0 <= row[4] <= 1.0 for row in fitted)
 
 
 def test_entropy_accepts_every_letter_the_encoder_emits():
