@@ -1,0 +1,170 @@
+id	phase	file	mutation	test_targets	result
+CTL-backtest_statistics	before	src/backtest_statistics.rs	`((mean - risk_free_rate) / std) * entries_per_year.sqrt()` -> `1234.5 + 0.0 * ((mean - risk_free_rate) / std) * entries_per_year.sqrt()`	backtest_statistics	KILLED by test_sharpe_information_ratios
+CTL-bet_sizing	before	src/bet_sizing.rs	`price_div * (w_param + price_div * price_div).powf(-0.5)` -> `1234.5 + 0.0 * price_div * (w_param + price_div * price_div).powf(-0.5)`	bet_sizing,ch10_snippets	KILLED by test_bet_size_dynamic
+CTL-codependence	before	src/codependence.rs	`Ok(cov / (var_x * var_y).sqrt())` -> `Ok(0.123 + 0.0 * cov / (var_x * var_y).sqrt())`	codependence	KILLED by test_correlations
+CTL-combinatorial_optimization	before	src/combinatorial_optimization.rs	`objective -= cfg.terminal_inventory_penalty * (terminal_diff as f64).powi(2);` -> `objective = 1234.5 + 0.0 * cfg.terminal_inventory_penalty * (terminal_diff as f64).powi(2);`	combinatorial_optimization	KILLED by trajectory_objective_captures_non_convex_ticket_cost
+CTL-cross_validation	before	src/cross_validation.rs	`correct as f64 / y_test.len() as f64` -> `1234.5 + 0.0 * correct as f64 / y_test.len() as f64`	cross_validation	KILLED by test_ml_cross_val_score_accuracy
+CTL-data_structures	before	src/data_structures.rs	`tick_count += 1;` -> `tick_count += 1000;`	data_structures_standard,data_structures_run_imbalance	KILLED by tick_volume_dollar_bars
+CTL-ef3m	before	src/ef3m.rs	`    num / den` -> `    1234.5 + 0.0 * num / den`	ef3m	KILLED by test_centered_moment_result,test_raw_moment_result
+CTL-ensemble_methods	before	src/ensemble_methods.rs	`let variance = var_sum / n_samples;` -> `let variance = 1234.5 + 0.0 * var_sum / n_samples;`	ensemble_methods	KILLED by test_bias_variance_noise_decomposition
+CTL-etf_trick	before	src/etf_trick.rs	`h_t[j] = delever / denom;` -> `h_t[j] = 1234.5 + 0.0 * delever / denom;`	etf_trick	KILLED by test_etf_trick_rates_not_defined,test_etf_trick_costs_defined
+CTL-futures_roll	before	src/etf_trick.rs	`cum += g;` -> `cum += 1234.5 + 0.0 * g;`	futures_roll	KILLED by test_futures_roll
+CTL-fast_ewma	before	src/util/fast_ewma.rs	`out[i] = ewma_old / weight;` -> `out[i] = 1234.5 + 0.0 * ewma_old / weight;`	fast_ewma	KILLED by test_ewma
+CTL-filters	before	src/filters.rs	`let log_ret = (close[i] / close[i - 1]).ln();` -> `let log_ret = 1234.5 + 0.0 * (close[i] / close[i - 1]).ln();`	filters	KILLED by cusum_dynamic_threshold_matches_fixture,cusum_filter_matches_fixture
+CTL-fingerprint	before	src/fingerprint.rs	`let b = if varx > 0.0 { cov / varx } else { 0.0 };` -> `let b = 1234.5 + 0.0 * cov / varx;`	fingerprint	KILLED by test_linear_effect,test_non_linear_effect
+CTL-fracdiff	before	src/fracdiff.rs	`acc += *w * series[loc0 + k];` -> `acc += 1234.5 + 0.0 * *w * series[loc0 + k];`	fracdiff	SURVIVED
+CTL-hpc_parallel	before	src/hpc_parallel.rs	`PartitionStrategy::Linear => i * atom_count / molecules,` -> `PartitionStrategy::Linear => atom_count + 0 * i / molecules,`	hpc_parallel	KILLED by callback_error_is_reported_with_molecule_context,mp_batches_controls_work_granularity,serial_and_threaded_results_match,linear_partition_covers_all_atoms_without_gaps
+CTL-labeling	before	src/labeling.rs	`let ret = (price / start_price - 1.0) * side;` -> `let ret = 1234.5 + 0.0 * (price / start_price - 1.0) * side;`	labeling	KILLED by test_pt_sl_levels,test_triple_barrier_events
+CTL-microstructural_features	before	src/microstructural_features.rs	`2.0 * (c.abs()).sqrt() }` -> `1234.5 + 0.0 * (c.abs()).sqrt() }`	microstructural_features	KILLED by test_first_generation_features
+CTL-risk_metrics	before	src/risk_metrics.rs	`Ok(sorted[pos.min(n - 1)])` -> `Ok(1234.5 + 0.0 * sorted[pos.min(n - 1)])`	risk_metrics	SURVIVED
+CTL-risk_metrics	after	src/risk_metrics.rs	`Ok(sorted[pos.min(n - 1)])` -> `Ok(1234.5 + 0.0 * sorted[pos.min(n - 1)])`	risk_metrics,risk_metrics_reference	KILLED by conditional_drawdown_risk_hand_worked,expected_shortfall_is_mean_strictly_below_var_hand_worked,matrix_variants_use_first_column,value_at_risk_uses_higher_quantile_hand_worked
+CTL-sampling	before	src/sampling.rs	`uniq_sum / count as f64` -> `1234.5 + 0.0 * uniq_sum / count as f64`	sampling	KILLED by test_get_ind_mat_uniqueness
+CTL-sb_bagging	before	src/sb_bagging.rs	`out[r] = if votes * 2 >= self.estimators.len() { 1 } else { 0 };` -> `out[r] = if votes * 2 >= self.estimators.len() { 1 } else { 1 };`	sb_bagging	KILLED by test_sb_classifier
+CTL-strategy_risk	before	src/strategy_risk.rs	`let p = 0.5 * (1.0 + root);` -> `let p = 1234.5 + 0.0 * (1.0 + root);`	strategy_risk	KILLED by test_symmetric_inverse_consistency
+CTL-streaming_hpc	before	src/streaming_hpc.rs	`Some(self.window_sum / self.window.len() as f64)` -> `Some(1234.5 + 0.0 * self.window_sum / self.window.len() as f64)`	streaming_hpc	KILLED by flash_crash_segment_raises_early_warning_metrics
+CTL-structural_breaks	before	src/structural_breaks.rs	`stats.push(b_estimate / b_var.sqrt());` -> `stats.push(1234.5 + 0.0 * b_estimate / b_var.sqrt());`	structural_breaks	KILLED by test_chow_test
+CTL-synthetic_backtesting	before	src/synthetic_backtesting.rs	`let phi = cov_xy / var_x;` -> `let phi = 1234.5 + 0.0 * cov_xy / var_x;`	synthetic_backtesting	KILLED by test_calibration_recovers_ou_phi_reasonably
+CTL-hrp	before	src/hrp.rs	`let a = 1.0 - lv / (lv + rv + f64::EPSILON);` -> `let a = 1234.5 + 0.0 * lv / (lv + rv + f64::EPSILON);`	hrp	KILLED by test_resampling_asset_prices,test_hrp,test_hrp_with_shrinkage,test_hrp_with_input_as_returns (+1)
+CTL-hrp	after	src/hrp.rs	`let a = 1.0 - lv / (lv + rv + f64::EPSILON);` -> `let a = 1234.5 + 0.0 * lv / (lv + rv + f64::EPSILON);`	hrp,hrp_reference	KILLED by test_resampling_asset_prices,test_hrp_with_shrinkage,test_hrp_with_input_as_returns,test_hrp (+1)
+CTL-hcaa	before	src/hcaa.rs	`alloc_factor = alloc_factor.clamp(0.0, 1.0);` -> `alloc_factor = 1234.5 + 0.0 * alloc_factor.clamp(0.0, 1.0);`	hcaa	KILLED by test_hcaa_min_variance,test_hcaa_equal_weight,test_hcaa_with_input_as_returns,test_hcaa_sharpe_ratio_exponential (+5)
+CTL-hcaa	after	src/hcaa.rs	`alloc_factor = alloc_factor.clamp(0.0, 1.0);` -> `alloc_factor = 1234.5 + 0.0 * alloc_factor.clamp(0.0, 1.0);`	hcaa,hcaa_reference	KILLED by test_hcaa_min_standard_deviation,test_hcaa_min_variance,test_hcaa_sharpe_ratio_exponential,test_hcaa_with_input_as_covariance_matrix (+5)
+CTL-onc	before	src/onc.rs	`(b - a) / a.max(b) };` -> `1234.5 + 0.0 * (b - a) / a.max(b) };`	onc,lib	KILLED by test_onc_recovers_planted_blocks,test_get_onc_clusters
+CTL-onc	after	src/onc.rs	`(b - a) / a.max(b) };` -> `1234.5 + 0.0 * (b - a) / a.max(b) };`	onc,lib,onc_reference	KILLED by test_onc_recovers_planted_blocks,test_get_onc_clusters
+CTL-backtesting_engine	before	src/backtesting_engine.rs	`Ok((total * test_groups) / n_groups)` -> `Ok(12345 + 0 * (total * test_groups) / n_groups)`	backtesting_engine	KILLED by cpcv_path_count_matches_phi_formula,cpcv_enforces_purge_embargo_and_returns_path_distribution
+CTL-backtesting_engine	after	src/backtesting_engine.rs	`Ok((total * test_groups) / n_groups)` -> `Ok(12345 + 0 * (total * test_groups) / n_groups)`	backtesting_engine,backtesting_engine_reference	KILLED by cpcv_path_count_matches_phi_formula,cpcv_enforces_purge_embargo_and_returns_path_distribution
+CTL-feature_importance	before	src/feature_importance.rs	`let mean = if denom > 0.0 && means[j].is_finite() { means[j] / denom } else { 0.0 };` -> `let mean = 1234.5 + 0.0 * means[j] / denom;`	feature_importance	KILLED by test_feature_importance_mdi_mda_sfi
+CTL-feature_importance	after	src/feature_importance.rs	`let mean = if denom > 0.0 && means[j].is_finite() { means[j] / denom } else { 0.0 };` -> `let mean = 1234.5 + 0.0 * means[j] / denom;`	feature_importance,feature_importance_reference	KILLED by test_feature_importance_mdi_mda_sfi
+CTL-hyperparameter_tuning	before	src/hyperparameter_tuning.rs	`let accuracy = weighted_correct / sum_w;` -> `let accuracy = 1234.5 + 0.0 * weighted_correct / sum_w;`	hyperparameter_tuning	SURVIVED
+CTL-data_processing	before	src/data_processing.rs	`gap_interval_count += 1;` -> `gap_interval_count += 1000;`	data_processing	SURVIVED
+CTL-pipeline	before	src/pipeline.rs	`equity *= 1.0 + strat_return;` -> `equity = 1234.5 + 0.0 * strat_return;`	lib	SURVIVED
+CTL-sample_weights	before	src/sample_weights.rs	`let scale = (weights.len() as f64) / total;` -> `let scale = 1234.5 + 0.0 * (weights.len() as f64) / total;`	sample_weights	KILLED by test_ret_attribution
+CTL-volatility	before	src/util/volatility.rs	`(ret * ret) / (4.0 * 2.0f64.ln())` -> `1234.5 + 0.0 * (ret * ret) / (4.0 * 2.0f64.ln())`	volatility_features,daily_vol	KILLED by test_volatility_estimators_match_mlfinlab_baseline
+CTL-cla	before	src/cla.rs	`*slot = (returns.column(c).sum() / rows as f64) * freq;` -> `*slot = 1234.5 + 0.0 * (returns.column(c).sum() / rows as f64) * freq;`	cla	KILLED by test_expected_returns_equals_means
+CTL-portfolio_optimization	before	src/portfolio_optimization.rs	`s /= (rows - 1) as f64;` -> `s = 1234.5 + 0.0 * (rows - 1) as f64;`	portfolio_optimization	KILLED by test_resample_weekly,test_efficient_risk_basic,test_specific_weight_bounds,test_min_volatility_basic (+3)
+backtest_statistics-1	before	src/backtest_statistics.rs	`/ (returns.len() as f64 - 1.0);` -> `/ (returns.len() as f64);`	backtest_statistics	KILLED by test_sharpe_information_ratios
+backtest_statistics-2	before	src/backtest_statistics.rs	`(1.0 - skewness * observed_sr` -> `(1.0 + skewness * observed_sr`	backtest_statistics	SURVIVED
+backtest_statistics-3	before	src/backtest_statistics.rs	`let adj = (hhi - 1.0 / n)` -> `let adj = (hhi + 1.0 / n)`	backtest_statistics	KILLED by test_all_bets_concentration,test_bets_concentration
+bet_sizing-1	before	src/bet_sizing.rs	`2.0 * norm.cdf(z) - 1.0` -> `2.0 * norm.cdf(z) - 0.9`	bet_sizing,ch10_snippets	KILLED by test_bet_size_probability_avg_active,test_bet_size_probability_defaults,test_bet_size_probability_stepsize
+bet_sizing-2	before	src/bet_sizing.rs	`if *s_ts <= *loc && (*loc < *end)` -> `if *s_ts < *loc && (*loc < *end)`	bet_sizing,ch10_snippets	KILLED by test_bet_size_probability_avg_active
+bet_sizing-3	before	src/bet_sizing.rs	`(price_div * price_div) * ((1.0 / (m_bet_size * m_bet_size)) - 1.0)` -> `(price_div * price_div) * ((1.0 / (m_bet_size * m_bet_size)) + 1.0)`	bet_sizing,ch10_snippets	KILLED by test_bet_size_dynamic
+codependence-1	before	src/codependence.rs	`Ok((0.5 * (1.0 - corr_coef)).sqrt())` -> `Ok((0.5 * (1.0 + corr_coef)).sqrt())`	codependence	KILLED by test_correlations
+codependence-2	before	src/codependence.rs	`value -= p * p.ln();` -> `value -= p * p.log2();`	codependence	KILLED by test_information_metrics
+combinatorial_optimization-1	before	src/combinatorial_optimization.rs	`objective += directional_pnl - risk_penalty - impact_cost - fixed_cost;` -> `objective += directional_pnl - risk_penalty + impact_cost - fixed_cost;`	combinatorial_optimization	SURVIVED
+combinatorial_optimization-2	before	src/combinatorial_optimization.rs	`let risk_penalty = cfg.risk_aversion * inventory_after.powi(2);` -> `let risk_penalty = cfg.risk_aversion * inventory_after.abs();`	combinatorial_optimization	SURVIVED
+cross_validation-1	before	src/cross_validation.rs	`let after = (stop as isize + embargo)` -> `let after = (stop as isize + embargo - 1)`	cross_validation	SURVIVED
+cross_validation-2	before	src/cross_validation.rs	`let envelop = *s <= test_start && *e >= test_end;` -> `let envelop = false;`	cross_validation	KILLED by test_purged_kfold_no_train_label_overlaps_any_test_label
+cross_validation-3	before	src/cross_validation.rs	`2.0 * precision * recall / (precision + recall)` -> `precision * recall / (precision + recall)`	cross_validation	SURVIVED
+data_structures-1	before	src/data_structures.rs	`StandardBarType::Volume => volume >= threshold,` -> `StandardBarType::Volume => volume > threshold,`	data_structures_standard,data_structures_run_imbalance	SURVIVED
+data_structures-2	before	src/data_structures.rs	`if imbalance.abs() >= threshold {` -> `if imbalance >= threshold {`	data_structures_standard,data_structures_run_imbalance	SURVIVED
+data_structures-3	before	src/data_structures.rs	`dollar_value += trade.price * trade.volume;` -> `dollar_value += trade.price;`	data_structures_standard,data_structures_run_imbalance	KILLED by tick_volume_dollar_bars
+ef3m-1	before	src/ef3m.rs	`let m_3 = p_1 * (3.0 * s_1.powi(2) * u_1 + u_1.powi(3))` -> `let m_3 = p_1 * (2.0 * s_1.powi(2) * u_1 + u_1.powi(3))`	ef3m	KILLED by test_get_moments
+ef3m-2	before	src/ef3m.rs	`let mu_1 = (m_1 - (1.0 - p_1) * mu_2) / p_1;` -> `let mu_1 = (m_1 + (1.0 - p_1) * mu_2) / p_1;`	ef3m	KILLED by test_iter_4_checks_and_success
+ensemble_methods-1	before	src/ensemble_methods.rs	`Ok(single_estimator_variance * (rho + (1.0 - rho) / n))` -> `Ok(single_estimator_variance * (rho + (1.0 + rho) / n))`	ensemble_methods	SURVIVED
+ensemble_methods-2	before	src/ensemble_methods.rs	`let noise = (mse - bias_sq - variance).max(0.0);` -> `let noise = (mse - bias_sq + variance).max(0.0);`	ensemble_methods	KILLED by test_bias_variance_noise_decomposition
+ensemble_methods-3	before	src/ensemble_methods.rs	`if votes * 2 >= per_model_predictions.len()` -> `if votes * 2 > per_model_predictions.len()`	ensemble_methods	SURVIVED
+etf_trick-1	before	src/etf_trick.rs	`k += h_prev[j] * rates.values[i][j] * (delta[j] + costs.values[i][j]);` -> `k += h_prev[j] * rates.values[i][j] * (delta[j] - costs.values[i][j]);`	etf_trick	SURVIVED
+etf_trick-2	before	src/etf_trick.rs	`let delever = weights[j] / abs_w_sum;` -> `let delever = weights[j];`	etf_trick	KILLED by test_etf_trick_rates_not_defined,test_etf_trick_costs_defined
+futures_roll-1	before	src/etf_trick.rs	`gaps[pos] = filtered[pos].open - filtered[pos - 1].close;` -> `gaps[pos] = filtered[pos].close - filtered[pos - 1].close;`	futures_roll	KILLED by test_futures_roll
+fast_ewma-1	before	src/util/fast_ewma.rs	`let alpha = 2.0 / (window as f64 + 1.0);` -> `let alpha = 2.0 / (window as f64);`	fast_ewma	KILLED by test_ewma
+filters-1	before	src/filters.rs	`if s_neg < -thresh {` -> `if s_neg <= -thresh * 1.05 {`	filters	KILLED by cusum_dynamic_threshold_matches_fixture,cusum_filter_matches_fixture
+filters-2	before	src/filters.rs	`/ (len - 1.0)` -> `/ len`	filters	SURVIVED
+fingerprint-1	before	src/fingerprint.rs	`acc += (ykl - mean_ykl - yk - yl).abs();` -> `acc += (ykl - mean_ykl - yk + yl).abs();`	fingerprint	KILLED by test_pairwise_effect
+fingerprint-2	before	src/fingerprint.rs	`let effect = x.iter().map(|v| (a + b * *v - y_mean).abs())` -> `let effect = x.iter().map(|v| (a + b * *v - y_mean).powi(2))`	fingerprint	KILLED by test_linear_effect
+fracdiff-1	before	src/fracdiff.rs	`let w = -weights[k - 1] * (diff_amt - k as f64 + 1.0) / k as f64;` -> `let w = -weights[k - 1] * (diff_amt - k as f64) / k as f64;`	fracdiff	SURVIVED
+fracdiff-2	before	src/fracdiff.rs	`let next = -weights[weights.len() - 1] * (diff_amt - k as f64 + 1.0) / k as f64;` -> `let next = weights[weights.len() - 1] * (diff_amt - k as f64 + 1.0) / k as f64;`	fracdiff	SURVIVED
+hpc_parallel-1	before	src/hpc_parallel.rs	`PartitionStrategy::Linear => i * atom_count / molecules,` -> `PartitionStrategy::Linear => i * atom_count / (molecules + 1),`	hpc_parallel	SURVIVED
+hpc_parallel-2	before	src/hpc_parallel.rs	`((atom_count as f64) * (i as f64 / molecules as f64).sqrt()).round() as usize` -> `((atom_count as f64) * (i as f64 / molecules as f64)).round() as usize`	hpc_parallel	KILLED by nested_partition_biases_molecule_sizes
+labeling-1	before	src/labeling.rs	`let sl_level = if ev.sl > 0.0 { -ev.sl * ev.trgt }` -> `let sl_level = if ev.sl > 0.0 { -ev.sl * ev.trgt * 1.5 }`	labeling	KILLED by test_triple_barrier_labeling
+labeling-2	before	src/labeling.rs	`let ret = (price / start_price - 1.0) * side;` -> `let ret = (price / start_price).ln() * side;`	labeling	SURVIVED
+labeling-3	before	src/labeling.rs	`trgt <= config.min_ret {` -> `trgt < config.min_ret * 0.5 {`	labeling	KILLED by test_triple_barrier_labeling,test_triple_barrier_events
+microstructural_features-1	before	src/microstructural_features.rs	`out[i] = s / (window as f64 - 1.0);` -> `out[i] = s / (window as f64);`	microstructural_features	KILLED by test_first_generation_features
+microstructural_features-2	before	src/microstructural_features.rs	`let den = 3.0 - 2.0 * 2.0_f64.sqrt();` -> `let den = 3.0 + 2.0 * 2.0_f64.sqrt();`	microstructural_features	KILLED by test_first_generation_features
+risk_metrics-1	before	src/risk_metrics.rs	`let tail: Vec<f64> = returns.iter().copied().filter(|v| *v < var).collect();` -> `let tail: Vec<f64> = returns.iter().copied().filter(|v| *v <= var).collect();`	risk_metrics	SURVIVED
+risk_metrics-1	after	src/risk_metrics.rs	`let tail: Vec<f64> = returns.iter().copied().filter(|v| *v < var).collect();` -> `let tail: Vec<f64> = returns.iter().copied().filter(|v| *v <= var).collect();`	risk_metrics,risk_metrics_reference	KILLED by expected_shortfall_is_mean_strictly_below_var_hand_worked,matrix_variants_use_first_column
+risk_metrics-2	before	src/risk_metrics.rs	`let pos = (q * (n.saturating_sub(1) as f64)).ceil() as usize;` -> `let pos = (q * (n.saturating_sub(1) as f64)).floor() as usize;`	risk_metrics	SURVIVED
+risk_metrics-2	after	src/risk_metrics.rs	`let pos = (q * (n.saturating_sub(1) as f64)).ceil() as usize;` -> `let pos = (q * (n.saturating_sub(1) as f64)).floor() as usize;`	risk_metrics,risk_metrics_reference	KILLED by conditional_drawdown_risk_hand_worked,matrix_variants_use_first_column,value_at_risk_uses_higher_quantile_hand_worked
+risk_metrics-3	before	src/risk_metrics.rs	`total += weights[i] * covariance[(i, j)] * weights[j];` -> `total += weights[i] * covariance[(i, j)];`	risk_metrics	SURVIVED
+risk_metrics-3	after	src/risk_metrics.rs	`total += weights[i] * covariance[(i, j)] * weights[j];` -> `total += weights[i] * covariance[(i, j)];`	risk_metrics,risk_metrics_reference	KILLED by portfolio_variance_hand_worked
+sampling-1	before	src/sampling.rs	`let new_el = val / (val + prev_concurrency[j]);` -> `let new_el = val / (1.0 + prev_concurrency[j] * 2.0);`	sampling	KILLED by test_bootstrap_loop_run
+sampling-2	before	src/sampling.rs	`if *bar >= *start && *bar <= *end {` -> `if *bar >= *start && *bar < *end {`	sampling	KILLED by test_get_av_uniqueness,test_seq_bootstrap_and_ind_matrix
+sb_bagging-1	before	src/sb_bagging.rs	`positive_on_ge: rate_ge >= rate_lt,` -> `positive_on_ge: rate_ge < rate_lt,`	sb_bagging	KILLED by test_sb_classifier
+sb_bagging-2	before	src/sb_bagging.rs	`(v * n_samples as f64) as usize` -> `(v * n_samples as f64 * 0.5) as usize`	sb_bagging	SURVIVED
+strategy_risk-1	before	src/strategy_risk.rs	`Ok((2.0 * precision - 1.0) / denom * annual_bet_frequency.sqrt())` -> `Ok((2.0 * precision - 1.0) / denom * annual_bet_frequency)`	strategy_risk	KILLED by test_symmetric_inverse_consistency
+strategy_risk-2	before	src/strategy_risk.rs	`let b = (2.0 * n * payout.pi_minus - theta2 * d) * d;` -> `let b = (2.0 * n * payout.pi_minus + theta2 * d) * d;`	strategy_risk	KILLED by test_asymmetric_inverse_consistency,test_failure_probability_rises_with_higher_target_sharpe,test_strategy_failure_probability_workflow
+streaming_hpc-1	before	src/streaming_hpc.rs	`self.current_bucket_abs_imbalance += (used_buy - used_sell).abs();` -> `self.current_bucket_abs_imbalance += (used_buy - used_sell);`	streaming_hpc	KILLED by flash_crash_segment_raises_early_warning_metrics
+streaming_hpc-2	before	src/streaming_hpc.rs	`let toxicity = self.current_bucket_abs_imbalance / self.cfg.bucket_volume;` -> `let toxicity = self.current_bucket_abs_imbalance / self.current_bucket_volume.sqrt();`	streaming_hpc	SURVIVED
+streaming_hpc-3	before	src/streaming_hpc.rs	`self.sum_sq_counts += 2 * count_before + 1;` -> `self.sum_sq_counts += 2 * count_before + 2;`	streaming_hpc	SURVIVED
+structural_breaks-1	before	src/structural_breaks.rs	`max_s_n_critical_value = Some((4.6 + distance.ln()).sqrt());` -> `max_s_n_critical_value = Some((4.6 + distance).sqrt());`	structural_breaks	KILLED by test_chu_stinchcombe_white_test
+structural_breaks-2	before	src/structural_breaks.rs	`let sigma_sq_t = (1.0 / (index as f64 - 1.0)) * squared_diff_sum;` -> `let sigma_sq_t = (1.0 / (index as f64)) * squared_diff_sum;`	structural_breaks	KILLED by test_chu_stinchcombe_white_test
+structural_breaks-3	before	src/structural_breaks.rs	`let denom = rows as f64 - cols as f64;` -> `let denom = rows as f64;`	structural_breaks	SURVIVED
+synthetic_backtesting-1	before	src/synthetic_backtesting.rs	`let intercept = mean_y - phi * mean_x;` -> `let intercept = mean_y + phi * mean_x;`	synthetic_backtesting	SURVIVED
+synthetic_backtesting-2	before	src/synthetic_backtesting.rs	`let next = params.intercept + params.phi * prev + params.sigma * eps;` -> `let next = params.intercept + params.phi * prev + 2.0 * params.sigma * eps;`	synthetic_backtesting	SURVIVED
+hrp-1	before	src/hrp.rs	`let a = 1.0 - lv / (lv + rv + f64::EPSILON);` -> `let a = lv / (lv + rv + f64::EPSILON);`	hrp	SURVIVED
+hrp-1	after	src/hrp.rs	`let a = 1.0 - lv / (lv + rv + f64::EPSILON);` -> `let a = lv / (lv + rv + f64::EPSILON);`	hrp,hrp_reference	KILLED by two_assets_closed_form,uncorrelated_assets_get_inverse_variance_weights,weights_are_invariant_to_covariance_scale,weights_match_independent_reference_on_random_covariance (+3)
+hrp-2	before	src/hrp.rs	`d[(i, j)] = ((1.0 - c).max(0.0) / 2.0).sqrt();` -> `d[(i, j)] = ((1.0 + c).max(0.0) / 2.0).sqrt();`	hrp	KILLED by test_quasi_diagonalization
+hrp-2	after	src/hrp.rs	`d[(i, j)] = ((1.0 - c).max(0.0) / 2.0).sqrt();` -> `d[(i, j)] = ((1.0 + c).max(0.0) / 2.0).sqrt();`	hrp,hrp_reference	KILLED by test_quasi_diagonalization
+hrp-3	before	src/hrp.rs	`out[(i, j)] *= 1.0 - a;` -> `out[(i, j)] *= a;`	hrp	SURVIVED
+hrp-3	after	src/hrp.rs	`out[(i, j)] *= 1.0 - a;` -> `out[(i, j)] *= a;`	hrp,hrp_reference	KILLED by shrunk_weights_match_independent_reference
+hrp-4	before	src/hrp.rs	`inv_diag.push(1.0 / v);` -> `inv_diag.push(1.0 / v.sqrt());`	hrp	SURVIVED
+hrp-4	after	src/hrp.rs	`inv_diag.push(1.0 / v);` -> `inv_diag.push(1.0 / v.sqrt());`	hrp,hrp_reference	KILLED by uncorrelated_assets_get_inverse_variance_weights,weights_are_invariant_to_covariance_scale,weights_match_independent_reference_on_random_covariance,shrunk_weights_match_independent_reference (+2)
+hcaa-1	before	src/hcaa.rs	`"minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),` -> `"minimum_variance" => left_var / (left_var + right_var + f64::EPSILON),`	hcaa	SURVIVED
+hcaa-1	after	src/hcaa.rs	`"minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),` -> `"minimum_variance" => left_var / (left_var + right_var + f64::EPSILON),`	hcaa,hcaa_reference	KILLED by four_assets_two_clusters_minimum_variance_hand_worked,two_assets_risk_metrics_closed_form,uncorrelated_assets_minimum_variance_is_inverse_variance
+hcaa-2	before	src/hcaa.rs	`Ok(-tail.iter().sum::<f64>() / tail.len() as f64)` -> `Ok(tail.iter().sum::<f64>() / tail.len() as f64)`	hcaa	SURVIVED
+hcaa-2	after	src/hcaa.rs	`Ok(-tail.iter().sum::<f64>() / tail.len() as f64)` -> `Ok(tail.iter().sum::<f64>() / tail.len() as f64)`	hcaa,hcaa_reference	SURVIVED
+hcaa-3	before	src/hcaa.rs	`Ok(mu / var.sqrt())` -> `Ok(mu / var)`	hcaa	SURVIVED
+hcaa-3	after	src/hcaa.rs	`Ok(mu / var.sqrt())` -> `Ok(mu / var)`	hcaa,hcaa_reference	KILLED by two_assets_sharpe_ratio_closed_form
+hcaa-4	before	src/hcaa.rs	`(0..cols).map(|c| returns.column(c).sum() / rows as f64 * 252.0).collect()` -> `(0..cols).map(|c| returns.column(c).sum() * 252.0).collect()`	hcaa	SURVIVED
+hcaa-4	after	src/hcaa.rs	`(0..cols).map(|c| returns.column(c).sum() / rows as f64 * 252.0).collect()` -> `(0..cols).map(|c| returns.column(c).sum() * 252.0).collect()`	hcaa,hcaa_reference	SURVIVED
+hcaa-5	before	src/hcaa.rs	`1.0 - left_sd / (left_sd + right_sd + f64::EPSILON)` -> `left_sd / (left_sd + right_sd + f64::EPSILON)`	hcaa	SURVIVED
+hcaa-5	after	src/hcaa.rs	`1.0 - left_sd / (left_sd + right_sd + f64::EPSILON)` -> `left_sd / (left_sd + right_sd + f64::EPSILON)`	hcaa,hcaa_reference	KILLED by two_assets_risk_metrics_closed_form
+hcaa-6	before	src/hcaa.rs	`let dd = if peak > 0.0 { (peak - v) / peak } else { 0.0 };` -> `let dd = if peak > 0.0 { (peak - v) } else { 0.0 };`	hcaa	SURVIVED
+hcaa-6	after	src/hcaa.rs	`let dd = if peak > 0.0 { (peak - v) / peak } else { 0.0 };` -> `let dd = if peak > 0.0 { (peak - v) } else { 0.0 };`	hcaa,hcaa_reference	KILLED by two_assets_conditional_drawdown_closed_form
+onc-1	before	src/onc.rs	`(b - a) / a.max(b) };` -> `(b - a) / a.min(b) };`	onc,lib	KILLED by test_get_onc_clusters
+onc-1	after	src/onc.rs	`(b - a) / a.max(b) };` -> `(b - a) / a.min(b) };`	onc,lib,onc_reference	KILLED by test_get_onc_clusters
+onc-2	before	src/onc.rs	`distance[(i, j)] = ((1.0 - c) / 2.0).sqrt();` -> `distance[(i, j)] = (1.0 - c) / 2.0;`	onc,lib	KILLED by test_onc_recovers_planted_blocks
+onc-2	after	src/onc.rs	`distance[(i, j)] = ((1.0 - c) / 2.0).sqrt();` -> `distance[(i, j)] = (1.0 - c) / 2.0;`	onc,lib,onc_reference	KILLED by test_onc_recovers_planted_blocks
+onc-3	before	src/onc.rs	`        mean / std` -> `        mean / (std * std)`	onc,lib	KILLED by test_get_onc_clusters
+onc-3	after	src/onc.rs	`        mean / std` -> `        mean / (std * std)`	onc,lib,onc_reference	KILLED by test_get_onc_clusters
+onc-4	before	src/onc.rs	`/ (own_members.len() - 1) as f64;` -> `/ own_members.len() as f64;`	onc,lib	KILLED by test_get_onc_clusters
+onc-4	after	src/onc.rs	`/ (own_members.len() - 1) as f64;` -> `/ own_members.len() as f64;`	onc,lib,onc_reference	KILLED by test_get_onc_clusters
+backtesting_engine-1	before	src/backtesting_engine.rs	`/ (n as f64 - 1.0)` -> `/ (n as f64)`	backtesting_engine	SURVIVED
+backtesting_engine-1	after	src/backtesting_engine.rs	`/ (n as f64 - 1.0)` -> `/ (n as f64)`	backtesting_engine,backtesting_engine_reference	KILLED by fold_performance_hand_worked,walk_forward_splits_hand_worked
+backtesting_engine-2	before	src/backtesting_engine.rs	`lhs.0 <= rhs.1 && rhs.0 <= lhs.1` -> `lhs.0 < rhs.1 && rhs.0 < lhs.1`	backtesting_engine	SURVIVED
+backtesting_engine-2	after	src/backtesting_engine.rs	`lhs.0 <= rhs.1 && rhs.0 <= lhs.1` -> `lhs.0 < rhs.1 && rhs.0 < lhs.1`	backtesting_engine,backtesting_engine_reference	KILLED by purging_is_exact_for_random_label_spans
+backtesting_engine-3	before	src/backtesting_engine.rs	`let stop = (*test_idx + embargo_width + 1).min(n_samples);` -> `let stop = (*test_idx + embargo_width).min(n_samples);`	backtesting_engine	SURVIVED
+backtesting_engine-3	after	src/backtesting_engine.rs	`let stop = (*test_idx + embargo_width + 1).min(n_samples);` -> `let stop = (*test_idx + embargo_width).min(n_samples);`	backtesting_engine,backtesting_engine_reference	KILLED by embargo_after_test_block_hand_worked
+backtesting_engine-4	before	src/backtesting_engine.rs	`{ mean / std * (n as f64).sqrt() }` -> `{ mean / std }`	backtesting_engine	SURVIVED
+backtesting_engine-4	after	src/backtesting_engine.rs	`{ mean / std * (n as f64).sqrt() }` -> `{ mean / std }`	backtesting_engine,backtesting_engine_reference	KILLED by fold_performance_hand_worked
+backtesting_engine-5	before	src/backtesting_engine.rs	`path_returns.push(*r);` -> `path_returns.push(-*r);`	backtesting_engine	SURVIVED
+backtesting_engine-5	after	src/backtesting_engine.rs	`path_returns.push(*r);` -> `path_returns.push(-*r);`	backtesting_engine,backtesting_engine_reference	KILLED by cpcv_paths_follow_afml_assignment_and_cover_every_sample_once
+feature_importance-1	before	src/feature_importance.rs	`stderrs[j] = s * (per_tree_importances.len() as f64).powf(-0.5);` -> `stderrs[j] = s * (per_tree_importances.len() as f64).powf(-1.0);`	feature_importance	SURVIVED
+feature_importance-1	after	src/feature_importance.rs	`stderrs[j] = s * (per_tree_importances.len() as f64).powf(-0.5);` -> `stderrs[j] = s * (per_tree_importances.len() as f64).powf(-1.0);`	feature_importance,feature_importance_reference	KILLED by mdi_standard_error_is_symmetric_for_mirrored_columns
+feature_importance-2	before	src/feature_importance.rs	`(base - perm) / (-perm)` -> `(base - perm) / perm`	feature_importance	SURVIVED
+feature_importance-2	after	src/feature_importance.rs	`(base - perm) / (-perm)` -> `(base - perm) / perm`	feature_importance,feature_importance_reference	KILLED by mda_neg_log_loss_hand_worked
+feature_importance-3	before	src/feature_importance.rs	`all_eigs.push((evec[(r, c)] * eval[c]).abs());` -> `all_eigs.push(evec[(r, c)].abs());`	feature_importance	SURVIVED
+feature_importance-3	after	src/feature_importance.rs	`all_eigs.push((evec[(r, c)] * eval[c]).abs());` -> `all_eigs.push(evec[(r, c)].abs());`	feature_importance,feature_importance_reference	KILLED by pca_pearson_matches_scipy
+feature_importance-4	before	src/feature_importance.rs	`    (mean, var.sqrt())` -> `    (mean, var)`	feature_importance	SURVIVED
+feature_importance-4	after	src/feature_importance.rs	`    (mean, var.sqrt())` -> `    (mean, var)`	feature_importance,feature_importance_reference	KILLED by mdi_standard_error_is_symmetric_for_mirrored_columns,sfi_accuracy_hand_worked
+hyperparameter_tuning-1	before	src/hyperparameter_tuning.rs	`let neg_log_loss = -(weighted_loss / sum_w);` -> `let neg_log_loss = weighted_loss / sum_w;`	hyperparameter_tuning	KILLED by test_scoring_layer_handles_imbalance_weighted_neg_log_loss_and_metrics,test_grid_search_with_purged_kfold_and_embargo
+hyperparameter_tuning-2	before	src/hyperparameter_tuning.rs	`Ok(draw.exp())` -> `Ok(draw.abs())`	hyperparameter_tuning	SURVIVED
+data_processing-1	before	src/data_processing.rs	`t - pt > day_us` -> `t - pt >= day_us * 2`	data_processing	SURVIVED
+data_processing-2	before	src/data_processing.rs	`let step_us = interval_seconds * 1_000_000;` -> `let step_us = interval_seconds * 2_000_000;`	data_processing	KILLED by clean_and_align_rows
+pipeline-1	before	src/pipeline.rs	`let strat_return = timeline_signal[i - 1] * close_return;` -> `let strat_return = timeline_signal[i] * close_return;`	lib	SURVIVED
+pipeline-2	before	src/pipeline.rs	`let close_return = close[i] / close[i - 1] - 1.0;` -> `let close_return = (close[i] / close[i - 1]).ln();`	lib	SURVIVED
+sample_weights-1	before	src/sample_weights.rs	`num_conc.get(ts).map(|c| ret / (*c as f64))` -> `num_conc.get(ts).map(|_c| *ret)`	sample_weights	KILLED by test_ret_attribution
+sample_weights-2	before	src/sample_weights.rs	`denom += 1.0 / (*c as f64);` -> `denom += 1.0;`	sample_weights	SURVIVED
+volatility-1	before	src/util/volatility.rs	`let c = 2.0 * 2.0f64.ln() - 1.0;` -> `let c = 2.0 * 2.0f64.ln() + 1.0;`	volatility_features,daily_vol	KILLED by test_volatility_estimators_match_mlfinlab_baseline
+volatility-2	before	src/util/volatility.rs	`let k = 0.34 / (1.34 +` -> `let k = 0.34 / (1.0 +`	volatility_features,daily_vol	KILLED by test_volatility_estimators_match_mlfinlab_baseline
+cla-1	before	src/cla.rs	`ema = alpha * returns[(r, c)] + (1.0 - alpha) * ema;` -> `ema = alpha * returns[(r, c)] + (1.0 + alpha) * ema;`	cla	SURVIVED
+cla-2	before	src/cla.rs	`let sigma = quad_risk(&self.cov_matrix, weights).sqrt();` -> `let sigma = quad_risk(&self.cov_matrix, weights);`	cla	SURVIVED
+portfolio_optimization-1	before	src/portfolio_optimization.rs	`out[(r - 1, c)] = (prices[(r, c)] / prev).ln();` -> `out[(r - 1, c)] = prices[(r, c)] / prev - 1.0;`	portfolio_optimization	SURVIVED
+portfolio_optimization-2	before	src/portfolio_optimization.rs	`expected[c] = (num / denom) * freq;` -> `expected[c] = num * freq;`	portfolio_optimization	SURVIVED
+CTL-fracdiff	after	src/fracdiff.rs	`acc += *w * series[loc0 + k];` -> `acc += 1234.5 + 0.0 * *w * series[loc0 + k];`	fracdiff,fracdiff_reference	KILLED by ffd_half_difference_hand_worked,ffd_with_integer_order_is_the_ordinary_difference,order_zero_is_identity
+CTL-hyperparameter_tuning	after	src/hyperparameter_tuning.rs	`let accuracy = weighted_correct / sum_w;` -> `let accuracy = 1234.5 + 0.0 * weighted_correct / sum_w;`	hyperparameter_tuning,hyperparameter_tuning_reference	KILLED by unweighted_accuracy_and_balanced_accuracy_hand_worked,weighted_scores_hand_worked
+CTL-pipeline	after	src/pipeline.rs	`equity *= 1.0 + strat_return;` -> `equity = 1234.5 + 0.0 * strat_return;`	lib,pipeline_reference	KILLED by strategy_path_hand_worked_without_look_ahead
+fracdiff-1	after	src/fracdiff.rs	`let w = -weights[k - 1] * (diff_amt - k as f64 + 1.0) / k as f64;` -> `let w = -weights[k - 1] * (diff_amt - k as f64) / k as f64;`	fracdiff,fracdiff_reference	KILLED by expanding_window_with_order_one_is_the_first_difference,weights_for_half_difference_closed_form,weights_for_integer_orders_are_finite_difference_stencils
+fracdiff-2	after	src/fracdiff.rs	`let next = -weights[weights.len() - 1] * (diff_amt - k as f64 + 1.0) / k as f64;` -> `let next = weights[weights.len() - 1] * (diff_amt - k as f64 + 1.0) / k as f64;`	fracdiff,fracdiff_reference	KILLED by ffd_half_difference_hand_worked,ffd_weights_are_cut_at_threshold,ffd_with_integer_order_is_the_ordinary_difference
+hyperparameter_tuning-1	after	src/hyperparameter_tuning.rs	`let neg_log_loss = -(weighted_loss / sum_w);` -> `let neg_log_loss = weighted_loss / sum_w;`	hyperparameter_tuning,hyperparameter_tuning_reference	KILLED by test_scoring_layer_handles_imbalance_weighted_neg_log_loss_and_metrics,test_grid_search_with_purged_kfold_and_embargo
+hyperparameter_tuning-2	after	src/hyperparameter_tuning.rs	`Ok(draw.exp())` -> `Ok(draw.abs())`	hyperparameter_tuning,hyperparameter_tuning_reference	KILLED by log_uniform_sampler_has_log_uniform_moments
+pipeline-1	after	src/pipeline.rs	`let strat_return = timeline_signal[i - 1] * close_return;` -> `let strat_return = timeline_signal[i] * close_return;`	lib,pipeline_reference	KILLED by strategy_path_hand_worked_without_look_ahead
+pipeline-2	after	src/pipeline.rs	`let close_return = close[i] / close[i - 1] - 1.0;` -> `let close_return = (close[i] / close[i - 1]).ln();`	lib,pipeline_reference	KILLED by strategy_path_hand_worked_without_look_ahead
