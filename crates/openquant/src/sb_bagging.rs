@@ -183,7 +183,8 @@ impl SequentiallyBootstrappedBaggingClassifier {
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
                 max_samples,
             );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
+            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+                .map_err(|_| SbBaggingError::DimensionMismatch)?;
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
 
@@ -331,7 +332,8 @@ impl SequentiallyBootstrappedBaggingRegressor {
                 ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
                 max_samples,
             );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup));
+            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+                .map_err(|_| SbBaggingError::DimensionMismatch)?;
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
             let n = samples.len() as f64;

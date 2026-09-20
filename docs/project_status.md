@@ -4,7 +4,14 @@
 - AFML gap modules tracked in epic `OQ-mef` are implemented in `crates/openquant/src/`:
   `ensemble_methods`, `hyperparameter_tuning`, `backtesting_engine`, `synthetic_backtesting`,
   `strategy_risk`, `hpc_parallel`, `combinatorial_optimization`, and `streaming_hpc`.
-- Panic-based public API paths were migrated to typed errors under `OQ-mef.6`.
+- Invalid arguments return `Err` rather than panicking. `OQ-mef.6` added `_checked` variants but
+  left the panicking wrappers public; #36 (2026-09-20) removed the wrappers, so the plain name is
+  the fallible one, and converted the remaining `assert!`/index panics in `bet_sizing`, `filters`,
+  `backtest_statistics`, `data_structures`, `sampling`, `microstructural_features`, `ef3m`,
+  `util::volatility` and `util::fast_ewma`. Covered by `crates/openquant/tests/invalid_input.rs`
+  and `python/tests/test_invalid_input_raises.py`. The `expect`s that remain in non-test code
+  guard internal invariants, not caller input. Not yet audited: slice indexing on mismatched
+  lengths in modules outside that list.
 - Notebook-first platform artifacts are present:
   Python bindings (`crates/pyopenquant`), Python API package (`python/openquant`),
   notebook starter packs (`notebooks/python`, `notebooks/rust`), experiment scaffold (`experiments/`),

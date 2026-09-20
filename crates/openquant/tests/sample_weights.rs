@@ -65,7 +65,8 @@ fn setup_events() -> EventsSetup {
     let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
     let timestamps: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
     let daily_vol = get_daily_vol(&close, 100);
-    let cusum_events = cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02));
+    let cusum_events =
+        cusum_filter_timestamps(&prices, &timestamps, Threshold::Scalar(0.02)).unwrap();
     let vertical_barriers = add_vertical_barrier(&cusum_events, &close, 2, 0, 0, 0);
     let side: Vec<(NaiveDateTime, f64)> = close.iter().map(|(ts, _)| (*ts, 1.0)).collect();
     let events = get_events(

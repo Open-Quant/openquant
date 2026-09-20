@@ -33,10 +33,6 @@ def test_ewma_rejects_negative_window():
         fast_ewma.ewma([1.0, 2.0, 3.0], -1)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="FINDING: fast_ewma.ewma(window=0) panics (pyo3 PanicException) instead of ValueError",
-)
 def test_ewma_zero_window_raises_value_error():
     with pytest.raises(ValueError):
         fast_ewma.ewma([1.0, 2.0, 3.0], 0)

@@ -3,7 +3,7 @@ title: "labeling"
 description: "Triple-barrier event labeling and metadata generation."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -129,7 +129,7 @@ let prices: Vec<f64> = close.iter().map(|(_, p)| *p).collect();
 let ts: Vec<NaiveDateTime> = close.iter().map(|(t, _)| *t).collect();
 
 // 2) detect candidate events via CUSUM filter
-let events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02));
+let events = cusum_filter_timestamps(&prices, &ts, Threshold::Scalar(0.02))?;
 
 // 3) estimate target volatility and add max-holding horizon
 let target = get_daily_vol(&close, 100);

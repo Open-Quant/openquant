@@ -3,7 +3,7 @@ title: "data_structures"
 description: "Constructs standard/time/run/imbalance bars from trade streams."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -109,16 +109,16 @@ use openquant::data_structures::{
 let trades: Vec<Trade> = vec![];
 
 // Fixed-time bars
-let t_bars = time_bars(&trades, Duration::minutes(5));
+let t_bars = time_bars(&trades, Duration::minutes(5))?;
 
 // Dollar bars via standard_bars
-let d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar);
+let d_bars = standard_bars(&trades, 50_000.0, StandardBarType::Dollar)?;
 
 // Run bars (Rust-only)
-let r_bars = run_bars(&trades, 100);
+let r_bars = run_bars(&trades, 100)?;
 
 // Tick imbalance bars (Rust-only)
-let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick);
+let ib = imbalance_bars(&trades, 500.0, ImbalanceBarType::Tick)?;
 ```
 
 ## Common Pitfalls

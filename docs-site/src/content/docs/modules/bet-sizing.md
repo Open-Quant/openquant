@@ -3,7 +3,7 @@ title: "bet_sizing"
 description: "Transforms model confidence and constraints into executable position sizes."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -81,7 +81,7 @@ let max_pos = vec![10.0; 5];
 let market = vec![100.0, 100.1, 100.0, 100.2, 100.15];
 let forecast = vec![100.3, 100.4, 100.2, 100.5, 100.45];
 
-let dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast);
+let dynamic = bet_size_dynamic(&pos, &max_pos, &market, &forecast)?;
 // tuple: (bet_size, target_position, limit_price)
 
 // Reserve sizing from overlapping long/short events
@@ -92,7 +92,7 @@ let t1 = vec![
   (t0 + Duration::minutes(20), t0 + Duration::minutes(50)),
 ];
 let side = vec![1.0, -1.0, 1.0];
-let (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true);
+let (reserve, fit) = bet_size_reserve_full(&t1, &side, 8, 1e-6, 200, true)?;
 
 assert_eq!(dynamic.len(), 5);
 assert!(fit.is_some());

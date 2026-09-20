@@ -1,10 +1,18 @@
+use super::InputError;
+
 /// Exponentially weighted moving average with span-like `window`.
 /// Mirrors mlfinlab.util.fast_ewma.ewma.
-pub fn ewma(arr_in: &[f64], window: usize) -> Vec<f64> {
-    if arr_in.is_empty() {
-        return Vec::new();
+pub fn ewma(arr_in: &[f64], window: usize) -> Result<Vec<f64>, InputError> {
+    if window == 0 {
+        return Err(InputError::OutOfRange {
+            name: "window",
+            value: 0.0,
+            expected: "a positive integer",
+        });
     }
-    assert!(window > 0, "window must be > 0");
+    if arr_in.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let alpha = 2.0 / (window as f64 + 1.0);
     let mut weight = 1.0;
@@ -17,5 +25,5 @@ pub fn ewma(arr_in: &[f64], window: usize) -> Vec<f64> {
         ewma_old = ewma_old * (1.0 - alpha) + arr_in[i];
         out[i] = ewma_old / weight;
     }
-    out
+    Ok(out)
 }

@@ -5,7 +5,7 @@ use openquant::risk_metrics::RiskMetrics;
 
 fn main() {
     let close = vec![80.0, 80.2, 80.1, 80.5, 80.3, 80.8, 80.6, 80.9, 81.1, 81.0];
-    let events = cusum_filter_indices(&close, Threshold::Scalar(0.001));
+    let events = cusum_filter_indices(&close, Threshold::Scalar(0.001)).unwrap();
     assert!(!events.is_empty());
 
     let prices = DMatrix::from_row_slice(

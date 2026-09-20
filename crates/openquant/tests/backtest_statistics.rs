@@ -113,16 +113,16 @@ fn test_probabilistic_deflated_sr() {
     assert!((psr - 0.95727).abs() < 1e-3);
 
     let sr_est = [3.5, 1.01, 1.02];
-    let dsr = deflated_sharpe_ratio(1.14, &sr_est, 250, 0.0, 3.0, false, false);
+    let dsr = deflated_sharpe_ratio(1.14, &sr_est, 250, 0.0, 3.0, false, false).unwrap();
     assert!((dsr - 0.95836).abs() < 1e-3);
-    let bench = deflated_sharpe_ratio(1.14, &[0.4, 100.0], 250, 0.0, 3.0, true, true);
+    let bench = deflated_sharpe_ratio(1.14, &[0.4, 100.0], 250, 0.0, 3.0, true, true).unwrap();
     assert!((bench - 1.012241).abs() < 1e-3);
-    let param = deflated_sharpe_ratio(1.14, &[0.4, 100.0], 250, 0.0, 3.0, true, false);
+    let param = deflated_sharpe_ratio(1.14, &[0.4, 100.0], 250, 0.0, 3.0, true, false).unwrap();
     assert!((param - 0.941740).abs() < 1e-3);
 }
 
 #[test]
 fn test_minimum_track_record_length() {
-    let min_trl = minimum_track_record_length(1.14, 1.0, 0.0, 3.0, 0.05);
+    let min_trl = minimum_track_record_length(1.14, 1.0, 0.0, 3.0, 0.05).unwrap();
     assert!((min_trl - 228.73497).abs() < 1e-1); // loosened tolerance
 }

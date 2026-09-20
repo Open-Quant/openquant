@@ -3,7 +3,7 @@ title: "microstructural_features"
 description: "Price-impact, spread, entropy, and flow toxicity estimators."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -68,10 +68,10 @@ let buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];
 
 // 2) Liquidity and spread proxies
 let roll = get_roll_measure(&close, 3);
-let cs_spread = get_corwin_schultz_estimator(&high, &low, 3);
-let kyle = get_bar_based_kyle_lambda(&close, &volume, 3);
-let amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3);
-let vpin = get_vpin(&volume, &buy_volume, 3);
+let cs_spread = get_corwin_schultz_estimator(&high, &low, 3)?;
+let kyle = get_bar_based_kyle_lambda(&close, &volume, 3)?;
+let amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3)?;
+let vpin = get_vpin(&volume, &buy_volume, 3)?;
 
 // 3) Feature panel is ready for regime model / execution model
 assert_eq!(roll.len(), close.len());
@@ -93,7 +93,7 @@ let msg = encode_tick_rule_array(&tick_rule)?;
 
 let h_shannon = get_shannon_entropy(&msg);
 let h_lz = get_lempel_ziv_entropy(&msg);
-let h_plugin = get_plug_in_entropy(&msg, 2);
+let h_plugin = get_plug_in_entropy(&msg, 2)?;
 
 assert!(h_shannon.is_finite());
 assert!(h_lz.is_finite());

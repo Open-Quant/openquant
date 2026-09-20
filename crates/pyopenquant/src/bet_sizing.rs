@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{pair_timestamps_values, parse_naive_datetimes, to_py_err};
+use crate::helpers::{input_err, pair_timestamps_values, parse_naive_datetimes};
 
 /// Python-facing reserve bet-size row: `(timestamp, active_long, active_short, c_t, bet_size)`.
 type ReserveRow = (String, f64, f64, f64, f64);
@@ -18,7 +18,7 @@ fn bet_sizing_discrete_signal(signal0: Vec<f64>, step_size: f64) -> Vec<f64> {
 
 #[pyfunction(name = "bet_size")]
 fn bet_sizing_bet_size(w_param: f64, price_div: f64, func: String) -> PyResult<f64> {
-    openquant::bet_sizing::bet_size_checked(w_param, price_div, &func).map_err(to_py_err)
+    openquant::bet_sizing::bet_size(w_param, price_div, &func).map_err(input_err)
 }
 
 #[pyfunction(name = "bet_size_sigmoid")]
@@ -28,7 +28,7 @@ fn bet_sizing_bet_size_sigmoid(w_param: f64, price_div: f64) -> f64 {
 
 #[pyfunction(name = "bet_size_power")]
 fn bet_sizing_bet_size_power(w_param: f64, price_div: f64) -> PyResult<f64> {
-    openquant::bet_sizing::bet_size_power_checked(w_param, price_div).map_err(to_py_err)
+    openquant::bet_sizing::bet_size_power(w_param, price_div).map_err(input_err)
 }
 
 #[pyfunction(name = "inv_price")]
@@ -38,8 +38,7 @@ fn bet_sizing_inv_price(
     m_bet_size: f64,
     func: String,
 ) -> PyResult<f64> {
-    openquant::bet_sizing::inv_price_checked(forecast_price, w_param, m_bet_size, &func)
-        .map_err(to_py_err)
+    openquant::bet_sizing::inv_price(forecast_price, w_param, m_bet_size, &func).map_err(input_err)
 }
 
 #[pyfunction(name = "inv_price_sigmoid")]
@@ -54,7 +53,7 @@ fn bet_sizing_inv_price_power(forecast_price: f64, w_param: f64, m_bet_size: f64
 
 #[pyfunction(name = "get_w")]
 fn bet_sizing_get_w(price_div: f64, m_bet_size: f64, func: String) -> PyResult<f64> {
-    openquant::bet_sizing::get_w_checked(price_div, m_bet_size, &func).map_err(to_py_err)
+    openquant::bet_sizing::get_w(price_div, m_bet_size, &func).map_err(input_err)
 }
 
 #[pyfunction(name = "get_w_sigmoid")]
@@ -64,7 +63,7 @@ fn bet_sizing_get_w_sigmoid(price_div: f64, m_bet_size: f64) -> f64 {
 
 #[pyfunction(name = "get_w_power")]
 fn bet_sizing_get_w_power(price_div: f64, m_bet_size: f64) -> PyResult<f64> {
-    openquant::bet_sizing::get_w_power_checked(price_div, m_bet_size).map_err(to_py_err)
+    openquant::bet_sizing::get_w_power(price_div, m_bet_size).map_err(input_err)
 }
 
 #[pyfunction(name = "get_target_pos")]
@@ -75,7 +74,7 @@ fn bet_sizing_get_target_pos(
     max_pos: f64,
     func: String,
 ) -> PyResult<f64> {
-    openquant::bet_sizing::get_target_pos_checked(w, f, m_p, max_pos, &func).map_err(to_py_err)
+    openquant::bet_sizing::get_target_pos(w, f, m_p, max_pos, &func).map_err(input_err)
 }
 
 #[pyfunction(name = "get_target_pos_sigmoid")]
@@ -94,8 +93,9 @@ fn bet_sizing_get_target_pos_power(
     forecast_price: f64,
     market_price: f64,
     max_pos: f64,
-) -> f64 {
+) -> PyResult<f64> {
     openquant::bet_sizing::get_target_pos_power(w_param, forecast_price, market_price, max_pos)
+        .map_err(input_err)
 }
 
 #[pyfunction(name = "limit_price")]
@@ -107,7 +107,7 @@ fn bet_sizing_limit_price(
     max_pos: f64,
     func: String,
 ) -> PyResult<f64> {
-    openquant::bet_sizing::limit_price_checked(t_pos, pos, f, w, max_pos, &func).map_err(to_py_err)
+    openquant::bet_sizing::limit_price(t_pos, pos, f, w, max_pos, &func).map_err(input_err)
 }
 
 #[pyfunction(name = "limit_price_sigmoid")]
@@ -144,7 +144,7 @@ fn bet_sizing_bet_size_dynamic(
     m_p: Vec<f64>,
     f: Vec<f64>,
 ) -> PyResult<Vec<(f64, f64, f64)>> {
-    openquant::bet_sizing::bet_size_dynamic_checked(&pos, &max_pos, &m_p, &f).map_err(to_py_err)
+    openquant::bet_sizing::bet_size_dynamic(&pos, &max_pos, &m_p, &f).map_err(input_err)
 }
 
 #[pyfunction(name = "cdf_mixture")]
@@ -172,7 +172,7 @@ fn bet_sizing_get_concurrent_sides(
     }
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
-    let result = openquant::bet_sizing::get_concurrent_sides(&t1, &side);
+    let result = openquant::bet_sizing::get_concurrent_sides(&t1, &side).map_err(input_err)?;
     Ok(result
         .into_iter()
         .map(|(ts, long, short)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), long, short))
@@ -194,7 +194,7 @@ fn bet_sizing_bet_size_budget(
     }
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
-    let result = openquant::bet_sizing::bet_size_budget(&t1, &side);
+    let result = openquant::bet_sizing::bet_size_budget(&t1, &side).map_err(input_err)?;
     Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
 }
 
@@ -266,7 +266,7 @@ fn bet_sizing_bet_size_reserve(
     }
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
-    let result = openquant::bet_sizing::bet_size_reserve(&t1, &side, &fit);
+    let result = openquant::bet_sizing::bet_size_reserve(&t1, &side, &fit).map_err(input_err)?;
     Ok(result
         .into_iter()
         .map(|(ts, l, s, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, b))
@@ -289,7 +289,8 @@ fn bet_sizing_bet_size_reserve_with_fit(
     }
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
-    let result = openquant::bet_sizing::bet_size_reserve_with_fit(&t1, &side, &fit);
+    let result =
+        openquant::bet_sizing::bet_size_reserve_with_fit(&t1, &side, &fit).map_err(input_err)?;
     Ok(result
         .into_iter()
         .map(|(ts, l, s, c, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, c, b))
@@ -322,7 +323,8 @@ fn bet_sizing_bet_size_reserve_full(
         epsilon,
         max_iter,
         return_parameters,
-    );
+    )
+    .map_err(input_err)?;
     let out_events = events
         .into_iter()
         .map(|(ts, l, s, c, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, c, b))

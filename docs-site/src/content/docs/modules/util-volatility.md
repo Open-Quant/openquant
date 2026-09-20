@@ -3,7 +3,7 @@ title: "util::volatility"
 description: "Volatility estimators used across labeling and risk workflows."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -60,7 +60,7 @@ let low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();
 // Close-to-close EWMA vol on a timestamped series; `lookback` is the EWMA span.
 let daily = get_daily_vol(&close, 100);
 // Parkinson uses the high/low range, so it needs no timestamps — `window` bars.
-let parkinson = get_parkinson_vol(&high, &low, 20);
+let parkinson = get_parkinson_vol(&high, &low, 20)?;
 
 println!("daily vol tail = {:?}", daily.last());
 println!("parkinson vol tail = {:?}", parkinson.last());

@@ -15,6 +15,11 @@ pub fn to_py_err<T: core::fmt::Debug>(err: T) -> PyErr {
     PyValueError::new_err(format!("{err:?}"))
 }
 
+/// An invalid-argument error from the core, raised as `ValueError` with the core's message.
+pub fn input_err<T: core::fmt::Display>(err: T) -> PyErr {
+    PyValueError::new_err(err.to_string())
+}
+
 pub fn matrix_from_rows(rows: Vec<Vec<f64>>) -> PyResult<DMatrix<f64>> {
     let nrows = rows.len();
     if nrows == 0 {

@@ -1,9 +1,8 @@
 use chrono::NaiveDateTime;
 use csv::ReaderBuilder;
 use openquant::filters::{
-    cusum_filter_indices, cusum_filter_indices_checked, cusum_filter_timestamps,
-    z_score_filter_indices, z_score_filter_timestamps, z_score_filter_timestamps_checked,
-    FilterError, Threshold,
+    cusum_filter_indices, cusum_filter_timestamps, z_score_filter_indices,
+    z_score_filter_timestamps, FilterError, Threshold,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -72,9 +71,12 @@ fn cusum_filter_matches_fixture() {
         let expected_idx =
             parse_ts(events["cusum"][&key_idx].as_array().expect("cusum indices as timestamps"));
 
-        let got_ts = cusum_filter_timestamps(&close, &timestamps, Threshold::Scalar(*thresh));
-        let got_idx =
-            as_timestamps(&cusum_filter_indices(&close, Threshold::Scalar(*thresh)), &timestamps);
+        let got_ts =
+            cusum_filter_timestamps(&close, &timestamps, Threshold::Scalar(*thresh)).unwrap();
+        let got_idx = as_timestamps(
+            &cusum_filter_indices(&close, Threshold::Scalar(*thresh)).unwrap(),
+            &timestamps,
+        );
 
         assert_eq!(got_ts, expected_ts, "threshold={thresh} timestamps");
         assert_eq!(got_idx, expected_idx, "threshold={thresh} indices");
@@ -94,9 +96,10 @@ fn cusum_dynamic_threshold_matches_fixture() {
     let dyn_threshold: Vec<f64> = close.iter().map(|v| v * 1e-5).collect();
 
     let got_ts =
-        cusum_filter_timestamps(&close, &timestamps, Threshold::Dynamic(dyn_threshold.clone()));
+        cusum_filter_timestamps(&close, &timestamps, Threshold::Dynamic(dyn_threshold.clone()))
+            .unwrap();
     let got_idx = as_timestamps(
-        &cusum_filter_indices(&close, Threshold::Dynamic(dyn_threshold)),
+        &cusum_filter_indices(&close, Threshold::Dynamic(dyn_threshold)).unwrap(),
         &timestamps,
     );
 
@@ -113,7 +116,7 @@ fn z_score_filter_matches_fixture() {
     let expected_idx =
         parse_ts(events["z_score"]["index"].as_array().expect("z_score index as timestamps"));
 
-    let got_ts = z_score_filter_timestamps(&close, &timestamps, 100, 100, 2.0);
+    let got_ts = z_score_filter_timestamps(&close, &timestamps, 100, 100, 2.0).unwrap();
     let got_idx = as_timestamps(&z_score_filter_indices(&close, 100, 100, 2.0), &timestamps);
 
     assert_eq!(got_ts, expected_ts, "z-score timestamps");
@@ -124,7 +127,7 @@ fn z_score_filter_matches_fixture() {
 fn cusum_checked_reports_missing_dynamic_threshold() {
     let (_timestamps, close) = load_data();
     let short_threshold = vec![0.01; close.len() / 4];
-    let err = cusum_filter_indices_checked(&close, Threshold::Dynamic(short_threshold))
+    let err = cusum_filter_indices(&close, Threshold::Dynamic(short_threshold))
         .expect_err("dynamic threshold underflow should return typed error");
     assert!(matches!(err, FilterError::MissingDynamicThreshold { index: _, available: _ }));
     assert!(err.to_string().contains("dynamic threshold missing value"));
@@ -134,7 +137,7 @@ fn cusum_checked_reports_missing_dynamic_threshold() {
 fn z_score_checked_reports_timestamp_shape_mismatch() {
     let (timestamps, close) = load_data();
     let short_ts = &timestamps[..1];
-    let err = z_score_filter_timestamps_checked(&close, short_ts, 100, 100, 2.0)
+    let err = z_score_filter_timestamps(&close, short_ts, 100, 100, 2.0)
         .expect_err("timestamp mismatch should return typed error");
     assert!(matches!(err, FilterError::TimestampIndexOutOfBounds { index: _, available: _ }));
     assert!(err.to_string().contains("out of bounds"));

@@ -1,3 +1,5 @@
+use super::input_error::same_length;
+use super::InputError;
 use chrono::{Duration, NaiveDateTime};
 
 /// Compute daily volatility via exponentially weighted std of daily returns.
@@ -55,8 +57,8 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
 /// Parkinson volatility estimator.
 /// Mirrors mlfinlab's `get_parksinson_vol` — note that upstream misspells
 /// "Parkinson"; this crate spells it correctly.
-pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
-    assert_eq!(high.len(), low.len(), "high/low length mismatch");
+pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Result<Vec<f64>, InputError> {
+    same_length("low", low, high.len())?;
     let estimator: Vec<f64> = high
         .iter()
         .zip(low.iter())
@@ -65,7 +67,7 @@ pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Vec<f64> {
             (ret * ret) / (4.0 * 2.0f64.ln())
         })
         .collect();
-    rolling_sqrt_mean(&estimator, window)
+    Ok(rolling_sqrt_mean(&estimator, window))
 }
 
 /// Garman-Klass volatility estimator.
@@ -76,10 +78,10 @@ pub fn get_garman_class_vol(
     low: &[f64],
     close: &[f64],
     window: usize,
-) -> Vec<f64> {
-    assert_eq!(open.len(), high.len(), "open/high length mismatch");
-    assert_eq!(open.len(), low.len(), "open/low length mismatch");
-    assert_eq!(open.len(), close.len(), "open/close length mismatch");
+) -> Result<Vec<f64>, InputError> {
+    same_length("high", high, open.len())?;
+    same_length("low", low, open.len())?;
+    same_length("close", close, open.len())?;
 
     let c = 2.0 * 2.0f64.ln() - 1.0;
     let estimator: Vec<f64> = open
@@ -93,7 +95,7 @@ pub fn get_garman_class_vol(
             0.5 * hl * hl - c * co * co
         })
         .collect();
-    rolling_sqrt_mean(&estimator, window)
+    Ok(rolling_sqrt_mean(&estimator, window))
 }
 
 /// Yang-Zhang volatility estimator.
@@ -104,17 +106,17 @@ pub fn get_yang_zhang_vol(
     low: &[f64],
     close: &[f64],
     window: usize,
-) -> Vec<f64> {
-    assert_eq!(open.len(), high.len(), "open/high length mismatch");
-    assert_eq!(open.len(), low.len(), "open/low length mismatch");
-    assert_eq!(open.len(), close.len(), "open/close length mismatch");
+) -> Result<Vec<f64>, InputError> {
+    same_length("high", high, open.len())?;
+    same_length("low", low, open.len())?;
+    same_length("close", close, open.len())?;
 
     let n = open.len();
     if n == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     if window < 2 {
-        return vec![f64::NAN; n];
+        return Ok(vec![f64::NAN; n]);
     }
 
     let k = 0.34 / (1.34 + ((window + 1) as f64 / (window - 1) as f64));
@@ -147,7 +149,7 @@ pub fn get_yang_zhang_vol(
     );
     let sigma_rs_sq = rolling_sum_with_min_periods(&rs_component, window, window);
 
-    sigma_open_sq
+    Ok(sigma_open_sq
         .iter()
         .zip(sigma_close_sq.iter())
         .zip(sigma_rs_sq.iter())
@@ -161,7 +163,7 @@ pub fn get_yang_zhang_vol(
                     .sqrt()
             }
         })
-        .collect()
+        .collect())
 }
 
 fn rolling_sqrt_mean(values: &[f64], window: usize) -> Vec<f64> {

@@ -47,13 +47,7 @@ fn threshold_at_checked(threshold: &Threshold, idx: usize) -> Result<f64, Filter
 }
 
 /// CUSUM filter returning indices of events (0-based positions in the input).
-pub fn cusum_filter_indices(close: &[f64], threshold: Threshold) -> Vec<usize> {
-    cusum_filter_indices_checked(close, threshold)
-        .expect("invalid threshold in cusum_filter_indices")
-}
-
-/// CUSUM filter returning indices of events (0-based positions in the input).
-pub fn cusum_filter_indices_checked(
+pub fn cusum_filter_indices(
     close: &[f64],
     threshold: Threshold,
 ) -> Result<Vec<usize>, FilterError> {
@@ -91,18 +85,8 @@ pub fn cusum_filter_timestamps(
     close: &[f64],
     timestamps: &[NaiveDateTime],
     threshold: Threshold,
-) -> Vec<NaiveDateTime> {
-    cusum_filter_timestamps_checked(close, timestamps, threshold)
-        .expect("timestamp index out of bounds in cusum_filter_timestamps")
-}
-
-/// CUSUM filter returning timestamps of events.
-pub fn cusum_filter_timestamps_checked(
-    close: &[f64],
-    timestamps: &[NaiveDateTime],
-    threshold: Threshold,
 ) -> Result<Vec<NaiveDateTime>, FilterError> {
-    let indices = cusum_filter_indices_checked(close, threshold)?;
+    let indices = cusum_filter_indices(close, threshold)?;
     indices
         .into_iter()
         .map(|i| {
@@ -166,18 +150,6 @@ pub fn z_score_filter_indices(
 
 /// Z-score filter returning timestamps of events.
 pub fn z_score_filter_timestamps(
-    close: &[f64],
-    timestamps: &[NaiveDateTime],
-    mean_window: usize,
-    std_window: usize,
-    threshold: f64,
-) -> Vec<NaiveDateTime> {
-    z_score_filter_timestamps_checked(close, timestamps, mean_window, std_window, threshold)
-        .expect("timestamp index out of bounds in z_score_filter_timestamps")
-}
-
-/// Z-score filter returning timestamps of events.
-pub fn z_score_filter_timestamps_checked(
     close: &[f64],
     timestamps: &[NaiveDateTime],
     mean_window: usize,

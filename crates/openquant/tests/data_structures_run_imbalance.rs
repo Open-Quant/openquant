@@ -35,7 +35,7 @@ fn trades_for_imbalance() -> Vec<Trade> {
 #[test]
 fn run_bars_close_on_consecutive_moves() {
     let trades = trades_for_runs();
-    let bars = run_bars(&trades, 3);
+    let bars = run_bars(&trades, 3).unwrap();
 
     assert_eq!(bars.len(), 2);
 
@@ -59,7 +59,7 @@ fn run_bars_close_on_consecutive_moves() {
 #[test]
 fn tick_imbalance_bars_accumulate_signed_ticks() {
     let trades = trades_for_imbalance();
-    let bars = imbalance_bars(&trades, 2.0, ImbalanceBarType::Tick);
+    let bars = imbalance_bars(&trades, 2.0, ImbalanceBarType::Tick).unwrap();
 
     assert_eq!(bars.len(), 2);
 

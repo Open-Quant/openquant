@@ -51,13 +51,6 @@ def test_daily_vol_rejects_length_mismatch_and_bad_timestamps():
         volatility.get_daily_vol(["2024-01-01"], [1.0], 5)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FINDING: range estimators assert_eq! on input lengths, so mismatched inputs "
-        "surface as pyo3 PanicException instead of ValueError"
-    ),
-)
 @pytest.mark.parametrize(
     "call",
     [
