@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-label="Time-decay weights from the oldest label to the newest, for four values of the decay parameter">
+<rect width="760" height="300" fill="#17140f"/>
+<text x="56" y="28" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">WEIGHT BY LABEL AGE</text>
+<line x1="56" y1="256.0" x2="600" y2="256.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="48" y="260.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">0</text>
+<line x1="56" y1="148.0" x2="600" y2="148.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="48" y="152.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">0.5</text>
+<line x1="56" y1="40.0" x2="600" y2="40.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="48" y="44.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">1.0</text>
+<polyline points="56.0,40.0 84.6,40.0 113.3,40.0 141.9,40.0 170.5,40.0 199.2,40.0 227.8,40.0 256.4,40.0 285.1,40.0 313.7,40.0 342.3,40.0 370.9,40.0 399.6,40.0 428.2,40.0 456.8,40.0 485.5,40.0 514.1,40.0 542.7,40.0 571.4,40.0 600.0,40.0" fill="none" stroke="#ece6d8" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="342.3" y="56.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">c = 1</text>
+<polyline points="56.0,142.6 84.6,137.2 113.3,131.8 141.9,126.4 170.5,121.0 199.2,115.6 227.8,110.2 256.4,104.8 285.1,99.4 313.7,94.0 342.3,88.6 370.9,83.2 399.6,77.8 428.2,72.4 456.8,67.0 485.5,61.6 514.1,56.2 542.7,50.8 571.4,45.4 600.0,40.0" fill="none" stroke="#f29ad6" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="193.2" y="109.6" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">c = 0.5</text>
+<polyline points="56.0,245.2 84.6,234.4 113.3,223.6 141.9,212.8 170.5,202.0 199.2,191.2 227.8,180.4 256.4,169.6 285.1,158.8 313.7,148.0 342.3,137.2 370.9,126.4 399.6,115.6 428.2,104.8 456.8,94.0 485.5,83.2 514.1,72.4 542.7,61.6 571.4,50.8 600.0,40.0" fill="none" stroke="#f29ad6" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="193.2" y="185.2" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">c = 0</text>
+<polyline points="56.0,256.0 84.6,256.0 113.3,256.0 141.9,256.0 170.5,256.0 199.2,256.0 227.8,256.0 256.4,256.0 285.1,256.0 313.7,256.0 342.3,234.4 370.9,212.8 399.6,191.2 428.2,169.6 456.8,148.0 485.5,126.4 514.1,104.8 542.7,83.2 571.4,61.6 600.0,40.0" fill="none" stroke="#f29ad6" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="407.6" y="205.2" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">c = -0.5</text>
+<text x="56" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">oldest</text>
+<text x="600" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">newest</text>
+</svg>
