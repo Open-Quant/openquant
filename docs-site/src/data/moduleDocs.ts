@@ -74,108 +74,19 @@ export type ModuleDoc = {
 export const moduleDocs: ModuleDoc[] = [
   {
     slug: "backtest-statistics",
-    conceptOverview:
-      "Turns a return or equity series into the handful of statistics a strategy is actually judged on: annualised Sharpe, information ratio, the drawdown and time-under-water profile, average holding period, bet concentration, and the multiple-testing corrections — probabilistic and deflated Sharpe — that say whether a Sharpe is real. Those corrections are why this module exists rather than a two-line Sharpe helper: AFML Chapter 14's point is that a Sharpe reported without the number of trials behind it is uninterpretable.",
-    whenToUse:
-      "Reach for it after a backtest run, at model-selection time, and again in production monitoring. Use `deflated_sharpe_ratio` whenever the strategy is the survivor of a search — a grid, a parameter sweep, a family of variants — and pass the trial count honestly; `sharpe_ratio` alone flatters every one of them. Note that `drawdown_and_time_under_water` consumes a timestamped equity curve, not a return vector, and that every annualisation constant must match your bar frequency.",
-    relatedModules: ["backtesting-engine", "strategy-risk", "risk-metrics", "synthetic-backtesting"],
     module: "backtest_statistics",
     subject: "Portfolio Construction and Risk",
-    summary: "Performance diagnostics for strategy returns and position trajectories.",
-    whyItExists: "Turns raw PnL/returns into risk-adjusted diagnostics used in model selection and production monitoring.",
-    keyApis: [
-      "sharpe_ratio",
-      "deflated_sharpe_ratio",
-      "probabilistic_sharpe_ratio",
-      "drawdown_and_time_under_water",
-      "average_holding_period",
-    ],
-    formulas: [
-      {
-        label: "Sharpe Ratio",
-        latex: "\\mathrm{SR}=\\frac{\\mu-r_f}{\\sigma}\\sqrt{n}",
-        where: "$\\mu$ and $\\sigma$ are the mean and standard deviation of the per-bar returns, $r_f$ the per-bar risk-free rate, and $n$ the number of bars per year (`entries_per_year`) — the annualisation constant must match your bar frequency.",
-      },
-      {
-        label: "Information Ratio",
-        latex: "\\mathrm{IR}=\\frac{\\mu-r_b}{\\sigma_{(r-r_b)}}",
-        where: "$r_b$ is the benchmark return and $\\sigma_{(r-r_b)}$ the tracking error, i.e. the standard deviation of the *excess* return series.",
-      },
-      {
-        label: "Probabilistic Sharpe Ratio",
-        latex: "\\mathrm{PSR}(\\mathrm{SR}^*)=Z\\left[\\frac{(\\widehat{\\mathrm{SR}}-\\mathrm{SR}^*)\\sqrt{T-1}}{\\sqrt{1-\\hat\\gamma_3\\widehat{\\mathrm{SR}}+\\frac{\\hat\\gamma_4-1}{4}\\widehat{\\mathrm{SR}}^2}}\\right]",
-        where: "$Z[\\cdot]$ is the standard normal CDF, $\\widehat{\\mathrm{SR}}$ the observed (non-annualised) Sharpe ratio, $\\mathrm{SR}^*$ the benchmark being tested against, $T$ the number of returns, and $\\hat\\gamma_3,\\hat\\gamma_4$ the sample skewness and kurtosis. Non-normal returns lower the confidence a given Sharpe deserves.",
-      },
-      {
-        label: "Deflated Sharpe Ratio",
-        latex: "\\mathrm{DSR}=\\mathrm{PSR}(\\mathrm{SR}_0),\\qquad \\mathrm{SR}_0=\\sqrt{V[\\{\\widehat{\\mathrm{SR}}_n\\}]}\\left((1-\\gamma)Z^{-1}\\!\\left[1-\\tfrac{1}{N}\\right]+\\gamma Z^{-1}\\!\\left[1-\\tfrac{e^{-1}}{N}\\right]\\right)",
-        where: "$N$ is the number of strategy variants you tried, $V[\\{\\widehat{\\mathrm{SR}}_n\\}]$ the variance of their Sharpe ratios, $\\gamma\\approx0.5772$ the Euler-Mascheroni constant, and $Z^{-1}$ the normal quantile function. $\\mathrm{SR}_0$ is the Sharpe you would *expect* the best of $N$ independent worthless strategies to post, so DSR is the PSR measured against that bar instead of against zero. `deflated_sharpe_ratio` accepts either the raw $\\{\\widehat{\\mathrm{SR}}_n\\}$ or the $(\\text{sd}, N)$ pair via `estimates_param`.",
-      },
-    ],
-    examples: [
-      {
-        title: "Compute Sharpe and drawdown",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::backtest_statistics::{drawdown_and_time_under_water, sharpe_ratio};\n\nlet returns = vec![0.01, -0.005, 0.007, -0.002, 0.003];\nlet sharpe = sharpe_ratio(&returns, 252.0, 0.0);\n\n// Drawdown and time-under-water are computed on a *timestamped equity curve*,\n// not on the return series: the function needs the timestamps to measure how\n// long each high-water mark went un-recovered.\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet mut equity = 1.0;\nlet curve: Vec<(NaiveDateTime, f64)> = returns\n    .iter()\n    .enumerate()\n    .map(|(i, r)| {\n        equity *= 1.0 + r;\n        (t0 + Duration::days(i as i64), equity)\n    })\n    .collect();\n\n// dollars = false reports each drawdown as a fraction of its high-water mark.\nlet (drawdowns, time_under_water) = drawdown_and_time_under_water(&curve, false);\nprintln!("sharpe={sharpe:.3} drawdowns={drawdowns:?} tuw={time_under_water:?}");`,
-      },
-    ],
-    notes: [
-      "Use annualization constants consistent with your bar frequency.",
-      "Deflated Sharpe is useful when strategy mining many variants.",
-    ],
+    summary: "Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["backtest_stats.sharpe_ratio", "backtest_stats.information_ratio", "backtest_stats.probabilistic_sharpe_ratio", "backtest_stats.deflated_sharpe_ratio", "backtest_stats.minimum_track_record_length", "backtest_stats.timing_of_flattening_and_flips", "backtest_stats.average_holding_period", "backtest_stats.bets_concentration", "backtest_stats.all_bets_concentration", "backtest_stats.drawdown_and_time_under_water"],
   },
   {
     slug: "backtesting-engine",
-    conceptOverview:
-      "Three validation modes over one data contract: walk-forward, purged k-fold cross-validation, and combinatorial purged CV. CPCV is the one that justifies the extra cost — instead of a single backtest path it produces phi[N,k] = C(N-1, k-1) paths, so the output is a *distribution* of per-path Sharpe ratios you can take quantiles of rather than a point estimate you can fool yourself with. Every run carries a `BacktestSafeguards` record (survivorship, look-ahead, data-mining, cost and multiple-testing controls) so the assumptions travel attached to the number.",
-    whenToUse:
-      "Use walk-forward when the question is \"would this have worked as deployed\"; use purged CV when you need many folds out of limited data; use CPCV when you are about to make a go/no-go decision and need to know how much of the reported Sharpe is path luck. All three require `label_spans` — the label lifetimes — not just observation timestamps, because that is what purging acts on. Compare the three modes against each other rather than averaging them into one statistic.",
-    relatedModules: ["cross-validation", "sample-weights", "backtest-statistics", "synthetic-backtesting", "hyperparameter-tuning"],
     module: "backtesting_engine",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.",
-    whyItExists:
-      "AFML Chapters 11-12 require scenario-based validation with explicit anti-leakage controls, split provenance, and path-wise uncertainty rather than single-score reporting.",
-    keyApis: [
-      "run_walk_forward",
-      "run_cross_validation",
-      "run_cpcv",
-      "cpcv_path_count",
-      "BacktestRunConfig",
-      "BacktestSafeguards",
-      "WalkForwardConfig",
-      "CrossValidationConfig",
-      "CpcvConfig",
-    ],
-    formulas: [
-      {
-        label: "CPCV Path Count",
-        latex: "\\phi[N,k]=\\binom{N}{k}\\frac{k}{N}=\\binom{N-1}{k-1}",
-      },
-      {
-        label: "Purge + Embargo Train Set",
-        latex:
-          "\\mathcal T_{train}^{*}=\\mathcal T_{train}\\setminus\\{i: \\exists j\\in\\mathcal T_{test},\\;I_i\\cap I_j\\neq\\varnothing\\}\\setminus\\mathcal E(\\mathcal T_{test},p)",
-      },
-      {
-        label: "Per-Path Sharpe",
-        latex: "S_{path}=\\frac{\\bar r_{path}}{\\sigma_{path}}\\sqrt{T_{path}}",
-      },
-    ],
-    examples: [
-      {
-        title: "Run CPCV and inspect Sharpe distribution",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::backtesting_engine::{\n    run_cpcv, BacktestData, BacktestRunConfig, BacktestSafeguards, CpcvConfig,\n};\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet pnl: Vec<f64> = (0..240).map(|i| ((i % 7) as f64 - 3.0) / 1000.0).collect();\n\n// Each observation carries the span its label was drawn over. That span — not the\n// observation's timestamp — is what purging and the embargo act on.\nlet data = BacktestData {\n    returns: pnl.clone(),\n    label_spans: (0..240)\n        .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2)))\n        .collect(),\n};\n\nlet result = run_cpcv(\n    &data,\n    &BacktestRunConfig {\n        mode_provenance: "research_v3_with_costs".to_string(),\n        trials_count: 24,\n        safeguards: BacktestSafeguards {\n            survivorship_bias_control: "point-in-time universe".to_string(),\n            look_ahead_control: "lagged features".to_string(),\n            data_mining_control: "frozen split protocol".to_string(),\n            cost_assumption: "spread + slippage".to_string(),\n            multiple_testing_control: "trial count logged".to_string(),\n        },\n    },\n    &CpcvConfig { n_groups: 8, test_groups: 2, pct_embargo: 0.01 },\n    |split| Ok(split.test_indices.iter().map(|i| pnl[*i]).collect()),\n)?;\n\nprintln!("phi = {}", result.path_count);\nprintln!("path sharpe count = {}", result.path_distribution.len());`,
-      },
-    ],
-    notes: [
-      "Chapter 11: a backtest is a scenario sanity check; keep safeguards and assumptions attached to every run.",
-      "Chapter 12: compare WF/CV/CPCV results by mode rather than averaging them into one statistic.",
-      "CPCV output is a path distribution, enabling robust Sharpe diagnostics (e.g., quantiles) instead of point estimates.",
-    ],
+    summary: "Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.",
+    handwritten: true,
   },
   {
     slug: "bet-sizing",
@@ -818,49 +729,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "synthetic-backtesting",
-    conceptOverview:
-      "AFML Chapter 13's answer to profit-taking and stop-loss overfitting. Rather than searching the PT/SL mesh on the single historical path you have — where the winning cell is mostly luck — it calibrates an Ornstein-Uhlenbeck process to that path, generates thousands of synthetic paths from the fitted parameters, and evaluates the whole mesh across all of them. `detect_no_stable_optimum` then asks whether the resulting Sharpe surface has a peak worth trusting at all.",
-    whenToUse:
-      "Use it before committing to any exit rule. Its most valuable output is often the negative one: when the fitted persistence is close to 1 the price is near a random walk, the Sharpe surface is flat, and `no_stable_optimum` says so — meaning no PT/SL pair is defensible and the honest move is to skip the optimisation rather than take the argmax of noise. It complements `backtesting_engine` rather than replacing it, since that validates on the real path.",
-    relatedModules: ["backtesting-engine", "labeling", "backtest-statistics", "bet-sizing", "strategy-risk"],
     module: "synthetic_backtesting",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.",
-    whyItExists:
-      "AFML Chapter 13 shows that selecting PT/SL rules on a single historical path is prone to overfitting; synthetic path ensembles let us evaluate rule robustness under calibrated process dynamics.",
-    keyApis: [
-      "calibrate_ou_params",
-      "generate_ou_paths",
-      "evaluate_rule_on_paths",
-      "search_optimal_trading_rule",
-      "detect_no_stable_optimum",
-      "run_synthetic_otr_workflow",
-    ],
-    formulas: [
-      {
-        label: "Discrete O-U (AR(1))",
-        latex: "P_t=\\alpha+\\phi P_{t-1}+\\sigma\\epsilon_t,\\quad \\epsilon_t\\sim\\mathcal N(0,1)",
-      },
-      {
-        label: "Equilibrium Level",
-        latex: "\\bar P=\\frac{\\alpha}{1-\\phi}",
-      },
-      {
-        label: "OTR Objective over Rule Mesh",
-        latex: "R^*=\\arg\\max_{R\\in\\Omega}\\frac{\\mathbb E[\\pi\\mid R]}{\\sigma[\\pi\\mid R]}",
-      },
-    ],
-    examples: [
-      {
-        title: "End-to-end synthetic OTR workflow",
-        language: "rust",
-        code: `use openquant::synthetic_backtesting::{\n    run_synthetic_otr_workflow, StabilityCriteria, SyntheticBacktestConfig,\n};\n\n// A realised price history is fitted to obtain the O-U parameters the synthetic\n// paths are drawn from.\nlet historical_prices: Vec<f64> =\n    (0..500).map(|i| 100.0 + (i as f64 * 0.05).sin() * 3.0).collect();\n\nlet cfg = SyntheticBacktestConfig {\n    initial_price: historical_prices[historical_prices.len() - 1],\n    n_paths: 10_000,\n    horizon: 128,\n    seed: 42,\n    profit_taking_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n    stop_loss_grid: vec![0.5, 1.0, 1.5, 2.0, 3.0],\n    max_holding_steps: 64,\n    annualization_factor: 1.0,\n    stability_criteria: StabilityCriteria::default(),\n};\n\nlet out = run_synthetic_otr_workflow(&historical_prices, &cfg)?;\nif out.diagnostics.no_stable_optimum {\n    println!("Skip OTR optimization: {}", out.diagnostics.reason);\n} else {\n    println!("Best PT/SL: {:?}", out.best_rule);\n}`,
-      },
-    ],
-    notes: [
-      "Near-random-walk estimates (|phi| close to 1) often produce flat Sharpe heatmaps where any selected rule is unstable out-of-sample.",
-      "Calibrating to process parameters and evaluating many synthetic paths reduces single-path lucky-fit risk compared to brute-force historical optimization.",
-    ],
+    summary: "Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["synthetic_bt.calibrate_ou_params", "synthetic_bt.generate_ou_paths", "synthetic_bt.evaluate_rule_on_paths", "synthetic_bt.detect_no_stable_optimum", "synthetic_bt.run_synthetic_otr_workflow", "synthetic_bt.search_optimal_trading_rule"],
   },

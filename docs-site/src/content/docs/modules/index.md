@@ -43,7 +43,7 @@ For the AFML chapter each module implements, see
 
 ### Portfolio Construction and Risk
 
-- [`backtest_statistics`](/modules/backtest-statistics/) — Performance diagnostics for strategy returns and position trajectories.
+- [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
 - [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
@@ -65,7 +65,7 @@ For the AFML chapter each module implements, see
 
 ### Sampling, Validation and ML Diagnostics
 
-- [`backtesting_engine`](/modules/backtesting-engine/) — Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.
+- [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
@@ -75,7 +75,7 @@ For the AFML chapter each module implements, see
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
 - [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
-- [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.
+- [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 
 ### Scaling, HPC and Infrastructure
 
@@ -87,8 +87,8 @@ For the AFML chapter each module implements, see
 
 ### Rust core
 
-- [`backtest_statistics`](/modules/backtest-statistics/) — Performance diagnostics for strategy returns and position trajectories.
-- [`backtesting_engine`](/modules/backtesting-engine/) — Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.
+- [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
+- [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
 - [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
@@ -119,7 +119,7 @@ For the AFML chapter each module implements, see
 - [`strategy_risk`](/modules/strategy-risk/) — AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.
 - [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
 - [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
-- [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.
+- [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 - [`util::fast_ewma`](/modules/util-fast-ewma/) — Fast EWMA primitive shared across feature and volatility routines.
 - [`util::volatility`](/modules/util-volatility/) — Volatility estimators used across labeling and risk workflows.
 
