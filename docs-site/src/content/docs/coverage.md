@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-09-20**.
+Numbers below were regenerated on **2026-09-21**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,9 +41,9 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 17 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
+| `generated` | 14 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 24 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 27 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 11 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
@@ -57,8 +57,10 @@ literal in the page generator rather than a record of anyone's review.
 ## Module documentation depth
 
 Module pages began as output of `src/data/moduleDocs.ts` and are being replaced, one AFML
-chapter at a time, by pages written by hand: each cites its source, runs at least one example
-whose printed output the docs checks compare, and has only the sections it needs. The first
+chapter at a time, by pages written by hand: each cites its source, has only the sections it
+needs, and runs its examples. For a module with Python bindings that is a Python block whose
+printed output the docs checks compare with the page; for a Rust-only module it is a Rust
+snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
 row below counts those. For the pages still generated, every entry fills in
 `conceptOverview`, `whenToUse` and `relatedModules`, so each carries those sections; the
 split is over the two optional ones, `keyParameters` and `commonPitfalls`.
@@ -67,9 +69,9 @@ split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 | | Count |
 |---|---|
 | Modules with a documentation page | 39 |
-| …written by hand, with a citation and executed examples | 23 |
+| …written by hand, with a citation and executed examples | 26 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 13 |
+| …generated, carrying the base template only | 10 |
 <!-- coverage:end:module-depth -->
 
 A base-template page is not a stub — it has a concept overview, mathematical

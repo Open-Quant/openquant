@@ -242,63 +242,19 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "hcaa",
-    conceptOverview:
-      "Hierarchical Clustering Asset Allocation generalises HRP's recursive bisection to risk measures other than variance. Seriation and the cluster tree are built the same way, but the split at each node weights the two sides by the chosen `allocation_metric` — cluster variance, standard deviation, Sharpe ratio, expected shortfall or conditional drawdown — so the same hierarchy can express a tail-risk budget rather than only a variance budget. Like HRP it never inverts the covariance matrix.",
-    whenToUse:
-      "Use it in place of `hrp` when your risk budget is not variance: expected shortfall or conditional drawdown for a drawdown-controlled mandate, Sharpe when you have return views you are willing to defend. Use `hrp` when you do not, since the variance split needs no expected-return estimate at all. The clustering is only as good as the distance fed to it, so build that with `codependence` rather than raw correlation, and sanity-check the cluster count with `onc`.",
-    relatedModules: ["hrp", "onc", "codependence", "portfolio-optimization", "cla"],
     module: "hcaa",
     subject: "Portfolio Construction and Risk",
-    summary: "Hierarchical Clustering Asset Allocation variant with cluster-level constraints.",
-    whyItExists: "Allocates capital by hierarchy to reduce concentration and covariance-estimation fragility.",
-    keyApis: ["HierarchicalClusteringAssetAllocation", "HcaaError"],
-    formulas: [
-      {
-        label: "Cluster Risk",
-        latex: "\\sigma_C^2=w_C^{\\top}\\Sigma_C w_C",
-        where: "$\\Sigma_C$ is the covariance sub-matrix of cluster $C$ and $w_C$ its inverse-variance weights, normalised to sum to one within the cluster.",
-      },
-      {
-        label: "Recursive Bisection Split",
-        latex: "\\alpha=1-\\frac{m_{\\text{left}}}{m_{\\text{left}}+m_{\\text{right}}},\\qquad w_{\\text{left}}\\mathrel{*}=\\alpha,\\quad w_{\\text{right}}\\mathrel{*}=1-\\alpha",
-        where: "$m_C$ is the risk of cluster $C$ under the chosen `allocation_metric`: cluster variance ($\\sigma_C^2$), standard deviation ($\\sigma_C$), expected shortfall, or conditional drawdown. Lower risk on one side means a larger $\\alpha$ for that side. This generalises the HRP split, which is the `minimum_variance` case. Two branches invert the sign: `sharpe_ratio` allocates $\\alpha=\\mathrm{SR}_{\\text{left}}/(\\mathrm{SR}_{\\text{left}}+\\mathrm{SR}_{\\text{right}})$ because higher is better there, and `equal_weighting` skips the split entirely.",
-      },
-    ],
-    examples: [
-      {
-        title: "Fit HCAA allocator",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::hcaa::HierarchicalClusteringAssetAllocation;\n\nlet asset_names: Vec<String> =\n    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();\n// rows = observations, cols = assets, in the same order as \`asset_names\`.\nlet prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);\n\n// The constructor argument selects how expected returns are estimated\n// ("mean" or "exponential"); it is not optional.\nlet mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");\n\n// allocate() fills the struct in place and returns Result<(), HcaaError>.\n// It does not return the weights — read them from \`hcaa.weights\` afterwards.\nhcaa.allocate(\n    &asset_names,\n    Some(&prices),      // asset_prices\n    None,               // asset_returns\n    None,               // covariance_matrix\n    None,               // expected_asset_returns\n    "minimum_variance", // allocation_metric\n    0.05,               // confidence_level, used by the tail-risk metrics\n    None,               // optimal_num_clusters — inferred when None\n    None,               // resample_by\n)?;\n\nprintln!("weights: {:?}", hcaa.weights);\nprintln!("seriation order: {:?}", hcaa.ordered_indices);`,
-      },
-    ],
-    notes: ["Cluster linkage choices influence allocations.", "Use with robust codependence distances when possible."],
+    summary: "Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["hcaa.allocate_hcaa"],
   },
   {
     slug: "hrp",
-    conceptOverview:
-      "Hierarchical Risk Parity replaces matrix inversion with a tree. It clusters assets on a correlation distance, reorders the covariance matrix so that similar assets sit adjacent (quasi-diagonalisation), then recursively bisects that ordering, splitting capital between the two halves in inverse proportion to their cluster variance. Nothing is inverted, so the numerical instability that makes Markowitz weights swing violently under a noisy covariance estimate simply does not arise.",
-    whenToUse:
-      "Use it when the asset count is large relative to the sample, when the covariance estimate is noisy, or whenever mean-variance weights are unstable between rebalances — which out of sample is most of the time. It needs no expected returns, which is both its robustness and its limit: if you have return views you trust, `cla` or `portfolio_optimization` will use them and HRP will not. Keep the asset ordering you pass in aligned with the dendrogram order you read back.",
-    relatedModules: ["hcaa", "codependence", "onc", "portfolio-optimization", "cla"],
     module: "hrp",
     subject: "Portfolio Construction and Risk",
-    summary: "Hierarchical Risk Parity allocation with recursive bisection.",
-    whyItExists: "Produces stable allocations without matrix inversion required by classic Markowitz.",
-    keyApis: ["HierarchicalRiskParity", "HrpDendrogram"],
-    formulas: [
-      { label: "IVP Weight", latex: "w_i\\propto\\frac{1}{\\sigma_i^2}" },
-      { label: "Bisection Split", latex: "\\alpha=1-\\frac{\\sigma_{left}^2}{\\sigma_{left}^2+\\sigma_{right}^2}" },
-    ],
-    examples: [
-      {
-        title: "Allocate with HRP",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::hrp::HierarchicalRiskParity;\n\nlet asset_names: Vec<String> =\n    ["SPY", "TLT", "GLD", "HYG"].iter().map(|s| s.to_string()).collect();\n// rows = observations, cols = assets, in the same order as \`asset_names\`.\nlet prices = DMatrix::from_fn(250, 4, |i, j| 100.0 + (i as f64) * 0.05 + (j as f64) * 3.0);\n\nlet mut hrp = HierarchicalRiskParity::new();\n\n// allocate() mutates the struct and returns Result<(), HrpError>; the weights are\n// read back from \`hrp.weights\`. Exactly one of prices / returns / covariance must\n// be supplied.\nhrp.allocate(\n    &asset_names,\n    Some(&prices), // asset_prices\n    None,          // asset_returns\n    None,          // covariance_matrix\n    None,          // resample_by\n    false,         // use_shrinkage — Ledoit-Wolf shrinkage on the covariance\n)?;\n\nprintln!("weights: {:?}", hrp.weights);\nprintln!("seriation order: {:?}", hrp.ordered_indices);`,
-      },
-    ],
-    notes: ["HRP is often more robust under unstable covariance estimates.", "Ensure input asset order tracks produced dendrogram order."],
+    summary: "Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["hrp.allocate_hrp"],
   },
@@ -323,28 +279,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "onc",
-    conceptOverview:
-      "Optimal Number of Clusters: runs k-means over a correlation matrix for a range of k, scores each partition by the mean-to-standard-deviation ratio of its silhouette scores, then re-clusters only the clusters that scored badly and keeps the result if it improves. Base k-means is unstable in both k and initialisation, so ONC restarts it `repeat` times and keeps the best — the point is a defensible cluster count, not a fast one.",
-    whenToUse:
-      "Use it before any hierarchical allocation to decide how many clusters the universe actually supports, instead of hard-coding a number; its answer feeds `hcaa`'s `optimal_num_clusters` directly. Use it also to test whether a claimed grouping — sectors, factors, strategy families — survives contact with the data. Clean the correlation matrix first: on an unstable universe ONC will happily find structure in noise and report a confident k for it.",
-    relatedModules: ["hcaa", "hrp", "codependence", "portfolio-optimization"],
     module: "onc",
     subject: "Portfolio Construction and Risk",
-    summary: "Optimal Number of Clusters utilities for clustering stability and allocation workflows.",
-    whyItExists: "Cluster count selection is a key source of model risk in hierarchical portfolio methods.",
-    keyApis: ["get_onc_clusters", "check_improve_clusters", "OncResult"],
-    formulas: [
-      { label: "Cluster Score", latex: "J(k)=\\text{intra}(k)-\\text{inter}(k)" },
-      { label: "Selection", latex: "k^*=\\arg\\min_k J(k)" },
-    ],
-    examples: [
-      {
-        title: "Infer cluster structure",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::onc::get_onc_clusters;\n\n// ONC consumes a *correlation* matrix, not raw prices — build one from your\n// codependence measure of choice first.\nlet corr = DMatrix::from_row_slice(\n    4,\n    4,\n    &[\n        1.00, 0.85, 0.10, 0.05, //\n        0.85, 1.00, 0.12, 0.08, //\n        0.10, 0.12, 1.00, 0.78, //\n        0.05, 0.08, 0.78, 1.00,\n    ],\n);\n\n// \`repeat\` is the number of k-means restarts used to stabilise the partition.\nlet out = get_onc_clusters(&corr, 20)?;\nprintln!("{} clusters", out.clusters.len());\nprintln!("silhouette scores: {:?}", out.silhouette_scores);`,
-      },
-    ],
-    notes: ["Run with repeated seeds/restarts for robust k selection.", "Use correlation cleaning before clustering unstable universes."],
+    summary: "Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["onc.get_onc_clusters"],
   },
