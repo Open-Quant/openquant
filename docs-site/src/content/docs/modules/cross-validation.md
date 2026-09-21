@@ -1,93 +1,192 @@
 ---
 title: "cross_validation"
-description: "Purged cross-validation utilities designed for label overlap and leakage control."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
+status: authored
+last_authored: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
 module: "cross_validation"
 api_surface: "rust-only"
+afml_chapter:
+  - "7"
+citation:
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4)."
 rust_api:
-  - "ml_cross_val_score"
-  - "ml_get_train_times"
   - "PurgedKFold"
+  - "ml_get_train_times"
+  - "ml_cross_val_score"
+  - "SimpleClassifier"
   - "Scoring"
+  - "TrainTestSplit"
+  - "CrossValidationError"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+k-fold cross-validation estimates out-of-sample performance on the assumption that a training
+observation tells the model nothing about a test observation beyond what the model
+generalises. With financial labels that assumption fails in a specific, mechanical way (AFML
+§7.3). A label formed at bar $t$ and resolved at bar $t+h$ is a function of the prices in
+between. If a training label's span overlaps a test label's span, the two share returns: the
+model has been shown part of the answer, and the fold's score is inflated. Shuffling makes it
+worse, since it scatters such pairs across every fold boundary.
 
-Standard k-fold leaks in finance because labels overlap: an observation's label is realised over a span of bars, and a training observation whose span touches a test observation's span has effectively seen the answer. `PurgedKFold` takes those spans as `samples_info_sets`, drops the overlapping training observations (purging), then drops a further `pct_embargo` fraction of observations immediately after each test fold to catch the serial correlation the spans do not literally share.
+This module is Rust-only. Python bindings are tracked in
+[#42](https://github.com/Open-Quant/openquant/issues/42).
 
-## When to Use
+## Purging and embargo
 
-Use it in place of plain k-fold for every model whose labels are event-based — which is every model built on `labeling`. `ml_cross_val_score` wraps it for scoring and `ml_get_train_times` exposes the purged training index if you are driving your own loop. Report fold-to-fold variance, not only the mean: a high mean with high variance across purged folds usually means the leakage moved rather than disappeared.
+**Purging** (§7.4.1) removes from the training set every label whose span
+$[t_{i,0},\,t_{i,1}]$ intersects the window the test labels cover. For a test fold that
+window runs from the first test label's start to the *latest* end among the fold's labels,
+which with variable-length labels need not be the last label's. A training label is dropped
+if it starts inside the window, ends inside it, or envelops it.
 
-## Mathematical Foundations
+**Embargo** (§7.4.2) removes a further stretch of training labels just *after* the test
+window. Purging handles overlap in the labels; the embargo handles what leaks through the
+features, which are usually serially correlated — a moving average computed a few bars after
+the test window still contains test-window prices.
 
-### Purged Train Set
+`PurgedKFold::new(n_splits, samples_info_sets, pct_embargo)` takes one `(start, end)` pair
+per sample, in time order, and `split(n_samples)` returns `(train_indices, test_indices)` for
+each fold. Folds are contiguous blocks; nothing is shuffled.
 
-$$
-\mathcal{T}_{\text{train}}=\mathcal{T}\setminus\{i:\;\exists j\in\mathcal{T}_{\text{test}},\;[t_{i,0},t_{i,1}]\cap[t_{j,0},t_{j,1}]\neq\varnothing\}\setminus\mathcal{E}
-$$
+<figure>
+<img class="dark:sl-hidden" src="/figures/ch7-purged-fold-light.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. A further three on each side are embargoed. The remaining twenty labels are training data." />
+<img class="light:sl-hidden" src="/figures/ch7-purged-fold-dark.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. A further three on each side are embargoed. The remaining twenty labels are training data." />
+<figcaption>The third fold of the example below at <code>pct_embargo = 0.15</code>. Twenty of the 32 non-test labels survive.</figcaption>
+</figure>
 
-where $[t_{i,0},t_{i,1}]$ is observation $i$'s label span — the `samples_info_sets` entry `PurgedKFold::new` requires. *Purging* drops any training observation whose label lifetime overlaps a test label's; $\mathcal{E}$ is the embargo set below. Overlap, not adjacency, is what leaks: two observations sampled a month apart still share information if their labels resolve on the same bar.
+## Two ways this differs from the book
 
-### Embargo
+Both are visible in the figure, and both make the split more conservative than Snippet 7.3,
+never less.
 
-$$
-e=\lfloor p\cdot T\rfloor,\qquad \mathcal{E}=\{i:\;\max(\mathcal{T}_{\text{test}})<i\le\max(\mathcal{T}_{\text{test}})+e\}
-$$
+1. **The embargo is applied on both sides of the test fold.** AFML embargoes only what
+   follows a test set, because only later features can contain test-window prices. Here the
+   same number of samples is also removed *before* the fold.
+2. **The embargo is counted from the fold's edges, not from the end of the purged zone.**
+   Snippet 7.3 resumes training `embargo` samples after the last test label's end. Here it is
+   `embargo` samples after the last test *sample*. When labels span at least as many samples
+   as the embargo, the embargo therefore removes nothing that purging had not already
+   removed.
 
-where $T$ is the total number of observations and $p$ the `pct_embargo` fraction (0.01 = 1%), so $e$ is an observation count. The embargo drops the $e$ observations immediately *after* each test fold, which catches serial correlation that purging alone misses because the label spans do not literally overlap.
-
-## Usage Examples
-
-### Rust
-
-#### Configure PurgedKFold
+The example shows the second point: forty hourly labels, each resolved three hours after it
+starts, five folds, third fold.
 
 ```rust
-use chrono::{Duration, NaiveDateTime};
-use openquant::cross_validation::PurgedKFold;
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::{CrossValidationError, PurgedKFold};
 
-let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info_sets: Vec<_> =
+    (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
 
-// samples_info_sets is one (label_start, label_end) span per observation. It is
-// mandatory: without label lifetimes there is nothing to purge against.
-let samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = (0..100)
-    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 3)))
-    .collect();
+let train_of = |pct_embargo: f64| -> Result<Vec<usize>, CrossValidationError> {
+    Ok(PurgedKFold::new(5, info_sets.clone(), pct_embargo)?.split(40)?[2].0.clone())
+};
 
-// n_splits = 5 folds; pct_embargo = 0.01 drops a further 1% of the sample
-// immediately after each test fold. new() validates and returns a Result.
-let cv = PurgedKFold::new(5, samples_info_sets, 0.01)?;
-
-let splits = cv.split(100)?;
-println!("{} folds; fold 0 keeps {} training rows", splits.len(), splits[0].0.len());
+// Test fold is samples 16-23. Purging alone removes 13-15 and 24-26.
+let purged: Vec<usize> = (0..=12).chain(27..=39).collect();
+assert_eq!(train_of(0.0)?, purged);
+// An embargo of ceil(0.07 * 40) = 3 samples falls entirely inside the purged zone.
+assert_eq!(train_of(0.07)?, purged);
+// Six samples reach past it, on both sides.
+assert_eq!(train_of(0.15)?, (0..=9).chain(30..=39).collect::<Vec<usize>>());
 ```
 
-## API Reference
+```text
+embargo 0.00: test 16-23  train 0-12, 27-39  (26 of 32 kept)
+embargo 0.07: test 16-23  train 0-12, 27-39  (26 of 32 kept)
+embargo 0.15: test 16-23  train 0-9, 30-39  (20 of 32 kept)
+```
 
-### Rust API
+The text block is the output of `cargo run --example docs_cross_validation`, and
+`test_docs_page_example_values` pins the same three index sets. To get an embargo of $e$
+samples *beyond* the purge in the book's sense, set `pct_embargo` to $(e+\ell)/n$, with
+$\ell$ the longest label span in samples. Both points are recorded on
+[#94](https://github.com/Open-Quant/openquant/issues/94).
 
-- `ml_cross_val_score`
-- `ml_get_train_times`
-- `PurgedKFold`
-- `Scoring`
+`pct_embargo` is a fraction of the *whole sample count*, rounded up: 0.01 on 5,000 samples
+is 50 samples. AFML suggests a value around 0.01.
 
-## Risk Notes and Caveats
+## Scoring
 
-- Always align event end-times when purging.
-- Report variance across folds, not only mean score.
+`ml_cross_val_score(classifier, x, y, sample_weight, splits, scoring)` fits on each training
+set and scores each test set. It takes any `SimpleClassifier` — a two-method trait, `fit`
+and `predict_proba` — and one of three `Scoring` rules:
 
-## Related Modules
+| `Scoring` | Value per fold |
+| --- | --- |
+| `Accuracy` | share of test samples where `proba ≥ 0.5` matches the label |
+| `NegLogLoss` | $\frac1n\sum_i\bigl[y_i\ln p_i+(1-y_i)\ln(1-p_i)\bigr]$, with $p_i$ clipped to $[10^{-15},\,1-10^{-15}]$; higher is better |
+| `F1` | harmonic mean of precision and recall for the positive class; 0 when there are no positive predictions |
 
-- [`labeling`](/modules/labeling/)
-- [`sample-weights`](/modules/sample-weights/)
-- [`backtesting-engine`](/modules/backtesting-engine/)
-- [`hyperparameter-tuning`](/modules/hyperparameter-tuning/)
-- [`feature-importance`](/modules/feature-importance/)
+AFML's advice (§7.5 and Chapter 9) is to prefer log loss for anything that will be sized by
+probability: accuracy scores a confident wrong call the same as a hesitant one, and
+[bet sizing](/modules/bet-sizing/) does not.
+
+```rust
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::{ml_cross_val_score, PurgedKFold, Scoring, SimpleClassifier};
+
+/// Predicts the training base rate, whatever the features. A floor for any real model.
+struct BaseRate(f64);
+
+impl SimpleClassifier for BaseRate {
+    fn fit(&mut self, _x: &[Vec<f64>], y: &[f64], _sample_weight: Option<&[f64]>) {
+        self.0 = y.iter().sum::<f64>() / y.len() as f64;
+    }
+    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+        vec![self.0; x.len()]
+    }
+}
+
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info_sets: Vec<_> =
+    (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+let x: Vec<Vec<f64>> = (0..40).map(|i| vec![f64::from(i)]).collect();
+let y: Vec<f64> = (0..40).map(|i| f64::from(u8::from(i % 4 == 0))).collect();
+
+let splits = PurgedKFold::new(5, info_sets, 0.0)?.split(40)?;
+let scores = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss);
+
+// A quarter of labels are positive, so every fold scores near ln-loss of p = 0.25.
+let entropy = -(0.25 * 0.25f64.ln() + 0.75 * 0.75f64.ln());
+assert_eq!(scores.len(), 5);
+assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
+```
+
+## What to watch for
+
+- **Sample weights are used to fit, not to score.** Snippet 7.4 exists because scikit-learn's
+  `cross_val_score` did exactly this; AFML's version passes the test-fold weights to the
+  metric. Here `sample_weight` reaches `fit` only, so every test sample counts equally. If
+  your weights matter — and with return attribution they differ by an order of magnitude —
+  compute the weighted score yourself from `splits`.
+- **`ml_cross_val_score` does not validate.** It returns `Vec<f64>`, not `Result`. An index
+  in `splits` beyond `x` panics, and an empty test set yields `NaN`. Build `splits` with
+  `PurgedKFold` and pass the same `x` and `y` it was sized for.
+- **`samples_info_sets` must be in time order, one per row of `x`.** Folds are blocks of
+  consecutive indices; the purge compares timestamps but the embargo counts positions.
+  Unsorted input purges correctly and embargoes nonsense.
+- **Purging can empty a training set.** With long labels and many folds, the purged zone can
+  swallow a small dataset. Check `train.len()` per fold; a fold trained on a handful of
+  samples produces a score, not a meaningful one.
+- **`ml_get_train_times` is the purge alone**, on timestamps, for one or more test windows
+  (Snippet 7.1). It applies no embargo and nothing else in the crate calls it; use it when
+  you build your own splits, for instance several disjoint test blocks at once.
+- **One path is not a backtest.** Purged k-fold gives one out-of-sample prediction per
+  sample, hence one performance path. Combinatorial purged CV, in
+  [`backtesting-engine`](/modules/backtesting-engine/), gives a distribution of them.
+
+## Related modules
+
+- [`sampling`](/modules/sampling/) and [`sample-weights`](/modules/sample-weights/) — the
+  in-sample half of the same overlap problem.
+- [`backtesting-engine`](/modules/backtesting-engine/) — walk-forward, purged CV and CPCV
+  over these splits.
+- [`hyperparameter-tuning`](/modules/hyperparameter-tuning/) — grid and randomised search
+  under `PurgedKFold`.
+- [`feature-importance`](/modules/feature-importance/) — MDA scores features on purged folds.

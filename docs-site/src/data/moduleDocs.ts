@@ -242,36 +242,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "cross-validation",
-    conceptOverview:
-      "Standard k-fold leaks in finance because labels overlap: an observation's label is realised over a span of bars, and a training observation whose span touches a test observation's span has effectively seen the answer. `PurgedKFold` takes those spans as `samples_info_sets`, drops the overlapping training observations (purging), then drops a further `pct_embargo` fraction of observations immediately after each test fold to catch the serial correlation the spans do not literally share.",
-    whenToUse:
-      "Use it in place of plain k-fold for every model whose labels are event-based — which is every model built on `labeling`. `ml_cross_val_score` wraps it for scoring and `ml_get_train_times` exposes the purged training index if you are driving your own loop. Report fold-to-fold variance, not only the mean: a high mean with high variance across purged folds usually means the leakage moved rather than disappeared.",
-    relatedModules: ["labeling", "sample-weights", "backtesting-engine", "hyperparameter-tuning", "feature-importance"],
     module: "cross_validation",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Purged cross-validation utilities designed for label overlap and leakage control.",
-    whyItExists: "Time-dependent labels violate IID assumptions; purging/embargoing reduces leakage bias.",
-    keyApis: ["ml_cross_val_score", "ml_get_train_times", "PurgedKFold", "Scoring"],
-    formulas: [
-      {
-        label: "Purged Train Set",
-        latex: "\\mathcal{T}_{\\text{train}}=\\mathcal{T}\\setminus\\{i:\\;\\exists j\\in\\mathcal{T}_{\\text{test}},\\;[t_{i,0},t_{i,1}]\\cap[t_{j,0},t_{j,1}]\\neq\\varnothing\\}\\setminus\\mathcal{E}",
-        where: "$[t_{i,0},t_{i,1}]$ is observation $i$'s label span — the `samples_info_sets` entry `PurgedKFold::new` requires. *Purging* drops any training observation whose label lifetime overlaps a test label's; $\\mathcal{E}$ is the embargo set below. Overlap, not adjacency, is what leaks: two observations sampled a month apart still share information if their labels resolve on the same bar.",
-      },
-      {
-        label: "Embargo",
-        latex: "e=\\lfloor p\\cdot T\\rfloor,\\qquad \\mathcal{E}=\\{i:\\;\\max(\\mathcal{T}_{\\text{test}})<i\\le\\max(\\mathcal{T}_{\\text{test}})+e\\}",
-        where: "$T$ is the total number of observations and $p$ the `pct_embargo` fraction (0.01 = 1%), so $e$ is an observation count. The embargo drops the $e$ observations immediately *after* each test fold, which catches serial correlation that purging alone misses because the label spans do not literally overlap.",
-      },
-    ],
-    examples: [
-      {
-        title: "Configure PurgedKFold",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::cross_validation::PurgedKFold;\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\n\n// samples_info_sets is one (label_start, label_end) span per observation. It is\n// mandatory: without label lifetimes there is nothing to purge against.\nlet samples_info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = (0..100)\n    .map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 3)))\n    .collect();\n\n// n_splits = 5 folds; pct_embargo = 0.01 drops a further 1% of the sample\n// immediately after each test fold. new() validates and returns a Result.\nlet cv = PurgedKFold::new(5, samples_info_sets, 0.01)?;\n\nlet splits = cv.split(100)?;\nprintln!("{} folds; fold 0 keeps {} training rows", splits.len(), splits[0].0.len());`,
-      },
-    ],
-    notes: ["Always align event end-times when purging.", "Report variance across folds, not only mean score."],
+    summary: "Purged k-fold cross-validation with an embargo, for overlapping labels.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
   {
@@ -362,58 +336,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "ensemble-methods",
-    conceptOverview:
-      "The diagnostics behind the bagging-versus-boosting choice rather than another ensemble implementation. `bias_variance_noise` decomposes the error; `average_pairwise_prediction_correlation` measures how correlated your base learners actually are; `bagging_ensemble_variance` turns that rho into the variance a bagged ensemble can reach, sigma^2(rho + (1-rho)/N). The consequence AFML Chapter 6 draws is the useful one: as N grows the ensemble variance floors at sigma^2·rho, so with highly correlated learners more estimators buy nothing at all.",
-    whenToUse:
-      "Use it before scaling an ensemble. If measured rho is 0.9, going from 20 to 200 estimators is wasted compute, and `recommend_bagging_vs_boosting` will say so from the numbers rather than from folklore. Reach for bagging when the base learner is unstable (variance-dominated) and boosting when it is weak (bias-dominated). Under heavy label overlap use `sequential_bootstrap_sample_indices` instead of the IID bootstrap, or the bags will be near-duplicates of each other.",
-    relatedModules: ["sb-bagging", "sampling", "sample-weights", "cross-validation", "feature-importance"],
     module: "ensemble_methods",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.",
-    whyItExists:
-      "AFML Chapter 6 emphasizes that ensemble gains depend on error decomposition and forecast dependence, not just estimator count.",
-    keyApis: [
-      "bias_variance_noise",
-      "bootstrap_sample_indices",
-      "sequential_bootstrap_sample_indices",
-      "aggregate_classification_vote",
-      "aggregate_classification_probability_mean",
-      "average_pairwise_prediction_correlation",
-      "bagging_ensemble_variance",
-      "recommend_bagging_vs_boosting",
-    ],
-    formulas: [
-      {
-        label: "Error Decomposition",
-        latex: "\\operatorname{MSE}=\\operatorname{Bias}^2+\\operatorname{Var}+\\operatorname{Noise}",
-      },
-      {
-        label: "Bagging Variance Under Average Correlation",
-        latex: "\\sigma^2_{bag}=\\sigma^2\\left(\\rho+\\frac{1-\\rho}{N}\\right)",
-      },
-      {
-        label: "Majority Vote and Mean Probability",
-        latex:
-          "\\hat y=\\mathbf 1\\left(\\frac{1}{N}\\sum_{m=1}^N \\hat p_m \\ge \\tau\\right),\\quad \\hat p=\\frac{1}{N}\\sum_{m=1}^N \\hat p_m",
-      },
-    ],
-    examples: [
-      {
-        title: "Assess Ensemble Variance and Recommendation",
-        language: "rust",
-        code: `use openquant::ensemble_methods::{\n  average_pairwise_prediction_correlation,\n  bagging_ensemble_variance,\n  recommend_bagging_vs_boosting,\n};\n\nlet preds = vec![\n  vec![0.51, 0.49, 0.52, 0.50],\n  vec![0.50, 0.48, 0.53, 0.49],\n  vec![0.52, 0.50, 0.51, 0.50],\n];\n\nlet rho = average_pairwise_prediction_correlation(&preds)?;\nlet bag_var = bagging_ensemble_variance(1.0, rho, 20)?;\nlet decision = recommend_bagging_vs_boosting(0.54, rho, 0.75, 1.0, 20)?;\n\nprintln!(\"rho={rho:.3}, var={bag_var:.3}, rec={:?}\", decision.recommended);`,
-      },
-      {
-        title: "Aggregate Bagged Classifier Outputs",
-        language: "rust",
-        code: `use openquant::ensemble_methods::{\n  aggregate_classification_vote,\n  aggregate_classification_probability_mean,\n};\n\nlet vote = aggregate_classification_vote(&[\n  vec![1, 0, 1],\n  vec![1, 1, 0],\n  vec![0, 1, 1],\n])?;\n\nlet (mean_prob, labels) = aggregate_classification_probability_mean(&[\n  vec![0.9, 0.2, 0.6],\n  vec![0.8, 0.3, 0.5],\n  vec![0.7, 0.4, 0.4],\n], 0.5)?;\n\nassert_eq!(vote, vec![1, 1, 1]);\nassert_eq!(labels, vec![1, 0, 1]);\nassert_eq!(mean_prob.len(), 3);`,
-      },
-    ],
-    notes: [
-      "If base learners are highly correlated, bagging variance reduction is minimal even with many estimators.",
-      "Sequential-bootstrap-style sampling is preferable under heavy label overlap and non-IID observations.",
-      "Boosting is usually preferable for weak learners (bias reduction); bagging is usually preferable for unstable learners (variance reduction).",
-    ],
+    summary: "Diagnostics for bagged ensembles: variance reduction given estimator correlation.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["ensemble.bias_variance_noise", "ensemble.bootstrap_sample_indices", "ensemble.sequential_bootstrap_sample_indices", "ensemble.aggregate_regression_mean", "ensemble.aggregate_classification_vote", "ensemble.aggregate_classification_probability_mean", "ensemble.average_pairwise_prediction_correlation", "ensemble.bagging_ensemble_variance", "ensemble.recommend_bagging_vs_boosting"],
   },
@@ -500,55 +426,8 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "fracdiff",
     module: "fracdiff",
     subject: "Market Microstructure, Dependence and Regime Detection",
-    summary: "Fractional differentiation to improve stationarity while retaining memory.",
-    whyItExists: "Balances stationarity and predictive memory better than integer differencing.",
-    keyApis: ["get_weights", "get_weights_ffd", "frac_diff", "frac_diff_ffd"],
-    formulas: [
-      { label: "FFD Weights", latex: "w_k = -w_{k-1}\\frac{d-k+1}{k}" },
-      { label: "Fractional Difference", latex: "y_t=\\sum_{k=0}^{\\infty}w_k x_{t-k}" },
-    ],
-    examples: [
-      {
-        title: "Fractionally differentiate a price series",
-        language: "python",
-        code: `from openquant._core import fracdiff
-
-prices = [100.0, 100.2, 100.1, 100.4, 100.6, 100.3, 100.8]
-
-# Fixed-window fractional differentiation (d=0.4, threshold=1e-4)
-stationary = fracdiff.frac_diff_ffd(prices, 0.4, 1e-4)
-
-# Inspect the FFD weights to understand memory retention
-weights = fracdiff.get_weights_ffd(0.4, 1e-4, len(prices))`,
-      },
-      {
-        title: "Compute fixed-width fracdiff",
-        language: "rust",
-        code: `use openquant::fracdiff::frac_diff_ffd;\n\nlet series = vec![100.0, 100.2, 100.1, 100.4, 100.6];\nlet out = frac_diff_ffd(&series, 0.4, 1e-4);`,
-      },
-    ],
-    notes: ["Tune d using stationarity tests and information retention.", "Threshold governs truncation error vs compute cost."],
-    conceptOverview: `Financial time series like prices are non-stationary — their statistical properties drift over time. Standard integer differencing (d=1, i.e., returns) makes the series stationary but destroys long-range memory that carries predictive signal.
-
-Fractional differentiation (AFML Chapter 5) generalizes differencing to real-valued orders 0 < d < 1. A fractional difference applies an infinite series of weights to past observations, where the weights decay polynomially. At d=0 you have the raw price (full memory, non-stationary). At d=1 you have returns (stationary, no memory). The goal is to find the minimum d that passes stationarity tests (e.g., ADF) while preserving as much memory as possible.
-
-The **fixed-width window (FFD)** variant truncates the weight series once weights fall below a threshold, making computation practical for long series. This is the recommended approach for production use.`,
-    whenToUse: `Apply fractional differentiation to price or spread series *before* feature engineering. It replaces raw returns as the base transformation when you need stationarity without discarding mean-reversion or trend memory.
-
-**Prerequisites**: A price series (close prices or mid-prices). Optionally, an ADF test loop to find the optimal d.
-
-**Alternatives**: Standard returns (d=1) if stationarity is sufficient and memory isn't needed. Log prices if your downstream model handles non-stationarity.`,
-    keyParameters: [
-      { name: "d", type: "f64", description: "Fractional differencing order; 0 = raw prices, 1 = returns", default: "—" },
-      { name: "threshold", type: "f64", description: "Minimum absolute weight for FFD truncation; smaller = longer memory window, more compute", default: "1e-4" },
-    ],
-    commonPitfalls: [
-      "Using d=1 by default (standard returns) when the series has exploitable long-memory — run a d-search with ADF first.",
-      "Setting threshold too large, which truncates weights aggressively and makes FFD behave like integer differencing.",
-      "Applying fracdiff to already-differenced data — check whether your input is prices or returns.",
-      "Forgetting that the first few observations are NaN/unreliable due to insufficient weight history — trim them before feeding into ML.",
-    ],
-    relatedModules: ["data-structures", "filters"],
+    summary: "Fractional differentiation: stationarity with as much memory as possible.",
+    handwritten: true,
     afmlChapters: [5],
     apiSurface: "both",
     pythonApis: ["fracdiff.get_weights", "fracdiff.get_weights_ffd", "fracdiff.frac_diff", "fracdiff.frac_diff_ffd"],

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 230" role="img" aria-label="One fold of purged k-fold: test labels, purged labels on both sides, and the embargo">
+<rect width="760" height="230" fill="#17140f"/>
+<text x="56" y="28" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">FOLD 3 OF 5 · 40 LABELS OF 4 BARS · EMBARGO 0.15</text>
+<rect x="57.5" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="73.7" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="89.9" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="106.1" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="122.3" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="138.5" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="154.7" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="170.9" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="187.1" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="203.3" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="219.5" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="235.7" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="251.9" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="268.1" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="284.3" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="300.5" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="316.7" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="332.9" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="349.1" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="365.3" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="381.5" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="397.7" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="413.9" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="430.1" y="96" width="13.2" height="30" fill="#f29ad6" fill-opacity="1.0"/>
+<rect x="446.3" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="462.5" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="478.7" y="96" width="13.2" height="30" fill="#aaa190" fill-opacity="0.5"/>
+<rect x="494.9" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="511.1" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="527.3" y="96" width="13.2" height="30" fill="#4c4536" fill-opacity="1.0"/>
+<rect x="543.5" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="559.7" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="575.9" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="592.1" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="608.3" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="624.5" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="640.7" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="656.9" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="673.1" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="689.3" y="96" width="13.2" height="30" fill="#ece6d8" fill-opacity="0.8"/>
+<rect x="56" y="168" width="14" height="14" fill="#ece6d8" fill-opacity="0.8"/>
+<text x="78" y="180" fill="#ece6d8" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">train</text>
+<rect x="206" y="168" width="14" height="14" fill="#aaa190" fill-opacity="0.5"/>
+<text x="228" y="180" fill="#ece6d8" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">purged</text>
+<rect x="356" y="168" width="14" height="14" fill="#4c4536" fill-opacity="1.0"/>
+<text x="378" y="180" fill="#ece6d8" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">embargo</text>
+<rect x="506" y="168" width="14" height="14" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="528" y="180" fill="#ece6d8" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">test</text>
+<text x="315.2" y="86" fill="#f29ad6" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="600" text-anchor="start">test fold</text>
+<text x="56" y="214" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">time →</text>
+</svg>

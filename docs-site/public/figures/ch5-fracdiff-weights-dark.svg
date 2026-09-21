@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-label="Fractional differencing weights at lags 1 to 8 for d = 0.2, 0.5, 0.8 and 1">
+<rect width="760" height="300" fill="#17140f"/>
+<text x="56" y="28" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">WEIGHT ON THE VALUE K BARS AGO · THE WEIGHT AT K = 0 IS ALWAYS 1</text>
+<line x1="120" y1="256.0" x2="600" y2="256.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="610" y="260.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-1.0</text>
+<line x1="120" y1="148.0" x2="600" y2="148.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="610" y="152.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.5</text>
+<line x1="120" y1="40.0" x2="600" y2="40.0" stroke="#4c4536" stroke-width="1.0"/>
+<text x="610" y="44.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0</text>
+<polyline points="120.0,83.2 188.6,57.3 257.1,50.4 325.7,47.3 394.3,45.5 462.9,44.4 531.4,43.7 600.0,43.1" fill="none" stroke="#f29ad6" stroke-width="1.6" stroke-linejoin="round"/>
+<circle cx="120.0" cy="83.2" r="2.6" fill="#f29ad6"/>
+<circle cx="188.6" cy="57.3" r="2.6" fill="#f29ad6"/>
+<circle cx="257.1" cy="50.4" r="2.6" fill="#f29ad6"/>
+<circle cx="325.7" cy="47.3" r="2.6" fill="#f29ad6"/>
+<circle cx="394.3" cy="45.5" r="2.6" fill="#f29ad6"/>
+<circle cx="462.9" cy="44.4" r="2.6" fill="#f29ad6"/>
+<circle cx="531.4" cy="43.7" r="2.6" fill="#f29ad6"/>
+<circle cx="600.0" cy="43.1" r="2.6" fill="#f29ad6"/>
+<text x="110" y="87.2" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">d = 0.2</text>
+<polyline points="120.0,148.0 188.6,67.0 257.1,53.5 325.7,48.4 394.3,45.9 462.9,44.4 531.4,43.5 600.0,42.8" fill="none" stroke="#f29ad6" stroke-width="1.6" stroke-linejoin="round"/>
+<circle cx="120.0" cy="148.0" r="2.6" fill="#f29ad6"/>
+<circle cx="188.6" cy="67.0" r="2.6" fill="#f29ad6"/>
+<circle cx="257.1" cy="53.5" r="2.6" fill="#f29ad6"/>
+<circle cx="325.7" cy="48.4" r="2.6" fill="#f29ad6"/>
+<circle cx="394.3" cy="45.9" r="2.6" fill="#f29ad6"/>
+<circle cx="462.9" cy="44.4" r="2.6" fill="#f29ad6"/>
+<circle cx="531.4" cy="43.5" r="2.6" fill="#f29ad6"/>
+<circle cx="600.0" cy="42.8" r="2.6" fill="#f29ad6"/>
+<text x="110" y="152.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">d = 0.5</text>
+<polyline points="120.0,212.8 188.6,57.3 257.1,46.9 325.7,43.8 394.3,42.4 462.9,41.7 531.4,41.3 600.0,41.0" fill="none" stroke="#f29ad6" stroke-width="1.6" stroke-linejoin="round"/>
+<circle cx="120.0" cy="212.8" r="2.6" fill="#f29ad6"/>
+<circle cx="188.6" cy="57.3" r="2.6" fill="#f29ad6"/>
+<circle cx="257.1" cy="46.9" r="2.6" fill="#f29ad6"/>
+<circle cx="325.7" cy="43.8" r="2.6" fill="#f29ad6"/>
+<circle cx="394.3" cy="42.4" r="2.6" fill="#f29ad6"/>
+<circle cx="462.9" cy="41.7" r="2.6" fill="#f29ad6"/>
+<circle cx="531.4" cy="41.3" r="2.6" fill="#f29ad6"/>
+<circle cx="600.0" cy="41.0" r="2.6" fill="#f29ad6"/>
+<text x="110" y="216.8" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">d = 0.8</text>
+<polyline points="120.0,256.0 188.6,40.0 257.1,40.0 325.7,40.0 394.3,40.0 462.9,40.0 531.4,40.0 600.0,40.0" fill="none" stroke="#ece6d8" stroke-width="1.6" stroke-linejoin="round"/>
+<circle cx="120.0" cy="256.0" r="2.6" fill="#ece6d8"/>
+<circle cx="188.6" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="257.1" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="325.7" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="394.3" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="462.9" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="531.4" cy="40.0" r="2.6" fill="#ece6d8"/>
+<circle cx="600.0" cy="40.0" r="2.6" fill="#ece6d8"/>
+<text x="110" y="260.0" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">d = 1</text>
+<text x="120.0" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 1</text>
+<text x="188.6" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 2</text>
+<text x="257.1" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 3</text>
+<text x="325.7" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 4</text>
+<text x="394.3" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 5</text>
+<text x="462.9" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 6</text>
+<text x="531.4" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 7</text>
+<text x="600.0" y="280" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 8</text>
+</svg>
