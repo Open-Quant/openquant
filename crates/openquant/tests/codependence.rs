@@ -101,3 +101,23 @@ fn test_number_of_bins() {
     assert_eq!(n_bins_x, 15);
     assert_eq!(n_bins_x_y, 9);
 }
+
+/// A correlation of -1 used to reach the bivariate bin formula, divide by zero, and ask for
+/// isize::MAX bins, which panicked with "capacity overflow" inside the histogram.
+#[test]
+fn perfectly_anticorrelated_series_do_not_panic() {
+    use openquant::codependence::{
+        get_mutual_info, get_optimal_number_of_bins, variation_of_information_score,
+    };
+
+    assert_eq!(
+        get_optimal_number_of_bins(1000, Some(-1.0)).unwrap(),
+        get_optimal_number_of_bins(1000, Some(1.0)).unwrap()
+    );
+
+    let x: Vec<f64> = (0..50).map(f64::from).collect();
+    let mirrored: Vec<f64> = x.iter().map(|v| -v).collect();
+    // A deterministic one-to-one relationship is maximal dependence either way round.
+    assert!((get_mutual_info(&x, &mirrored, None, true).unwrap() - 1.0).abs() < 1e-12);
+    assert!(variation_of_information_score(&x, &mirrored, None, true).unwrap().abs() < 1e-12);
+}

@@ -34,7 +34,7 @@ For the AFML chapter each module implements, see
 
 ### Market Microstructure, Dependence and Regime Detection
 
-- [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
+- [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
 - [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
 - [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
@@ -49,8 +49,8 @@ For the AFML chapter each module implements, see
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
-- [`risk_metrics`](/modules/risk-metrics/) — Portfolio and return-distribution risk measures for downside control.
-- [`strategy_risk`](/modules/strategy-risk/) — AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.
+- [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
+- [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 
 ### Position Sizing and Trade Construction
 
@@ -91,7 +91,7 @@ For the AFML chapter each module implements, see
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
-- [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
+- [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
@@ -112,11 +112,11 @@ For the AFML chapter each module implements, see
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
-- [`risk_metrics`](/modules/risk-metrics/) — Portfolio and return-distribution risk measures for downside control.
+- [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
 - [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
-- [`strategy_risk`](/modules/strategy-risk/) — AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.
+- [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 - [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
 - [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.

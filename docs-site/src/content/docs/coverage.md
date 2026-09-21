@@ -41,9 +41,9 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 22 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
+| `generated` | 19 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 19 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 22 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 11 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
@@ -67,9 +67,9 @@ split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 | | Count |
 |---|---|
 | Modules with a documentation page | 39 |
-| …written by hand, with a citation and executed examples | 18 |
+| …written by hand, with a citation and executed examples | 21 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 18 |
+| …generated, carrying the base template only | 15 |
 <!-- coverage:end:module-depth -->
 
 A base-template page is not a stub — it has a concept overview, mathematical
