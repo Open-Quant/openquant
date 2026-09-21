@@ -126,28 +126,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "codependence",
-    conceptOverview:
-      "Dependence measures that survive non-linearity, which Pearson correlation does not. Distance correlation is zero only under genuine independence. Mutual information and variation of information are information-theoretic and need a binning choice, which `get_optimal_number_of_bins` supplies. The angular distances turn a correlation into a proper metric — sqrt(2(1-rho)) and its absolute and squared variants — which is what hierarchical clustering needs in order to be well posed at all.",
-    whenToUse:
-      "Use it upstream of any clustering or feature-pruning step: `hrp`, `hcaa` and `onc` all consume a distance matrix, and feeding them raw correlation silently assumes the relationship is linear. Use distance correlation when you suspect a non-monotone relationship, and variation of information when you want a true metric on discrete variables. Bin selection materially changes mutual-information estimates, so fix it explicitly and record it alongside the result.",
-    relatedModules: ["hrp", "hcaa", "onc", "feature-importance", "microstructural-features"],
     module: "codependence",
     subject: "Market Microstructure, Dependence and Regime Detection",
-    summary: "Dependence metrics beyond linear correlation for feature and asset relationships.",
-    whyItExists: "Financial relationships are often non-linear and regime-dependent; correlation alone is insufficient.",
-    keyApis: ["distance_correlation", "get_mutual_info", "variation_of_information_score", "angular_distance"],
-    formulas: [
-      { label: "Mutual Information", latex: "I(X;Y)=\\sum_{x,y}p(x,y)\\log\\frac{p(x,y)}{p(x)p(y)}" },
-      { label: "Variation of Information", latex: "VI(X,Y)=H(X)+H(Y)-2I(X;Y)" },
-    ],
-    examples: [
-      {
-        title: "Distance correlation between series",
-        language: "rust",
-        code: `use openquant::codependence::distance_correlation;\n\nlet x = vec![1.0, 2.0, 3.0, 4.0];\nlet y = vec![1.1, 1.9, 3.2, 3.8];\nlet dcor = distance_correlation(&x, &y)?;`,
-      },
-    ],
-    notes: ["Use with clustering and feature pruning workflows.", "Bin selection materially impacts MI estimates."],
+    summary: "Correlation distances, distance correlation, mutual information and variation of information.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["codependence.angular_distance", "codependence.absolute_angular_distance", "codependence.squared_angular_distance", "codependence.distance_correlation", "codependence.get_optimal_number_of_bins", "codependence.get_mutual_info", "codependence.variation_of_information_score"],
   },
@@ -458,80 +440,19 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "risk-metrics",
-    conceptOverview:
-      "Downside risk measures over a return series or a return panel: value at risk (the quantile at the given confidence level), expected shortfall (the mean loss beyond it), conditional drawdown at risk, and portfolio variance from a covariance matrix and a weight vector. Expected shortfall and CDaR are subadditive where VaR is not, which is why a risk budget built on VaR alone can be gamed by splitting one position across two sleeves.",
-    whenToUse:
-      "Use it for portfolio-level guardrails and risk budgets, and as the input when `hcaa` should allocate on tail risk rather than on variance. Prefer expected shortfall to VaR whenever the number will be summed across books. These are non-parametric estimates, so they need enough tail observations to mean anything: at 95% confidence a 200-observation sample rests on ten points. All of them are `&self` methods on a unit struct, and the `_from_matrix` variants take return panels.",
-    relatedModules: ["hcaa", "portfolio-optimization", "backtest-statistics", "strategy-risk"],
     module: "risk_metrics",
     subject: "Portfolio Construction and Risk",
-    summary: "Portfolio and return-distribution risk measures for downside control.",
-    whyItExists: "Risk budgets and guardrails require coherent downside metrics beyond variance.",
-    keyApis: ["RiskMetrics::calculate_value_at_risk", "RiskMetrics::calculate_expected_shortfall", "RiskMetrics::calculate_conditional_drawdown_risk", "RiskMetrics::calculate_variance"],
-    formulas: [
-      { label: "VaR", latex: "VaR_\\alpha = -Q_\\alpha(R)" },
-      { label: "Expected Shortfall", latex: "ES_\\alpha = -E[R \\mid R \\le Q_\\alpha(R)]" },
-    ],
-    examples: [
-      {
-        title: "Compute VaR and ES",
-        language: "rust",
-        code: `use openquant::risk_metrics::RiskMetrics;\n\nlet returns = vec![-0.02, 0.01, -0.005, 0.003, 0.004];\n\n// These are &self methods on a unit struct, not associated functions: they need\n// a receiver. \`confidence_level\` is the tail probability (0.05 = 95% VaR).\nlet metrics = RiskMetrics;\nlet var_95 = metrics.calculate_value_at_risk(&returns, 0.05)?;\nlet es_95 = metrics.calculate_expected_shortfall(&returns, 0.05)?;\n\nprintln!("VaR(95%) = {var_95:.4}, ES(95%) = {es_95:.4}");`,
-      },
-    ],
-    notes: ["Non-parametric estimates need enough tail observations.", "Use matrix variants for multi-asset return panels."],
+    summary: "Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["risk.calculate_value_at_risk", "risk.calculate_expected_shortfall", "risk.calculate_conditional_drawdown_risk", "risk.calculate_variance", "risk.calculate_value_at_risk_from_matrix", "risk.calculate_expected_shortfall_from_matrix", "risk.calculate_conditional_drawdown_risk_from_matrix"],
   },
   {
     slug: "strategy-risk",
-    conceptOverview:
-      "AFML Chapter 15 asks a question portfolio risk does not: given the precision, payout asymmetry and bet frequency this strategy actually achieved, what is the probability that the *process* fails to reach its Sharpe target? The symmetric and asymmetric helpers invert the Sharpe relation for whichever variable you are solving for — implied precision, implied frequency — and `estimate_strategy_failure_probability` bootstraps the realised bet outcomes, fits a KDE to the resulting precision distribution, and reports the mass falling below the precision the target Sharpe requires.",
-    whenToUse:
-      "Use it at strategy-approval time and then as a standing monitor: the implied precision threshold p* is a concrete kill criterion, and a strategy whose realised precision drifts toward it is failing before its PnL says so. Analyse the manager-controlled inputs — the payouts and the bet count — separately from market-determined precision, because the first are design choices and the second is not. This is strategy viability; use `risk_metrics` for holdings and tail risk.",
-    relatedModules: ["risk-metrics", "backtest-statistics", "bet-sizing", "backtesting-engine"],
     module: "strategy_risk",
     subject: "Portfolio Construction and Risk",
-    summary: "AFML Chapter 15 strategy-viability diagnostics based on precision, payout asymmetry, and bet frequency.",
-    whyItExists:
-      "Strategy risk is the probability that a process fails to achieve a Sharpe objective over time; it is distinct from holdings/portfolio variance risk and should be monitored separately.",
-    keyApis: [
-      "sharpe_symmetric",
-      "implied_precision_symmetric",
-      "implied_frequency_symmetric",
-      "sharpe_asymmetric",
-      "implied_precision_asymmetric",
-      "implied_frequency_asymmetric",
-      "estimate_strategy_failure_probability",
-      "StrategyRiskConfig",
-      "StrategyRiskReport",
-    ],
-    formulas: [
-      {
-        label: "Symmetric Sharpe",
-        latex: "\\theta=\\frac{2p-1}{2\\sqrt{p(1-p)}}\\sqrt{n}",
-      },
-      {
-        label: "Asymmetric Sharpe",
-        latex:
-          "\\theta=\\frac{(\\pi_+-\\pi_-)p+\\pi_-}{(\\pi_+-\\pi_-)\\sqrt{p(1-p)}}\\sqrt{n}",
-      },
-      {
-        label: "Strategy Failure Probability",
-        latex: "P_{fail}=\\Pr[p\\le p^*],\\quad p^*=\\text{impliedPrecision}(\\theta^*,\\pi_+,\\pi_-,n)",
-      },
-    ],
-    examples: [
-      {
-        title: "Estimate strategy-failure probability from realized bets",
-        language: "rust",
-        code: `use openquant::strategy_risk::{estimate_strategy_failure_probability, StrategyRiskConfig};\n\nlet outcomes = vec![0.005, -0.01, 0.005, 0.005, -0.01, 0.005, 0.005, -0.01];\nlet report = estimate_strategy_failure_probability(\n  &outcomes,\n  StrategyRiskConfig {\n    years_elapsed: 2.0,\n    target_sharpe: 2.0,\n    investor_horizon_years: 2.0,\n    bootstrap_iterations: 10_000,\n    seed: 7,\n    kde_bandwidth: None,\n  },\n)?;\n\nprintln!(\"p*: {:.4}\", report.implied_precision_threshold);\nprintln!(\"failure (KDE): {:.2}%\", 100.0 * report.kde_failure_probability);`,
-      },
-    ],
-    notes: [
-      "Inputs under manager control ({pi_minus, pi_plus, n}) should be analyzed separately from uncertain market precision p.",
-      "Use this module for strategy-level viability and probability-of-failure diagnostics; use `risk_metrics` for portfolio-tail and drawdown risk.",
-    ],
+    summary: "The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["strategy_risk.sharpe_symmetric", "strategy_risk.implied_precision_symmetric", "strategy_risk.implied_frequency_symmetric", "strategy_risk.sharpe_asymmetric", "strategy_risk.implied_precision_asymmetric", "strategy_risk.implied_frequency_asymmetric", "strategy_risk.estimate_strategy_failure_probability"],
   },

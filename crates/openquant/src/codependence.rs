@@ -267,9 +267,10 @@ pub fn get_optimal_number_of_bins(
         (z / 6.0 + 2.0 / (3.0 * z) + 1.0 / 3.0).round()
     };
     // Arm order keeps a NaN correlation on the bivariate branch, as before.
+    // At |corr| = 1 the bivariate formula divides by zero, so both signs fall back.
     let bins = match corr_coef {
         None => univariate(),
-        Some(corr) if (corr - 1.0).abs() <= 1e-4 => univariate(),
+        Some(corr) if (corr.abs() - 1.0).abs() <= 1e-4 => univariate(),
         Some(corr) => {
             let inner = (1.0 + 24.0 * n / (1.0 - corr * corr)).sqrt();
             (2.0_f64).powf(-0.5) * (1.0 + inner).sqrt()
