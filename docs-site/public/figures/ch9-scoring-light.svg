@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-label="Cross-validated score against sharpness k under accuracy and negative log loss">
+<rect width="760" height="300" fill="#fbf9f4"/>
+<text x="72" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">MEAN SCORE OVER FIVE PURGED FOLDS</text>
+<line x1="72" y1="230.6" x2="600" y2="230.6" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="64" y="234.6" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">-0.5</text>
+<line x1="72" y1="167.1" x2="600" y2="167.1" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="64" y="171.1" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">0</text>
+<line x1="72" y1="103.5" x2="600" y2="103.5" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="64" y="107.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">+0.5</text>
+<line x1="72" y1="40.0" x2="600" y2="40.0" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="64" y="44.0" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">+1.0</text>
+<polyline points="72.0,53.6 248.0,53.6 336.0,53.6 424.0,53.6 600.0,53.6" fill="none" stroke="#1d1a16" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="53.6" r="3.2" fill="#1d1a16"/>
+<circle cx="248.0" cy="53.6" r="3.2" fill="#1d1a16"/>
+<circle cx="336.0" cy="53.6" r="3.2" fill="#1d1a16"/>
+<circle cx="424.0" cy="53.6" r="3.2" fill="#1d1a16"/>
+<circle cx="600.0" cy="53.6" r="3.2" fill="#1d1a16"/>
+<text x="610" y="57.6" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">accuracy</text>
+<polyline points="72.0,242.6 248.0,217.1 336.0,201.9 424.0,195.5 600.0,226.5" fill="none" stroke="#97196a" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="72.0" cy="242.6" r="3.2" fill="#97196a"/>
+<circle cx="248.0" cy="217.1" r="3.2" fill="#97196a"/>
+<circle cx="336.0" cy="201.9" r="3.2" fill="#97196a"/>
+<circle cx="424.0" cy="195.5" r="3.2" fill="#97196a"/>
+<circle cx="600.0" cy="226.5" r="3.2" fill="#97196a"/>
+<text x="610" y="230.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">neg log loss</text>
+<text x="424.0" y="185.5" fill="#97196a" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="600" text-anchor="middle">best</text>
+<text x="72.0" y="280" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 0.5</text>
+<text x="248.0" y="280" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 2</text>
+<text x="336.0" y="280" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 4</text>
+<text x="424.0" y="280" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 8</text>
+<text x="600.0" y="280" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">k = 32</text>
+</svg>

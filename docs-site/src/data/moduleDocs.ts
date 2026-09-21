@@ -260,51 +260,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "hyperparameter-tuning",
-    conceptOverview:
-      "Grid and randomized search that run under `PurgedKFold` rather than plain k-fold, so the tuning loop cannot buy its score with leakage. `randomized_search` samples from `RandomParamDistribution`, including log-uniform — the right prior for scale parameters such as C and gamma — and AFML Chapter 9's argument is that beyond a couple of dimensions random sampling dominates grid search per unit of compute. The scoring choice exposed by `SearchScoring` is an economic decision, not a statistical one.",
-    whenToUse:
-      "Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilities drive position size, since it penalises confident wrong answers the way a bet does; use `Accuracy` only when every prediction carries similar economic weight; use `BalancedAccuracy` for the severe class imbalance typical of meta-labelling, where recall of the positive class is what matters. Pass `sample_weight` from `sample_weights` — tuning on unweighted overlapping observations rewards the wrong model.",
-    relatedModules: ["cross-validation", "sample-weights", "sb-bagging", "ensemble-methods", "backtesting-engine"],
     module: "hyperparameter_tuning",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.",
-    whyItExists:
-      "AFML Chapter 9 recommends tuning under PurgedKFold, using randomized search for large spaces, and scoring with metrics aligned to trading objectives.",
-    keyApis: [
-      "grid_search",
-      "randomized_search",
-      "expand_param_grid",
-      "sample_log_uniform",
-      "classification_score",
-      "SearchScoring",
-      "RandomParamDistribution",
-    ],
-    formulas: [
-      {
-        label: "Purged CV Objective",
-        latex: "\\hat\\theta=\\arg\\max_{\\theta\\in\\Theta}\\frac{1}{K}\\sum_{k=1}^{K}\\mathrm{Score}(f_\\theta,\\mathcal T_k^{train},\\mathcal T_k^{test})",
-      },
-      {
-        label: "Log-Uniform Draw",
-        latex: "\\log x\\sim U(\\log a,\\log b),\\; a>0,\\;x\\in(a,b)",
-      },
-      {
-        label: "Weighted Neg Log Loss",
-        latex: "-\\frac{1}{\\sum_i w_i}\\sum_i w_i\\left[y_i\\log p_i + (1-y_i)\\log(1-p_i)\\right]",
-      },
-    ],
-    examples: [
-      {
-        title: "Randomized search with PurgedKFold semantics",
-        language: "rust",
-        code: `use chrono::{Duration, NaiveDateTime};\nuse openquant::cross_validation::SimpleClassifier;\nuse openquant::hyperparameter_tuning::{\n    randomized_search, ParamSet, RandomParamDistribution, SearchData, SearchScoring,\n};\nuse std::collections::BTreeMap;\n\n// The search builds a fresh model from each sampled parameter set.\nstruct Logistic {\n    c: f64,\n}\nimpl SimpleClassifier for Logistic {\n    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}\n    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter().map(|row| 1.0 / (1.0 + (-self.c * row[0]).exp())).collect()\n    }\n}\nlet build_model =\n    |params: &ParamSet| Logistic { c: params["C"].as_f64().unwrap_or(1.0) };\n\nlet mut space = BTreeMap::new();\nspace.insert("C".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });\nspace.insert("gamma".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });\n\nlet t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;\nlet x: Vec<Vec<f64>> = (0..60).map(|i| vec![(i as f64 - 30.0) / 30.0]).collect();\nlet y: Vec<f64> = (0..60).map(|i| if i >= 30 { 1.0 } else { 0.0 }).collect();\nlet w = vec![1.0f64; 60];\n// Label spans again — the search purges internally, so it needs them.\nlet info_sets: Vec<(NaiveDateTime, NaiveDateTime)> =\n    (0..60).map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2))).collect();\n\nlet result = randomized_search(\n    build_model,\n    &space,\n    25,   // n_iter — parameter sets sampled\n    42,   // seed\n    SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },\n    5,    // n_splits\n    0.01, // pct_embargo\n    SearchScoring::NegLogLoss,\n)?;\nprintln!("best score = {} with {:?}", result.best_score, result.best_params);`,
-      },
-    ],
-    notes: [
-      "Use Accuracy only when each prediction has similar economic value (equal bet sizing).",
-      "Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.",
-      "BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.",
-    ],
+    summary: "Grid and randomised search on purged k-fold splits, scored with sample weights.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
   {
@@ -354,36 +313,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "feature-importance",
-    conceptOverview:
-      "The three AFML Chapter 8 importance methods on the Rust side, each with a different blind spot. MDI is in-sample and tree-specific: it sums each feature's impurity decrease across splits, cheap but defeated by substitution, since two interchangeable features split the credit and both then look weak. MDA permutes a feature in the *test* fold and measures the score drop, so it is model-agnostic and out-of-sample but still substitution-prone. Single-feature importance trains on one feature at a time, immune to substitution but blind to interactions. `feature_pca_analysis` cross-checks the ranking against an unsupervised one.",
-    whenToUse:
-      "Run at least two of the three: agreement between MDI and MDA is evidence, MDI alone is not. Prefer MDA when leakage risk is high, since it is the only one scored out of sample — and give it purged splits from `cross_validation`, not a fold count. Compare rankings across time windows before trusting them; a feature that is important in only one regime is a feature that will fail in the next.",
-    relatedModules: ["feature-diagnostics", "cross-validation", "sample-weights", "codependence", "fingerprint"],
     module: "feature_importance",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.",
-    whyItExists: "Improves model interpretability and helps remove unstable or redundant features.",
-    keyApis: ["mean_decrease_impurity", "mean_decrease_accuracy", "single_feature_importance", "feature_pca_analysis"],
-    formulas: [
-      {
-        label: "MDI — Mean Decrease Impurity",
-        latex: "I_j=\\frac{1}{B}\\sum_{b=1}^{B}\\;\\sum_{t\\in T_j^{(b)}} p(t)\\,\\Delta i(t)",
-        where: "$T_j^{(b)}$ are the nodes of tree $b$ that split on feature $j$, $p(t)$ the fraction of samples reaching node $t$, and $\\Delta i(t)$ the impurity drop at that split. This is the tree-based definition: it is in-sample, computable only for tree ensembles, and `mean_decrease_impurity` takes the per-tree importance vectors a fitted forest already exposes. The Python `feature_diagnostics.mdi_importance` uses a different, linear-model estimator under the same acronym — see that page.",
-      },
-      {
-        label: "MDA — Mean Decrease Accuracy",
-        latex: "I_j=\\frac{1}{K}\\sum_{k=1}^{K}\\big(S_k-S_{k,\\text{perm}(j)}\\big)",
-        where: "$S_k$ is the out-of-sample score on purged fold $k$ and $S_{k,\\text{perm}(j)}$ the same score after column $j$ is randomly permuted in the test set. Unlike MDI it is model-agnostic and out-of-sample, which is why `mean_decrease_accuracy` demands the CV splits rather than a fold count.",
-      },
-    ],
-    examples: [
-      {
-        title: "Run MDA with classifier",
-        language: "rust",
-        code: `use openquant::cross_validation::{Scoring, SimpleClassifier};\nuse openquant::feature_importance::mean_decrease_accuracy;\n\n// MDA works with any model implementing SimpleClassifier; this stand-in keeps\n// the example self-contained.\nstruct MeanThreshold {\n    threshold: f64,\n}\nimpl SimpleClassifier for MeanThreshold {\n    fn fit(&mut self, x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {\n        self.threshold = x.iter().map(|row| row[0]).sum::<f64>() / x.len() as f64;\n    }\n    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter().map(|row| if row[0] > self.threshold { 0.9 } else { 0.1 }).collect()\n    }\n}\n\nlet x: Vec<Vec<f64>> = (0..40).map(|i| vec![i as f64, (i % 7) as f64]).collect();\nlet y: Vec<f64> = (0..40).map(|i| if i >= 20 { 1.0 } else { 0.0 }).collect();\nlet feature_names = vec!["trend".to_string(), "noise".to_string()];\n\n// MDA is measured out of sample, so it takes the *already-purged splits* — not a\n// fold count. Feed it the output of PurgedKFold::split so the score is leak-free.\nlet splits = vec![\n    ((0..20).collect::<Vec<usize>>(), (20..40).collect::<Vec<usize>>()),\n    ((20..40).collect::<Vec<usize>>(), (0..20).collect::<Vec<usize>>()),\n];\n\nlet mut model = MeanThreshold { threshold: 0.0 };\nlet importance = mean_decrease_accuracy(\n    &mut model,\n    &x,\n    &y,\n    &feature_names,\n    &splits,\n    None, // sample_weight — pass uniqueness weights from \`sample_weights\` in practice\n    Scoring::Accuracy,\n)?;\n\nprintln!("trend: mean={:.4} std={:.4}", importance["trend"].mean, importance["trend"].std);`,
-      },
-    ],
-    notes: ["Cross-validated MDA is preferred when leakage risk is high.", "Compare ranking stability across folds/time windows."],
+    summary: "MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
   {
@@ -398,28 +331,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "fingerprint",
-    conceptOverview:
-      "Model fingerprinting decomposes a fitted model's behaviour into a linear effect, a non-linear effect and pairwise interaction effects per feature, by sweeping each feature across a grid and measuring how the prediction moves. The result describes *what the model learned* rather than how well it scored — two models with identical accuracy can have entirely different fingerprints, and only one of them may be relying on something that will still be there next quarter.",
-    whenToUse:
-      "Use it after fitting and before deploying, and again on every retrain: comparing fingerprints across retrains is a drift signal that accuracy metrics do not give you. Use the pairwise effects to find interaction risk, since a large pairwise term means the model's response to one feature depends on another, which makes its extrapolation fragile. It works with any model — implement `RegressionPredictor` or `ClassificationPredictor` and pass it to `fit`.",
-    relatedModules: ["feature-importance", "feature-diagnostics", "ensemble-methods", "backtesting-engine"],
     module: "fingerprint",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Model fingerprinting for linear, non-linear, and pairwise feature effects.",
-    whyItExists: "Quantifies behavior of fitted models beyond scalar accuracy metrics.",
-    keyApis: ["RegressionModelFingerprint", "ClassificationModelFingerprint", "Effect", "PairwiseEffect"],
-    formulas: [
-      { label: "Partial Effect", latex: "f_j(x_j)=E_{X_{-j}}[f(X)|X_j=x_j]" },
-      { label: "Pairwise Interaction", latex: "I_{ij}=f(x_i,x_j)-f_i(x_i)-f_j(x_j)" },
-    ],
-    examples: [
-      {
-        title: "Create regression fingerprint",
-        language: "rust",
-        code: `use openquant::fingerprint::{RegressionModelFingerprint, RegressionPredictor};\n\n// Fingerprinting is model-agnostic: anything that can predict will do.\nstruct LinearModel {\n    beta: Vec<f64>,\n}\nimpl RegressionPredictor for LinearModel {\n    fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {\n        x.iter()\n            .map(|row| row.iter().zip(self.beta.iter()).map(|(v, b)| v * b).sum())\n            .collect()\n    }\n}\n\nlet model = LinearModel { beta: vec![1.5, -0.5] };\nlet x: Vec<Vec<f64>> =\n    (0..50).map(|i| vec![i as f64 / 50.0, ((i % 5) as f64) / 5.0]).collect();\n\n// new() takes no arguments; the model and data go to fit(), which needs &mut self.\n// num_values is the partial-dependence grid resolution.\nlet mut fingerprint = RegressionModelFingerprint::new();\nfingerprint.fit(&model, &x, 10, Some(&[(0, 1)]))?;\n\n// The accessor is get_effects(), returning (linear, non-linear, optional pairwise).\nlet (linear, non_linear, pairwise) = fingerprint.get_effects()?;\nprintln!("linear={:?}", linear.norm);\nprintln!("non_linear={:?}", non_linear.norm);\nprintln!("pairwise={:?}", pairwise.map(|p| p.norm.clone()));`,
-      },
-    ],
-    notes: ["Compare fingerprints across retrains for drift detection.", "Use pairwise effects to detect hidden interaction risk."],
+    summary: "Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
   {
@@ -1099,112 +1014,8 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
     slug: "feature-diagnostics",
     module: "feature_diagnostics",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Feature importance diagnostics: MDI, MDA, SFI, PCA orthogonalization, and substitution-effect analysis.",
-    whyItExists: "AFML Chapter 8 requires multiple importance methods to detect substitution effects and unstable features before deploying models.",
-    keyApis: ["mdi_importance", "mda_importance", "sfi_importance", "orthogonalize_features_pca", "substitution_effect_report"],
-    formulas: [
-      {
-        label: "In-Sample Importance (`mdi_importance`)",
-        latex: "I_j=\\frac{1}{B}\\sum_{b=1}^{B}\\frac{\\left|\\beta_j^{(b)}\\right|}{\\sum_k\\left|\\beta_k^{(b)}\\right|}",
-        where: "$\\beta^{(b)}$ are the coefficients of a linear probability model fitted to bootstrap replica $b$, and $B$ = `n_estimators`. **This is normalised coefficient magnitude, not impurity decrease.** The function is named `mdi_importance` because it fills MDI's role — a cheap in-sample ranking computed from the fitted model alone, with the same substitution-effect weakness — but there is no tree and no impurity term here. For the tree-based $I_j=\\frac{1}{B}\\sum_b\\sum_{t\\in T_j^{(b)}}p(t)\\Delta i(t)$, see the Rust [`feature-importance`](/modules/feature-importance/) module. The two are not interchangeable and will rank features differently: this one measures linear sensitivity, that one measures split usefulness. Features must be standardised for the magnitudes to be comparable.",
-      },
-      {
-        label: "Out-of-Sample Importance (`mda_importance`)",
-        latex: "I_j=\\frac{1}{K}\\sum_{k=1}^{K}\\frac{S_k-S_{k,\\text{perm}(j)}}{d(S_{k,\\text{perm}(j)})},\\qquad d(S)=\\begin{cases}-S & \\text{scoring}=\\texttt{neg\\_log\\_loss}\\\\ 1-S & \\text{scoring}=\\texttt{accuracy}\\end{cases}",
-        where: "$S_k$ is the score on purged fold $k$ and $S_{k,\\text{perm}(j)}$ the score after permuting column $j$ in that fold's test set. The denominator differs by scoring rule, and the default is `neg_log_loss` — with negative scores $-S$, not $1-S$, is what puts folds on a comparable scale. Splits come from `_purged_kfold_splits`, so `event_end_indices` must be supplied for the purge to do anything.",
-      },
-    ],
-    examples: [
-      {
-        title: "Run all three importance methods and compare",
-        language: "python",
-        
-        code: `from openquant.feature_diagnostics import (
-    mdi_importance, mda_importance, sfi_importance
-)
-
-# A deterministic stand-in for your feature matrix: momentum carries the
-# signal, spread is noise, so the importances below are checkable.
-import random
-
-rng = random.Random(7)
-X = [[rng.gauss(0.0, 1.0) for _ in range(3)] for _ in range(120)]
-y = [1.0 if row[0] + 0.3 * row[1] > 0.0 else 0.0 for row in X]
-names = ["momentum", "volatility", "spread"]
-
-# event_end_indices[i] is the row at which sample i's label resolves. It is
-# REQUIRED for the purged methods: without it every sample would be a
-# degenerate one-row interval, nothing would be purged, and the training
-# folds would leak label information from the test fold. Passing it is what
-# makes the split actually purged.
-ends = [i + 3 for i in range(len(y))]
-
-mdi = mdi_importance(X, y, feature_names=names, n_estimators=32)
-mda = mda_importance(X, y, feature_names=names, event_end_indices=ends,
-                     n_splits=5, pct_embargo=0.01)
-sfi = sfi_importance(X, y, feature_names=names, event_end_indices=ends,
-                     n_splits=5)
-
-# mda["cv"]["purged"] is True here. It is False -- and "method" reads
-# "kfold_embargo_only" -- if you deliberately opt out with
-# allow_unpurged=True, so an unpurged run can never look like a purged one.
-
-# Each returns: {"table": pl.DataFrame, "viz_payload": {...}, ...}
-print(mdi["table"])  # feature | mean | std | stderr
-print(mda["table"])`,
-      },
-      {
-        title: "Detect substitution effects between correlated features",
-        language: "python",
-        docCheck: "skip",
-        code: `from openquant.feature_diagnostics import substitution_effect_report
-
-report = substitution_effect_report(
-    X, y,
-    feature_names=names,
-    corr_threshold=0.7,   # flag pairs with |corr| > 0.7
-    orthogonalize=True,   # also run MDA on PCA-orthogonalized features
-)
-
-# Correlated pairs with dilution risk
-print(report["pairs"])
-# feature_a | feature_b | corr | dilution_ratio | flag_substitution_risk
-
-# Before/after orthogonalization comparison
-print(report["orthogonalized"]["max_abs_corr_before"])   # e.g., 0.92
-print(report["orthogonalized"]["max_abs_corr_after"])     # e.g., 0.03`,
-      },
-    ],
-    notes: [
-      "MDI is biased toward high-cardinality features; cross-check with MDA.",
-      "MDA uses purged k-fold CV internally to prevent leakage in importance estimates.",
-      "SFI trains single-feature models — useful for detecting features that are only useful in combination.",
-      "substitution_effect_report combines MDA + correlation + PCA in one call.",
-    ],
-    conceptOverview: `Feature importance is not a single number — AFML Chapter 8 argues you need multiple methods because each has different failure modes. **MDI** (Mean Decrease Impurity) measures how much each feature contributes to splits in an ensemble, but it's biased toward features with more unique values. **MDA** (Mean Decrease Accuracy) measures the score drop when a feature is permuted, which is unbiased but noisy. **SFI** (Single Feature Importance) trains one model per feature, revealing which features carry signal alone vs. only in combination.
-
-The critical insight is **substitution effects**: when two features are correlated, MDI and MDA split importance between them arbitrarily. A feature that appears unimportant might be essential — its importance was just absorbed by its correlated partner. The \`substitution_effect_report\` detects this by comparing individual MDA scores against grouped-permutation scores, and by re-running MDA on PCA-orthogonalized features where substitution effects vanish.
-
-All importance methods use purged k-fold cross-validation internally, preventing information leakage from overlapping labels.`,
-    whenToUse: `Run feature diagnostics after training an initial model and before finalizing the feature set. Use the results to prune unstable features, detect redundancy, and validate that your model relies on economically meaningful signals.
-
-**Prerequisites**: Feature matrix X, label vector y, and optionally event end indices for purged CV.
-
-**Alternatives**: Rust-side \`feature_importance\` module for MDI/MDA on Rust models; this Python module adds SFI, PCA orthogonalization, and substitution-effect analysis.`,
-    keyParameters: [
-      { name: "n_estimators", type: "int", description: "Number of bootstrap rounds for MDI", default: "32" },
-      { name: "n_splits", type: "int", description: "Number of purged k-fold splits for MDA/SFI", default: "5" },
-      { name: "pct_embargo", type: "float", description: "Embargo fraction for purged CV", default: "0.01" },
-      { name: "scoring", type: "str", description: "Scoring metric: 'neg_log_loss', 'accuracy', or 'f1'", default: "'neg_log_loss'" },
-      { name: "corr_threshold", type: "float", description: "Minimum |correlation| to flag a substitution-risk pair", default: "0.9" },
-      { name: "variance_threshold", type: "float", description: "PCA cumulative variance to retain for orthogonalization", default: "0.95" },
-    ],
-    commonPitfalls: [
-      "Relying on a single importance method — always cross-check MDI, MDA, and SFI for consistent rankings.",
-      "Ignoring substitution effects: if two features are correlated, both may appear unimportant individually but one is essential.",
-      "Not using event_end_indices with overlapping labels — without purging, importance estimates are biased by leakage.",
-    ],
-    relatedModules: ["feature-importance", "cross-validation"],
+    summary: "Python importance reports on purged folds, with a substitution-effect report and a feature screen.",
+    handwritten: true,
     afmlChapters: [8],
     apiSurface: "python-only",
     pythonApis: ["feature_diagnostics.mdi_importance", "feature_diagnostics.mda_importance", "feature_diagnostics.sfi_importance", "feature_diagnostics.orthogonalize_features_pca", "feature_diagnostics.substitution_effect_report"],
