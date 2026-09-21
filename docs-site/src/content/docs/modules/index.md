@@ -69,10 +69,10 @@ For the AFML chapter each module implements, see
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
-- [`feature_diagnostics`](/modules/feature-diagnostics/) — Feature importance diagnostics: MDI, MDA, SFI, PCA orthogonalization, and substitution-effect analysis.
-- [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
-- [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
-- [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.
+- [`feature_diagnostics`](/modules/feature-diagnostics/) — Python importance reports on purged folds, with a substitution-effect report and a feature screen.
+- [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
+- [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
+- [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
 - [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Synthetic-data OTR backtesting with O-U calibration, PT/SL mesh search, and stability diagnostics.
@@ -99,14 +99,14 @@ For the AFML chapter each module implements, see
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
-- [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
+- [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
-- [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
+- [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
 - [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
-- [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring.
+- [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.

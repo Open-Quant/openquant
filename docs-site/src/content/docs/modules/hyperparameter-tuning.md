@@ -1,128 +1,208 @@
 ---
 title: "hyperparameter_tuning"
-description: "Leakage-aware grid/randomized hyper-parameter search with purged CV and weighted scoring."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
+status: authored
+last_authored: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
 module: "hyperparameter_tuning"
 api_surface: "rust-only"
+afml_chapter:
+  - "9"
+citation:
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 9: §9.2 Grid Search Cross-Validation (Snippets 9.1–9.2); §9.3 Randomized Search Cross-Validation (Snippet 9.3); §9.3.1 Log-Uniform Distribution (Snippet 9.4); §9.4 Scoring and Hyper-parameter Tuning."
+  - "Bergstra, J. and Bengio, Y. (2012). Random search for hyper-parameter optimization. Journal of Machine Learning Research 13, 281–305."
 rust_api:
   - "grid_search"
   - "randomized_search"
   - "expand_param_grid"
-  - "sample_log_uniform"
   - "classification_score"
+  - "sample_log_uniform"
+  - "SearchData"
   - "SearchScoring"
+  - "SearchResult"
+  - "SearchTrial"
+  - "HyperParamValue"
   - "RandomParamDistribution"
+  - "ParamSet"
+  - "TuningError"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+Tuning is where cross-validation leakage does the most damage, because the search *optimises*
+against it. If overlapping labels inflate every fold's score a little, the configuration that
+wins is the one best at exploiting the overlap — usually the most flexible one. AFML's
+Chapter 9 therefore changes two things about an ordinary grid search: the folds are
+[purged and embargoed](/modules/cross-validation/), and the score is one that punishes
+confident mistakes. This module is that search.
 
-Grid and randomized search that run under `PurgedKFold` rather than plain k-fold, so the tuning loop cannot buy its score with leakage. `randomized_search` samples from `RandomParamDistribution`, including log-uniform — the right prior for scale parameters such as C and gamma — and AFML Chapter 9's argument is that beyond a couple of dimensions random sampling dominates grid search per unit of compute. The scoring choice exposed by `SearchScoring` is an economic decision, not a statistical one.
+## How a search is set up
 
-## When to Use
+You supply a **builder**, a closure from a `ParamSet` to a fresh model implementing
+[`SimpleClassifier`](/modules/cross-validation/#scoring). A `ParamSet` is a map from name to
+`HyperParamValue` (`Int`, `Float` or `Bool`), read back with `as_i64`, `as_f64` and
+`as_bool`. The data go in a `SearchData`: features, 0/1 labels, optional sample weights, and
+the `(start, end)` span of every label, which is what the purge needs.
 
-Any time you tune a model whose labels overlap. Use `NegLogLoss` when probabilities drive position size, since it penalises confident wrong answers the way a bet does; use `Accuracy` only when every prediction carries similar economic weight; use `BalancedAccuracy` for the severe class imbalance typical of meta-labelling, where recall of the positive class is what matters. Pass `sample_weight` from `sample_weights` — tuning on unweighted overlapping observations rewards the wrong model.
+- `grid_search(builder, grid, data, n_splits, pct_embargo, scoring)` tries every combination
+  of the listed values.
+- `randomized_search(builder, space, n_iter, seed, data, n_splits, pct_embargo, scoring)`
+  draws `n_iter` parameter sets from distributions: `Choice`, `Uniform`, `LogUniform`, or
+  `IntRangeInclusive`. It is reproducible for a given `seed`.
 
-## Mathematical Foundations
+Both return a `SearchResult`: `best_params`, `best_score`, and every `SearchTrial` with its
+per-fold scores. Each trial builds a new model per fold, fits it with the training weights,
+and scores the test fold **with the test weights** — the correction Snippet 9.1 makes to
+scikit-learn.
 
-### Purged CV Objective
+## Scoring decides what you find
 
-$$
-\hat\theta=\arg\max_{\theta\in\Theta}\frac{1}{K}\sum_{k=1}^{K}\mathrm{Score}(f_\theta,\mathcal T_k^{train},\mathcal T_k^{test})
-$$
+| `SearchScoring` | |
+| --- | --- |
+| `NegLogLoss` | weighted mean log-likelihood of the true label; probabilities clipped at $10^{-15}$ |
+| `Accuracy` | weighted share of labels matched at a 0.5 threshold |
+| `BalancedAccuracy` | mean of per-class recall, over the classes present in the fold |
 
-### Log-Uniform Draw
-
-$$
-\log x\sim U(\log a,\log b),\; a>0,\;x\in(a,b)
-$$
-
-### Weighted Neg Log Loss
-
-$$
--\frac{1}{\sum_i w_i}\sum_i w_i\left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]
-$$
-
-## Usage Examples
-
-### Rust
-
-#### Randomized search with PurgedKFold semantics
+AFML's argument for log loss (§9.4) is about position sizing. Accuracy counts a wrong call
+made with 51% confidence the same as one made with 99%, but a strategy that
+[sizes by probability](/modules/bet-sizing/) loses far more on the second. The example makes
+the point with a model whose only hyperparameter is how confident it is: `k` scales the
+score inside the sigmoid and changes no prediction's side of 0.5.
 
 ```rust
-use chrono::{Duration, NaiveDateTime};
-use openquant::cross_validation::SimpleClassifier;
-use openquant::hyperparameter_tuning::{
-    randomized_search, ParamSet, RandomParamDistribution, SearchData, SearchScoring,
-};
 use std::collections::BTreeMap;
 
-// The search builds a fresh model from each sampled parameter set.
-struct Logistic {
-    c: f64,
-}
-impl SimpleClassifier for Logistic {
-    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::SimpleClassifier;
+use openquant::hyperparameter_tuning::{
+    grid_search, randomized_search, HyperParamValue, ParamSet, RandomParamDistribution,
+    SearchData, SearchScoring,
+};
+
+/// Scores by the difference of class means, squashed by a sigmoid of sharpness `k`.
+struct MeanDiff { k: f64, w: Vec<f64>, b: f64 }
+
+impl SimpleClassifier for MeanDiff {
+    fn fit(&mut self, x: &[Vec<f64>], y: &[f64], _sample_weight: Option<&[f64]>) {
+        let m = x[0].len();
+        let (mut pos, mut neg, mut n_pos, mut n_neg) = (vec![0.0; m], vec![0.0; m], 0.0, 0.0);
+        for (row, label) in x.iter().zip(y) {
+            let (sum, count) =
+                if *label > 0.5 { (&mut pos, &mut n_pos) } else { (&mut neg, &mut n_neg) };
+            *count += 1.0;
+            row.iter().enumerate().for_each(|(j, v)| sum[j] += v);
+        }
+        self.w = (0..m).map(|j| pos[j] / n_pos - neg[j] / n_neg).collect();
+        self.b = -(0..m).map(|j| self.w[j] * (pos[j] / n_pos + neg[j] / n_neg) / 2.0).sum::<f64>();
+    }
     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
-        x.iter().map(|row| 1.0 / (1.0 + (-self.c * row[0]).exp())).collect()
+        let z = |r: &Vec<f64>| r.iter().zip(&self.w).map(|(a, b)| a * b).sum::<f64>() + self.b;
+        x.iter().map(|r| 1.0 / (1.0 + (-self.k * z(r)).exp())).collect()
     }
 }
-let build_model =
-    |params: &ParamSet| Logistic { c: params["C"].as_f64().unwrap_or(1.0) };
 
-let mut space = BTreeMap::new();
-space.insert("C".to_string(), RandomParamDistribution::LogUniform { low: 1e-2, high: 1e2 });
-space.insert("gamma".to_string(), RandomParamDistribution::LogUniform { low: 1e-3, high: 1e1 });
+// Reproducible noise in [-1, 1) from a hash, so the example needs no RNG.
+fn noise(i: usize, salt: u64) -> f64 {
+    let mut h = (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ salt.wrapping_mul(0xD1B5_4A32_D192_ED03);
+    h ^= h >> 31;
+    h = h.wrapping_mul(0x7FB5_D329_728E_A185);
+    h ^= h >> 27;
+    (h >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0
+}
 
-let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
-let x: Vec<Vec<f64>> = (0..60).map(|i| vec![(i as f64 - 30.0) / 30.0]).collect();
-let y: Vec<f64> = (0..60).map(|i| if i >= 30 { 1.0 } else { 0.0 }).collect();
-let w = vec![1.0f64; 60];
-// Label spans again — the search purges internally, so it needs them.
-let info_sets: Vec<(NaiveDateTime, NaiveDateTime)> =
-    (0..60).map(|i| (t0 + Duration::days(i), t0 + Duration::days(i + 2))).collect();
+let n = 600;
+let x: Vec<Vec<f64>> = (0..n).map(|i| vec![noise(i, 1), noise(i, 2), noise(i, 3)]).collect();
+let y: Vec<f64> = (0..n)
+    .map(|i| f64::from(u8::from(x[i][0] + 0.5 * x[i][1] + 0.4 * noise(i, 9) > 0.0)))
+    .collect();
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info: Vec<_> =
+    (0..n as i64).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
 
-let result = randomized_search(
-    build_model,
-    &space,
-    25,   // n_iter — parameter sets sampled
-    42,   // seed
-    SearchData { x: &x, y: &y, sample_weight: Some(&w), samples_info_sets: &info_sets },
-    5,    // n_splits
-    0.01, // pct_embargo
-    SearchScoring::NegLogLoss,
-)?;
-println!("best score = {} with {:?}", result.best_score, result.best_params);
+let data = || SearchData { x: &x, y: &y, sample_weight: None, samples_info_sets: &info };
+let build = |p: &ParamSet| MeanDiff { k: p["k"].as_f64().unwrap(), w: vec![], b: 0.0 };
+let grid = BTreeMap::from([(
+    "k".to_string(),
+    [0.5, 2.0, 4.0, 8.0, 32.0].map(HyperParamValue::Float).to_vec(),
+)]);
+
+let by_loss = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::NegLogLoss)?;
+assert_eq!(by_loss.best_params["k"], HyperParamValue::Float(8.0));
+assert!((by_loss.best_score + 0.2238).abs() < 1e-4);
+
+// Accuracy cannot tell the five apart, and a tie goes to the last one tried.
+let by_accuracy = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::Accuracy)?;
+assert!(by_accuracy.trials.iter().all(|t| (t.mean_score - 0.8933).abs() < 1e-4));
+assert_eq!(by_accuracy.best_params["k"], HyperParamValue::Float(32.0));
+
+// A log-uniform draw covers three orders of magnitude evenly and lands near the same optimum.
+let space =
+    BTreeMap::from([("k".to_string(), RandomParamDistribution::LogUniform { low: 0.1, high: 100.0 })]);
+let random = randomized_search(build, &space, 12, 7, data(), 5, 0.01, SearchScoring::NegLogLoss)?;
+assert!((random.best_params["k"].as_f64().unwrap() - 8.253).abs() < 1e-3);
 ```
 
-## API Reference
+Mean score by `k`, from the two grid searches:
 
-### Rust API
+```text
+   k     neg log loss   accuracy
+  0.5       -0.5942       0.8933
+  2.0       -0.3935       0.8933
+  4.0       -0.2746       0.8933
+  8.0       -0.2238       0.8933
+ 32.0       -0.4681       0.8933
+```
 
-- `grid_search`
-- `randomized_search`
-- `expand_param_grid`
-- `sample_log_uniform`
-- `classification_score`
-- `SearchScoring`
-- `RandomParamDistribution`
+<figure>
+<img class="dark:sl-hidden" src="/figures/ch9-scoring-light.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.893 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
+<img class="light:sl-hidden" src="/figures/ch9-scoring-dark.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.893 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
+<figcaption>Accuracy is blind to confidence. Log loss finds the <em>k</em> at which stated probabilities match outcomes, and penalises overconfidence beyond it.</figcaption>
+</figure>
 
-## Risk Notes and Caveats
+Accuracy returned `k = 32`, the second-worst setting by log loss, and it did so by accident
+of ordering. A model tuned that way states near-certainty on calls it gets right 89% of
+the time, and a probability-sized book built on it is badly over-levered.
 
-- Use Accuracy only when each prediction has similar economic value (equal bet sizing).
-- Prefer weighted NegLogLoss when probabilities drive position sizing or outcomes have different economic magnitude.
-- BalancedAccuracy is useful for severe class imbalance, especially in meta-labeling where recall of positives matters.
+## Why log-uniform
 
-## Related Modules
+Many hyperparameters — regularisation strength, learning rate, an SVM's `C` and `gamma` —
+matter by order of magnitude: the difference between 0.01 and 0.1 is as large as between 10
+and 100. A uniform draw over $[0.01, 100]$ puts 90% of its samples above 10 and almost none
+where the lower decades are. `LogUniform` draws $\ln x$ uniformly (§9.3.1), so every decade
+gets equal attention; `sample_log_uniform(low, high, rng)` is the same draw on its own. Both
+bounds must be positive.
 
-- [`cross-validation`](/modules/cross-validation/)
-- [`sample-weights`](/modules/sample-weights/)
-- [`sb-bagging`](/modules/sb-bagging/)
-- [`ensemble-methods`](/modules/ensemble-methods/)
-- [`backtesting-engine`](/modules/backtesting-engine/)
+Random search is also usually the better use of a fixed budget when only some parameters
+matter, because a grid spends most of its trials varying the ones that do not (Bergstra and
+Bengio, 2012).
+
+## What to watch for
+
+- **The search does not refit.** `SearchResult` holds parameters and scores, not a model.
+  Build and fit the winner yourself, on the training span.
+- **Ties go to the last trial**, as the accuracy search shows. Order the grid so that the
+  simplest or most conservative configuration comes last if you want ties broken that way.
+  A `NaN` mean score is treated as equal to everything, so check `trials` when a model can
+  fail to fit.
+- **Every trial is a trial.** The best of 200 configurations looks good partly because it is
+  the best of 200. `trials.len()` is the number to carry into a
+  [deflated Sharpe ratio](/modules/backtest-statistics/) or any other multiple-testing
+  correction — and that includes searches you ran and discarded.
+- **The winner's score is not an out-of-sample estimate.** It was selected for being high.
+  Hold out a final span that the search never sees, or nest the search inside an outer purged
+  loop.
+- **The embargo is measured from the fold's edge**, so a `pct_embargo` shorter than the
+  labels adds nothing to the purge; see
+  [`cross-validation`](/modules/cross-validation/#two-ways-this-differs-from-the-book).
+- **Labels must be 0 or 1** and probabilities finite and in $[0,1]$; anything else is a
+  `TuningError`, as are negative weights and a fold left empty by purging.
+
+## Related modules
+
+- [`cross-validation`](/modules/cross-validation/) — the splitter and the classifier trait.
+- [`sample-weights`](/modules/sample-weights/) — the weights scored with here.
+- [`bet-sizing`](/modules/bet-sizing/) — why calibrated probabilities are worth tuning for.
+- [`backtest-statistics`](/modules/backtest-statistics/) — deflating results by the number
+  of trials.
