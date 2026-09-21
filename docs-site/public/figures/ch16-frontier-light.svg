@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" role="img" aria-label="The long-only efficient frontier of four assets, with the turning points of the critical line algorithm">
+<rect width="760" height="330" fill="#fbf9f4"/>
+<text x="64" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">EXPECTED RETURN AGAINST VOLATILITY</text>
+<line x1="64" y1="286.0" x2="620" y2="286.0" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="56" y="290.0" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">2%</text>
+<line x1="64" y1="224.5" x2="620" y2="224.5" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="56" y="228.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">4%</text>
+<line x1="64" y1="163.0" x2="620" y2="163.0" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="56" y="167.0" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">6%</text>
+<line x1="64" y1="101.5" x2="620" y2="101.5" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="56" y="105.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">8%</text>
+<line x1="64" y1="40.0" x2="620" y2="40.0" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="56" y="44.0" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">10%</text>
+<text x="64.0" y="308" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0%</text>
+<text x="203.0" y="308" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">6%</text>
+<text x="342.0" y="308" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">12%</text>
+<text x="481.0" y="308" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">18%</text>
+<text x="620.0" y="308" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">24%</text>
+<polyline points="573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 573.7,70.8 572.4,71.1 571.1,71.5 569.8,71.9 568.5,72.3 567.2,72.6 565.9,73.0 564.6,73.4 563.3,73.8 562.1,74.1 560.8,74.5 559.5,74.9 558.3,75.3 557.0,75.6 555.8,76.0 554.5,76.4 543.0,79.9 531.6,83.4 520.2,86.9 509.0,90.4 498.0,93.9 487.1,97.4 476.3,100.9 465.7,104.4 455.3,107.9 445.0,111.4 435.0,114.9 425.3,118.4 415.7,121.9 406.4,125.4 397.5,128.9 378.8,136.3 360.2,143.8 341.8,151.2 323.7,158.7 305.8,166.1 288.3,173.6 271.2,181.0 254.6,188.5 238.7,195.9 223.8,203.4 210.0,210.8 197.8,218.2 187.6,225.7 179.9,233.1 175.3,240.6 175.2,240.9 175.1,241.2 175.0,241.6 174.9,241.9 174.8,242.2 174.7,242.5 174.6,242.9 174.6,243.2 174.5,243.5 174.5,243.8 174.4,244.2 174.4,244.5 174.4,244.8 174.4,245.1 174.4,245.5" fill="none" stroke="#97196a" stroke-width="2.0" stroke-linejoin="round"/>
+<circle cx="573.7" cy="70.8" r="4.2" fill="#97196a"/>
+<circle cx="573.7" cy="70.8" r="4.2" fill="#97196a"/>
+<circle cx="554.5" cy="76.4" r="4.2" fill="#97196a"/>
+<circle cx="397.5" cy="128.9" r="4.2" fill="#97196a"/>
+<circle cx="175.3" cy="240.6" r="4.2" fill="#97196a"/>
+<circle cx="174.4" cy="245.5" r="4.2" fill="#97196a"/>
+<circle cx="183.0" cy="229.8" r="4.2" fill="#1d1a16"/>
+<text x="193.0" y="243.8" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">max Sharpe</text>
+<circle cx="179.8" cy="255.2" r="3.0" fill="#5c554b"/>
+<text x="187.8" y="259.2" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">bonds</text>
+<circle cx="434.7" cy="132.2" r="3.0" fill="#5c554b"/>
+<text x="442.7" y="136.2" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">equity</text>
+<circle cx="573.7" cy="70.8" r="3.0" fill="#5c554b"/>
+<text x="581.7" y="74.8" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">small cap</text>
+<circle cx="411.5" cy="224.5" r="3.0" fill="#5c554b"/>
+<text x="419.5" y="228.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">gold</text>
+</svg>

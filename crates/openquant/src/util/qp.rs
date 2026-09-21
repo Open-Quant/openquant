@@ -45,6 +45,22 @@ pub(crate) fn solve_qp(
         return Err(QpError::Malformed);
     }
 
+    // Scale every constraint row to a largest coefficient of one. The feasible set is unchanged,
+    // but ADMM converges at a rate set by the conditioning of A: a return constraint with
+    // coefficients near 0.05 beside budget and box rows of 1 stalled it until MAX_ITERATIONS,
+    // and the failure was reported as an infeasible problem.
+    let mut a = a.clone();
+    let (mut lower, mut upper) = (lower.to_vec(), upper.to_vec());
+    for i in 0..m {
+        let largest = a.row(i).iter().fold(0.0f64, |acc, v| acc.max(v.abs()));
+        if largest > 0.0 && largest.is_finite() {
+            a.row_mut(i).iter_mut().for_each(|v| *v /= largest);
+            lower[i] /= largest;
+            upper[i] /= largest;
+        }
+    }
+    let (a, lower, upper) = (&a, lower.as_slice(), upper.as_slice());
+
     // The minimiser does not depend on the scale of P; bring it to order one so that RHO and
     // SIGMA mean the same thing for daily and for annualised covariances.
     let scale = p.diagonal().iter().map(|v| v.abs()).sum::<f64>() / n as f64;

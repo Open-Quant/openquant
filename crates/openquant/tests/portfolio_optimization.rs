@@ -231,3 +231,39 @@ fn allocate_efficient_risk_with_opts(
 ) -> Result<openquant::portfolio_optimization::MeanVariance, AllocError> {
     openquant::portfolio_optimization::allocate_efficient_risk_with(prices, opts)
 }
+
+/// `efficient_risk` used to fail with "no portfolio satisfies the constraints" for feasible
+/// targets whenever returns were in decimal units: the return constraint's coefficients were
+/// twenty times smaller than the budget row's, ADMM stalled, and hitting the iteration cap was
+/// reported as infeasibility. The same problem in percent units solved. Rows are now scaled.
+#[test]
+fn efficient_risk_does_not_depend_on_the_units_of_the_return_constraint() {
+    use nalgebra::DMatrix;
+    use openquant::portfolio_optimization::{allocate_from_inputs, AllocationOptions};
+
+    let mu = [0.03, 0.07, 0.09, 0.04];
+    let vol = [0.05, 0.16, 0.22, 0.15];
+    let rho =
+        [[1.0, 0.1, 0.1, 0.1], [0.1, 1.0, 0.8, 0.0], [0.1, 0.8, 1.0, 0.0], [0.1, 0.0, 0.0, 1.0]];
+    let cov = DMatrix::from_fn(4, 4, |i, j| rho[i][j] * vol[i] * vol[j]);
+
+    for target in [0.04, 0.05, 0.06, 0.07, 0.08] {
+        let opts = AllocationOptions { target_return: target, ..AllocationOptions::default() };
+        let decimal = allocate_from_inputs(&mu, &cov, "efficient_risk", &opts)
+            .unwrap_or_else(|e| panic!("target {target}: {e}"));
+        // The return constraint binds above the minimum-variance return of about 3.3%.
+        assert!((decimal.portfolio_return - target).abs() < 1e-7, "target {target}");
+        assert!((decimal.weights.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(decimal.weights.iter().all(|w| *w > -1e-9));
+
+        // The same problem stated in percent must give the same weights.
+        let mu_pct: Vec<f64> = mu.iter().map(|m| m * 100.0).collect();
+        let cov_pct = &cov * 1e4;
+        let opts_pct =
+            AllocationOptions { target_return: target * 100.0, ..AllocationOptions::default() };
+        let percent = allocate_from_inputs(&mu_pct, &cov_pct, "efficient_risk", &opts_pct).unwrap();
+        for (a, b) in decimal.weights.iter().zip(&percent.weights) {
+            assert!((a - b).abs() < 1e-6, "target {target}: {a} vs {b}");
+        }
+    }
+}
