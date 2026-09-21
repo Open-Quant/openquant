@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+last_generated: '2026-09-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -35,7 +35,7 @@ For the AFML chapter each module implements, see
 ### Market Microstructure, Dependence and Regime Detection
 
 - [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
-- [`fracdiff`](/modules/fracdiff/) — Fractional differentiation to improve stationarity while retaining memory.
+- [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
 - [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
 - [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
 - [`util::fast_ewma`](/modules/util-fast-ewma/) — Fast EWMA primitive shared across feature and volatility routines.
@@ -66,9 +66,9 @@ For the AFML chapter each module implements, see
 ### Sampling, Validation and ML Diagnostics
 
 - [`backtesting_engine`](/modules/backtesting-engine/) — Backtesting core with walk-forward, purged CV, and combinatorial purged CV (CPCV) workflows.
-- [`cross_validation`](/modules/cross-validation/) — Purged cross-validation utilities designed for label overlap and leakage control.
+- [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
-- [`ensemble_methods`](/modules/ensemble-methods/) — Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.
+- [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — Feature importance diagnostics: MDI, MDA, SFI, PCA orthogonalization, and substitution-effect analysis.
 - [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
 - [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
@@ -93,16 +93,16 @@ For the AFML chapter each module implements, see
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
 - [`codependence`](/modules/codependence/) — Dependence metrics beyond linear correlation for feature and asset relationships.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
-- [`cross_validation`](/modules/cross-validation/) — Purged cross-validation utilities designed for label overlap and leakage control.
+- [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
-- [`ensemble_methods`](/modules/ensemble-methods/) — Bias/variance diagnostics and practical bagging-vs-boosting ensemble utilities.
+- [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 - [`feature_importance`](/modules/feature-importance/) — Feature ranking methods: MDI, MDA, and single-feature importance with PCA diagnostics.
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`fingerprint`](/modules/fingerprint/) — Model fingerprinting for linear, non-linear, and pairwise feature effects.
-- [`fracdiff`](/modules/fracdiff/) — Fractional differentiation to improve stationarity while retaining memory.
+- [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
 - [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.

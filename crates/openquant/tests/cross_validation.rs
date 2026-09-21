@@ -221,3 +221,22 @@ fn test_purged_kfold_rejects_impossible_split_counts() {
     }
     assert!(PurgedKFold::new(5, info_sets, 0.0).is_ok());
 }
+
+/// The numbers quoted on the `cross_validation` docs page (examples/docs_cross_validation.rs).
+#[test]
+fn test_docs_page_example_values() {
+    use chrono::{Duration, NaiveDate};
+    use openquant::cross_validation::PurgedKFold;
+
+    let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+    let info: Vec<_> =
+        (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+    let train_of =
+        |pct: f64| PurgedKFold::new(5, info.clone(), pct).unwrap().split(40).unwrap()[2].0.clone();
+
+    let purged_only: Vec<usize> = (0..=12).chain(27..=39).collect();
+    assert_eq!(train_of(0.0), purged_only);
+    // A 3-sample embargo is counted from the fold's edges, inside the purged zone: no effect.
+    assert_eq!(train_of(0.07), purged_only);
+    assert_eq!(train_of(0.15), (0..=9).chain(30..=39).collect::<Vec<usize>>());
+}
