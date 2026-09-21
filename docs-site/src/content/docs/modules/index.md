@@ -45,9 +45,9 @@ For the AFML chapter each module implements, see
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
-- [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
-- [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
-- [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
+- [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
+- [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
@@ -103,13 +103,13 @@ For the AFML chapter each module implements, see
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
-- [`hcaa`](/modules/hcaa/) — Hierarchical Clustering Asset Allocation variant with cluster-level constraints.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
-- [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
+- [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
-- [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
+- [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.

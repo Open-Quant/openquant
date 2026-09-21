@@ -2,7 +2,7 @@
 title: "risk_metrics"
 description: "Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -28,9 +28,9 @@ sidebar:
 ---
 
 Four risk numbers computed from a sample, with no distribution assumed. The module is a port
-of mlfinlab's `RiskMetrics` class, and its main user inside this crate is
-[`hcaa`](/modules/hcaa/), which allocates between clusters by variance, expected shortfall or
-conditional drawdown. It is not from AFML. In Rust the functions are methods on the unit
+of mlfinlab's `RiskMetrics` class, and its user inside this crate is
+[`pipeline`](/modules/pipeline/), which reports these figures for a strategy's returns. It is
+not from AFML. In Rust the functions are methods on the unit
 struct `RiskMetrics`; in Python they are functions in `openquant.risk`.
 
 ## What each one measures
@@ -129,9 +129,11 @@ assert_eq!(
   the 0.95 level on a realistic equity curve it returns `NaN`, and at other levels it returns
   a number that is not a tail statistic. It also needs a cumulative series although its
   parameter is named `returns`, and it reads `confidence_level` as an upper quantile, the
-  opposite of VaR beside it. [`hcaa`](/modules/hcaa/) with
-  `"conditional_drawdown_risk"` inherits all of this
-  ([#102](https://github.com/Open-Quant/openquant/issues/102)).
+  opposite of VaR beside it. [`pipeline`](/modules/pipeline/) reports a
+  `conditional_drawdown_risk` computed this way, from returns
+  ([#102](https://github.com/Open-Quant/openquant/issues/102)). [`hcaa`](/modules/hcaa/) is
+  *not* affected: it has its own drawdown measure, built on the drawdown series of a wealth
+  curve, which is the correct construction.
 - **Historical estimates cannot see what has not happened.** A 1% expected shortfall from 500
   observations is the mean of five numbers. Nothing here fits a tail, scales with horizon, or
   weights recent data.
@@ -145,7 +147,9 @@ assert_eq!(
 
 ## Related modules
 
-- [`hcaa`](/modules/hcaa/) — allocates using these measures.
+- [`hcaa`](/modules/hcaa/) — allocates between clusters by variance, expected shortfall or
+  conditional drawdown, with its own implementations of the last two.
+- [`pipeline`](/modules/pipeline/) — reports these measures for a strategy.
 - [`backtest-statistics`](/modules/backtest-statistics/) — drawdown and time under water of a
   track record.
 - [`strategy-risk`](/modules/strategy-risk/) — the risk that the strategy itself stops

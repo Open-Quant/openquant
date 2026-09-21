@@ -1,93 +1,175 @@
 ---
 title: "onc"
-description: "Optimal Number of Clusters utilities for clustering stability and allocation workflows."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+description: "Optimal Number of Clusters: partition a correlation matrix with k-means, choosing the number of clusters by silhouette quality."
+status: authored
+last_authored: '2026-09-21'
 audience:
   - quant-dev
   - platform-engineering
 module: "onc"
 api_surface: "both"
+citation:
+  - "López de Prado, M. (2020). Machine Learning for Asset Managers. Cambridge University Press. Chapter 4, Optimal Clustering: §4.4 Optimal Number of Clusters; §4.4.1 Observations Matrix; §4.4.2 Base Clustering (Snippet 4.1); §4.4.3 Higher-Level Clustering (Snippet 4.2); §4.5 Experimental Results."
+  - "López de Prado, M. and Lewis, M. J. (2019). Detection of false investment strategies using unsupervised learning methods. Quantitative Finance 19(9), 1555–1565."
+  - "Rousseeuw, P. J. (1987). Silhouettes: a graphical aid to the interpretation and validation of cluster analysis. Journal of Computational and Applied Mathematics 20, 53–65."
 rust_api:
   - "get_onc_clusters"
   - "check_improve_clusters"
   - "OncResult"
+  - "OncError"
+python_api:
+  - "onc.get_onc_clusters"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+Most clustering algorithms need to be told how many clusters to find, and the answer is
+usually the thing you wanted to learn. How many distinct bets are in this portfolio? How many
+genuinely different strategies are in these two hundred backtests? The Optimal Number of
+Clusters algorithm (López de Prado and Lewis, 2019; *Machine Learning for Asset Managers*,
+Chapter 4) answers by trying every count and keeping the partition whose clusters are most
+clearly separated. It is not from AFML. Its two uses in this library's workflow are grouping
+substitutable features before measuring
+[importance](/modules/feature-importance/) and counting the *effective* number of trials for
+a [deflated Sharpe ratio](/modules/backtest-statistics/#deflating-for-the-trials-you-ran).
 
-Optimal Number of Clusters: runs k-means over a correlation matrix for a range of k, scores each partition by the mean-to-standard-deviation ratio of its silhouette scores, then re-clusters only the clusters that scored badly and keeps the result if it improves. Base k-means is unstable in both k and initialisation, so ONC restarts it `repeat` times and keeps the best — the point is a defensible cluster count, not a fast one.
+## The algorithm
 
-## When to Use
+**Observations.** Convert the correlation matrix to the distance
+$d_{ij}=\sqrt{\tfrac12(1-\rho_{ij})}$. Each item is then represented by *its row of that
+matrix*, its distances to every other item, so two items are close when they relate to
+everything else in the same way. That is more robust than comparing the pair alone.
 
-Use it before any hierarchical allocation to decide how many clusters the universe actually supports, instead of hard-coding a number; its answer feeds `hcaa`'s `optimal_num_clusters` directly. Use it also to test whether a claimed grouping — sectors, factors, strategy families — survives contact with the data. Clean the correlation matrix first: on an unstable universe ONC will happily find structure in noise and report a confident k for it.
-
-## Mathematical Foundations
-
-### Cluster Score
+**Quality.** For an item $i$, let $a_i$ be its mean distance to the other members of its
+cluster and $b_i$ its mean distance to the members of the nearest other cluster. Its
+silhouette (Rousseeuw, 1987) is
 
 $$
-J(k)=\text{intra}(k)-\text{inter}(k)
+S_i \;=\; \frac{b_i-a_i}{\max(a_i,\,b_i)}
 $$
 
-### Selection
+which is near 1 for an item deep inside a well-separated cluster and negative for one that
+sits closer to a neighbouring cluster. The quality of a whole partition is the $t$-statistic
+of the silhouettes, $q=\mathrm{E}[S_i]/\sqrt{\mathrm{V}[S_i]}$: high when silhouettes are
+large *and* uniformly so.
 
-$$
-k^*=\arg\min_k J(k)
-$$
+**Base clustering.** Run k-means for every $k$ from 2 to $N-1$, `repeat` times each with
+different initialisations, and keep the partition with the highest $q$.
 
-## Usage Examples
+**Higher-level clustering.** Compute $q$ per cluster. Clusters below the average are pooled
+and the whole procedure is run again on just their members, on the view that a poor cluster
+may be several real ones merged. The re-clustered partition is kept if it scores better.
 
-### Rust
+`get_onc_clusters(corr, repeat)` returns an `OncResult`: `clusters`, a map from cluster label
+to member indices; `silhouette_scores`, one per item in the original order; and
+`ordered_correlation`, the matrix permuted so that clusters are contiguous.
 
-#### Infer cluster structure
+## Recovering planted clusters
+
+```python
+import random
+
+from openquant import onc
+
+# Twelve series in three planted groups of sizes 5, 4 and 3, shuffled so that the correlation
+# matrix shows no structure as given.
+rng = random.Random(7)
+group_of = [0] * 5 + [1] * 4 + [2] * 3
+rng.shuffle(group_of)
+series = []
+factors = [[rng.gauss(0, 1) for _ in range(600)] for _ in range(3)]
+for g in group_of:
+    series.append([0.8 * f + 0.6 * rng.gauss(0, 1) for f in factors[g]])
+
+def corr(a, b):
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    return cov / (sum((x - ma) ** 2 for x in a) * sum((y - mb) ** 2 for y in b)) ** 0.5
+
+matrix = [[corr(a, b) for b in series] for a in series]
+result = onc.get_onc_clusters(matrix, 5)
+
+print("planted groups:", group_of)
+for label, members in sorted(result["clusters"].items()):
+    print(f"cluster {label}: members {members}  planted group {sorted({group_of[i] for i in members})}")
+silhouettes = result["silhouette_scores"]
+print(f"mean silhouette {sum(silhouettes) / len(silhouettes):.2f}")
+```
+
+```text
+planted groups: [1, 2, 0, 2, 1, 0, 2, 0, 0, 1, 0, 1]
+cluster 0: members [1, 3, 6]  planted group [2]
+cluster 1: members [2, 5, 7, 8, 10]  planted group [0]
+cluster 2: members [0, 4, 9, 11]  planted group [1]
+mean silhouette 0.48
+```
+
+Nothing told the algorithm to look for three clusters, or that their sizes differ. It
+returned three, and each holds exactly the members of one planted group.
+
+<figure>
+<img class="dark:sl-hidden" src="/figures/mlam4-onc-light.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes three, five and four, with near-zero correlation everywhere else." />
+<img class="light:sl-hidden" src="/figures/mlam4-onc-dark.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes three, five and four, with near-zero correlation everywhere else." />
+<figcaption>The example's correlation matrix, before and after. The right-hand panel is <code>ordered_correlation</code>.</figcaption>
+</figure>
+
+## From Rust
 
 ```rust
 use nalgebra::DMatrix;
-use openquant::onc::get_onc_clusters;
+use openquant::onc::{get_onc_clusters, OncError};
 
-// ONC consumes a *correlation* matrix, not raw prices — build one from your
-// codependence measure of choice first.
-let corr = DMatrix::from_row_slice(
-    4,
-    4,
-    &[
-        1.00, 0.85, 0.10, 0.05, //
-        0.85, 1.00, 0.12, 0.08, //
-        0.10, 0.12, 1.00, 0.78, //
-        0.05, 0.08, 0.78, 1.00,
-    ],
-);
+// Two blocks of three: 0.8 within a block, 0.1 across.
+let block = |i: usize| i / 3;
+let corr = DMatrix::from_fn(6, 6, |i, j| {
+    if i == j { 1.0 } else if block(i) == block(j) { 0.8 } else { 0.1 }
+});
 
-// `repeat` is the number of k-means restarts used to stabilise the partition.
-let out = get_onc_clusters(&corr, 20)?;
-println!("{} clusters", out.clusters.len());
-println!("silhouette scores: {:?}", out.silhouette_scores);
+let result = get_onc_clusters(&corr, 3)?;
+assert_eq!(result.clusters.len(), 2);
+let mut found: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+found.sort();
+assert_eq!(found, vec![vec![0, 1, 2], vec![3, 4, 5]]);
+
+// One silhouette per item, all clearly positive for a clean partition.
+assert_eq!(result.silhouette_scores.len(), 6);
+assert!(result.silhouette_scores.iter().all(|s| *s > 0.5));
+
+assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
 ```
 
-## API Reference
+## What to watch for
 
-### Python API
+- **The higher-level step may keep the wrong partition.** By inspection, when re-clustering
+  *improves* quality the function returns the original partition, and when it does not, the
+  re-clustered one — the reverse of Snippet 4.2. The branch runs only when more than two
+  clusters are below average, which clean inputs like the example never reach and no test
+  covers ([#107](https://github.com/Open-Quant/openquant/issues/107)). On messy real
+  correlation matrices it does run. Check the result by looking at `ordered_correlation`.
+- **Results are reproducible, and not tunable.** k-means is seeded from a fixed value, the
+  repetition number and $k$, so the same matrix always gives the same answer. `repeat` adds
+  initialisations; there is no seed parameter to vary.
+- **Cost grows as the cube of the number of items or worse.** Every $k$ up to $N-1$ is tried,
+  `repeat` times, and each silhouette pass is quadratic. A few hundred items is comfortable;
+  thousands is not, and the recursion multiplies it.
+- **It always returns at least two clusters.** There is no "one cluster" outcome, so a matrix
+  with no structure still comes back partitioned. A low mean silhouette, or a silhouette
+  $t$-statistic near zero, is the sign that the clusters are not real.
+- **Negative correlation is distance, not similarity.** With $d=\sqrt{\tfrac12(1-\rho)}$ a
+  pair at $\rho=-1$ is as far apart as possible. If a strategy and its mirror image should
+  count as the same bet, take absolute correlations first.
+- **The input must be a correlation matrix**: square, with at least two rows. Values are
+  clamped to $[-1,1]$ but symmetry and a unit diagonal are not checked. From Python it is a
+  list of lists, and `clusters` comes back as a dict keyed by label.
 
-- `onc.get_onc_clusters`
+## Related modules
 
-### Rust API
-
-- `get_onc_clusters`
-- `check_improve_clusters`
-- `OncResult`
-
-## Risk Notes and Caveats
-
-- Run with repeated seeds/restarts for robust k selection.
-- Use correlation cleaning before clustering unstable universes.
-
-## Related Modules
-
-- [`hcaa`](/modules/hcaa/)
-- [`hrp`](/modules/hrp/)
-- [`codependence`](/modules/codependence/)
-- [`portfolio-optimization`](/modules/portfolio-optimization/)
+- [`codependence`](/modules/codependence/) — the distance used here, and alternatives that
+  see non-linear dependence.
+- [`hrp`](/modules/hrp/), [`hcaa`](/modules/hcaa/) — allocation over a hierarchical tree
+  rather than a flat partition.
+- [`feature-importance`](/modules/feature-importance/) — cluster features, then measure
+  importance per cluster.
+- [`backtest-statistics`](/modules/backtest-statistics/) — the number of clusters of trial
+  returns is the $N$ to deflate by.
