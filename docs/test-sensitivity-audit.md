@@ -126,6 +126,8 @@ mutations.
 ## Findings from the new tests (library unchanged; tests are `#[ignore = "FINDING: ..."]`)
 
 1. **hrp / hcaa weekly and monthly resampling scrambles the price matrix - library bug.**
+   *Fixed by #93: one row-correct helper in `util::resample`; the three tests below are no
+   longer ignored. The text that follows describes the code as audited.*
    `src/hrp.rs:143` and `src/hcaa.rs:175` fill a `Vec` row by row and hand it to the
    column-major `DMatrix::from_vec`. Same class of defect as #79, in a code path no test
    exercised (the existing test passes `"B"`, which short-circuits). Evidence: allocating with

@@ -224,7 +224,6 @@ fn load_prices_and_names() -> (DMatrix<f64>, Vec<String>) {
 
 /// Asking for weekly resampling must equal handing over rows 4, 9, 14, ... directly.
 #[test]
-#[ignore = "FINDING: hcaa::resample_prices builds the resampled matrix with column-major DMatrix::from_vec from row-major data, scrambling prices whenever resample_by is W or M"]
 fn weekly_resampling_equals_allocating_on_every_fifth_row() {
     let (prices, names) = load_prices_and_names();
     let kept: Vec<usize> = (4..prices.nrows()).step_by(5).collect();

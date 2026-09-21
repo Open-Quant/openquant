@@ -107,7 +107,6 @@ fn shrunk_weights_match_independent_reference() {
 /// Weekly resampling keeps rows 4, 9, 14, ... of the price matrix. The reference does exactly
 /// that in numpy (`prices[4::5]`) before running the independent HRP.
 #[test]
-#[ignore = "FINDING: hrp::resample_prices builds the resampled matrix with column-major DMatrix::from_vec from row-major data, scrambling prices whenever resample_by is W or M"]
 fn weekly_resampled_weights_match_independent_reference() {
     let (prices, names) = load_prices_and_names();
     let case = &reference()["stock_prices_weekly"];
@@ -120,7 +119,6 @@ fn weekly_resampled_weights_match_independent_reference() {
 /// Same claim without any reference file: asking the library to resample weekly must equal
 /// handing it the weekly rows directly.
 #[test]
-#[ignore = "FINDING: hrp::resample_prices builds the resampled matrix with column-major DMatrix::from_vec from row-major data, scrambling prices whenever resample_by is W or M"]
 fn weekly_resampling_equals_allocating_on_every_fifth_row() {
     let (prices, names) = load_prices_and_names();
     let kept: Vec<usize> = (4..prices.nrows()).step_by(5).collect();

@@ -1,3 +1,4 @@
+use crate::util::resample::{freq_step, resample_prices};
 use chrono::NaiveDate;
 use nalgebra::{DMatrix, DVector};
 
@@ -338,39 +339,6 @@ impl CLA {
         }
         Ok(())
     }
-}
-
-fn freq_step(resample_by: Option<&str>) -> usize {
-    resample_by
-        .map(|f| f.to_lowercase())
-        .as_deref()
-        .map(|freq| match freq {
-            "w" | "week" | "weekly" => 5,
-            "m" | "month" | "monthly" => 21,
-            "b" | "d" | "day" | "daily" => 1,
-            _ => 1,
-        })
-        .unwrap_or(1)
-}
-
-fn resample_prices(prices: &DMatrix<f64>, step: usize) -> DMatrix<f64> {
-    if step <= 1 {
-        return prices.clone_owned();
-    }
-    let rows = prices.nrows();
-    let cols = prices.ncols();
-    let mut flat: Vec<f64> = Vec::new();
-    let mut count = 0;
-    for r in (step - 1..rows).step_by(step) {
-        for c in 0..cols {
-            flat.push(prices[(r, c)]);
-        }
-        count += 1;
-    }
-    if count == 0 {
-        return prices.clone_owned();
-    }
-    DMatrix::from_vec(count, cols, flat)
 }
 
 fn returns_and_frequency(
