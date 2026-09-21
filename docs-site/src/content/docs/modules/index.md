@@ -36,8 +36,8 @@ For the AFML chapter each module implements, see
 
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
-- [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
-- [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
+- [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
+- [`structural_breaks`](/modules/structural-breaks/) — SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.
 - [`util::fast_ewma`](/modules/util-fast-ewma/) — Fast EWMA primitive shared across feature and volatility routines.
 - [`util::volatility`](/modules/util-volatility/) — Volatility estimators used across labeling and risk workflows.
 
@@ -108,7 +108,7 @@ For the AFML chapter each module implements, see
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity allocation with recursive bisection.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
-- [`microstructural_features`](/modules/microstructural-features/) — Price-impact, spread, entropy, and flow toxicity estimators.
+- [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters utilities for clustering stability and allocation workflows.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
@@ -118,7 +118,7 @@ For the AFML chapter each module implements, see
 - [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 - [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
-- [`structural_breaks`](/modules/structural-breaks/) — Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).
+- [`structural_breaks`](/modules/structural-breaks/) — SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 - [`util::fast_ewma`](/modules/util-fast-ewma/) — Fast EWMA primitive shared across feature and volatility routines.
 - [`util::volatility`](/modules/util-volatility/) — Volatility estimators used across labeling and risk workflows.
