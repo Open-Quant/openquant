@@ -366,6 +366,9 @@ h1 {
 
 .sl-markdown-content .katex {
   font-size: 1.05em;
+  /* KaTeX's hidden MathML copy is absolutely positioned. Without a positioned ancestor it
+     escapes any scroll container it sits in (a wide table on a phone) and widens the page. */
+  position: relative;
 }
 
 /* ── Landing hero ────────────────────────────────────────────────────────── */

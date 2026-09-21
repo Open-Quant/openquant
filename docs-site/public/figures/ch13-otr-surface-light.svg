@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" role="img" aria-label="Sharpe ratio of each profit-taking and stop-loss pair on simulated paths, for a mean-reverting process and a near random walk">
+<rect width="760" height="330" fill="#fbf9f4"/>
+<text x="84" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">MEAN-REVERTING · Φ = 0.90</text>
+<text x="74" y="84" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">8</text>
+<rect x="84" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="84" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.438"/>
+<text x="105.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">2.2</text>
+<rect x="130" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="130" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.637"/>
+<text x="151.5" y="83" fill="#fbf9f4" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">3.2</text>
+<rect x="176" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="176" y="56" width="43" height="43" fill="#97196a" fill-opacity="1.0"/>
+<text x="197.5" y="83" fill="#fbf9f4" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">5.0</text>
+<rect x="222" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="222" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.815"/>
+<text x="243.5" y="83" fill="#fbf9f4" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">4.0</text>
+<rect x="268" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="268" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.237"/>
+<text x="289.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">1.2</text>
+<text x="74" y="130" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">4</text>
+<rect x="84" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="84" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.27"/>
+<text x="105.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">1.3</text>
+<rect x="130" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="130" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.33"/>
+<text x="151.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">1.6</text>
+<rect x="176" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="176" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.427"/>
+<text x="197.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">2.1</text>
+<rect x="222" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="222" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.412"/>
+<text x="243.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">2.0</text>
+<rect x="268" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="268" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.184"/>
+<text x="289.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.9</text>
+<text x="74" y="176" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">2</text>
+<rect x="84" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="84" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.137"/>
+<text x="105.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.7</text>
+<rect x="130" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="130" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.158"/>
+<text x="151.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.8</text>
+<rect x="176" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="176" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.179"/>
+<text x="197.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.9</text>
+<rect x="222" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="222" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.18"/>
+<text x="243.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.9</text>
+<rect x="268" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="268" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.084"/>
+<text x="289.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
+<text x="74" y="222" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">1</text>
+<rect x="84" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="84" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.091"/>
+<text x="105.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<rect x="130" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="130" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.099"/>
+<text x="151.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<rect x="176" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="176" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.11"/>
+<text x="197.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<rect x="222" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="222" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.104"/>
+<text x="243.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<rect x="268" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="268" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.032"/>
+<text x="289.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.2</text>
+<text x="74" y="268" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">0.5</text>
+<rect x="84" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="84" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.072"/>
+<text x="105.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
+<rect x="130" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="130" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.077"/>
+<text x="151.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
+<rect x="176" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="176" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.083"/>
+<text x="197.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
+<rect x="222" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="222" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.076"/>
+<text x="243.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.4</text>
+<rect x="268" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="268" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.013"/>
+<text x="289.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.1</text>
+<text x="105.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<text x="151.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">1</text>
+<text x="197.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">2</text>
+<text x="243.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">4</text>
+<text x="289.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">8</text>
+<text x="199.0" y="320" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="11" font-weight="400" text-anchor="middle">profit-taking width</text>
+<text x="40" y="46" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="11" font-weight="400" text-anchor="start">stop</text>
+<text x="434" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">NEAR RANDOM WALK · Φ = 0.995</text>
+<text x="424" y="84" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">8</text>
+<rect x="434" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="434" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.011"/>
+<text x="455.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.1</text>
+<rect x="480" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="480" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.011"/>
+<text x="501.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.1</text>
+<rect x="526" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="526" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.009"/>
+<text x="547.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="572" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="572" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.001"/>
+<text x="593.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="618" y="56" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="618" y="56" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="639.5" y="83" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<text x="424" y="130" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">4</text>
+<rect x="434" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="434" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.004"/>
+<text x="455.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="480" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="480" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.004"/>
+<text x="501.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="526" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="526" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.002"/>
+<text x="547.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="572" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="572" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="593.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="618" y="102" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="618" y="102" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="639.5" y="129" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<text x="424" y="176" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">2</text>
+<rect x="434" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="434" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="455.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="480" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="480" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="501.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="526" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="526" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="547.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="572" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="572" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="593.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<rect x="618" y="148" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="618" y="148" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="639.5" y="175" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<text x="424" y="222" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">1</text>
+<rect x="434" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="434" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="455.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="480" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="480" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="501.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="526" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="526" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="547.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="572" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="572" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="593.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<rect x="618" y="194" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="618" y="194" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="639.5" y="221" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<text x="424" y="268" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="end">0.5</text>
+<rect x="434" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="434" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="455.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="480" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="480" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="501.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="526" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="526" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="547.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0</text>
+<rect x="572" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="572" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="593.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<rect x="618" y="240" width="43" height="43" fill="#cdc4b1" fill-opacity="0.35"/>
+<rect x="618" y="240" width="43" height="43" fill="#97196a" fill-opacity="0.0"/>
+<text x="639.5" y="267" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">-0.1</text>
+<text x="455.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">0.5</text>
+<text x="501.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">1</text>
+<text x="547.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">2</text>
+<text x="593.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">4</text>
+<text x="639.5" y="300" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="middle">8</text>
+<text x="549.0" y="320" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="11" font-weight="400" text-anchor="middle">profit-taking width</text>
+</svg>
