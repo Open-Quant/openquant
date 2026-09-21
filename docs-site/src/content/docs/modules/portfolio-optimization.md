@@ -1,139 +1,216 @@
 ---
 title: "portfolio_optimization"
-description: "Mean-variance and constrained allocation methods with ergonomic APIs."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+description: "Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe ratio, and minimum risk for a target return."
+status: authored
+last_authored: '2026-09-21'
 audience:
   - quant-dev
   - platform-engineering
 module: "portfolio_optimization"
 api_surface: "both"
+afml_chapter:
+  - "16"
+citation:
+  - "Markowitz, H. (1952). Portfolio selection. Journal of Finance 7(1), 77–91."
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 16: §16.2 The Problem with Convex Portfolio Optimization; §16.3 Markowitz's Curse."
+  - "Stellato, B., Banjac, G., Goulart, P., Bemporad, A. and Boyd, S. (2020). OSQP: an operator splitting solver for quadratic programs. Mathematical Programming Computation 12(4), 637–672."
+  - "Michaud, R. O. (1989). The Markowitz optimization enigma: is 'optimized' optimal? Financial Analysts Journal 45(1), 31–42."
 rust_api:
+  - "allocate_from_inputs"
+  - "allocate_with_solution"
   - "allocate_inverse_variance"
   - "allocate_min_vol"
   - "allocate_max_sharpe"
   - "allocate_efficient_risk"
+  - "compute_expected_and_covariance"
   - "AllocationOptions"
+  - "MeanVariance"
+  - "ReturnsMethod"
+  - "AllocError"
+python_api:
+  - "portfolio.allocate_from_inputs"
+  - "portfolio.allocate_with_solution"
+  - "portfolio.allocate_inverse_variance"
+  - "portfolio.allocate_min_vol"
+  - "portfolio.allocate_max_sharpe"
+  - "portfolio.allocate_efficient_risk"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+This is the classical toolbox: given expected returns $\mu$ and a covariance matrix $\Sigma$,
+find weights that minimise risk, maximise the Sharpe ratio, or hit a return target at least
+risk, subject to bounds on each weight. AFML's Chapter 16 exists because these portfolios are
+fragile, and [`hrp`](/modules/hrp/) is the book's alternative. They remain the benchmark
+every alternative is measured against, and with sensible bounds they are often good enough.
+The Python module is `openquant.portfolio`.
 
-Mean-variance allocation with the constraints production actually needs. Four objectives — inverse variance, minimum volatility, maximum Sharpe, and efficient risk (maximum return at a target volatility) — each with a `_with` variant taking `AllocationOptions`: per-asset bounds, a global tuple bound, the expected-returns estimator (historical mean or exponentially weighted) and price resampling. The options struct is really the module; the constraint set matters far more to out-of-sample behaviour than the choice of objective.
+## Four solutions
 
-## When to Use
+All four are long-only and fully invested by default, $\sum_i w_i=1$ and $0\le w_i\le 1$.
 
-Use it when you have expected returns you are willing to defend, and `hrp` or `hcaa` when you do not. Treat `allocate_inverse_variance` as the baseline to beat — it uses no return estimate at all and is hard to improve on out of sample. Cap concentration through `bounds` before tuning the objective, and monitor turnover and the drift between target and filled weights, which usually account for more of the backtest-to-live gap than the optimiser does.
+| `solution` | Problem |
+| --- | --- |
+| `"inverse_variance"` | weights proportional to the reciprocal of each variance; ignores correlation, then clamps to the bounds |
+| `"min_volatility"` | minimise portfolio variance |
+| `"max_sharpe"` | maximise excess return over `risk_free_rate` per unit of volatility |
+| `"efficient_risk"` | minimise portfolio variance subject to an expected return of at least `target_return` |
 
-## Mathematical Foundations
-
-### Constrained Mean-Variance Program
-
-$$
-\begin{aligned}\min_{w}\;&\frac{1}{2}w^T\Sigma w-\lambda\mu^T w\\\text{s.t. }&\mathbf 1^T w=1,\quad l_i\le w_i\le u_i\end{aligned}
-$$
-
-### Minimum Variance / Maximum Sharpe / Efficient Return
-
-$$
-\begin{aligned}w_{MV}&=\arg\min_w\;w^T\Sigma w\\w_{MSR}&=\arg\max_w\;\frac{w^T(\mu-r_f\mathbf 1)}{\sqrt{w^T\Sigma w}}\\w_{ER}(r^*)&=\arg\min_w\;w^T\Sigma w\;\text{s.t. }w^T\mu\ge r^*\end{aligned}
-$$
-
-### Exponential Mean Estimator
+Written out, the last is
 
 $$
-\mu_t=\frac{\sum_{k=0}^{T-1}(1-\alpha)^k r_{t-k}}{\sum_{k=0}^{T-1}(1-\alpha)^k},\qquad \alpha=\frac{2}{\text{span}+1}
+\min_{w}\; w^\top\Sigma\,w
+\quad\text{s.t.}\quad \mu^\top w\ge r^*,\;\; \mathbf 1^\top w=1,\;\; l_i\le w_i\le u_i
 $$
 
-## Usage Examples
+and minimum volatility is the same without the return constraint. Maximum Sharpe is not a
+quadratic programme as stated, since it is a ratio. It becomes one under the substitution
+$y=\kappa w$ with $\kappa>0$: minimise $y^\top\Sigma y$ subject to $(\mu-r_f)^\top y=1$, with
+the bounds rewritten as $l_i\,\mathbf 1^\top y\le y_i\le u_i\,\mathbf 1^\top y$ so that they stay
+linear, then recover $w=y/\mathbf 1^\top y$.
 
-### Rust
+The three optimisations go to an internal solver, ADMM in the OSQP formulation (Stellato et
+al., 2020) followed by an exact solve on the active constraints it identifies. **Bounds are
+part of the problem.** The closed-form minimum-variance solution shorts assets, and clipping
+it to zero afterwards is not the long-only optimum; the solver finds the constrained one.
 
-#### End-to-end: Compute and Compare Core Allocators
+Bounds come two ways. `tuple_bounds = (lo, hi)` applies to every asset; `bounds` sets them per
+asset by index and takes precedence (a `HashMap<usize, (f64, f64)>` in Rust, a list of
+`(index, lo, hi)` in Python).
+
+```python
+from openquant import portfolio
+
+# Expected annual returns and an annual covariance matrix for four assets.
+names = ["bonds", "equity", "small cap", "gold"]
+mu = [0.03, 0.07, 0.09, 0.04]
+vol = [0.05, 0.16, 0.22, 0.15]
+rho = [[1.0, 0.1, 0.1, 0.1], [0.1, 1.0, 0.8, 0.0], [0.1, 0.8, 1.0, 0.0], [0.1, 0.0, 0.0, 1.0]]
+cov = [[rho[i][j] * vol[i] * vol[j] for j in range(4)] for i in range(4)]
+
+def show(label, result):
+    weights, risk, ret, _ = result
+    cells = "  ".join(f"{round(w, 2) + 0.0:5.2f}" for w in weights)
+    print(f"{label:24s} {cells}   return {ret:.3f}  risk {risk:.3f}")
+
+print(" " * 25 + "  ".join(f"{n[:5]:>5s}" for n in names))
+show("inverse variance", portfolio.allocate_from_inputs(mu, cov, "inverse_variance"))
+show("minimum volatility", portfolio.allocate_from_inputs(mu, cov, "min_volatility"))
+show("maximum Sharpe", portfolio.allocate_from_inputs(mu, cov, "max_sharpe", risk_free_rate=0.02))
+show("6.5% return, least risk", portfolio.allocate_from_inputs(mu, cov, "efficient_risk", target_return=0.065))
+show("same, 35% cap per asset", portfolio.allocate_from_inputs(mu, cov, "efficient_risk", target_return=0.065,
+                                                              tuple_bounds=(0.0, 0.35)))
+
+# Markowitz's curse: nudge one expected return by half a percentage point.
+base = portfolio.allocate_from_inputs(mu, cov, "max_sharpe", risk_free_rate=0.02)[0]
+nudged = portfolio.allocate_from_inputs([0.03, 0.075, 0.09, 0.04], cov, "max_sharpe", risk_free_rate=0.02)[0]
+print("equity +0.5pt moves weights by:", "  ".join(f"{round(b - a, 2) + 0.0:+.2f}" for a, b in zip(base, nudged)))
+```
+
+```text
+                         bonds  equit  small   gold
+inverse variance          0.79   0.08   0.04   0.09   return 0.036  risk 0.049
+minimum volatility        0.87   0.06   0.00   0.07   return 0.033  risk 0.048
+maximum Sharpe            0.55   0.17   0.15   0.14   return 0.047  risk 0.069
+6.5% return, least risk   0.14   0.27   0.36   0.23   return 0.065  risk 0.124
+same, 35% cap per asset   0.13   0.29   0.35   0.23   return 0.065  risk 0.124
+equity +0.5pt moves weights by: -0.02  +0.09  -0.06  +0.00
+```
+
+The last line is the argument of AFML §16.3 in one number. Raising the expected return of
+equity from 7.0% to 7.5%, a change far smaller than anyone's ability to forecast it, moves
+nine points of the portfolio into equity, six of them out of its close substitute. Equity
+and small cap are correlated at 0.8, so the optimiser treats them as nearly interchangeable
+and swings between them on small differences in $\mu$ (Michaud, 1989, called it error
+maximisation). The remedies are the ones on this site: bounds, as in the fifth row; leaving
+$\mu$ out altogether, as minimum volatility and [`hrp`](/modules/hrp/) do; or a better
+covariance estimate.
+
+## From prices
+
+`allocate_min_vol`, `allocate_max_sharpe`, `allocate_efficient_risk`,
+`allocate_inverse_variance` and `allocate_with_solution(prices, solution, options)` take a
+matrix of prices, rows by date and columns by asset, and estimate the inputs themselves:
+**log** returns, their sample covariance, and an expected return that is either the mean
+(`ReturnsMethod::Mean`) or an exponentially weighted mean
+(`ReturnsMethod::Exponential { span }`), multiplied by 252 to annualise.
+`compute_expected_and_covariance` returns those estimates without solving anything.
+`resample_by` of `"W"` or `"M"` keeps every 5th or 21st row first.
+
+## From Rust
 
 ```rust
 use nalgebra::DMatrix;
-use openquant::portfolio_optimization::{
-    allocate_inverse_variance,
-    allocate_min_vol,
-    allocate_max_sharpe,
-    allocate_efficient_risk,
-};
+use openquant::portfolio_optimization::{allocate_from_inputs, AllocError, AllocationOptions};
 
-// rows=time, cols=assets
-let prices: DMatrix<f64> = /* load matrix */ DMatrix::zeros(252, 6);
+let mu = [0.03, 0.07, 0.09, 0.04];
+let vol = [0.05, 0.16, 0.22, 0.15];
+let rho = [[1.0, 0.1, 0.1, 0.1], [0.1, 1.0, 0.8, 0.0], [0.1, 0.8, 1.0, 0.0], [0.1, 0.0, 0.0, 1.0]];
+let cov = DMatrix::from_fn(4, 4, |i, j| rho[i][j] * vol[i] * vol[j]);
 
-let ivp = allocate_inverse_variance(&prices)?;
-let mv = allocate_min_vol(&prices, None, None)?;
-let msr = allocate_max_sharpe(&prices, 0.01, None, None)?;
-let er = allocate_efficient_risk(&prices, 0.12, None, None)?;
+let min_vol = allocate_from_inputs(&mu, &cov, "min_volatility", &AllocationOptions::default())?;
+assert!((min_vol.weights.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+assert!(min_vol.weights.iter().all(|w| *w > -1e-9));
+assert!((min_vol.portfolio_risk - 0.0476).abs() < 1e-4);
 
-assert_eq!(ivp.weights.len(), prices.ncols());
-assert!((mv.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
-assert!((msr.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
-assert!((er.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);
+// A return target above the minimum-variance return binds exactly, and costs risk.
+let target = AllocationOptions { target_return: 0.065, ..AllocationOptions::default() };
+let efficient = allocate_from_inputs(&mu, &cov, "efficient_risk", &target)?;
+assert!((efficient.portfolio_return - 0.065).abs() < 1e-7);
+assert!(efficient.portfolio_risk > min_vol.portfolio_risk);
+
+// With a 35% cap the most any portfolio can return is 6.8%, so 7% is infeasible...
+let capped = AllocationOptions { target_return: 0.07, tuple_bounds: Some((0.0, 0.35)), ..AllocationOptions::default() };
+assert!(matches!(
+    allocate_from_inputs(&mu, &cov, "efficient_risk", &capped),
+    Err(AllocError::OptimizationFailed(_))
+));
+// ...and bounds that cannot sum to one are rejected before solving.
+let impossible = AllocationOptions { tuple_bounds: Some((0.3, 0.4)), ..AllocationOptions::default() };
+assert!(matches!(
+    allocate_from_inputs(&mu, &cov, "min_volatility", &impossible),
+    Err(AllocError::InfeasibleBounds { .. })
+));
 ```
 
-#### End-to-end: Constrained Allocation with Exponential Returns and Resampling
+## What to watch for
 
-```rust
-use nalgebra::DMatrix;
-use openquant::portfolio_optimization::{
-    allocate_max_sharpe_with, AllocationOptions, ReturnsMethod,
-};
-use std::collections::HashMap;
+- **From prices, this module uses log returns; [`cla`](/modules/cla/), [`hrp`](/modules/hrp/)
+  and [`hcaa`](/modules/hcaa/) use simple returns.** The mean log return is lower by about
+  half the variance, which penalises volatile assets, so the same prices give different
+  maximum-Sharpe weights here and in `cla` — 0.955 against 0.928 in one asset on a test
+  history. Given identical $\mu$ and $\Sigma$ the two agree to 1e-9
+  ([#110](https://github.com/Open-Quant/openquant/issues/110)). Use `allocate_from_inputs`
+  with your own estimates when the convention matters.
+- **From prices, the reported return is annual and the reported risk is not.** Expected
+  returns are multiplied by 252 and the covariance is left per period, so `portfolio_risk` is
+  a daily volatility beside an annual `portfolio_return`, and `portfolio_sharpe` divides one
+  by the other: 23.7 on a history whose annualised Sharpe ratio is 1.49. The *weights* are
+  unaffected as long as `risk_free_rate` and `target_return` are annual figures. With
+  `allocate_from_inputs` the units are whatever you supplied, as in the example (#110).
+- **`portfolio_sharpe` is zero for every solution except `"max_sharpe"`.** Zero means "not
+  computed".
+- **A target return that cannot be met is reported as `OptimizationFailed`**, with the text
+  "no portfolio satisfies the constraints". The same error covers a solver that did not
+  converge. Bounds that cannot sum to one are caught earlier as `InfeasibleBounds`, with the
+  sums in the message.
+- **`"efficient_risk"` treats the target as a floor.** A target below the minimum-variance
+  portfolio's return gives the minimum-variance portfolio, not a deliberately worse one.
+- **`"max_sharpe"` needs at least one asset above the risk-free rate**, and says so
+  otherwise.
+- **The solver is dense and meant for tens of assets.** Each iteration is a dense
+  back-substitution, and it has been tested at that scale. Thousands of assets call for a
+  sparse solver.
+- **The covariance is the plain sample covariance.** With more assets than a few dozen
+  observations per asset it is poorly conditioned, and every weakness described above gets
+  worse. Shrink it, or denoise it, before passing it to `allocate_from_inputs`.
 
-// rows = time, cols = assets
-let prices = DMatrix::from_fn(252, 6, |i, j| 100.0 + (i as f64) * 0.03 + (j as f64) * 2.0);
+## Related modules
 
-let mut bounds = HashMap::new();
-// Cap concentration in the first asset; the tuple bound applies to the rest.
-bounds.insert(0usize, (0.0, 0.20));
-
-let opts = AllocationOptions {
-    risk_free_rate: 0.02,
-    returns_method: ReturnsMethod::Exponential { span: 60 },
-    resample_by: Some("W"),
-    bounds: Some(bounds),
-    tuple_bounds: Some((0.0, 0.40)),
-    ..Default::default()
-};
-
-let constrained = allocate_max_sharpe_with(&prices, &opts)?;
-assert!(constrained.weights.iter().all(|w| *w >= -1e-10));
-```
-
-## API Reference
-
-### Python API
-
-- `portfolio.allocate_inverse_variance`
-- `portfolio.allocate_min_vol`
-- `portfolio.allocate_max_sharpe`
-- `portfolio.allocate_efficient_risk`
-- `portfolio.allocate_with_solution`
-- `portfolio.allocate_from_inputs`
-
-### Rust API
-
-- `allocate_inverse_variance`
-- `allocate_min_vol`
-- `allocate_max_sharpe`
-- `allocate_efficient_risk`
-- `AllocationOptions`
-
-## Risk Notes and Caveats
-
-- Optimizer output is only as good as mean/covariance assumptions; stress-test inputs and rebalance frequency.
-- Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks.
-- Track turnover, realized slippage, and drift between target and filled weights in production.
-
-## Related Modules
-
-- [`hrp`](/modules/hrp/)
-- [`hcaa`](/modules/hcaa/)
-- [`cla`](/modules/cla/)
-- [`risk-metrics`](/modules/risk-metrics/)
-- [`backtest-statistics`](/modules/backtest-statistics/)
+- [`cla`](/modules/cla/) — the whole efficient frontier from the same inputs, by the
+  critical line algorithm.
+- [`hrp`](/modules/hrp/), [`hcaa`](/modules/hcaa/) — allocation without inverting $\Sigma$
+  or estimating $\mu$.
+- [`risk-metrics`](/modules/risk-metrics/) — tail risk of the resulting portfolio.
+- [`codependence`](/modules/codependence/), [`onc`](/modules/onc/) — structure in the
+  correlation matrix, for constraints by cluster.

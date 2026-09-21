@@ -99,28 +99,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "cla",
-    conceptOverview:
-      "Markowitz's Critical Line Algorithm in the Bailey-Lopez de Prado formulation: the exact solution to the constrained mean-variance problem with inequality bounds on every weight. Rather than calling a general quadratic solver it walks the efficient frontier from the maximum-return corner, computing each turning point where an asset enters or leaves the free set. That yields the whole frontier rather than one point on it, and it terminates — which quadratic solvers on near-singular covariance matrices frequently do not.",
-    whenToUse:
-      "Use it when you need the full efficient frontier, when weight bounds are binding, or when a general optimiser is returning unstable or non-converging weights on an ill-conditioned covariance. If you only want one portfolio and the covariance is well behaved, `portfolio_optimization` is the shorter path. If the covariance itself is the problem, prefer `hrp`, which never inverts it. CLA still needs expected returns, so it inherits their estimation error.",
-    relatedModules: ["portfolio-optimization", "hrp", "hcaa", "risk-metrics"],
     module: "cla",
     subject: "Portfolio Construction and Risk",
-    summary: "Critical Line Algorithm implementation for constrained mean-variance optimization.",
-    whyItExists: "CLA solves constrained Markowitz problems efficiently with active-set style line updates.",
-    keyApis: ["CLA", "covariance", "ReturnsEstimation"],
-    formulas: [
-      { label: "MVO Objective", latex: "\\min_w\\;\\frac{1}{2}w^T\\Sigma w-\\lambda\\mu^T w" },
-      { label: "Budget Constraint", latex: "\\mathbf{1}^T w=1" },
-    ],
-    examples: [
-      {
-        title: "Prepare covariance for CLA",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::cla::covariance;\n\nlet returns = DMatrix::from_row_slice(3, 2, &[0.01, 0.02, -0.01, 0.01, 0.015, 0.03]);\nlet sigma = covariance(&returns);`,
-      },
-    ],
-    notes: ["CLA behavior depends on weight bounds and return estimates.", "Use robust covariance estimators when sample size is small."],
+    summary: "The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["cla.allocate_cla"],
   },
@@ -288,50 +270,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "portfolio-optimization",
-    conceptOverview:
-      "Mean-variance allocation with the constraints production actually needs. Four objectives — inverse variance, minimum volatility, maximum Sharpe, and efficient risk (maximum return at a target volatility) — each with a `_with` variant taking `AllocationOptions`: per-asset bounds, a global tuple bound, the expected-returns estimator (historical mean or exponentially weighted) and price resampling. The options struct is really the module; the constraint set matters far more to out-of-sample behaviour than the choice of objective.",
-    whenToUse:
-      "Use it when you have expected returns you are willing to defend, and `hrp` or `hcaa` when you do not. Treat `allocate_inverse_variance` as the baseline to beat — it uses no return estimate at all and is hard to improve on out of sample. Cap concentration through `bounds` before tuning the objective, and monitor turnover and the drift between target and filled weights, which usually account for more of the backtest-to-live gap than the optimiser does.",
-    relatedModules: ["hrp", "hcaa", "cla", "risk-metrics", "backtest-statistics"],
     module: "portfolio_optimization",
     subject: "Portfolio Construction and Risk",
-    summary: "Mean-variance and constrained allocation methods with ergonomic APIs.",
-    whyItExists: "Provides production-ready portfolio construction primitives with explicit options and constraints.",
-    keyApis: ["allocate_inverse_variance", "allocate_min_vol", "allocate_max_sharpe", "allocate_efficient_risk", "AllocationOptions"],
-    formulas: [
-      {
-        label: "Constrained Mean-Variance Program",
-        latex:
-          "\\begin{aligned}\\min_{w}\\;&\\frac{1}{2}w^T\\Sigma w-\\lambda\\mu^T w\\\\\\text{s.t. }&\\mathbf 1^T w=1,\\quad l_i\\le w_i\\le u_i\\end{aligned}",
-      },
-      {
-        label: "Minimum Variance / Maximum Sharpe / Efficient Return",
-        latex:
-          "\\begin{aligned}w_{MV}&=\\arg\\min_w\\;w^T\\Sigma w\\\\w_{MSR}&=\\arg\\max_w\\;\\frac{w^T(\\mu-r_f\\mathbf 1)}{\\sqrt{w^T\\Sigma w}}\\\\w_{ER}(r^*)&=\\arg\\min_w\\;w^T\\Sigma w\\;\\text{s.t. }w^T\\mu\\ge r^*\\end{aligned}",
-      },
-      {
-        label: "Exponential Mean Estimator",
-        latex:
-          "\\mu_t=\\frac{\\sum_{k=0}^{T-1}(1-\\alpha)^k r_{t-k}}{\\sum_{k=0}^{T-1}(1-\\alpha)^k},\\qquad \\alpha=\\frac{2}{\\text{span}+1}",
-      },
-    ],
-    examples: [
-      {
-        title: "End-to-end: Compute and Compare Core Allocators",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::portfolio_optimization::{\n    allocate_inverse_variance,\n    allocate_min_vol,\n    allocate_max_sharpe,\n    allocate_efficient_risk,\n};\n\n// rows=time, cols=assets\nlet prices: DMatrix<f64> = /* load matrix */ DMatrix::zeros(252, 6);\n\nlet ivp = allocate_inverse_variance(&prices)?;\nlet mv = allocate_min_vol(&prices, None, None)?;\nlet msr = allocate_max_sharpe(&prices, 0.01, None, None)?;\nlet er = allocate_efficient_risk(&prices, 0.12, None, None)?;\n\nassert_eq!(ivp.weights.len(), prices.ncols());\nassert!((mv.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);\nassert!((msr.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);\nassert!((er.weights.iter().sum::<f64>() - 1.0).abs() < 1e-6);`,
-      },
-      {
-        title: "End-to-end: Constrained Allocation with Exponential Returns and Resampling",
-        language: "rust",
-        code: `use nalgebra::DMatrix;\nuse openquant::portfolio_optimization::{\n    allocate_max_sharpe_with, AllocationOptions, ReturnsMethod,\n};\nuse std::collections::HashMap;\n\n// rows = time, cols = assets\nlet prices = DMatrix::from_fn(252, 6, |i, j| 100.0 + (i as f64) * 0.03 + (j as f64) * 2.0);\n\nlet mut bounds = HashMap::new();\n// Cap concentration in the first asset; the tuple bound applies to the rest.\nbounds.insert(0usize, (0.0, 0.20));\n\nlet opts = AllocationOptions {\n    risk_free_rate: 0.02,\n    returns_method: ReturnsMethod::Exponential { span: 60 },\n    resample_by: Some("W"),\n    bounds: Some(bounds),\n    tuple_bounds: Some((0.0, 0.40)),\n    ..Default::default()\n};\n\nlet constrained = allocate_max_sharpe_with(&prices, &opts)?;\nassert!(constrained.weights.iter().all(|w| *w >= -1e-10));`,
-      },
-    ],
-    notes: [
-      "Optimizer output is only as good as mean/covariance assumptions; stress-test inputs and rebalance frequency.",
-      "Constraint design (asset caps, sector caps, long/short bounds) is usually more important than small objective tweaks.",
-      "Track turnover, realized slippage, and drift between target and filled weights in production.",
-    ],
+    summary: "Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["portfolio.allocate_inverse_variance", "portfolio.allocate_min_vol", "portfolio.allocate_max_sharpe", "portfolio.allocate_efficient_risk", "portfolio.allocate_with_solution", "portfolio.allocate_from_inputs"],
   },

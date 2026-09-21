@@ -44,11 +44,11 @@ For the AFML chapter each module implements, see
 ### Portfolio Construction and Risk
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
-- [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
+- [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
 - [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
-- [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
+- [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 
@@ -90,7 +90,7 @@ For the AFML chapter each module implements, see
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
-- [`cla`](/modules/cla/) — Critical Line Algorithm implementation for constrained mean-variance optimization.
+- [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
@@ -111,7 +111,7 @@ For the AFML chapter each module implements, see
 - [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
-- [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance and constrained allocation methods with ergonomic APIs.
+- [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
