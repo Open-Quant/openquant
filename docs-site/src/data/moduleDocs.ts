@@ -314,51 +314,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "microstructural-features",
-    conceptOverview:
-      "Features computed from bar-level order flow rather than from price alone, in three families: effective-spread proxies (Roll, Corwin-Schultz), price-impact coefficients (Kyle's lambda, Amihud, Hasbrouck) and flow-toxicity or entropy measures (VPIN, plus Shannon, Lempel-Ziv and plug-in entropy over encoded tick signs). Together they estimate what OHLC bars omit: how expensive the instrument is to trade, and how likely it is that the counterparty knows something you do not.",
-    whenToUse:
-      "Use them as features when the edge or its cost depends on liquidity — execution models, regime detection, and any signal that decays with trade size. VPIN in particular is an early-warning indicator for flow toxicity ahead of liquidity events. Normalise within venue and time bucket before comparing across assets, since these are strongly regime-dependent, and freeze the symbol encoding used for entropy features or the values will not be comparable between training and production.",
-    relatedModules: ["data-structures", "streaming-hpc", "structural-breaks", "filters", "codependence"],
     module: "microstructural_features",
     subject: "Market Microstructure, Dependence and Regime Detection",
-    summary: "Price-impact, spread, entropy, and flow toxicity estimators.",
-    whyItExists: "Microstructure features capture liquidity and order-flow dynamics not visible in OHLC bars alone.",
-    keyApis: ["get_roll_measure", "get_corwin_schultz_estimator", "get_bar_based_kyle_lambda", "get_vpin", "MicrostructuralFeaturesGenerator"],
-    formulas: [
-      {
-        label: "Kyle / Amihud / Hasbrouck Impact Families",
-        latex:
-          "\\Delta p_t=\\lambda_K q_t+\\epsilon_t,\\qquad r_t=\\lambda_A\\frac{1}{DV_t}+\\epsilon_t,\\qquad r_t=\\lambda_H\\frac{q_t}{\\sqrt{DV_t}}+\\epsilon_t",
-      },
-      {
-        label: "Spread and Volatility Proxies",
-        latex:
-          "\\text{Roll spread}\\approx 2\\sqrt{-\\operatorname{cov}(\\Delta p_t,\\Delta p_{t-1})},\\qquad\\sigma_{CS}=f(H_t,L_t,H_{t-1},L_{t-1})",
-      },
-      {
-        label: "Flow Toxicity and Entropy",
-        latex:
-          "\\mathrm{VPIN}_t=\\frac{1}{V_t}\\cdot\\frac{1}{n}\\sum_{i=t-n+1}^{t}\\left|V_i^{B}-V_i^{S}\\right|,\\qquad H=-\\sum_j p_j\\log p_j",
-        where: "$V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bar $i$ (`get_bvc_buy_volume` will estimate the split when it is not observed), $V_t$ the current bar's total volume, and $n$ the rolling `window`. The normaliser sits *outside* the sum because bars are not equal-volume: `get_vpin` averages the imbalance over the window and then scales by the latest bar. The equal-volume-bucket form used by [`streaming-hpc`](/modules/streaming-hpc/) divides each term by the same constant bucket size instead; the two agree when bars carry equal volume. $H$ is the entropy of the tick-sign message, with $p_j$ the empirical frequency of symbol $j$.",
-      },
-    ],
-    examples: [
-      {
-        title: "End-to-end: Build Core Liquidity Feature Panel",
-        language: "rust",
-        code: `use openquant::microstructural_features::{\n    get_roll_measure,\n    get_corwin_schultz_estimator,\n    get_bar_based_kyle_lambda,\n    get_bar_based_amihud_lambda,\n    get_vpin,\n};\n\n// 1) Inputs from bar construction\nlet close = vec![100.0, 100.2, 100.1, 100.3, 100.25, 100.4];\nlet high = vec![100.1, 100.25, 100.2, 100.35, 100.3, 100.45];\nlet low = vec![99.9, 100.0, 99.95, 100.1, 100.05, 100.2];\nlet volume = vec![1000.0, 1200.0, 900.0, 1100.0, 1300.0, 1250.0];\nlet dollar_volume: Vec<f64> = close.iter().zip(volume.iter()).map(|(p, v)| p * v).collect();\nlet buy_volume = vec![600.0, 700.0, 480.0, 650.0, 800.0, 760.0];\n\n// 2) Liquidity and spread proxies\nlet roll = get_roll_measure(&close, 3);\nlet cs_spread = get_corwin_schultz_estimator(&high, &low, 3)?;\nlet kyle = get_bar_based_kyle_lambda(&close, &volume, 3)?;\nlet amihud = get_bar_based_amihud_lambda(&close, &dollar_volume, 3)?;\nlet vpin = get_vpin(&volume, &buy_volume, 3)?;\n\n// 3) Feature panel is ready for regime model / execution model\nassert_eq!(roll.len(), close.len());\nassert_eq!(vpin.len(), close.len());`,
-      },
-      {
-        title: "From Encoded Tick Signs to Entropy Features",
-        language: "rust",
-        code: `use openquant::microstructural_features::{\n    encode_tick_rule_array,\n    get_shannon_entropy,\n    get_lempel_ziv_entropy,\n    get_plug_in_entropy,\n};\n\nlet tick_rule = vec![1, 1, -1, -1, 1, -1, 1, 1, 1, -1];\nlet msg = encode_tick_rule_array(&tick_rule)?;\n\nlet h_shannon = get_shannon_entropy(&msg);\nlet h_lz = get_lempel_ziv_entropy(&msg);\nlet h_plugin = get_plug_in_entropy(&msg, 2)?;\n\nassert!(h_shannon.is_finite());\nassert!(h_lz.is_finite());\nassert!(h_plugin.is_finite());`,
-      },
-    ],
-    notes: [
-      "Microstructure signals are highly regime-dependent; normalize and standardize within venue/time bucket before cross-asset comparison.",
-      "Use shared bar definitions between training and live pipelines, otherwise feature drift is structural.",
-      "Entropy features are sensitive to encoding; freeze symbol maps in production.",
-    ],
+    summary: "Spread, price-impact, order-flow and entropy features from bars or trades.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["microstructural.get_roll_measure", "microstructural.get_roll_impact", "microstructural.get_corwin_schultz_estimator", "microstructural.get_bekker_parkinson_vol", "microstructural.get_bar_based_kyle_lambda", "microstructural.get_bar_based_amihud_lambda", "microstructural.get_bar_based_hasbrouck_lambda", "microstructural.get_trades_based_kyle_lambda", "microstructural.get_trades_based_amihud_lambda", "microstructural.get_trades_based_hasbrouck_lambda", "microstructural.vwap", "microstructural.get_avg_tick_size", "microstructural.get_vpin", "microstructural.get_bvc_buy_volume", "microstructural.encode_tick_rule_array", "microstructural.quantile_mapping", "microstructural.sigma_mapping", "microstructural.encode_array", "microstructural.get_shannon_entropy", "microstructural.get_lempel_ziv_entropy", "microstructural.get_plug_in_entropy", "microstructural.get_konto_entropy"],
   },
@@ -659,28 +618,10 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "structural-breaks",
-    conceptOverview:
-      "Three families of break test. Chow-type statistics test for a break at a known or scanned candidate date. Chu-Stinchcombe-White is a sequential monitoring statistic that can be run online as data arrives. SADF — the supremum of ADF statistics over expanding windows — tests for *explosive* rather than merely non-stationary behaviour, which is the econometric signature of a bubble: an autoregressive coefficient that exceeds 1 rather than approaching it from below.",
-    whenToUse:
-      "Use SADF as a regime guard on any model whose parameters are estimated: a break means the training distribution no longer describes the present, and refitting then becomes a decision rather than a formality. Use the sequential statistics for online monitoring between refits. SADF cost grows quadratically with series length, because every endpoint re-runs an expanding-window regression, so keep long-window scenarios on a nightly path rather than in an interactive loop.",
-    relatedModules: ["filters", "microstructural-features", "fracdiff", "cross-validation"],
     module: "structural_breaks",
     subject: "Market Microstructure, Dependence and Regime Detection",
-    summary: "Regime change and bubble diagnostics (Chow, CUSUM variants, SADF).",
-    whyItExists: "Regime instability can invalidate model assumptions; break detection is a core risk control.",
-    keyApis: ["get_chow_type_stat", "get_chu_stinchcombe_white_statistics", "get_sadf", "SadfLags"],
-    formulas: [
-      { label: "ADF Regression", latex: "\\Delta y_t=\\alpha+\\beta y_{t-1}+\\sum_{i=1}^{k}\\phi_i\\Delta y_{t-i}+\\epsilon_t" },
-      { label: "SADF", latex: "SADF=\\sup_{r_2\\in[r_0,1]} ADF_0^{r_2}" },
-    ],
-    examples: [
-      {
-        title: "Compute SADF statistic",
-        language: "rust",
-        code: `use openquant::structural_breaks::{get_sadf, SadfLags};\n\n// SADF is defined on log prices.\nlet log_prices: Vec<f64> =\n    (0..160).map(|i| (100.0 + i as f64 * 0.1 + ((i / 40) as f64) * 5.0).ln()).collect();\n\n// (series, model, add_const, min_length, lags). \`model\` selects the regression\n// specification — "linear", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp",\n// "sm_power" — and \`min_length\` is the shortest window a statistic is computed on.\nlet sadf = get_sadf(&log_prices, "linear", true, 20, SadfLags::Fixed(1))?;\n\nlet peak = sadf.iter().cloned().fold(f64::NEG_INFINITY, f64::max);\nprintln!("{} SADF values, peak = {peak:.4}", sadf.len());`,
-      },
-    ],
-    notes: ["SADF can be computationally expensive on long windows.", "Use dedicated slow/nightly test paths for heavy scenarios."],
+    summary: "SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["structural_breaks.get_chow_type_stat", "structural_breaks.get_chu_stinchcombe_white_statistics", "structural_breaks.get_sadf"],
   },

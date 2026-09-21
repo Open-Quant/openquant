@@ -1,90 +1,216 @@
 ---
 title: "structural_breaks"
-description: "Regime change and bubble diagnostics (Chow, CUSUM variants, SADF)."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+description: "Tests for a change of regime in a price series: the supremum ADF test for explosive behaviour, a Chow-type Dickey-Fuller test, and the Chu-Stinchcombe-White CUSUM test."
+status: authored
+last_authored: '2026-09-20'
 audience:
   - quant-dev
   - platform-engineering
 module: "structural_breaks"
 api_surface: "both"
+afml_chapter:
+  - "17"
+citation:
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 17: §17.2 Types of Structural Break Tests; §17.3.2 Chu-Stinchcombe-White CUSUM Test on Levels; §17.4.1 Chow-Type Dickey-Fuller Test; §17.4.2 Supremum Augmented Dickey-Fuller (Snippets 17.1–17.4); §17.4.2.3 Computational Complexity; §17.4.3 Sub- and Super-Martingale Tests."
+  - "Phillips, P. C. B., Wu, Y. and Yu, J. (2011). Explosive behavior in the 1990s Nasdaq: when did exuberance escalate asset values? International Economic Review 52(1), 201–226."
+  - "Phillips, P. C. B., Shi, S. and Yu, J. (2015). Testing for multiple bubbles: historical episodes of exuberance and collapse in the S&P 500. International Economic Review 56(4), 1043–1078."
+  - "Chu, C.-S. J., Stinchcombe, M. and White, H. (1996). Monitoring structural change. Econometrica 64(5), 1045–1065."
 rust_api:
+  - "get_sadf"
   - "get_chow_type_stat"
   - "get_chu_stinchcombe_white_statistics"
-  - "get_sadf"
   - "SadfLags"
+  - "ChuStinchcombeWhiteResult"
+  - "StructuralBreakError"
+python_api:
+  - "structural_breaks.get_sadf"
+  - "structural_breaks.get_chow_type_stat"
+  - "structural_breaks.get_chu_stinchcombe_white_statistics"
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+Most of what a model learns from history assumes the future resembles it. A structural break
+is the moment that stops being true: a mean-reverting spread starts trending, a quiet market
+turns explosive. AFML's Chapter 17 treats break statistics as *features* — a number per bar
+saying how strongly the recent past looks like a different regime — and notes that they are
+valuable precisely because few participants compute them. This module implements three of the
+chapter's tests. All take **log prices**.
 
-Three families of break test. Chow-type statistics test for a break at a known or scanned candidate date. Chu-Stinchcombe-White is a sequential monitoring statistic that can be run online as data arrives. SADF — the supremum of ADF statistics over expanding windows — tests for *explosive* rather than merely non-stationary behaviour, which is the econometric signature of a bubble: an autoregressive coefficient that exceeds 1 rather than approaching it from below.
+## Supremum ADF: is the series explosive?
 
-## When to Use
-
-Use SADF as a regime guard on any model whose parameters are estimated: a break means the training distribution no longer describes the present, and refitting then becomes a decision rather than a formality. Use the sequential statistics for online monitoring between refits. SADF cost grows quadratically with series length, because every endpoint re-runs an expanding-window regression, so keep long-window scenarios on a nightly path rather than in an interactive loop.
-
-## Mathematical Foundations
-
-### ADF Regression
-
-$$
-\Delta y_t=\alpha+\beta y_{t-1}+\sum_{i=1}^{k}\phi_i\Delta y_{t-i}+\epsilon_t
-$$
-
-### SADF
+An augmented Dickey–Fuller regression fits
 
 $$
-SADF=\sup_{r_2\in[r_0,1]} ADF_0^{r_2}
+\Delta y_t \;=\; \alpha + \beta\,y_{t-1} + \sum_{l=1}^{L}\gamma_l\,\Delta y_{t-l} + \varepsilon_t
 $$
 
-## Usage Examples
+and the usual unit-root test asks whether $\beta<0$ (stationary). Phillips, Wu and Yu (2011)
+turned it around: $\beta>0$ means the series is *explosive*, the signature of a bubble. One
+ADF over a whole sample misses bubbles that inflate and burst inside it, because the collapse
+pulls the estimate back. The **supremum ADF** statistic at time $t$ therefore takes the
+largest ADF $t$-statistic over every window that ends at $t$ and starts anywhere at least
+`min_length` bars earlier (§17.4.2):
 
-### Rust
+$$
+\mathrm{SADF}_t \;=\; \sup_{t_0\,\le\, t-\tau}\;\frac{\hat\beta_{t_0,t}}{\hat\sigma_{\hat\beta_{t_0,t}}}
+$$
 
-#### Compute SADF statistic
+`get_sadf(series, model, add_const, min_length, lags)` returns that series. `lags` is $L$ (in
+Rust, `SadfLags::Fixed(L)` or an explicit `SadfLags::Array` of lag numbers). `model` chooses
+the specification:
 
-```rust
-use openquant::structural_breaks::{get_sadf, SadfLags};
+| `model` | Regression |
+| --- | --- |
+| `"linear"` | the ADF above plus a linear time trend |
+| `"quadratic"` | the ADF above plus a squared time trend |
+| `"sm_poly_1"` | the level of the series on a quadratic polynomial in time |
+| `"sm_poly_2"` | the log of the series on a quadratic polynomial in time |
+| `"sm_exp"` | the log of the series on time |
+| `"sm_power"` | the log of the series on the log of time |
 
-// SADF is defined on log prices.
-let log_prices: Vec<f64> =
-    (0..160).map(|i| (100.0 + i as f64 * 0.1 + ((i / 40) as f64) * 5.0).ln()).collect();
+The four `sm_` models are the sub- and super-martingale tests of §17.4.3, which look for
+trends of a given shape instead of explosiveness. For them the statistic is the $t$-ratio of
+the first trend coefficient, `add_const` is ignored and `lags` only sets where the output
+starts, and three of them take a logarithm, so they need a *positive* input: prices, not log
+prices.
 
-// (series, model, add_const, min_length, lags). `model` selects the regression
-// specification — "linear", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp",
-// "sm_power" — and `min_length` is the shortest window a statistic is computed on.
-let sadf = get_sadf(&log_prices, "linear", true, 20, SadfLags::Fixed(1))?;
+## Chow-type Dickey–Fuller: when did it turn?
 
-let peak = sadf.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-println!("{} SADF values, peak = {peak:.4}", sadf.len());
+The Chow-type test (§17.4.1) supposes a single date $\tau^*$ at which a random walk becomes
+explosive and stays so. For each candidate date it fits
+$\Delta y_t=\delta\,y_{t-1}\,D_t[\tau^*]+\varepsilon_t$, with the dummy $D_t$ equal to 1 after
+the date, and reports the $t$-statistic of $\delta$.
+`get_chow_type_stat(log_prices, min_length)` returns one statistic per candidate date from
+`min_length` to `n − min_length`; the date with the largest value is the estimated break.
+
+## The two compared
+
+```python
+import math
+import random
+
+from openquant import structural_breaks as sb
+
+# 300 log prices: a random walk, except that over bars 180-239 each step adds a drift that
+# compounds at 6% a bar (a 70% run-up), and bar 240 gives back two thirds of it.
+rng = random.Random(14)
+y = [math.log(100.0)]
+for t in range(1, 300):
+    step = rng.gauss(0, 0.01)
+    if 180 <= t < 240:
+        step += 0.001 * 1.06 ** (t - 180)
+    elif t == 240:
+        step -= 2 / 3 * (y[-1] - y[179])
+    y.append(y[-1] + step)
+
+sadf = sb.get_sadf(y, "linear", True, 30, 1)
+offset = len(y) - len(sadf)  # the first statistic belongs to this bar
+peak = max(range(len(sadf)), key=sadf.__getitem__)
+calm = sorted(sadf[: 170 - offset])
+print(f"{len(sadf)} SADF values, first at bar {offset}")
+print(f"median before the bubble {calm[len(calm) // 2]:+.2f}, maximum before it {calm[-1]:+.2f}")
+print(f"peak {sadf[peak]:+.2f} at bar {peak + offset}")
+first = next(i for i, v in enumerate(sadf) if i + offset >= 180 and v > 1.5)
+print(f"first value above 1.5 inside the bubble: bar {first + offset}")
+
+for label, series in (("run-up only (bars 0-239)", y[:240]), ("whole sample, crash included", y)):
+    chow = sb.get_chow_type_stat(series, 30)
+    best = max(range(len(chow)), key=chow.__getitem__)
+    print(f"Chow-type, {label}: peak {chow[best]:+.2f} for a break at bar {best + 30}")
 ```
 
-## API Reference
+```text
+268 SADF values, first at bar 32
+median before the bubble -1.11, maximum before it +1.14
+peak +3.80 at bar 239
+first value above 1.5 inside the bubble: bar 227
+Chow-type, run-up only (bars 0-239): peak +8.32 for a break at bar 209
+Chow-type, whole sample, crash included: peak +1.18 for a break at bar 72
+```
 
-### Python API
+<figure>
+<img class="dark:sl-hidden" src="/figures/ch17-sadf-light.svg" alt="Two stacked panels over 300 bars. The upper panel is a log price that wanders, runs up steeply between bars 180 and 239, and drops sharply at bar 240. The lower panel is the SADF statistic, which stays between about minus 2 and plus 1 until the run-up, rises to 3.8 at bar 239, and falls back after the crash. A horizontal line marks 1.5." />
+<img class="light:sl-hidden" src="/figures/ch17-sadf-dark.svg" alt="Two stacked panels over 300 bars. The upper panel is a log price that wanders, runs up steeply between bars 180 and 239, and drops sharply at bar 240. The lower panel is the SADF statistic, which stays between about minus 2 and plus 1 until the run-up, rises to 3.8 at bar 239, and falls back after the crash. A horizontal line marks 1.5." />
+<figcaption>The example's series and its SADF. The shaded span is the run-up.</figcaption>
+</figure>
 
-- `structural_breaks.get_chow_type_stat`
-- `structural_breaks.get_chu_stinchcombe_white_statistics`
-- `structural_breaks.get_sadf`
+Before the run-up SADF sits around −1.1, which is what a random walk gives. Inside it the
+statistic climbs to 3.8 on the last bar before the crash, and it first crosses 1.5 — in the
+region of the 95% critical values Phillips, Wu and Yu tabulate — at bar 227, thirteen bars
+before the top. That is late. The run-up had been under way for 47 bars, and detecting
+explosiveness needs enough of it to have happened.
 
-### Rust API
+The Chow-type lines show that test's assumption at work. On the run-up alone it is emphatic,
+8.3. Add the crash and the sixty bars after it and it falls to 1.2 with a break date that
+means nothing, because the series did not *stay* explosive. AFML's §17.4.2 makes this the
+reason to prefer SADF, which looks at windows ending at each bar and is unaffected by what
+comes after.
 
-- `get_chow_type_stat`
-- `get_chu_stinchcombe_white_statistics`
-- `get_sadf`
-- `SadfLags`
+## From Rust
 
-## Risk Notes and Caveats
+```rust
+use openquant::structural_breaks::{
+    get_chow_type_stat, get_sadf, SadfLags, StructuralBreakError,
+};
 
-- SADF can be computationally expensive on long windows.
-- Use dedicated slow/nightly test paths for heavy scenarios.
+// A log price whose increments compound: explosive by construction.
+let mut y = vec![4.0_f64];
+for t in 1..120 {
+    let wobble = if t % 2 == 0 { 0.002 } else { -0.002 };
+    y.push(y[t - 1] + 0.0005 * 1.05_f64.powi(t as i32) + wobble);
+}
 
-## Related Modules
+let sadf = get_sadf(&y, "linear", true, 20, SadfLags::Fixed(1))?;
+// One lag uses two leading bars; the first statistic then needs min_length more.
+assert_eq!(sadf.len(), y.len() - 2 - 20);
+assert!(sadf.last().unwrap() > &3.0);
 
-- [`filters`](/modules/filters/)
-- [`microstructural-features`](/modules/microstructural-features/)
-- [`fracdiff`](/modules/fracdiff/)
-- [`cross-validation`](/modules/cross-validation/)
+let chow = get_chow_type_stat(&y, 20)?;
+assert_eq!(chow.len(), y.len() - 2 * 20);
+
+// Too short a series is not an error for these two: they return nothing.
+assert!(get_chow_type_stat(&y[..30], 20)?.is_empty());
+assert!(matches!(
+    get_sadf(&y, "cubic", true, 20, SadfLags::Fixed(1)),
+    Err(StructuralBreakError::InvalidModel(_))
+));
+```
+
+## What to watch for
+
+- **Do not use `get_chu_stinchcombe_white_statistics` on real prices yet.** The CUSUM
+  statistic of §17.3.2 divides a price change by $\hat\sigma_t\sqrt{t-n}$; the implementation
+  divides by $\hat\sigma_t^{2}\sqrt{t-n}$ instead, so the result depends on the units of the
+  series. On simulated random walks with a 1% step it exceeds its critical value on 94% of
+  bars; with a step of 1, where $\sigma=\sigma^2$, on 5.6%
+  ([#104](https://github.com/Open-Quant/openquant/issues/104)). From Python it returns the
+  tuple `(critical_values, statistics)`, in that order.
+- **SADF is cubic in the sample length.** Every bar refits a regression for every admissible
+  start: $O(n^2)$ regressions of up to $n$ rows. A few hundred bars are quick, a few thousand
+  are slow, and AFML's §17.4.2.3 puts a full tick history at supercomputer scale. Compute it
+  on sampled bars, cap the look-back by passing a trailing slice, or parallelise over end
+  dates yourself.
+- **Critical values are not supplied.** SADF does not follow a Dickey–Fuller distribution;
+  its critical values depend on the sample length and `min_length` and come from simulation
+  (Phillips, Shi and Yu, 2015). As a feature this does not matter, since the model learns its
+  own thresholds. As a test, simulate random walks of your length and read off the quantile.
+- **`"quadratic"` replaces the linear trend with a squared one**; it does not add a second
+  term. A specification with both is not available.
+- **`"sm_power"` regresses on the log of time starting from time zero**, whose logarithm is
+  $-\infty$. Windows that include the first row produce no statistic and are skipped
+  silently, so that model effectively starts one bar late.
+- **A window whose regression is singular is skipped, not reported.** If every window at a
+  bar is singular — a constant stretch of prices — that bar's SADF is $-\infty$.
+- **Detection lags the break.** As the example shows, the statistic crosses a threshold well
+  into the episode. It tells you a bubble is under way, not that one is starting.
+
+## Related modules
+
+- [`filters`](/modules/filters/) — the CUSUM *filter*, which samples events and shares only a
+  name with the CUSUM test here.
+- [`fracdiff`](/modules/fracdiff/) — the other use of unit-root thinking in this library.
+- [`synthetic-backtesting`](/modules/synthetic-backtesting/) — relies on a regime holding
+  still; these tests say when it has not.
+- [`feature-importance`](/modules/feature-importance/) — to check whether a break statistic
+  earns its place as a feature.
