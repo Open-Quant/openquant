@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-21'
+last_generated: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -45,7 +45,7 @@ For the AFML chapter each module implements, see
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
-- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
@@ -103,7 +103,7 @@ For the AFML chapter each module implements, see
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
-- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.

@@ -226,7 +226,7 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "hcaa",
     module: "hcaa",
     subject: "Portfolio Construction and Risk",
-    summary: "Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.",
+    summary: "Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.",
     handwritten: true,
     apiSurface: "both",
     pythonApis: ["hcaa.allocate_hcaa"],
