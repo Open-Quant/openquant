@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-21'
+last_generated: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -67,7 +67,7 @@ For the AFML chapter each module implements, see
 
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
-- [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
+- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — Python importance reports on purged folds, with a substitution-effect report and a feature screen.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
@@ -96,7 +96,7 @@ For the AFML chapter each module implements, see
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
-- [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
+- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
