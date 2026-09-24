@@ -52,8 +52,16 @@ and unlike VaR it is a coherent risk measure in the sense of Artzner et al. (199
 expected shortfall of a combined book never exceeds the sum of its parts', which VaR can
 violate.
 
-Both are returned **as returns, with their sign** — a 5% VaR of −0.0166 means a loss of
-1.66% — and `confidence_level` is the **tail probability**, 0.05, not 0.95.
+**Conditional drawdown at risk** (Chekhlov, Uryasev and Zabarankin, 2005) applies the same
+idea to drawdowns. For a cumulative series $x$ — an equity curve, a price or a cumulative
+return — the drawdown is $d_t = \max_{s\le t} x_s - x_t$, in the units of $x$, and CDaR at
+level $\alpha$ is the mean of the worst $1-\alpha$ share of the $d_t$. It lies between the
+$\alpha$-quantile of the drawdowns and the maximum drawdown. Here `confidence_level` is that
+**upper-tail** level: 0.95 averages the worst 5% of drawdowns.
+
+VaR and expected shortfall are returned **as returns, with their sign** — a 5% VaR of
+−0.0166 means a loss of 1.66% — and their `confidence_level` is the **tail probability**,
+0.05, not 0.95.
 
 ```python
 import random
@@ -97,6 +105,10 @@ is simply the second-worst.
 Expected shortfall then averages the returns **strictly below** VaR. If none are, as with
 constant returns or $\alpha=0$, it returns `NaN` rather than an error.
 
+Conditional drawdown at risk takes the same "higher" quantile of the drawdowns and averages
+every drawdown **at or above** it, so its tail always holds at least the maximum drawdown and
+the result is never `NaN` on finite input.
+
 ## From Rust
 
 ```rust
@@ -113,6 +125,12 @@ assert!((risk.calculate_expected_shortfall(&returns, 0.25)? + 0.04).abs() < 1e-1
 // Nothing lies strictly below the minimum, so the tail is empty.
 assert!(risk.calculate_expected_shortfall(&returns, 0.0)?.is_nan());
 
+// Conditional drawdown at risk takes a cumulative series, and 0.9 means the worst 10%.
+// Drawdowns 0 0 1 0 4 1. At 0.6 the threshold is the fourth-smallest, 1; (1, 1, 4) average 2.
+let equity = [1.0, 3.0, 2.0, 5.0, 1.0, 4.0];
+assert_eq!(risk.calculate_conditional_drawdown_risk(&equity, 0.6)?, 2.0);
+assert_eq!(risk.calculate_conditional_drawdown_risk(&equity, 0.9)?, 4.0);
+
 let covariance = DMatrix::from_row_slice(2, 2, &[0.04, 0.01, 0.01, 0.09]);
 assert!((risk.calculate_variance(&covariance, &[0.6, 0.4])? - 0.0336).abs() < 1e-12);
 assert_eq!(risk.calculate_variance(&covariance, &[1.0]), Err(RiskMetricsError::DimensionMismatch));
@@ -124,16 +142,19 @@ assert_eq!(
 
 ## What to watch for
 
-- **Do not use `calculate_conditional_drawdown_risk` yet.** It averages the tail of the
-  *running maximum* of the drawdown, a series that only rises and ends on a plateau, so at
-  the 0.95 level on a realistic equity curve it returns `NaN`, and at other levels it returns
-  a number that is not a tail statistic. It also needs a cumulative series although its
-  parameter is named `returns`, and it reads `confidence_level` as an upper quantile, the
-  opposite of VaR beside it. [`pipeline`](/modules/pipeline/) reports a
-  `conditional_drawdown_risk` computed this way, from returns
-  ([#102](https://github.com/Open-Quant/openquant/issues/102)). [`hcaa`](/modules/hcaa/) is
-  *not* affected: it has its own drawdown measure, built on the drawdown series of a wealth
-  curve, which is the correct construction.
+- **`calculate_conditional_drawdown_risk` wants an equity curve, not returns**, although
+  the Python keyword is still called `returns`. On per-period returns
+  $\max_{s\le t} x_s - x_t$ is not a drawdown, and the function has no way to tell.
+  [`pipeline`](/modules/pipeline/) still makes that call, on its strategy returns at 0.05, so
+  its `conditional_drawdown_risk` is not a drawdown figure. [`hcaa`](/modules/hcaa/) has its
+  own drawdown measure, built on the drawdown series of a wealth curve.
+- **Its `confidence_level` is the upper-tail level**, 0.95 for the worst 5%, the opposite of
+  VaR and expected shortfall beside it. Passing 0.05 averages nearly every drawdown, which
+  is not a tail statistic.
+- **Versions before [#102](https://github.com/Open-Quant/openquant/issues/102) was fixed**,
+  and mlfinlab, which they copied, averaged the *running maximum* of the drawdown strictly
+  above its quantile. That series only rises, so at 0.95 on a realistic equity curve they
+  returned `NaN`. Numbers from those versions are not comparable with today's.
 - **Historical estimates cannot see what has not happened.** A 1% expected shortfall from 500
   observations is the mean of five numbers. Nothing here fits a tail, scales with horizon, or
   weights recent data.
