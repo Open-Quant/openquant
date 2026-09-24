@@ -2,7 +2,7 @@
 title: "risk_metrics"
 description: "Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance."
 status: authored
-last_authored: '2026-09-21'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -145,9 +145,9 @@ assert_eq!(
 - **`calculate_conditional_drawdown_risk` wants an equity curve, not returns**, although
   the Python keyword is still called `returns`. On per-period returns
   $\max_{s\le t} x_s - x_t$ is not a drawdown, and the function has no way to tell.
-  [`pipeline`](/modules/pipeline/) still makes that call, on its strategy returns at 0.05, so
-  its `conditional_drawdown_risk` is not a drawdown figure. [`hcaa`](/modules/hcaa/) has its
-  own drawdown measure, built on the drawdown series of a wealth curve.
+  [`pipeline`](/modules/pipeline/) passes its strategy's equity curve, at one minus its
+  `confidence_level`. [`hcaa`](/modules/hcaa/) has its own drawdown measure, built on the
+  drawdown series of a wealth curve.
 - **Its `confidence_level` is the upper-tail level**, 0.95 for the worst 5%, the opposite of
   VaR and expected shortfall beside it. Passing 0.05 averages nearly every drawdown, which
   is not a tail statistic.
