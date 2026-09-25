@@ -1,30 +1,112 @@
+//! The ETF trick and futures roll gaps (AFML §2.4.1 and §2.4.3, Snippet 2.2).
+//!
+//! [`EtfTrick`] turns a basket of instruments with changing allocations, rolls, FX rates and
+//! carry into the value `K_t` of one dollar invested in it: a synthetic total-return series
+//! with no gaps at rolls or rebalances, which can be fed to bars, filters and labels like a
+//! single instrument. [`get_futures_roll_series`] is the single-contract special case: the
+//! cumulative roll gap of one futures chain.
+//!
+//! Conventions:
+//!
+//! - [`Table`]s share one row index (oldest first) and one set of columns (instruments).
+//!   Columns are matched by name to the allocation table's order.
+//! - Allocations are de-levered by the sum of their absolute values, and holdings are sized
+//!   at the **next** bar's open; the bar after a rebalance earns open-to-close only.
+//! - `costs` holds carry or dividends in price units with the sign of a credit: it is
+//!   **added** to the price change. Transaction costs are not modelled, so `K_t` is gross.
+//! - A rebalance is detected by exact equality of consecutive allocation rows.
+//!
+//! This module is Rust-only; there is no Python binding.
+//!
+//! ```
+//! use openquant::etf_trick::{EtfTrick, Table};
+//!
+//! # fn main() -> Result<(), openquant::etf_trick::EtfTrickError> {
+//! let table = |values: [[f64; 2]; 6]| Table {
+//!     index: ["01-02", "01-03", "01-04", "01-05", "01-08", "01-09"].map(String::from).to_vec(),
+//!     columns: vec!["CL".to_string(), "NG".to_string()],
+//!     values: values.iter().map(|row| row.to_vec()).collect(),
+//! };
+//! let open = [[70.0, 2.50], [70.5, 2.52], [71.4, 2.49], [71.0, 2.55], [72.2, 2.60], [72.0, 2.58]];
+//! let close =
+//!     [[70.4, 2.51], [71.2, 2.50], [71.1, 2.54], [72.0, 2.61], [72.1, 2.57], [72.6, 2.59]];
+//! let alloc = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.8, 0.2], [0.8, 0.2], [0.8, 0.2]];
+//!
+//! let etf = EtfTrick::from_tables(
+//!     table(open),
+//!     table(close),
+//!     table(alloc),
+//!     table([[0.0; 2]; 6]), // no carry
+//!     None,                 // no FX
+//! )?;
+//! let series = etf.get_etf_series(100)?;
+//! // Six rows give four values: the first seeds the previous close, the last lacks a next open.
+//! assert_eq!(series.len(), 4);
+//! assert_eq!(series[0], ("01-03".to_string(), 1.0));
+//! // 1 + 0.5 / 71.4 * (-0.10) + 0.5 / 2.49 * 0.04
+//! assert!((series[1].1 - 1.007332).abs() < 1e-6);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use std::collections::HashMap;
 use std::path::Path;
 
 use chrono::NaiveDate;
 use csv::StringRecord;
 
+/// Errors returned by the ETF trick and roll-gap functions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum EtfTrickError {
     /// Reading a CSV failed; `reason` is the underlying I/O or parse error.
     #[error("failed to {action} {path}: {reason}")]
-    Csv { action: &'static str, path: String, reason: String },
+    Csv {
+        /// What was being done (`"open"`, `"read headers"`, `"read record"`).
+        action: &'static str,
+        /// The file.
+        path: String,
+        /// The underlying error message.
+        reason: String,
+    },
+    /// A CSV has fewer than two columns (an index and at least one value column).
     #[error("csv {path} must have at least index + 1 value column")]
-    TooFewColumns { path: String },
+    TooFewColumns {
+        /// The file.
+        path: String,
+    },
+    /// A CSV record has no index cell.
     #[error("missing index column in {path}")]
-    MissingIndexColumn { path: String },
+    MissingIndexColumn {
+        /// The file.
+        path: String,
+    },
+    /// A CSV value cell is not a number.
     #[error("failed to parse float '{cell}' in {path}: {reason}")]
-    ParseFloat { cell: String, path: String, reason: String },
+    ParseFloat {
+        /// The cell text.
+        cell: String,
+        /// The file.
+        path: String,
+        /// The parse error message.
+        reason: String,
+    },
+    /// A table lacks a column named in the allocation table.
     #[error("missing column '{0}' in table")]
     MissingColumn(String),
+    /// `batch_size` is below 3 for a CSV source.
     #[error("Batch size should be >= 3")]
     BatchTooSmall,
+    /// The tables do not share the same row index.
     #[error("DataFrames indices are different")]
     IndexMismatch,
+    /// The tables have different numbers of columns.
     #[error("DataFrames columns are different")]
     ColumnMismatch,
+    /// Internal: holdings were not initialised before use.
     #[error("missing previous h")]
     MissingPreviousHoldings,
+    /// The roll method is not `"absolute"` or `"relative"`.
     #[error("The method must be either absolute or relative, Check spelling.")]
     UnknownRollMethod,
 }
@@ -35,14 +117,27 @@ impl EtfTrickError {
     }
 }
 
+/// A small labelled matrix: one row per date, one column per instrument.
 #[derive(Clone, Debug)]
 pub struct Table {
+    /// Row labels (typically dates), oldest first.
     pub index: Vec<String>,
+    /// Column names (instruments).
     pub columns: Vec<String>,
+    /// Row-major values; each row has one value per column.
     pub values: Vec<Vec<f64>>,
 }
 
 impl Table {
+    /// Reads a table from a CSV with a header row: the first column is the index and every
+    /// other column a numeric value column.
+    ///
+    /// # Errors
+    ///
+    /// - [`EtfTrickError::Csv`] if the file cannot be opened or a record cannot be read.
+    /// - [`EtfTrickError::TooFewColumns`] if the header has fewer than two columns.
+    /// - [`EtfTrickError::MissingIndexColumn`] if a record is empty.
+    /// - [`EtfTrickError::ParseFloat`] if a value cell is not a number.
     pub fn from_csv(path: &Path) -> Result<Self, EtfTrickError> {
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
@@ -95,6 +190,10 @@ impl Table {
     }
 }
 
+/// The ETF trick (AFML §2.4.1): the value of one dollar invested in a basket.
+///
+/// Build from in-memory [`Table`]s with [`EtfTrick::from_tables`] or from CSV paths with
+/// [`EtfTrick::from_csv`], then call [`EtfTrick::get_etf_series`].
 #[derive(Clone, Debug)]
 pub struct EtfTrick {
     source: Source,
@@ -123,6 +222,18 @@ enum Source {
 }
 
 impl EtfTrick {
+    /// Creates an ETF trick from in-memory tables.
+    ///
+    /// `open` and `close` are prices, `alloc` the target weights (any leverage; they are
+    /// de-levered), `costs` the carry or dividends per bar in price units (added to the price
+    /// change), and `rates` the FX rate of each instrument to the account currency (1 when
+    /// `None`). All tables must share the row index and column count.
+    ///
+    /// # Errors
+    ///
+    /// - [`EtfTrickError::IndexMismatch`] if a table's index or row count differs from
+    ///   `open`'s.
+    /// - [`EtfTrickError::ColumnMismatch`] if a table's column count differs from `open`'s.
     pub fn from_tables(
         open: Table,
         close: Table,
@@ -136,6 +247,13 @@ impl EtfTrick {
         })
     }
 
+    /// Creates an ETF trick that reads its tables from CSV files (see [`Table::from_csv`]) when
+    /// [`EtfTrick::get_etf_series`] is called.
+    ///
+    /// # Errors
+    ///
+    /// Never; the files are not opened until [`EtfTrick::get_etf_series`]. The `Result` is
+    /// kept for API stability.
     pub fn from_csv(
         open_path: &str,
         close_path: &str,
@@ -154,6 +272,24 @@ impl EtfTrick {
         })
     }
 
+    /// Computes the value series `(index, K_t)`, starting from `K = 1`.
+    ///
+    /// Holdings at a rebalance are `h = w K / (o_{t+1} fx sum|w|)`; each later bar adds
+    /// `sum h fx (delta + costs)`, with `delta` the close-to-close change, or open-to-close on
+    /// the bar after a rebalance. The first row only seeds the previous close and the last
+    /// row is dropped (sizing there needs a next open), so `n` rows give `n - 2` values;
+    /// fewer than two rows give none. This matches mlfinlab's output.
+    ///
+    /// `batch_size` exists for mlfinlab compatibility: it is checked for CSV sources and
+    /// otherwise ignored. CSV files are read in full.
+    ///
+    /// # Errors
+    ///
+    /// - [`EtfTrickError::BatchTooSmall`] if the source is CSV and `batch_size < 3`.
+    /// - Any [`Table::from_csv`] error for a CSV source.
+    /// - [`EtfTrickError::IndexMismatch`] or [`EtfTrickError::ColumnMismatch`] if the tables
+    ///   disagree in shape.
+    /// - [`EtfTrickError::MissingColumn`] if a table lacks an instrument named in `alloc`.
     pub fn get_etf_series(&self, batch_size: usize) -> Result<Vec<(String, f64)>, EtfTrickError> {
         match &self.source {
             Source::InMemory(tables) => compute_etf_series(
@@ -183,6 +319,8 @@ impl EtfTrick {
         }
     }
 
+    /// Does nothing; kept for mlfinlab API compatibility (the computation holds no state
+    /// between calls).
     pub fn reset(&mut self) {}
 }
 
@@ -319,17 +457,61 @@ fn compute_etf_series(
     Ok(out)
 }
 
+/// One quote of a futures chain for [`get_futures_roll_series`].
 #[derive(Clone, Debug)]
 pub struct FuturesRollRow {
+    /// Session date.
     pub date: NaiveDate,
+    /// Opening price of `security`.
     pub open: f64,
+    /// Closing price of `security`.
     pub close: f64,
+    /// The contract this row quotes.
     pub security: String,
+    /// The front contract on this date; rows where it differs from `security` are ignored.
     pub current_security: String,
 }
 
-/// Generate rolling futures gap series.
-/// Mirrors mlfinlab.multi_product.etf_trick.get_futures_roll_series.
+/// Cumulative roll-gap series of a futures chain (AFML §2.4.3, Snippet 2.2).
+///
+/// Keeps the rows where `security == current_security`, sorts them by date, and at each
+/// change of front contract takes the gap between the new contract's open and the old one's
+/// previous close. Returns one value per kept row:
+///
+/// - `"absolute"`: cumulative sum of `open - previous close`; subtract it from raw prices;
+/// - `"relative"`: cumulative product of `open / previous close`; divide raw prices by it.
+///
+/// With `roll_backward = true` the series is shifted so its last value is 0 (absolute) or 1
+/// (relative): recent prices are left untouched and history is adjusted. An empty input, or
+/// one with no front-contract rows, returns an empty vector. Mirrors mlfinlab's
+/// `get_futures_roll_series`.
+///
+/// # Errors
+///
+/// [`EtfTrickError::UnknownRollMethod`] if `method` is not `"absolute"` or `"relative"` (only
+/// checked when there are rows to roll).
+///
+/// ```
+/// use chrono::NaiveDate;
+/// use openquant::etf_trick::{get_futures_roll_series, FuturesRollRow};
+///
+/// # fn main() -> Result<(), openquant::etf_trick::EtfTrickError> {
+/// let row = |day, open, close, contract: &str| FuturesRollRow {
+///     date: NaiveDate::from_ymd_opt(2024, 1, day).unwrap(),
+///     open,
+///     close,
+///     security: contract.to_string(),
+///     current_security: contract.to_string(),
+/// };
+/// // The new contract opens 0.90 above the old one's last close.
+/// let chain =
+///     vec![row(3, 70.5, 71.2, "CLG4"), row(4, 71.4, 71.1, "CLG4"), row(5, 72.0, 72.9, "CLH4")];
+/// let gaps = get_futures_roll_series(&chain, "absolute", true)?;
+/// assert!((gaps[0] + 0.9).abs() < 1e-9 && (gaps[1] + 0.9).abs() < 1e-9);
+/// assert_eq!(gaps[2], 0.0);
+/// # Ok(())
+/// # }
+/// ```
 pub fn get_futures_roll_series(
     rows: &[FuturesRollRow],
     method: &str,
