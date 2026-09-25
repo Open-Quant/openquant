@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{pair_timestamps_values, to_py_err};
+use crate::helpers::{format_naive_datetime, pair_timestamps_values, to_py_err};
 
 #[pyfunction(name = "get_daily_vol")]
 fn volatility_get_daily_vol(
@@ -11,7 +11,7 @@ fn volatility_get_daily_vol(
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
     let result = openquant::util::volatility::get_daily_vol(&close, lookback);
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "get_parkinson_vol")]

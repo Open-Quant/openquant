@@ -50,7 +50,8 @@ Input conventions:
 
 Input conventions:
 - `close`: list of floats
-- `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`
+- `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`, with an optional fractional
+  second (e.g. `2024-01-02 09:30:01.760917`); returned timestamps keep the fraction
 - timestamp variants require `len(close) == len(timestamps)`
 
 ### `openquant.bars` (AFML Ch.2 event-driven bars; Rust core via PyO3)
@@ -79,7 +80,7 @@ Notes:
 - `meta_labels(...)`
 
 Input conventions:
-- `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings
+- `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings (fractional seconds allowed)
 - `close_prices`: list of floats
 - `t_events`: event timestamps
 - `target_timestamps` + `target_values`: target/volatility inputs
@@ -220,7 +221,8 @@ summary = openquant.pipeline.summarize_pipeline(pipe)
 - `ValueError: close/timestamps length mismatch`
   - Align prices and timestamps one-to-one before calling timestamp APIs.
 - `ValueError: invalid datetime ...`
-  - Use `%Y-%m-%d %H:%M:%S` timestamp strings.
+  - Use `%Y-%m-%d %H:%M:%S` timestamp strings, optionally with a fractional second
+    (`%Y-%m-%d %H:%M:%S.%f`). `str(datetime)` produces this format.
 - `ModuleNotFoundError: No module named 'openquant'`
   - Re-run `uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml`.
 
