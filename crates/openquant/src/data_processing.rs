@@ -11,8 +11,22 @@
 //! - row functions take [`OhlcvRow`]s with a [`NaiveDateTime`] interpreted as UTC.
 //!
 //! Output is sorted by `(symbol, timestamp)`. A duplicate is a repeated `(symbol, timestamp)`
-//! key. A gap is two consecutive bars of one symbol more than **one day** apart, whatever
-//! the bar interval, so weekends count as gaps on daily data.
+//! key.
+//!
+//! **Gaps.** The quality report infers the bar spacing as the most common positive spacing
+//! between consecutive bars of one symbol, pooled over all symbols (the smallest on a tie),
+//! and reports it as [`DataQualityReport::inferred_interval_us`]. For **daily** data (an
+//! inferred spacing within an hour of one day, so DST shifts do not matter) a gap is a
+//! skipped weekday: at least one Monday-to-Friday UTC date strictly between the two bars'
+//! dates. Weekends are not gaps; exchange holidays are, as no holiday calendar is applied.
+//! For **any other** spacing a gap is a spacing longer than the inferred one, so intraday
+//! data counts overnight and weekend breaks. Before #168 any spacing over one day counted,
+//! whatever the frequency.
+//!
+//! **Calendar alignment** puts each symbol on a grid from its first bar in steps of the
+//! interval. A bar that is not on that grid is not in the aligned output; the
+//! `align_calendar_*` functions return a [`CalendarAlignmentReport`] that lists those bars
+//! (before #168 they were dropped silently).
 //!
 //! ```
 //! use chrono::NaiveDate;
@@ -36,18 +50,21 @@
 //! assert_eq!(clean.len(), 3);
 //! assert_eq!(clean[0].close, 10.5); // keep_last keeps the later duplicate
 //! assert_eq!(report.rows_removed_by_deduplication, 1);
-//! assert_eq!(report.gap_interval_count, 1); // Jan 3 -> Jan 5
+//! assert_eq!(report.inferred_interval_us, Some(86_400_000_000)); // daily
+//! assert_eq!(report.gap_interval_count, 1); // Wed Jan 3 -> Fri Jan 5 skips Thursday
 //!
-//! let aligned = align_calendar_rows(&rows, 86_400)?;
+//! let (aligned, alignment) = align_calendar_rows(&rows, 86_400)?;
 //! let missing: Vec<bool> = aligned.iter().map(|r| r.is_missing_bar).collect();
 //! assert_eq!(missing, vec![false, false, true, false]);
 //! assert_eq!(aligned[2].close, None);
+//! assert_eq!(alignment.rows_removed_by_deduplication, 1);
+//! assert!(alignment.off_grid_bars.is_empty());
 //! # Ok(())
 //! # }
 //! ```
 #![deny(missing_docs)]
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Days, NaiveDateTime, Utc, Weekday};
 use polars::prelude::*;
 use std::collections::HashSet;
 
@@ -173,6 +190,18 @@ pub struct AlignedOhlcvColumns {
     pub is_missing_bar: Vec<bool>,
 }
 
+/// What [`align_calendar_df`] (and its column and row forms) left out of the aligned output.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CalendarAlignmentReport {
+    /// Rows dropped as repeated `(symbol, timestamp)` keys before alignment (the last
+    /// occurrence is kept).
+    pub rows_removed_by_deduplication: usize,
+    /// `(symbol, timestamp)` of every remaining bar that is not on its symbol's grid and so
+    /// is not in the output, sorted by symbol and time. A bar is on the grid when its
+    /// timestamp is the symbol's first timestamp plus a whole number of intervals.
+    pub off_grid_bars: Vec<(String, NaiveDateTime)>,
+}
+
 /// Summary diagnostics of an OHLCV data set.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataQualityReport {
@@ -182,8 +211,14 @@ pub struct DataQualityReport {
     pub symbol_count: usize,
     /// Rows whose `(symbol, timestamp)` repeats the previous row's (0 after cleaning).
     pub duplicate_key_count: usize,
-    /// Consecutive bars of one symbol more than one day apart.
+    /// Consecutive bars of one symbol with a gap between them: a skipped weekday for daily
+    /// data, otherwise a spacing longer than [`DataQualityReport::inferred_interval_us`]
+    /// (see the [module docs](self)).
     pub gap_interval_count: usize,
+    /// The bar spacing in microseconds: the most common positive spacing between
+    /// consecutive bars of one symbol, pooled over symbols (the smallest on a tie). `None`
+    /// when no symbol has two bars at different times.
+    pub inferred_interval_us: Option<i64>,
     /// Earliest timestamp (UTC), `None` when empty.
     pub ts_min: Option<NaiveDateTime>,
     /// Latest timestamp (UTC), `None` when empty.
@@ -214,6 +249,44 @@ fn micros_to_naive(ts_us: i64) -> Option<NaiveDateTime> {
     DateTime::<Utc>::from_timestamp_micros(ts_us).map(|dt| dt.naive_utc())
 }
 
+const DAY_US: i64 = 86_400 * 1_000_000;
+const HOUR_US: i64 = 3_600 * 1_000_000;
+
+/// The most common spacing (smallest on a tie); `None` for no spacings.
+fn modal_spacing(steps: &[(i64, i64)]) -> Option<i64> {
+    let mut spacings: Vec<i64> = steps.iter().map(|(pt, t)| t - pt).collect();
+    spacings.sort_unstable();
+    let mut best: Option<(i64, usize)> = None;
+    for run in spacings.chunk_by(|a, b| a == b) {
+        // Ascending order, so a strict `>` keeps the smallest spacing on a tie.
+        if best.is_none_or(|(_, n)| run.len() > n) {
+            best = Some((run[0], run.len()));
+        }
+    }
+    best.map(|(spacing, _)| spacing)
+}
+
+/// Whether the step from `prev_us` to `cur_us` is a gap, given the inferred bar spacing.
+fn is_gap(prev_us: i64, cur_us: i64, interval_us: i64) -> bool {
+    if (interval_us - DAY_US).abs() > HOUR_US {
+        return cur_us - prev_us > interval_us;
+    }
+    // Daily data: a gap is a skipped weekday. Any three consecutive dates include one, so
+    // this looks at no more than three.
+    let (Some(prev), Some(cur)) = (micros_to_naive(prev_us), micros_to_naive(cur_us)) else {
+        return cur_us - prev_us > interval_us;
+    };
+    let (prev, cur) = (prev.date(), cur.date());
+    let mut day = prev + Days::new(1);
+    while day < cur {
+        if !matches!(day.weekday(), Weekday::Sat | Weekday::Sun) {
+            return true;
+        }
+        day = day + Days::new(1);
+    }
+    false
+}
+
 fn quality_report_from_sorted_df(
     sorted: &DataFrame,
     rows_removed_by_deduplication: usize,
@@ -233,8 +306,8 @@ fn quality_report_from_sorted_df(
 
     let mut symbol_set: HashSet<&str> = HashSet::new();
     let mut duplicate_key_count = 0usize;
-    let mut gap_interval_count = 0usize;
-    let day_us = 24 * 3600 * 1_000_000i64;
+    // Positive spacings between consecutive bars of one symbol, as (previous, current).
+    let mut steps: Vec<(i64, i64)> = Vec::new();
 
     let mut prev_symbol: Option<&str> = None;
     let mut prev_ts: Option<i64> = None;
@@ -248,14 +321,20 @@ fn quality_report_from_sorted_df(
         if let (Some(ps), Some(pt)) = (prev_symbol, prev_ts) {
             if ps == s && pt == t {
                 duplicate_key_count += 1;
-            } else if ps == s && t - pt > day_us {
-                gap_interval_count += 1;
+            } else if ps == s && t > pt {
+                steps.push((pt, t));
             }
         }
 
         prev_symbol = Some(s);
         prev_ts = Some(t);
     }
+
+    let inferred_interval_us = modal_spacing(&steps);
+    let gap_interval_count = match inferred_interval_us {
+        None => 0,
+        Some(interval) => steps.iter().filter(|(pt, t)| is_gap(*pt, *t, interval)).count(),
+    };
 
     let ts_min = ts.min().and_then(micros_to_naive);
     let ts_max = ts.max().and_then(micros_to_naive);
@@ -265,6 +344,7 @@ fn quality_report_from_sorted_df(
         symbol_count: symbol_set.len(),
         duplicate_key_count,
         gap_interval_count,
+        inferred_interval_us,
         ts_min,
         ts_max,
         rows_removed_by_deduplication,
@@ -292,6 +372,7 @@ pub fn quality_report_df(
             symbol_count: 0,
             duplicate_key_count: 0,
             gap_interval_count: 0,
+            inferred_interval_us: None,
             ts_min: None,
             ts_max: None,
             rows_removed_by_deduplication,
@@ -325,6 +406,7 @@ pub fn clean_ohlcv_df(
             symbol_count: 0,
             duplicate_key_count: 0,
             gap_interval_count: 0,
+            inferred_interval_us: None,
             ts_min: None,
             ts_max: None,
             rows_removed_by_deduplication: 0,
@@ -354,9 +436,10 @@ pub fn clean_ohlcv_df(
 /// a regular grid from its first to its last timestamp in steps of `interval_seconds`.
 ///
 /// Grid points without a bar get null prices and `is_missing_bar = true`. The grid starts at
-/// each symbol's first timestamp, so **bars whose timestamp is not on that grid are dropped**;
-/// the interval should divide the data's spacing. A short interval over a long span produces
-/// many rows.
+/// each symbol's first timestamp, so **a bar whose timestamp is not on that grid is not in
+/// the output**; the returned [`CalendarAlignmentReport`] lists every such bar, with the
+/// number of duplicate rows removed. The interval should divide the data's spacing. A short
+/// interval over a long span produces many rows.
 ///
 /// # Errors
 ///
@@ -367,17 +450,21 @@ pub fn clean_ohlcv_df(
 pub fn align_calendar_df(
     df: &DataFrame,
     interval_seconds: i64,
-) -> Result<DataFrame, DataProcessingError> {
+) -> Result<(DataFrame, CalendarAlignmentReport), DataProcessingError> {
     if interval_seconds <= 0 {
         return Err(DataProcessingError::NonPositiveInterval);
     }
 
-    let (cleaned, _) = clean_ohlcv_df(df, true)?;
+    let (cleaned, clean_report) = clean_ohlcv_df(df, true)?;
+    let mut report = CalendarAlignmentReport {
+        rows_removed_by_deduplication: clean_report.rows_removed_by_deduplication,
+        off_grid_bars: Vec::new(),
+    };
     if cleaned.height() == 0 {
         let mut out = cleaned.clone();
         out.with_column(Series::new("is_missing_bar".into(), Vec::<bool>::new()))
             .map_err(|e| DataProcessingError::frame("failed to add is_missing_bar", e))?;
-        return Ok(out);
+        return Ok((out, report));
     }
 
     let symbols = cleaned
@@ -410,6 +497,16 @@ pub fn align_calendar_df(
         let end =
             ts.get(j - 1).ok_or(DataProcessingError::NullValue { column: "ts_us", row: j - 1 })?;
 
+        for k in i..j {
+            let t = ts.get(k).ok_or(DataProcessingError::NullValue { column: "ts_us", row: k })?;
+            if (t - start) % step_us != 0 {
+                let when = micros_to_naive(t).ok_or_else(|| {
+                    DataProcessingError::frame("timestamp out of range", format!("ts_us={t}"))
+                })?;
+                report.off_grid_bars.push((symbol.to_string(), when));
+            }
+        }
+
         let mut cur = start;
         while cur <= end {
             cal_symbols.push(symbol.to_string());
@@ -436,7 +533,7 @@ pub fn align_calendar_df(
     out.with_column(missing)
         .map_err(|e| DataProcessingError::frame("failed to add is_missing_bar", e))?;
 
-    Ok(out)
+    Ok((out, report))
 }
 
 fn validate_lengths(columns: &OhlcvColumns) -> Result<(), DataProcessingError> {
@@ -572,7 +669,8 @@ pub fn clean_ohlcv_columns(
     Ok((clean_cols, report))
 }
 
-/// Aligns [`OhlcvColumns`] to a regular grid; see [`align_calendar_df`].
+/// Aligns [`OhlcvColumns`] to a regular grid; see [`align_calendar_df`], including for the
+/// returned [`CalendarAlignmentReport`].
 ///
 /// # Errors
 ///
@@ -582,9 +680,9 @@ pub fn clean_ohlcv_columns(
 pub fn align_calendar_columns(
     columns: &OhlcvColumns,
     interval_seconds: i64,
-) -> Result<AlignedOhlcvColumns, DataProcessingError> {
+) -> Result<(AlignedOhlcvColumns, CalendarAlignmentReport), DataProcessingError> {
     let df = to_polars_df(columns)?;
-    let out = align_calendar_df(&df, interval_seconds)?;
+    let (out, report) = align_calendar_df(&df, interval_seconds)?;
 
     let timestamps_us = out
         .column("ts_us")
@@ -652,17 +750,20 @@ pub fn align_calendar_columns(
         .into_no_null_iter()
         .collect::<Vec<_>>();
 
-    Ok(AlignedOhlcvColumns {
-        timestamps_us,
-        symbols,
-        open,
-        high,
-        low,
-        close,
-        volume,
-        adj_close,
-        is_missing_bar,
-    })
+    Ok((
+        AlignedOhlcvColumns {
+            timestamps_us,
+            symbols,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            adj_close,
+            is_missing_bar,
+        },
+        report,
+    ))
 }
 
 fn rows_to_columns(rows: &[OhlcvRow]) -> OhlcvColumns {
@@ -758,7 +859,8 @@ pub fn quality_report(
     quality_report_columns(&cols, rows_removed_by_deduplication).expect("validated rows")
 }
 
-/// Aligns [`OhlcvRow`]s to a regular grid of `interval_seconds`; see [`align_calendar_df`].
+/// Aligns [`OhlcvRow`]s to a regular grid of `interval_seconds`; see [`align_calendar_df`],
+/// including for the returned [`CalendarAlignmentReport`].
 ///
 /// # Errors
 ///
@@ -767,8 +869,8 @@ pub fn quality_report(
 pub fn align_calendar_rows(
     rows: &[OhlcvRow],
     interval_seconds: i64,
-) -> Result<Vec<AlignedOhlcvRow>, DataProcessingError> {
+) -> Result<(Vec<AlignedOhlcvRow>, CalendarAlignmentReport), DataProcessingError> {
     let cols = rows_to_columns(rows);
-    let aligned_cols = align_calendar_columns(&cols, interval_seconds)?;
-    Ok(aligned_columns_to_rows(&aligned_cols))
+    let (aligned_cols, report) = align_calendar_columns(&cols, interval_seconds)?;
+    Ok((aligned_columns_to_rows(&aligned_cols), report))
 }

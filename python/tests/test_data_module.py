@@ -6,6 +6,7 @@ from pathlib import Path
 
 import openquant
 import polars as pl
+import pytest
 
 
 def _fixture_path() -> Path:
@@ -121,3 +122,89 @@ def test_core_dataframe_bindings_accept_polars_frames():
     msft = aligned.filter(pl.col("symbol") == "MSFT")
     assert msft.height == 3
     assert msft["is_missing_bar"].to_list() == [False, True, False]
+
+
+def _daily_frame(stamps: list[str], symbol: str = "AAA") -> pl.DataFrame:
+    n = len(stamps)
+    return pl.DataFrame(
+        {
+            "ts": stamps,
+            "symbol": [symbol] * n,
+            "open": [1.0] * n,
+            "high": [1.0] * n,
+            "low": [1.0] * n,
+            "close": [float(i) for i in range(n)],
+            "volume": [1.0] * n,
+        }
+    )
+
+
+def test_gap_count_follows_the_bar_frequency():
+    # Mirrors crates/openquant/tests/data_processing.rs::gap_count_follows_the_bar_frequency
+    # (#168). September 2024: the 2nd is a Monday.
+    week = [f"2024-09-{d:02d}" for d in (2, 3, 4, 5, 6, 9)]
+    report = openquant.data.data_quality_report(_daily_frame(week))
+    assert report["inferred_interval_us"] == 86_400 * 1_000_000
+    assert report["gap_interval_count"] == 0  # the weekend is not a gap
+
+    missing = [f"2024-09-{d:02d}" for d in (2, 3, 5, 6, 10)]
+    assert openquant.data.data_quality_report(_daily_frame(missing))["gap_interval_count"] == 2
+
+    hourly = [f"2024-09-02 {h:02d}:00:00" for h in (9, 10, 11, 13, 14, 15)]
+    report = openquant.data.data_quality_report(_daily_frame(hourly))
+    assert report["inferred_interval_us"] == 3_600 * 1_000_000
+    assert report["gap_interval_count"] == 1
+
+    # The Rust core agrees.
+    from openquant import _core
+
+    for stamps, gaps in ((week, 0), (missing, 2), (hourly, 1)):
+        ts_us = (
+            _daily_frame(stamps)
+            .with_columns(pl.col("ts").str.to_datetime())
+            .get_column("ts")
+            .dt.timestamp("us")
+            .to_list()
+        )
+        ones = [1.0] * len(ts_us)
+        core = _core.data.quality_report(
+            ts_us, ["AAA"] * len(ts_us), ones, ones, ones, ones, ones, ones
+        )
+        assert core["gap_interval_count"] == gaps
+
+
+def test_align_calendar_reports_off_grid_bars():
+    # Mirrors crates/openquant/tests/data_processing.rs::align_calendar_reports_off_grid_bars
+    # (#168): a bar that is not on the grid used to vanish without a trace.
+    raw = _daily_frame(
+        ["2024-09-02 00:00:00", "2024-09-03 00:00:00", "2024-09-04 16:00:00", "2024-09-05 00:00:00"]
+    )
+    aligned, report = openquant.data.align_calendar(raw, return_report=True)
+    assert aligned["is_missing_bar"].to_list() == [False, False, True, False]
+    assert report["off_grid_bar_count"] == 1
+    assert report["rows_removed_by_deduplication"] == 0
+    assert report["off_grid_bars"]["ts"].dt.strftime("%Y-%m-%d %H:%M").to_list() == [
+        "2024-09-04 16:00"
+    ]
+
+    with pytest.warns(UserWarning, match="dropped 1 bar"):
+        openquant.data.align_calendar(raw)
+
+    from openquant import _core
+
+    core_in = raw.with_columns(
+        pl.col("ts").str.to_datetime().dt.timestamp("us").alias("ts_us"),
+        pl.col("close").alias("adj_close"),
+    ).drop("ts")
+    frame, core_report = _core.data.align_calendar_df(core_in, 86_400, return_report=True)
+    assert frame["is_missing_bar"].to_list() == [False, False, True, False]
+    assert core_report["off_grid_bar_count"] == 1
+    assert core_report["off_grid_bars"] == [("AAA", core_in["ts_us"][2])]
+    assert isinstance(_core.data.align_calendar_df(core_in, 86_400), pl.DataFrame)
+
+    cols = [core_in[c].to_list() for c in ("ts_us", "symbol", "open", "high", "low", "close")]
+    cols += [core_in["volume"].to_list(), core_in["adj_close"].to_list()]
+    out, col_report = _core.data.align_calendar(*cols, 86_400, return_report=True)
+    assert out[-1] == [False, False, True, False]
+    assert col_report == core_report
+    assert len(_core.data.align_calendar(*cols, 86_400)) == 9
