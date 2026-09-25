@@ -179,8 +179,10 @@ pub fn run_mid_frequency_pipeline(
         risk_metrics.calculate_value_at_risk(&strategy_returns, config.confidence_level)?;
     let expected_shortfall =
         risk_metrics.calculate_expected_shortfall(&strategy_returns, config.confidence_level)?;
+    // CDaR needs the cumulative curve, and takes the upper-tail level where VaR and ES take the
+    // tail probability.
     let conditional_drawdown_risk = risk_metrics
-        .calculate_conditional_drawdown_risk(&strategy_returns, config.confidence_level)?;
+        .calculate_conditional_drawdown_risk(&equity_curve, 1.0 - config.confidence_level)?;
     let realized_sharpe = if strategy_returns.len() > 1 {
         sharpe_ratio(&strategy_returns, 252.0, config.risk_free_rate)
     } else {

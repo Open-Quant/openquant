@@ -2,7 +2,9 @@ use chrono::NaiveDateTime;
 use csv::ReaderBuilder;
 use openquant::filters::{cusum_filter_timestamps, Threshold};
 use openquant::labeling::{add_vertical_barrier, get_events};
-use openquant::sample_weights::{get_weights_by_return, get_weights_by_time_decay};
+use openquant::sample_weights::{
+    get_weights_by_return, get_weights_by_time_decay, SampleWeightsError,
+};
 use openquant::util::volatility::get_daily_vol;
 use serde::Deserialize;
 use std::path::Path;
@@ -153,8 +155,76 @@ fn test_time_decay_weights() {
 #[test]
 fn test_value_error_raise() {
     let (mut events, close, _, _) = setup_events();
-    // Introduce NaN via zero timestamp to trigger validation
-    events[0].0 = chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0).unwrap().naive_utc();
-    assert!(get_weights_by_return(&events, &close).is_err());
-    assert!(get_weights_by_time_decay(&events, &close, 0.5).is_err());
+    // An event that ends before it starts has no span to weight.
+    events[1].1 = events[1].0 - chrono::Duration::seconds(1);
+    let want = SampleWeightsError::EndBeforeStart { index: 1 };
+    assert_eq!(get_weights_by_return(&events, &close).unwrap_err(), want);
+    assert_eq!(get_weights_by_time_decay(&events, &close, 0.5).unwrap_err(), want);
+    assert_eq!(want.to_string(), "event 1 ends before it starts");
+}
+
+/// Six one-minute bars and three events, two of which start on the same bar (issue #91).
+type Event = (NaiveDateTime, NaiveDateTime, f64);
+
+fn shared_start_setup() -> (Vec<(NaiveDateTime, f64)>, [Event; 3]) {
+    let open = chrono::NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 30, 0).unwrap();
+    let close: Vec<_> = [100.0, 101.0, 102.0, 101.0, 100.0, 103.0]
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (open + chrono::Duration::minutes(i as i64), *p))
+        .collect();
+    let at = |i: usize| close[i].0;
+    let events = [(at(0), at(2), 1.0), (at(0), at(3), 1.0), (at(2), at(4), 1.0)];
+    (close, events)
+}
+
+#[test]
+fn test_time_decay_keeps_one_weight_per_event_when_starts_coincide() {
+    let (close, [a, b, c]) = shared_start_setup();
+    // Concurrency per bar is [2, 2, 3, 2, 1, 0], so the average uniqueness of A, B and C is
+    // 4/9, 11/24 and 11/18. In start order, with the tie between A and B broken by input order,
+    // the cumulative uniqueness is 32/72, 65/72 and 109/72. With decay 0.5 the line through
+    // (109/72, 1) has slope 0.5 / (109/72) = 36/109 and intercept 0.5.
+    let weight = |x: f64| 0.5 + 36.0 / 109.0 * x;
+    let (w_a, w_b, w_c) = (weight(32.0 / 72.0), weight(65.0 / 72.0), 1.0);
+
+    let got = get_weights_by_time_decay(&[a, b, c], &close, 0.5).expect("weights");
+    assert_eq!(got.len(), 3);
+    assert_eq!(got.iter().map(|(ts, _)| *ts).collect::<Vec<_>>(), vec![a.0, b.0, c.0]);
+    for (g, w) in got.iter().zip([w_a, w_b, w_c]) {
+        assert!((g.1 - w).abs() < 1e-12, "got {}, want {w}", g.1);
+    }
+
+    // Reordering the input reorders the output with it: each event keeps its own weight.
+    let got = get_weights_by_time_decay(&[c, a, b], &close, 0.5).expect("weights");
+    assert_eq!(got.iter().map(|(ts, _)| *ts).collect::<Vec<_>>(), vec![c.0, a.0, b.0]);
+    for (g, w) in got.iter().zip([w_c, w_a, w_b]) {
+        assert!((g.1 - w).abs() < 1e-12, "got {}, want {w}", g.1);
+    }
+
+    // Tied starts take cumulative positions in input order, so listing B before A puts B first:
+    // B sits at 11/24 = 33/72 and A at 33/72 + 4/9 = 65/72.
+    let got = get_weights_by_time_decay(&[b, a, c], &close, 0.5).expect("weights");
+    assert_eq!(got.len(), 3);
+    for (g, w) in got.iter().zip([weight(33.0 / 72.0), weight(65.0 / 72.0), 1.0]) {
+        assert!((g.1 - w).abs() < 1e-12, "got {}, want {w}", g.1);
+    }
+}
+
+#[test]
+fn test_return_attribution_keeps_one_weight_per_event_when_starts_coincide() {
+    let (close, events) = shared_start_setup();
+    let got = get_weights_by_return(&events, &close).expect("weights");
+    let starts: Vec<_> = events.iter().map(|e| e.0).collect();
+    assert_eq!(got.iter().map(|(ts, _)| *ts).collect::<Vec<_>>(), starts);
+}
+
+#[test]
+fn test_unix_epoch_is_an_ordinary_timestamp() {
+    let epoch = chrono::DateTime::<chrono::Utc>::from_timestamp(0, 0).unwrap().naive_utc();
+    let close: Vec<_> =
+        (0..4).map(|i| (epoch + chrono::Duration::days(i), 100.0 + i as f64)).collect();
+    let events = [(close[0].0, close[1].0, 1.0), (close[2].0, close[3].0, 1.0)];
+    assert_eq!(get_weights_by_return(&events, &close).expect("return").len(), 2);
+    assert_eq!(get_weights_by_time_decay(&events, &close, 0.5).expect("decay").len(), 2);
 }

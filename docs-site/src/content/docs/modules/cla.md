@@ -2,7 +2,7 @@
 title: "cla"
 description: "The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points, with no general-purpose optimiser."
 status: authored
-last_authored: '2026-09-21'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -158,11 +158,13 @@ assert!(matches!(
 
 ## What to watch for
 
-- **From prices, CLA uses simple returns and
-  [`portfolio_optimization`](/modules/portfolio-optimization/) uses log returns**, so the same
-  price history gives different maximum-Sharpe portfolios in the two modules. Given the same
-  $\mu$ and $\Sigma$ they agree, as the example shows
-  ([#110](https://github.com/Open-Quant/openquant/issues/110)).
+- **From prices, CLA uses simple returns**, as do
+  [`portfolio_optimization`](/modules/portfolio-optimization/), [`hrp`](/modules/hrp/) and
+  [`hcaa`](/modules/hcaa/). Its expected returns are annualised and its covariance is left
+  per period, which moves no turning point. From the same prices, or the same $\mu$ and
+  $\Sigma$, CLA and `portfolio_optimization` find the same maximum-Sharpe portfolio; until
+  [#110](https://github.com/Open-Quant/openquant/issues/110) was fixed,
+  `portfolio_optimization` took log returns and the two differed.
 - **`"max_sharpe"` has no risk-free rate.** It maximises $\mu^\top w/\sigma$, the tangency
   portfolio for a rate of zero, which for low-yielding safe assets lands near the
   minimum-variance end, as in the figure. For a non-zero rate, subtract it from the expected
