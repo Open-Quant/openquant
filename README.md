@@ -43,7 +43,9 @@ uv run --python .venv/bin/python python -c "import openquant; print('ok')"
 
 The Python distribution will be published as **`pyopenquant`**; the import name is
 `openquant`. Do not `pip install openquant` - that name on PyPI belongs to an
-unrelated project.
+unrelated project. The extension builds against a patched `pyo3-polars`
+checked in under `vendor/` (see `vendor/README.md`), so it ships only as a
+wheel. The `openquant` Rust crate does not depend on that patch.
 
 ## Quick Start
 ```bash
@@ -108,6 +110,11 @@ bun run dev
 ```
 
 Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.
+
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test and docs gates, and pull
+request conventions, and [tests/FIXTURES.md](tests/FIXTURES.md) for where the test
+fixtures come from. Report security problems privately ([SECURITY.md](SECURITY.md)).
 
 ## License
 MIT (`LICENSE`)

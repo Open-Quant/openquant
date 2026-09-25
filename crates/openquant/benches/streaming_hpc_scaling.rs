@@ -8,9 +8,9 @@ use std::thread;
 
 fn pipeline_cfg() -> StreamingPipelineConfig {
     StreamingPipelineConfig {
-        vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20 },
+        vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20, cdf_lookback: 100 },
         hhi: HhiConfig { lookback_events: 200 },
-        thresholds: AlertThresholds { vpin: 0.45, hhi: 0.30 },
+        thresholds: AlertThresholds { vpin_cdf: 0.99, hhi: 0.30 },
     }
 }
 
