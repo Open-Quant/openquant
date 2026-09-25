@@ -327,6 +327,7 @@ export const apiInventory = {
     "openquant::streaming_hpc": [
       "completed_buckets",
       "current",
+      "current_cdf",
       "generate_synthetic_flash_crash_stream",
       "new",
       "on_event",
