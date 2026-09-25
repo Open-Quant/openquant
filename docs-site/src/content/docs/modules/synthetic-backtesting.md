@@ -2,7 +2,7 @@
 title: "synthetic_backtesting"
 description: "Choose profit-taking and stop-loss levels on simulated paths of a fitted mean-reverting process, instead of on the one historical path."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -188,11 +188,11 @@ reference, so when building `OuProcessParams` by hand keep them consistent:
 - **`annualization_factor` multiplies by its square root and ignores holding time.** A rule
   that exits in 3 steps and one that holds for 59 are scaled alike. Use 1.0 and read the
   Sharpe ratio as per trade, alongside `avg_holding_steps`.
-- **The defaults differ between Rust and Python.** `StabilityCriteria::default()` is
-  $\varphi\ge0.97$, margin 0.20, surface deviation 0.10, best Sharpe 0.30; the Python
-  function's defaults are 0.99, 0.10, 0.05 and 0.0. All eight numbers are this library's
-  heuristics, not AFML's — the book shows the flattening but sets no thresholds. Look at the
-  surface.
+- **The stability thresholds are heuristics.** `StabilityCriteria::default()` is
+  $\varphi\ge0.97$, margin 0.20, surface deviation 0.10, best Sharpe 0.30, and
+  `run_synthetic_otr_workflow` uses the same four when its threshold arguments are left as
+  `None`. They are this library's numbers, not AFML's — the book shows the flattening but
+  sets no thresholds. Look at the surface.
 - **The model is the assumption.** Everything downstream is conditional on the price being
   a stationary AR(1) with constant parameters. `r_squared` is always high for a persistent
   series and says nothing about that; `stationary` is true for any $\varphi<1$, including

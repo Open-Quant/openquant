@@ -60,6 +60,10 @@ bench-check:
 py-develop:
     uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 
+# Optimised build; use it for timing and for heavy calls such as structural_breaks.get_sadf.
+py-develop-release:
+    uv run --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
+
 py-build:
     uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquant/Cargo.toml --out dist
 

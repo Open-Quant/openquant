@@ -48,21 +48,25 @@ fn ens_aggregate_regression_mean(per_model_predictions: Vec<Vec<f64>>) -> PyResu
 }
 
 #[pyfunction(name = "aggregate_classification_vote")]
-fn ens_aggregate_classification_vote(per_model_predictions: Vec<Vec<u8>>) -> PyResult<Vec<u8>> {
-    openquant::ensemble_methods::aggregate_classification_vote(&per_model_predictions)
-        .map_err(to_py_err)
+fn ens_aggregate_classification_vote(per_model_predictions: Vec<Vec<u8>>) -> PyResult<Vec<u32>> {
+    // Widened so the labels reach Python as a list of ints; PyO3 turns a Vec<u8> into `bytes`.
+    let votes = openquant::ensemble_methods::aggregate_classification_vote(&per_model_predictions)
+        .map_err(to_py_err)?;
+    Ok(votes.into_iter().map(u32::from).collect())
 }
 
 #[pyfunction(name = "aggregate_classification_probability_mean")]
 fn ens_aggregate_classification_probability_mean(
     per_model_probabilities: Vec<Vec<f64>>,
     threshold: f64,
-) -> PyResult<(Vec<f64>, Vec<u8>)> {
-    openquant::ensemble_methods::aggregate_classification_probability_mean(
-        &per_model_probabilities,
-        threshold,
-    )
-    .map_err(to_py_err)
+) -> PyResult<(Vec<f64>, Vec<u32>)> {
+    let (probabilities, labels) =
+        openquant::ensemble_methods::aggregate_classification_probability_mean(
+            &per_model_probabilities,
+            threshold,
+        )
+        .map_err(to_py_err)?;
+    Ok((probabilities, labels.into_iter().map(u32::from).collect()))
 }
 
 #[pyfunction(name = "average_pairwise_prediction_correlation")]
