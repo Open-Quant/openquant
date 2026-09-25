@@ -59,6 +59,7 @@
 #![deny(missing_docs)]
 
 use std::fmt::{Display, Formatter};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -212,8 +213,9 @@ pub enum HpcParallelError {
         /// The callback error, formatted with `Display`.
         message: String,
     },
-    /// A thread panicked. Returned by [`AsyncParallelHandle::wait`] when the callback
-    /// panicked; [`run_parallel`] itself propagates the panic instead.
+    /// The callback (or a worker thread) panicked. The panic is caught and reported here by
+    /// [`run_parallel`] and by [`AsyncParallelHandle::wait`]; the panic message still goes
+    /// through the process's panic hook (by default, printed to stderr).
     WorkerPanic,
     /// An internal channel closed unexpectedly; the message says during which step.
     ChannelClosed(&'static str),
@@ -278,11 +280,7 @@ impl<R> AsyncParallelHandle<R> {
 /// [`HpcParallelError::InvalidConfig`] if `target_molecules == 0` and `atom_count > 0`.
 /// With `atom_count == 0` the result is an empty vector whatever `target_molecules` is.
 ///
-/// # Panics
-///
-/// In builds with overflow checks, the linear boundary `i * atom_count` overflows `usize`
-/// and panics once `atom_count` and the molecule count are both around `2^32` or more on
-/// 64-bit targets.
+/// The linear boundary `i * N / M` is formed in `u128`, so it is exact for any counts.
 ///
 /// ```
 /// use openquant::hpc_parallel::{partition_atoms, PartitionStrategy};
@@ -312,7 +310,10 @@ pub fn partition_atoms(
     boundaries.push(0usize);
     for i in 1..molecules {
         let b = match strategy {
-            PartitionStrategy::Linear => i * atom_count / molecules,
+            // `i * atom_count` can exceed `usize`; the quotient is below `atom_count`.
+            PartitionStrategy::Linear => {
+                (i as u128 * atom_count as u128 / molecules as u128) as usize
+            }
             PartitionStrategy::Nested => {
                 ((atom_count as f64) * (i as f64 / molecules as f64).sqrt()).round() as usize
             }
@@ -353,13 +354,11 @@ pub fn partition_atoms(
 ///   the run stops at the first failing molecule. In threaded mode every molecule still
 ///   runs, and the error that arrives first (not necessarily the lowest `molecule_id`) is
 ///   returned once all have finished. No partial outputs are returned either way.
+/// - [`HpcParallelError::WorkerPanic`] if the callback panics. The panic is caught per
+///   molecule and treated like a callback error: serial mode stops there, threaded mode
+///   finishes the other molecules first. The callback keeps being called for later
+///   molecules in threaded mode, so it must not rely on state a panic could leave broken.
 /// - [`HpcParallelError::ChannelClosed`] if an internal channel closes unexpectedly.
-///
-/// # Panics
-///
-/// If the callback panics, the panic propagates to the caller (in threaded mode, once the
-/// remaining workers have drained the queue); it is not turned into
-/// [`HpcParallelError::WorkerPanic`]. Use [`dispatch_async`] to catch it.
 ///
 /// # Examples
 ///
@@ -415,8 +414,8 @@ where
 /// Starts [`run_parallel`] on a background thread and returns a handle to it.
 ///
 /// The atoms are moved into the thread. Poll with [`AsyncParallelHandle::is_finished`] and
-/// collect the report with [`AsyncParallelHandle::wait`], which also reports a panicking
-/// callback as [`HpcParallelError::WorkerPanic`]. Configuration errors are reported by
+/// collect the report with [`AsyncParallelHandle::wait`], which reports a panicking callback
+/// as [`HpcParallelError::WorkerPanic`], as [`run_parallel`] does. Configuration errors are reported by
 /// `wait`, not here.
 ///
 /// ```
@@ -455,6 +454,28 @@ where
     AsyncParallelHandle { join_handle, result_rx: rx }
 }
 
+/// Runs the callback on one molecule, turning a returned error into
+/// [`HpcParallelError::CallbackFailed`] and a panic into [`HpcParallelError::WorkerPanic`].
+fn call_molecule<A, R, F, E>(
+    callback: &F,
+    atoms: &[A],
+    part: &MoleculePartition,
+) -> Result<R, HpcParallelError>
+where
+    F: Fn(&[A]) -> Result<R, E>,
+    E: Display,
+{
+    // The callback only sees a shared slice; any state it keeps across a panic is its own.
+    match catch_unwind(AssertUnwindSafe(|| callback(&atoms[part.start..part.end]))) {
+        Ok(Ok(out)) => Ok(out),
+        Ok(Err(err)) => Err(HpcParallelError::CallbackFailed {
+            molecule_id: part.molecule_id,
+            message: err.to_string(),
+        }),
+        Err(_) => Err(HpcParallelError::WorkerPanic),
+    }
+}
+
 fn run_serial<A, R, F, E>(
     atoms: &[A],
     partitions: &[MoleculePartition],
@@ -472,12 +493,7 @@ where
     let mut completed_atoms = 0usize;
 
     for part in partitions {
-        let out = callback(&atoms[part.start..part.end]).map_err(|err| {
-            HpcParallelError::CallbackFailed {
-                molecule_id: part.molecule_id,
-                message: err.to_string(),
-            }
-        })?;
+        let out = call_molecule(callback, atoms, part)?;
         outputs.push(out);
         completed_atoms += part.len();
         maybe_record_progress(
@@ -529,12 +545,7 @@ where
                     Ok(part) => part,
                     Err(_) => break,
                 };
-                let res = cb(&atoms[part.start..part.end]).map_err(|err| {
-                    HpcParallelError::CallbackFailed {
-                        molecule_id: part.molecule_id,
-                        message: err.to_string(),
-                    }
-                });
+                let res = call_molecule(&*cb, atoms, &part);
                 if tx.send((part, res)).is_err() {
                     break;
                 }
