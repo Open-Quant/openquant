@@ -3,13 +3,21 @@ use pyo3::types::PyDict;
 
 use crate::helpers::to_py_err;
 
+/// Returns `(bias_sq, variance, noise, mse)`. `noise` is `None` unless `y_expected` (the
+/// noiseless target E[y|x]) is given; without it `bias_sq` includes the irreducible noise.
 #[pyfunction(name = "bias_variance_noise")]
+#[pyo3(signature = (y_true, per_model_predictions, y_expected=None))]
 fn ens_bias_variance_noise(
     y_true: Vec<f64>,
     per_model_predictions: Vec<Vec<f64>>,
-) -> PyResult<(f64, f64, f64, f64)> {
-    let result = openquant::ensemble_methods::bias_variance_noise(&y_true, &per_model_predictions)
-        .map_err(to_py_err)?;
+    y_expected: Option<Vec<f64>>,
+) -> PyResult<(f64, f64, Option<f64>, f64)> {
+    let result = openquant::ensemble_methods::bias_variance_noise(
+        &y_true,
+        &per_model_predictions,
+        y_expected.as_deref(),
+    )
+    .map_err(to_py_err)?;
     Ok((result.bias_sq, result.variance, result.noise, result.mse))
 }
 

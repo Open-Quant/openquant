@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-24'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -23,7 +23,7 @@ For the AFML chapter each module implements, see
 ### Data Ingestion and Quality
 
 - [`adapters`](/modules/adapters/) — Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers.
-- [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
+- [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
 
 ### Event-Driven Data and Labeling
 
@@ -45,7 +45,7 @@ For the AFML chapter each module implements, see
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
-- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
@@ -59,6 +59,7 @@ For the AFML chapter each module implements, see
 
 ### Research Workflows
 
+- [`evaluation`](/modules/evaluation/) — PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`research`](/modules/research/) — Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates.
 - [`viz`](/modules/viz/) — Visualization payload builders for feature importance, drawdown, regime, frontier, and cluster charts.
@@ -74,7 +75,7 @@ For the AFML chapter each module implements, see
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
-- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 
 ### Scaling, HPC and Infrastructure
@@ -94,7 +95,7 @@ For the AFML chapter each module implements, see
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
-- [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
+- [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
@@ -103,7 +104,7 @@ For the AFML chapter each module implements, see
 - [`filters`](/modules/filters/) — The symmetric CUSUM filter and a rolling z-score filter for event-based sampling.
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
-- [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
+- [`hcaa`](/modules/hcaa/) — Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML's atoms and molecules: equal-work partitions of a job, run in serial or on threads, outputs in order.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
@@ -115,7 +116,7 @@ For the AFML chapter each module implements, see
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
-- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 - [`streaming_hpc`](/modules/streaming-hpc/) — VPIN and a venue-concentration HHI updated event by event in constant memory, with a joint alert.
 - [`structural_breaks`](/modules/structural-breaks/) — SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.
@@ -131,9 +132,10 @@ For the AFML chapter each module implements, see
 - [`bet_sizing`](/modules/bet-sizing/) — `get_signal`, `discrete_signal`, `bet_size`, `bet_size_sigmoid`, `bet_size_power`, `inv_price`, `inv_price_sigmoid`, `inv_price_power`, `get_w`, `get_w_sigmoid`, `get_w_power`, `get_target_pos`, `get_target_pos_sigmoid`, `get_target_pos_power`, `limit_price`, `limit_price_sigmoid`, `limit_price_power`, `avg_active_signals`, `bet_size_dynamic`, `cdf_mixture`, `single_bet_size_mixed`, `get_concurrent_sides`, `bet_size_budget`, `bet_size_probability`, `mp_avg_active_signals`, `bet_size_reserve`, `bet_size_reserve_with_fit`, `bet_size_reserve_full`
 - [`cla`](/modules/cla/) — `allocate_cla`
 - [`codependence`](/modules/codependence/) — `angular_distance`, `absolute_angular_distance`, `squared_angular_distance`, `distance_correlation`, `get_optimal_number_of_bins`, `get_mutual_info`, `variation_of_information_score`
-- [`data`](/modules/data/) — `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
+- [`data`](/modules/data/) — `fetch`, `dataset_hash`, `record_dataset_hash`, `quality_failures`, `default_cache_dir`, `DataSource`, `LocalSampleSource`, `LocalFileSource`, `CallableSource`, `CacheMissError`, `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
 - [`ef3m`](/modules/ef3m/) — `centered_moment`, `raw_moment`, `most_likely_parameters`, `fit_m2n`
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
+- [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
 - [`fast_ewma`](/modules/util-fast-ewma/) — `ewma`
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — `mdi_importance`, `mda_importance`, `sfi_importance`, `orthogonalize_features_pca`, `substitution_effect_report`
 - [`filters`](/modules/filters/) — `cusum_filter_indices`, `cusum_filter_timestamps`, `z_score_filter_indices`, `z_score_filter_timestamps`

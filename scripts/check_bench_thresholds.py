@@ -33,9 +33,12 @@ def main():
     curr = latest.get("benchmarks", {})
 
     regressions = []
+    missing = []
+    rows = []
     checked = 0
     for name, b in base.items():
         if name not in curr:
+            missing.append(name)
             continue
         b_ms = b["mean_ms"]
         c_ms = curr[name]["mean_ms"]
@@ -44,10 +47,26 @@ def main():
         checked += 1
         delta_pct = ((c_ms - b_ms) / b_ms) * 100.0
         threshold_pct = float(overrides.get(name, args.max_regression_pct))
+        rows.append((name, b_ms, c_ms, delta_pct, threshold_pct))
         if delta_pct > threshold_pct:
             regressions.append((name, b_ms, c_ms, delta_pct, threshold_pct))
 
     print(f"checked {checked} benchmarks against baseline")
+    for name, b_ms, c_ms, d, t in rows:
+        print(f"  {name}: baseline={b_ms:.3f}ms latest={c_ms:.3f}ms delta={d:+.1f}% threshold={t:.1f}%")
+    for name in sorted(set(curr) - set(base)):
+        print(f"  {name}: new benchmark, no baseline to compare against")
+
+    failed = False
+    if missing:
+        # A benchmark that stops producing results must not read as "no regression".
+        print("benchmarks in the baseline but missing from the latest run:")
+        for name in missing:
+            print(f"- {name}")
+        failed = True
+    if checked == 0:
+        print("no benchmarks were compared; refusing to report success")
+        failed = True
     if regressions:
         print("regressions above threshold:")
         for name, b_ms, c_ms, d, t in regressions:
@@ -55,8 +74,10 @@ def main():
                 f"- {name}: baseline={b_ms:.3f}ms latest={c_ms:.3f}ms "
                 f"delta={d:.1f}% threshold={t:.1f}%"
             )
-        return 1
+        failed = True
 
+    if failed:
+        return 1
     print("no benchmark regressions above threshold")
     return 0
 

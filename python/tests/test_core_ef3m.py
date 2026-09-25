@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import ef3m
 
 
@@ -69,4 +68,3 @@ def test_ef3m_rejects_wrongly_typed_input():
 def test_centered_moment_too_few_moments_raises_value_error():
     with pytest.raises(ValueError):
         ef3m.centered_moment([0.7], 5)
-

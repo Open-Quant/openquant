@@ -1,6 +1,6 @@
 ---
 title: "sb_bagging"
-description: "A bagging ensemble intended to draw each estimator's sample with the sequential bootstrap. Read the status note before using it."
+description: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a deliberately simple one-feature base learner."
 status: authored
 last_authored: '2026-09-25'
 audience:
@@ -37,18 +37,14 @@ to draw each estimator's sample with the
 ensemble built around that idea, a port of mlfinlab's
 `SequentiallyBootstrappedBaggingClassifier` and `SequentiallyBootstrappedBaggingRegressor`.
 
-:::caution[Status: this module does not yet do what its name says]
-As implemented today, **every estimator is trained on a uniform bootstrap sample**, not a
-sequential one. `fit` fills `seq_bootstrap`'s warm-up list with as many uniform random label
-indices as the sample is long, so the uniqueness-weighted draw is never used. Measured on 60
-overlapping labels, the average uniqueness of the classifier's samples is 0.255 — the same
-as a uniform bootstrap (0.255) and below `sampling::seq_bootstrap` (0.261).
-
-Three further gaps: the reported `oob_score` is in-sample accuracy, `sample_weight` is
-accepted and ignored, and the base learner is a fixed one-feature model. All are tracked in
-[#90](https://github.com/Open-Quant/openquant/issues/90). Until it is closed, treat this
-module as an interface sketch, and get the real thing by passing
-[`sampling.seq_bootstrap`](/modules/sampling/) indices to your own learners.
+:::caution[Status: the sampling is real, the base learner is a sketch]
+Each estimator's sample is drawn with the sequential bootstrap, seeded by `random_state`.
+Measured on 60 overlapping labels, the average uniqueness of the estimators' samples is
+0.261, against 0.254 for a uniform bootstrap. The base learner, though, is fixed: a
+one-feature stump or a one-feature least-squares line. Use this module to study what
+sequential sampling does to an ensemble; for a production model, pass
+[`sampling.seq_bootstrap`](/modules/sampling/#the-sequential-bootstrap) indices to your own
+learners.
 :::
 
 ## What it does today
@@ -56,8 +52,9 @@ module as an interface sketch, and get the real thing by passing
 For each of `n_estimators` estimators, `fit(x, y, ind_mat, sample_weight)`:
 
 1. draws `max_features` column indices and **keeps only the first**;
-2. draws `max_samples` row indices (uniformly, per the note above);
-3. fits the base learner on that one feature over those rows.
+2. draws `max_samples` label indices with the sequential bootstrap over `ind_mat`;
+3. fits the base learner on that one feature over those rows, weighting each draw by its
+   row's `sample_weight` if one is given (a row drawn twice counts twice).
 
 The classifier's base learner is a decision stump whose threshold is the *mean* of the
 feature over the sample — not a fitted split — predicting whichever side of it had the
@@ -66,7 +63,8 @@ takes a majority vote (ties go to class 1) or the mean of the lines.
 
 `ind_mat` is the bars × labels indicator matrix from
 [`sampling.get_ind_matrix`](/modules/sampling/#concurrency-and-uniqueness); its columns must
-correspond one-to-one with the rows of `x`.
+correspond one-to-one with the rows of `x`, and a different count is `DimensionMismatch`.
+`sample_weight`, if given, needs one finite, non-negative weight per row, not all zero.
 
 ```python
 import random
@@ -85,23 +83,25 @@ y = [int(s + rng.gauss(0, 0.8) > 0) for s in signal]
 fit = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=50, random_state=7)
 predictions = fit["predictions"]  # a list of 0/1 ints
 in_sample = sum(p == t for p, t in zip(predictions, y)) / n
-print(f"in-sample accuracy {in_sample:.3f}   reported oob_score {fit['oob_score']:.3f}")
+print(f"in-sample accuracy {in_sample:.3f}   out-of-bag accuracy {fit['oob_score']:.3f}")
 
 again = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=50, random_state=7)
 print("same random_state, same predictions:", again["predictions"] == predictions)
 ```
 
 ```text
-in-sample accuracy 0.733   reported oob_score 0.733
+in-sample accuracy 0.725   out-of-bag accuracy 0.650
 same random_state, same predictions: True
 ```
 
-The two numbers on the first line are equal because they are the same computation. Do not
-read `oob_score` as an estimate of generalisation; score the model under
-[purged cross-validation](/modules/cross-validation/) instead.
+`oob_score` scores each row only with the estimators that did not draw it, so it sits below
+the in-sample figure. It is still not an honest estimate of generalisation when labels
+overlap (see below); score the model under
+[purged cross-validation](/modules/cross-validation/) for that.
 
 The Python functions fit and predict on the same `x` in one call and return a dict with
-`predictions` and `oob_score`. There is no way to predict on new rows from Python; that needs
+`predictions` and `oob_score` (always computed; `None` only if every estimator drew every row).
+`sample_weight` is passed through to `fit`. There is no way to predict on new rows from Python; that needs
 the Rust types.
 
 ## From Rust
@@ -142,24 +142,27 @@ Configuration is by public field after `new(random_state)`: `n_estimators` (defa
 `bootstrap_features`, `oob_score` and `warm_start`. With `warm_start`, a second `fit` keeps
 the existing estimators and adds up to the new `n_estimators`; lowering it is
 `DecreasingEstimators`, and combining it with `oob_score` is `WarmStartWithOob`.
-`estimators_samples` holds the row indices each estimator was trained on.
+`estimators_samples` holds the row indices each estimator was trained on. With `oob_score`,
+`fit` sets `oob_score_value` to the accuracy (classifier) or R² (regressor) over the rows at
+least one estimator did not draw, each predicted only by those estimators; it is `None` if
+every row was drawn by every estimator. The same `random_state` and inputs reproduce a fit.
 
 ## What to watch for
 
-- **Everything in the status note.** In particular, a result from this module is a result
-  from ordinary bagging of one-feature stumps.
-- **A mismatched `ind_mat` panics.** If `ind_mat` has more label columns than `x` has rows,
-  `fit` indexes past the end of `x` and panics; from Python that surfaces as a
-  `PanicException`, not a `ValueError`. Fewer columns than rows fails silently instead: the
-  extra rows are never sampled.
+- **The base learner is the weak point.** A result from this module is a result from
+  sequentially bootstrapped bagging of one-feature stumps or lines, not of a real model.
+- **Out-of-bag rows are still close to in-bag rows.** Sequential sampling makes the samples
+  more unique, but a held-out label still overlaps drawn labels in time, so `oob_score`
+  remains optimistic when labels overlap (AFML §4.5). Treat it as a sanity check and score
+  the model under [purged cross-validation](/modules/cross-validation/).
 - **`max_features` above one column changes nothing** except the random stream, because only
   the first sampled feature is used. With several informative features each estimator sees
   one of them, chosen at random.
 - **Labels are `u8` with 1 as the positive class.** Anything other than 1 counts as negative
   when the stump picks its side, so a −1/+1 encoding must be mapped to 0/1 first.
-- **`random_state` reproduces a fit today only because the draws are uniform.** Once the
-  sequential draw is restored, reproducibility depends on `seq_bootstrap` becoming seedable,
-  which is part of the same issue.
+- **The sequential draw is expensive.** Each draw rescans the whole indicator matrix, so one
+  estimator costs on the order of bars × labels × `max_samples` operations. Thousands of
+  labels over many estimators is slow; lower `max_samples` or bootstrap within blocks.
 
 ## Related modules
 

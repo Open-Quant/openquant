@@ -7,6 +7,7 @@ pub mod combinatorial_optimization;
 pub mod cross_validation;
 pub mod data_processing;
 pub mod data_structures;
+pub mod dynamic_allocation;
 pub mod ef3m;
 pub mod ensemble_methods;
 pub mod etf_trick;

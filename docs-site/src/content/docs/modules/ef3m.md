@@ -2,7 +2,7 @@
 title: "ef3m"
 description: "EF3M: fit a mixture of two Gaussians by matching its first four or five moments exactly, from many random starts, and take the mode of the fits."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -142,8 +142,7 @@ Variant 2 is more accurate at every setting and no slower. At coarse `epsilon`, 
 variant 1's runs ended on a degenerate fit with $p_1\approx1$: one Gaussian for everything
 and a second, arbitrarily wide one with no weight. Variant 1's error is measured on all five
 moments, including the fifth it does not fit, which accounts for part of its higher error but
-not the degenerate fits. Prefer variant 2 unless the fifth moment is too noisy to trust; see
-the caveat on negative means below.
+not the degenerate fits. Prefer variant 2 unless the fifth moment is too noisy to trust.
 
 ## From Rust
 
@@ -193,12 +192,13 @@ In Rust, `M2N::single_fit_loop` is one run and `mp_fit` is `n_runs` of them; Pyt
 - **Results are random and there is no seed.** The starting $p_1$ of every attempt comes from
   the thread's random number generator. Use `n_runs` and `most_likely_parameters`, and round to
   the precision you actually need; the example is stable to one decimal with 25 runs.
-- **Variant 2 cannot return a negative $\mu_2$.** Its fourth-moment step determines only
-  $\mu_2^2$ and takes the positive root. If both components have negative means, as for a
-  mixture of $-3$ and $-1$, variant 2 returns a wrong fit with $\mu_2>0$. Centre the sample
-  first: subtract its mean from every observation, fit, and add the mean back to $\mu_1$ and
-  $\mu_2$. The higher of the two means always lies above the overall mean, so after centring it
-  is positive. Variant 1 has no such restriction
+- **Variant 2 fits about the mean.** Its fourth-moment step determines only $\mu_2^2$ and
+  takes the positive root, so on raw moments it could not return a negative $\mu_2$.
+  `single_fit_loop`, `mp_fit` and `fit_m2n` therefore run variant 2 on the moments of
+  $X-\mathrm E[X]$ and add the mean back to $\mu_1$ and $\mu_2$; each row's `error` is still
+  measured against the raw moments you passed. Either sign of $\mu_2$ works, as for a mixture
+  of $-3$ and $-1$, and you no longer need to centre the sample yourself. Calling `M2N::fit` or
+  `iter_5` directly on raw moments still takes the positive root
   ([#115](https://github.com/Open-Quant/openquant/issues/115)).
 - **The components may come back in either order.** The search starts with $\mu_2$ above the
   mean, but the iteration can end with the labels swapped. A mode taken over runs that disagree

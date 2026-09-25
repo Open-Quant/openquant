@@ -221,8 +221,11 @@ assert_eq!((label, side), (1, None));
   [`cross-validation`](/modules/cross-validation/), passing each event's $(t_0, t_1)$.
 - **Timestamps must match exactly.** Events, targets and sides are joined to `close` by
   timestamp. An event whose timestamp is not a bar in `close` is skipped without an error.
-- **Whole seconds only from Python.** Timestamps cross the binding as strings at one-second
-  resolution ([#87](https://github.com/Open-Quant/openquant/issues/87)).
+- **Timestamps from Python are strings.** They cross the binding as
+  `"%Y-%m-%d %H:%M:%S"` with an optional fractional second (up to nanoseconds). Output
+  times are written as `str(datetime)` writes them: no fraction on a whole second, otherwise
+  six digits (nine below a microsecond). A string built with `str()` comes back unchanged;
+  one written another way, such as `"...01.5"`, comes back as `"...01.500000"`.
 - **`num_threads` does nothing.** It is kept so that mlfinlab call sites port unchanged.
 
 ## Related modules

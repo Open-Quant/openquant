@@ -6,7 +6,6 @@ One call per bound module whose errors were retyped.
 """
 
 import pytest
-
 from openquant._core import (
     codependence,
     data,

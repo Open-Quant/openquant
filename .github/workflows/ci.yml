@@ -1,8 +1,22 @@
 name: CI
 
+# Every job here runs on every pull request, with no path filter, so any of
+# them can be made a required status check. Pushes run only on main: a branch
+# push that also has a PR would otherwise run the whole workflow twice.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # Explicit bash gives -eo pipefail; GitHub's implicit default is bash -e.
+    shell: bash
 
 jobs:
   lint-test:
@@ -16,11 +30,93 @@ jobs:
         with:
           components: clippy,rustfmt
       - name: Format check
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # test_sadf_test is #[ignore]d for runtime (about an hour in debug); it and
+      # every other ignored test except known FINDING tests run in nightly.yml.
       - name: Tests (fast)
         run: cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+
+  bench-compile:
+    # Compiles all four benches (perf_hotspots, synthetic_ticker_pipeline,
+    # hpc_parallel_scaling, streaming_hpc_scaling) so none can rot unnoticed.
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile every benchmark target
+        run: cargo bench -p openquant --no-run
+
+  python:
+    name: python (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Lowest supported (requires-python) and the version the docs and
+        # justfile develop on.
+        python-version: ["3.11", "3.13"]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - name: Cache cargo registry + build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-py${{ matrix.python-version }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-py${{ matrix.python-version }}-
+      - name: Create virtual environment
+        run: uv venv --python ${{ matrix.python-version }} .venv
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      # --no-install-project: the extension is built once, by maturin below.
+      - name: Install dev dependencies
+        run: uv sync --locked --group dev --no-install-project
+      - name: Build + install the openquant extension
+        run: uv run --no-sync maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+      - name: Import smoke check
+        run: uv run --no-sync python -c "import openquant; print('openquant bindings import ok')"
+      - name: Python tests
+        run: uv run --no-sync pytest python/tests -q
+      # Notebook, experiment and Rust-example smokes need the same built
+      # extension, so they run here once (on the development Python) instead
+      # of rebuilding it in a separate workflow.
+      - name: Python notebook smoke (paired scripts)
+        if: matrix.python-version == '3.13'
+        run: uv run --no-sync python notebooks/python/scripts/smoke_all.py
+      - name: Experiment scaffold smoke
+        if: matrix.python-version == '3.13'
+        run: uv run --no-sync python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out "$RUNNER_TEMP/openquant-artifacts"
+      - name: Rust notebook-companion smoke
+        if: matrix.python-version == '3.13'
+        run: cargo run -p openquant --example research_notebook_smoke
+
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install dev dependencies (ruff, mypy pinned in pyproject.toml)
+        run: |
+          uv venv --python 3.13 .venv
+          uv sync --locked --group dev --no-install-project
+      - name: Ruff lint
+        run: uv run --no-sync ruff check python/
+      - name: Ruff format check
+        run: uv run --no-sync ruff format --check python/
+      # Type-checks python/openquant and python/tests (see [tool.mypy]). The
+      # compiled openquant._core has no stubs yet and is treated as Any.
+      - name: Mypy
+        run: uv run --no-sync mypy
 
   docs-checks:
     runs-on: ubuntu-latest
@@ -69,7 +165,7 @@ jobs:
         working-directory: docs-site
       # check:python-examples EXECUTES every documented ```python block, so
       # unlike the Rust gate it needs the compiled extension, not just a
-      # toolchain. Same maturin recipe as python-bindings.yml; the gate finds
+      # toolchain. Same maturin recipe as the python job; the gate finds
       # the interpreter at .venv/bin/python3 on its own.
       - uses: actions/setup-python@v5
         with:

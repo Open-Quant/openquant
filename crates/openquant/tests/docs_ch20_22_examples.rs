@@ -188,9 +188,9 @@ fn streaming_hpc_page() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let cfg = StreamingPipelineConfig {
-        vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 10 },
+        vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 10, cdf_lookback: 100 },
         hhi: HhiConfig { lookback_events: 50 },
-        thresholds: AlertThresholds { vpin: 0.3, hhi: 0.5 },
+        thresholds: AlertThresholds { vpin_cdf: 0.99, hhi: 0.5 },
     };
     let stream_with_crash_at = |fraction: f64| {
         generate_synthetic_flash_crash_stream(SyntheticStreamConfig {
@@ -210,7 +210,7 @@ fn streaming_hpc_page() -> Result<(), Box<dyn std::error::Error>> {
             first_alert = Some(i);
         }
     }
-    assert_eq!(first_alert, Some(729));
+    assert_eq!(first_alert, Some(723));
 
     // A bad tick is rejected before it touches the state.
     let bad = StreamEvent { price: f64::NAN, ..stream[0] };
@@ -226,9 +226,12 @@ fn streaming_hpc_page() -> Result<(), Box<dyn std::error::Error>> {
         progress_every: 1,
     };
     let report = run_streaming_pipeline_parallel(&streams, cfg, parallel)?;
-    // One summary per stream, in input order. Each alerts from 29 events after its crash to the end.
+    // One summary per stream, in input order. VPIN's CDF needs a history of 100 values. In the
+    // streams that crash at events 100 to 300 it fills only after VPIN has reached its plateau,
+    // so the jump is never ranked and they never alert. The others alert for six events, 23 to
+    // 28 events after their crash.
     let alerts: Vec<usize> = report.stream_summaries.iter().map(|s| s.alert_count).collect();
-    assert_eq!(alerts, [871, 771, 671, 571, 471, 371, 271, 171]);
+    assert_eq!(alerts, [0, 0, 0, 6, 6, 6, 6, 6]);
     assert_eq!(report.stream_summaries[0].latest_hhi, Some(1.0));
     Ok(())
 }

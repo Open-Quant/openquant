@@ -2,7 +2,7 @@
 title: "sample_weights"
 description: "Training weights for overlapping labels: return attribution and time decay."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -162,21 +162,21 @@ Both return `(event start, weight)` pairs in the order the events were given.
   few weights before fitting, and consider winsorising them. A label over a flat stretch gets
   a weight near zero and is effectively deleted from training, which is rarely what you want
   for a meta-label whose correct answer was "do nothing".
-- **Events that share a start time break time decay.** `get_weights_by_time_decay` keys its
-  result by start timestamp, so of several events with one start only the first gets a
-  weight and the output is *shorter than the input*
-  ([#91](https://github.com/Open-Quant/openquant/issues/91)). Check the lengths match before
-  zipping weights onto features. `get_weights_by_return` is not affected.
+- **Events that share a start time are ordered by input position.** Both functions return one
+  weight per event, duplicates included. For time decay, events with the same start take
+  consecutive places on the cumulative-uniqueness axis in the order you passed them, so the
+  one listed later counts as newer and, whenever `decay < 1`, weighs more. Swapping two such
+  events swaps which one that is; sort them first (by end time, say) if the choice should not
+  depend on input order.
+  Until [#91](https://github.com/Open-Quant/openquant/issues/91) the duplicates were dropped.
 - **Weights are fitted quantities.** Concurrency and cumulative uniqueness are computed over
   the events you pass. Compute weights on the training fold only; weights computed over the
   whole history leak the future's label density into the past.
 - **Timestamps must match exactly.** A label's span is matched to `close` by comparing
-  timestamps, so an event time that is not a bar time still works, but an `end` before its
-  `start` silently produces a weight of 0 rather than an error. From Python, timestamps are
-  `"%Y-%m-%d %H:%M:%S"` strings with whole seconds
-  ([#87](https://github.com/Open-Quant/openquant/issues/87)).
-- **`SampleWeightsError::NanInEvents` is vestigial.** It fires on a timestamp equal to the
-  Unix epoch, a leftover of porting pandas `NaT`. It cannot be triggered with real data.
+  timestamps, so an event time that is not a bar time still works. An `end` before its
+  `start` is rejected with `SampleWeightsError::EndBeforeStart`, which names the first
+  offending event (a `ValueError` from Python). From Python, timestamps are
+  `"%Y-%m-%d %H:%M:%S"` strings with an optional fractional second.
 - **Class imbalance is a separate correction.** Neither function looks at the label. AFML
   §4.8 handles imbalance with `class_weight='balanced'` in the learner, on top of these.
 

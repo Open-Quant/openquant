@@ -34,21 +34,48 @@ pub fn matrix_from_rows(rows: Vec<Vec<f64>>) -> PyResult<DMatrix<f64>> {
     Ok(DMatrix::from_row_slice(nrows, ncols, &flat))
 }
 
+/// Wire format for timestamps crossing the Python boundary, e.g. `2024-01-02 09:30:01.760917`.
+///
+/// On input `%.f` makes the fraction optional and accepts any number of digits up to
+/// nanoseconds.
+pub const DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.f";
+
+/// Parse one wire-format timestamp, with or without a fractional second.
+pub fn parse_datetime_str(value: &str) -> chrono::ParseResult<chrono::NaiveDateTime> {
+    chrono::NaiveDateTime::parse_from_str(value, DATETIME_FORMAT)
+}
+
+/// Format one timestamp in the wire format, keeping any fractional second.
+///
+/// Written as Python's `str(datetime)` and pandas' `str(Timestamp)` write it: no fraction on a
+/// whole second (so whole-second output is byte-identical to what it always was), six digits
+/// for a whole microsecond, nine otherwise. A string built by `str()` on the Python side
+/// therefore comes back unchanged and can be used as a join key.
+pub fn format_naive_datetime(value: &chrono::NaiveDateTime) -> String {
+    let fmt = match chrono::Timelike::nanosecond(value) {
+        0 => "%Y-%m-%d %H:%M:%S",
+        n if n % 1_000 == 0 => "%Y-%m-%d %H:%M:%S%.6f",
+        _ => "%Y-%m-%d %H:%M:%S%.9f",
+    };
+    value.format(fmt).to_string()
+}
+
+/// Parse one timestamp, naming it in the error as `what` (e.g. "datetime").
+pub fn parse_naive_datetime(value: &str, what: &str) -> PyResult<chrono::NaiveDateTime> {
+    parse_datetime_str(value).map_err(|e| {
+        PyValueError::new_err(format!(
+            "invalid {what} '{value}' (expected '%Y-%m-%d %H:%M:%S' with an optional \
+             fractional second): {e}"
+        ))
+    })
+}
+
 pub fn parse_naive_datetimes(values: Vec<String>) -> PyResult<Vec<chrono::NaiveDateTime>> {
-    values
-        .into_iter()
-        .map(|v| {
-            chrono::NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S").map_err(|e| {
-                PyValueError::new_err(format!(
-                    "invalid datetime '{v}' (expected '%Y-%m-%d %H:%M:%S'): {e}"
-                ))
-            })
-        })
-        .collect()
+    values.iter().map(|v| parse_naive_datetime(v, "datetime")).collect()
 }
 
 pub fn format_naive_datetimes(values: Vec<chrono::NaiveDateTime>) -> Vec<String> {
-    values.into_iter().map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()).collect()
+    values.iter().map(format_naive_datetime).collect()
 }
 
 pub fn pair_timestamps_values(
@@ -77,28 +104,23 @@ pub fn parse_vertical_barriers(
 
     let mut out = Vec::with_capacity(values.len());
     for (start, end) in values {
-        let start_ts =
-            chrono::NaiveDateTime::parse_from_str(&start, "%Y-%m-%d %H:%M:%S").map_err(|e| {
-                PyValueError::new_err(format!("invalid start barrier datetime '{start}': {e}"))
-            })?;
-        let end_ts =
-            chrono::NaiveDateTime::parse_from_str(&end, "%Y-%m-%d %H:%M:%S").map_err(|e| {
-                PyValueError::new_err(format!("invalid end barrier datetime '{end}': {e}"))
-            })?;
+        let start_ts = parse_naive_datetime(&start, "start barrier datetime")?;
+        let end_ts = parse_naive_datetime(&end, "end barrier datetime")?;
         out.push((start_ts, end_ts));
     }
     Ok(Some(out))
 }
 
 pub fn parse_one_naive_datetime(value: &str) -> PyResult<chrono::NaiveDateTime> {
-    chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
+    parse_datetime_str(value)
         .or_else(|_| {
             chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
                 .map(|d| d.and_hms_opt(0, 0, 0).expect("valid fixed midnight"))
         })
         .map_err(|e| {
             PyValueError::new_err(format!(
-                "invalid datetime '{value}' (expected '%Y-%m-%d %H:%M:%S' or '%Y-%m-%d'): {e}"
+                "invalid datetime '{value}' (expected '%Y-%m-%d %H:%M:%S' with an optional \
+                 fractional second, or '%Y-%m-%d'): {e}"
             ))
         })
 }
@@ -131,8 +153,8 @@ pub fn bars_to_rows(bars: Vec<openquant::data_structures::StandardBar>) -> Vec<B
     bars.into_iter()
         .map(|b| {
             (
-                b.start_timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                b.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                format_naive_datetime(&b.start_timestamp),
+                format_naive_datetime(&b.timestamp),
                 b.open,
                 b.high,
                 b.low,
@@ -200,10 +222,8 @@ pub fn report_to_pydict(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
-    out_report
-        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
-    out_report
-        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
+    out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
     Ok(out_report.into_pyobject(py).unwrap().into_any().unbind())
 }
@@ -267,4 +287,55 @@ pub fn build_labeling_events(args: LabelingEventArgs) -> PyResult<LabelingInputs
         side_storage.as_deref(),
     );
     Ok((close, events))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_naive_datetime, parse_datetime_str};
+
+    #[test]
+    fn whole_second_timestamps_round_trip_byte_for_byte() {
+        for s in ["2024-01-02 09:30:01", "1999-12-31 23:59:59", "2024-02-29 00:00:00"] {
+            let ts = parse_datetime_str(s).unwrap();
+            assert_eq!(format_naive_datetime(&ts), s);
+        }
+    }
+
+    #[test]
+    fn sub_second_timestamps_keep_their_fraction() {
+        for s in [
+            "2024-01-02 09:30:01.500000",
+            "2024-01-02 09:30:01.000001",
+            "2024-01-02 09:30:01.760917",
+            "2024-01-02 09:30:01.000000001",
+            "2024-01-02 09:30:01.123456789",
+        ] {
+            let ts = parse_datetime_str(s).unwrap();
+            assert_eq!(format_naive_datetime(&ts), s);
+        }
+        let a = parse_datetime_str("2024-01-02 09:30:01.000001").unwrap();
+        let b = parse_datetime_str("2024-01-02 09:30:01.000002").unwrap();
+        assert_eq!((b - a).num_microseconds(), Some(1));
+    }
+
+    #[test]
+    fn fraction_is_written_as_python_str_writes_it() {
+        // None on a whole second, six digits to the microsecond, nine below it.
+        for (input, output) in [
+            ("2024-01-02 09:30:01.5", "2024-01-02 09:30:01.500000"),
+            ("2024-01-02 09:30:01.120", "2024-01-02 09:30:01.120000"),
+            ("2024-01-02 09:30:01.000000", "2024-01-02 09:30:01"),
+            ("2024-01-02 09:30:01.1234567", "2024-01-02 09:30:01.123456700"),
+        ] {
+            let ts = parse_datetime_str(input).unwrap();
+            assert_eq!(format_naive_datetime(&ts), output);
+        }
+    }
+
+    #[test]
+    fn malformed_timestamps_are_still_rejected() {
+        for s in ["2024-01-02", "2024-01-02 09:30", "2024-01-02T09:30:01", "x"] {
+            assert!(parse_datetime_str(s).is_err(), "{s} should not parse");
+        }
+    }
 }

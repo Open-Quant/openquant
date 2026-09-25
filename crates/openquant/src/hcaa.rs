@@ -15,6 +15,10 @@ pub enum HcaaError {
     MissingReturnsForTailRisk,
     #[error("dimension mismatch: {0}")]
     DimensionMismatch(&'static str),
+    #[error(
+        "optimal_num_clusters must be between 1 and {assets} (the asset count), got {requested}"
+    )]
+    InvalidNumClusters { requested: usize, assets: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -126,18 +130,35 @@ impl HierarchicalClusteringAssetAllocation {
             return Err(HcaaError::MissingReturnsForTailRisk);
         }
 
+        let num_clusters = optimal_num_clusters.unwrap_or(n_assets);
+        if num_clusters == 0 || num_clusters > n_assets {
+            return Err(HcaaError::InvalidNumClusters {
+                requested: num_clusters,
+                assets: n_assets,
+            });
+        }
+
         let corr = cov2corr(&covariance_owned)?;
-        let _ = optimal_num_clusters.unwrap_or(n_assets.min(5));
         self.clusters = single_linkage_children(&corr);
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);
-        self.weights = recursive_bisection(
-            &self.ordered_indices,
-            &expected_owned,
-            &returns_owned,
-            &covariance_owned,
-            allocation_metric,
+        let inputs = MetricInputs {
+            expected: &expected_owned,
+            returns: &returns_owned,
+            cov: &covariance_owned,
+            metric: allocation_metric,
             confidence_level,
+        };
+        let mut weights = vec![0.0; n_assets];
+        allocate_down_tree(
+            &self.clusters,
+            n_assets,
+            num_clusters,
+            2 * n_assets - 2,
+            1.0,
+            &inputs,
+            &mut weights,
         )?;
+        self.weights = weights;
 
         Ok(())
     }
@@ -429,105 +450,97 @@ fn cluster_conditional_drawdown(
     Ok(tail.iter().sum::<f64>() / tail.len() as f64)
 }
 
-fn recursive_bisection(
-    ordered_indices: &[usize],
-    expected_asset_returns: &[f64],
-    asset_returns: &DMatrix<f64>,
-    covariance_matrix: &DMatrix<f64>,
-    allocation_metric: &str,
+/// What a split needs to score each side.
+struct MetricInputs<'a> {
+    expected: &'a [f64],
+    returns: &'a DMatrix<f64>,
+    cov: &'a DMatrix<f64>,
+    metric: &'a str,
     confidence_level: f64,
-) -> Result<Vec<f64>, HcaaError> {
-    let n_assets = covariance_matrix.nrows();
-    let mut weights = vec![1.0; n_assets];
-    let mut clustered: Vec<Vec<usize>> = vec![ordered_indices.to_vec()];
+}
 
-    while !clustered.is_empty() {
-        let mut split: Vec<Vec<usize>> = Vec::new();
-        for cluster in clustered {
-            if cluster.len() > 1 {
-                let mid = cluster.len() / 2;
-                split.push(cluster[0..mid].to_vec());
-                split.push(cluster[mid..].to_vec());
+/// The share of a node's weight that goes to its left child.
+fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64, HcaaError> {
+    let left_var = cluster_variance(m.cov, left)?;
+    let right_var = cluster_variance(m.cov, right)?;
+    let alloc_factor = match m.metric {
+        "minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),
+        "minimum_standard_deviation" => {
+            let left_sd = left_var.sqrt();
+            let right_sd = right_var.sqrt();
+            1.0 - left_sd / (left_sd + right_sd + f64::EPSILON)
+        }
+        "sharpe_ratio" => {
+            let left_sr = cluster_sharpe(m.expected, m.cov, left)?;
+            let right_sr = cluster_sharpe(m.expected, m.cov, right)?;
+            let raw = left_sr / (left_sr + right_sr + f64::EPSILON);
+            if (0.0..=1.0).contains(&raw) {
+                raw
+            } else {
+                1.0 - left_var / (left_var + right_var + f64::EPSILON)
             }
         }
-        if split.is_empty() {
-            break;
+        "expected_shortfall" => {
+            let left_es = cluster_expected_shortfall(m.returns, m.cov, m.confidence_level, left)?;
+            let right_es = cluster_expected_shortfall(m.returns, m.cov, m.confidence_level, right)?;
+            1.0 - left_es / (left_es + right_es + f64::EPSILON)
         }
+        "conditional_drawdown_risk" => {
+            let left_cdd =
+                cluster_conditional_drawdown(m.returns, m.cov, m.confidence_level, left)?;
+            let right_cdd =
+                cluster_conditional_drawdown(m.returns, m.cov, m.confidence_level, right)?;
+            1.0 - left_cdd / (left_cdd + right_cdd + f64::EPSILON)
+        }
+        _ => 0.5,
+    };
+    Ok(if alloc_factor.is_finite() { alloc_factor.clamp(0.0, 1.0) } else { 0.5 })
+}
 
-        for pair in (0..split.len()).step_by(2) {
-            let left = &split[pair];
-            let right = &split[pair + 1];
-            let left_var = cluster_variance(covariance_matrix, left)?;
-            let right_var = cluster_variance(covariance_matrix, right)?;
-            let mut alloc_factor = match allocation_metric {
-                "minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),
-                "minimum_standard_deviation" => {
-                    let left_sd = left_var.sqrt();
-                    let right_sd = right_var.sqrt();
-                    1.0 - left_sd / (left_sd + right_sd + f64::EPSILON)
-                }
-                "sharpe_ratio" => {
-                    let left_sr = cluster_sharpe(expected_asset_returns, covariance_matrix, left)?;
-                    let right_sr =
-                        cluster_sharpe(expected_asset_returns, covariance_matrix, right)?;
-                    let raw = left_sr / (left_sr + right_sr + f64::EPSILON);
-                    if (0.0..=1.0).contains(&raw) {
-                        raw
-                    } else {
-                        1.0 - left_var / (left_var + right_var + f64::EPSILON)
-                    }
-                }
-                "expected_shortfall" => {
-                    let left_es = cluster_expected_shortfall(
-                        asset_returns,
-                        covariance_matrix,
-                        confidence_level,
-                        left,
-                    )?;
-                    let right_es = cluster_expected_shortfall(
-                        asset_returns,
-                        covariance_matrix,
-                        confidence_level,
-                        right,
-                    )?;
-                    1.0 - left_es / (left_es + right_es + f64::EPSILON)
-                }
-                "conditional_drawdown_risk" => {
-                    let left_cdd = cluster_conditional_drawdown(
-                        asset_returns,
-                        covariance_matrix,
-                        confidence_level,
-                        left,
-                    )?;
-                    let right_cdd = cluster_conditional_drawdown(
-                        asset_returns,
-                        covariance_matrix,
-                        confidence_level,
-                        right,
-                    )?;
-                    1.0 - left_cdd / (left_cdd + right_cdd + f64::EPSILON)
-                }
-                _ => 0.5,
-            };
-            if !alloc_factor.is_finite() {
-                alloc_factor = 0.5;
-            }
-            alloc_factor = alloc_factor.clamp(0.0, 1.0);
-            for &idx in left {
-                weights[idx] *= alloc_factor;
-            }
-            for &idx in right {
-                weights[idx] *= 1.0 - alloc_factor;
-            }
-        }
-        clustered = split;
+/// Hand `weight` down the dendrogram from `node`. The top `num_clusters - 1` merges are split
+/// between their two children by the metric; below that cut each node is one cluster, whose
+/// weight is shared equally (`equal_weighting`) or by inverse variance (every other metric, the
+/// portfolio the metrics assume inside a cluster).
+fn allocate_down_tree(
+    children: &[[usize; 2]],
+    n_assets: usize,
+    num_clusters: usize,
+    node: usize,
+    weight: f64,
+    m: &MetricInputs,
+    weights: &mut [f64],
+) -> Result<(), HcaaError> {
+    if node < n_assets {
+        weights[node] = weight;
+        return Ok(());
     }
-
-    let sum: f64 = weights.iter().sum();
-    if sum > 0.0 {
-        for w in &mut weights {
-            *w /= sum;
-        }
+    let row = node - n_assets;
+    if row + num_clusters >= n_assets {
+        let [left, right] = children[row];
+        let alpha = split_factor(
+            &quasi_diagonalization(n_assets, children, left),
+            &quasi_diagonalization(n_assets, children, right),
+            m,
+        )?;
+        allocate_down_tree(children, n_assets, num_clusters, left, weight * alpha, m, weights)?;
+        return allocate_down_tree(
+            children,
+            n_assets,
+            num_clusters,
+            right,
+            weight * (1.0 - alpha),
+            m,
+            weights,
+        );
     }
-    Ok(weights)
+    let members = quasi_diagonalization(n_assets, children, node);
+    let within = if m.metric == "equal_weighting" {
+        vec![1.0 / members.len() as f64; members.len()]
+    } else {
+        inverse_variance_weights(m.cov, &members)?
+    };
+    for (&asset, w) in members.iter().zip(within) {
+        weights[asset] = weight * w;
+    }
+    Ok(())
 }
