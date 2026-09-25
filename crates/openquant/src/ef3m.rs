@@ -1,28 +1,101 @@
+//! EF3M: fit a mixture of two Gaussians by matching its raw moments exactly.
+//!
+//! The mixture `p_1 N(mu_1, sigma_1^2) + (1 - p_1) N(mu_2, sigma_2^2)` has five parameters,
+//! so its first five raw moments pin it down. EF3M, the *Exact Fit of the first 3 Moments*
+//! (López de Prado and Foreman, 2014, *Quantitative Finance* 14(5), 913–930), solves the
+//! moment equations iteratively from a grid of starting values of `mu_2`, each with a random
+//! starting `p_1`, and keeps the iterate with the smallest squared moment error. AFML uses
+//! the fitted mixture in §10.2 (strategy-independent bet sizing, see
+//! [`crate::bet_sizing::bet_size_reserve`]) and §15.4.1 (the average loss and gain of a
+//! strategy, see [`crate::strategy_risk`]).
+//!
+//! - [`M2N`] holds the moments and settings; [`M2N::single_fit_loop`] is one search and
+//!   [`M2N::mp_fit`] repeats it `n_runs` times.
+//! - [`most_likely_parameters`] takes, column by column, the mode of a kernel density over
+//!   the runs, the paper's way of summarising the random fits.
+//! - [`centered_moment`] and [`raw_moment`] convert between raw and centred moments.
+//!
+//! Conventions: `moments` are **raw** moments `E[x^k]` for `k = 1..=5`, in that order.
+//! Parameter vectors are ordered `[mu_1, mu_2, sigma_1, sigma_2, p_1]` (sigmas are standard
+//! deviations), the order [`crate::bet_sizing`] expects. `variant` 1 fits four moments and
+//! variant 2 five; variant 2 is more accurate and runs about the mean (see
+//! [`M2N::single_fit_loop`]). Fits are random and unseeded (the starting `p_1` comes from
+//! the thread-local RNG); use several runs and [`most_likely_parameters`], and check that
+//! the runs agree on which component is which, since the labels can come back swapped. The
+//! five modes need not come from the same run, nor reproduce the moments. Despite
+//! `num_workers`, [`M2N::mp_fit`] is serial.
+//!
+//! ```
+//! use openquant::ef3m::{centered_moment, M2N};
+//!
+//! // Exact raw moments of 0.7 N(-1, 1) + 0.3 N(2, 0.5^2).
+//! let truth = [-1.0, 2.0, 1.0, 0.5, 0.7];
+//! let moments = M2N::with_defaults(vec![]).get_moments(&truth, true).unwrap();
+//! assert!((moments[0] + 0.1).abs() < 1e-12); // 0.7 * -1 + 0.3 * 2
+//! let variance = centered_moment(&moments, 2).unwrap();
+//! assert!((variance - 2.665).abs() < 1e-12);
+//!
+//! // Started at the true mu_2 and p_1, one iteration of either variant reproduces the
+//! // mixture: the truth is a fixed point.
+//! let m2n = M2N::with_defaults(moments.clone());
+//! for step in [m2n.iter_4(2.0, 0.7), m2n.iter_5(2.0, 0.7)] {
+//!     assert!(step.iter().zip(&truth).all(|(a, b)| (a - b).abs() < 1e-9));
+//! }
+//! ```
+#![deny(missing_docs)]
+
 use crate::util::InputError;
 use rand::Rng;
 use std::collections::{BTreeMap, HashSet};
 
+/// An EF3M fitter for a mixture of two Gaussians: the target moments, the search settings,
+/// and the best fit found so far.
+///
+/// Build it with [`M2N::new`] or [`M2N::with_defaults`] and run [`M2N::mp_fit`] or
+/// [`M2N::single_fit_loop`]. Parameter vectors are `[mu_1, mu_2, sigma_1, sigma_2, p_1]`.
 #[derive(Debug, Clone)]
 pub struct M2N {
+    /// Target raw moments `E[x^k]`, `k = 1..=5`. The fit needs all five.
     pub moments: Vec<f64>,
+    /// Convergence tolerance on `p_1`; also the spacing of the `mu_2` start grid, which has
+    /// about `1 / epsilon` points. Must be `> 0`.
     pub epsilon: f64,
+    /// Width of the `mu_2` start grid in standard deviations: starts run from
+    /// `m_1 + epsilon * factor * sigma` to about `m_1 + factor * sigma`.
     pub factor: f64,
+    /// Number of independent searches [`M2N::mp_fit`] runs.
     pub n_runs: usize,
+    /// `1` to fit four moments ([`M2N::iter_4`]) or `2` to fit five ([`M2N::iter_5`]).
     pub variant: usize,
+    /// Maximum iterations of one attempt in [`M2N::fit`].
     pub max_iter: usize,
+    /// Unused: kept for API compatibility; [`M2N::mp_fit`] runs serially.
     pub num_workers: isize,
+    /// Scratch: the moments implied by the last iterate of [`M2N::fit`] (or by
+    /// [`M2N::get_moments`] with `return_result = false`).
     pub new_moments: Vec<f64>,
+    /// Best parameters found so far, `[mu_1, mu_2, sigma_1, sigma_2, p_1]`; all zeros until
+    /// an admissible iterate improves on the initial error.
     pub parameters: Vec<f64>,
+    /// Squared moment error of `parameters`; starts at the sum of squared target moments.
     pub error: f64,
 }
 
+/// One fitted mixture, a row of the output of [`M2N::single_fit_loop`] and [`M2N::mp_fit`].
 #[derive(Debug, Clone)]
 pub struct FitResultRow {
+    /// Mean of component 1.
     pub mu_1: f64,
+    /// Mean of component 2.
     pub mu_2: f64,
+    /// Standard deviation of component 1.
     pub sigma_1: f64,
+    /// Standard deviation of component 2.
     pub sigma_2: f64,
+    /// Weight of component 1, in `[0, 1]`; component 2 has weight `1 - p_1`.
     pub p_1: f64,
+    /// Sum of squared differences between the target raw moments and the five raw moments
+    /// implied by this row's parameters.
     pub error: f64,
 }
 
@@ -45,6 +118,10 @@ fn round_to_5(x: f64) -> f64 {
 }
 
 impl M2N {
+    /// Creates a fitter; see the field docs for each argument. Nothing is validated here:
+    /// [`M2N::single_fit_loop`] and [`M2N::mp_fit`] check `moments` and `variant`.
+    ///
+    /// `parameters` starts at zeros and `error` at the sum of squared `moments`.
     pub fn new(
         moments: Vec<f64>,
         epsilon: f64,
@@ -69,10 +146,28 @@ impl M2N {
         }
     }
 
+    /// Creates a fitter with the defaults `epsilon = 1e-5`, `factor = 5`, `n_runs = 1`,
+    /// `variant = 1` (four moments), `max_iter = 100_000` and `num_workers = -1`.
+    ///
+    /// Note the default variant is 1, although variant 2 is the more accurate one.
     pub fn with_defaults(moments: Vec<f64>) -> Self {
         Self::new(moments, 1e-5, 5.0, 1, 1, 100_000, -1)
     }
 
+    /// The first five raw moments `E[x^k]`, `k = 1..=5`, of the mixture with the given
+    /// parameters `[mu_1, mu_2, sigma_1, sigma_2, p_1]`.
+    ///
+    /// With `return_result = true` the moments are returned; with `false` they are stored in
+    /// [`M2N::new_moments`] and `None` is returned. Only the first five entries of
+    /// `parameters` are read; nothing is validated.
+    ///
+    /// # Panics
+    ///
+    /// If `parameters` has fewer than five entries.
+    ///
+    /// # Examples
+    ///
+    /// See the [module documentation](self).
     pub fn get_moments(&mut self, parameters: &[f64], return_result: bool) -> Option<Vec<f64>> {
         let u_1 = parameters[0];
         let u_2 = parameters[1];
@@ -99,6 +194,21 @@ impl M2N {
         }
     }
 
+    /// One step of the four-moment variant (variant 1): from a guess of `mu_2` and `p_1`,
+    /// solves `mu_1` from `m_1`, `sigma_2` from `m_3`, `sigma_1` from `m_2`, and a new `p_1`
+    /// from `m_4`.
+    ///
+    /// Returns `[mu_1, mu_2, sigma_1, sigma_2, p_1_new]` (with `mu_2` unchanged), or an empty
+    /// vector if the step is inadmissible: a zero denominator, a negative variance, or a new
+    /// `p_1` outside `[0, 1]` (NaN included).
+    ///
+    /// # Panics
+    ///
+    /// If [`M2N::moments`] has fewer than four entries.
+    ///
+    /// # Examples
+    ///
+    /// See the [module documentation](self).
     pub fn iter_4(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
         let m_1 = self.moments[0];
         let m_2 = self.moments[1];
@@ -146,6 +256,21 @@ impl M2N {
     /// One step of the five-moment variant. Like the paper, it takes the positive root for mu_2,
     /// so on raw moments it cannot return mu_2 < 0; `single_fit_loop` therefore runs this variant
     /// on centred moments (see `centred_fit_loop`).
+    ///
+    /// From a guess of `mu_2` and `p_1`, solves `mu_1` from `m_1`, `sigma_2` from `m_3`,
+    /// `sigma_1` from `m_2`, a new `mu_2` from `m_4` (positive root) and a new `p_1` from
+    /// `m_5`. Returns `[mu_1, mu_2_new, sigma_1, sigma_2, p_1_new]`, or an empty vector if the
+    /// step is inadmissible: a zero denominator, a negative variance or `mu_2^2`,
+    /// `1 - p_1 < 1e-4`, or a new `p_1` outside `[0, 1]` (NaN included). Called directly on
+    /// raw moments it still takes the positive root (#115).
+    ///
+    /// # Panics
+    ///
+    /// If [`M2N::moments`] has fewer than five entries.
+    ///
+    /// # Examples
+    ///
+    /// See the [module documentation](self).
     pub fn iter_5(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
         let m_1 = self.moments[0];
         let m_2 = self.moments[1];
@@ -210,6 +335,25 @@ impl M2N {
         vec![mu_1, mu_2_new, sigma_1, sigma_2, p_1_new]
     }
 
+    /// One EF3M attempt from the starting `mu_2` and a random starting `p_1` in `[0, 1)`.
+    ///
+    /// Iterates [`M2N::iter_4`] or [`M2N::iter_5`] (by [`M2N::variant`]) until `p_1` moves by
+    /// less than [`M2N::epsilon`], a step is inadmissible, or more than [`M2N::max_iter`]
+    /// iterations have run. Whenever an iterate's squared moment error (over the first five
+    /// target moments) beats
+    /// [`M2N::error`], it replaces [`M2N::parameters`] and [`M2N::error`], so they always
+    /// hold the best iterate seen across calls, not the last one. The attempt runs on
+    /// [`M2N::moments`] as given (for variant 2, on raw moments it cannot return
+    /// `mu_2 < 0`); [`M2N::single_fit_loop`] is the entry point that centres them.
+    ///
+    /// # Errors
+    ///
+    /// [`InputError::OutOfRange`] if `variant` is not 1 or 2. Inadmissible steps and hitting
+    /// `max_iter` end the attempt with `Ok(())`.
+    ///
+    /// # Panics
+    ///
+    /// If [`M2N::moments`] has fewer than four entries (variant 1) or five (variant 2).
     pub fn fit(&mut self, mut mu_2: f64) -> Result<(), InputError> {
         let mut rng = rand::thread_rng();
         let mut p_1 = rng.gen_range(0.0..1.0);
@@ -275,6 +419,53 @@ impl M2N {
         Ok(())
     }
 
+    /// One EF3M search: runs [`M2N::fit`] from each start
+    /// `mu_2 = m_1 + i * epsilon * factor * sigma`, `i = 1, 2, ...` up to about
+    /// `1 / epsilon`, where `sigma` is the standard deviation implied by the moments, and
+    /// returns the best fit found.
+    ///
+    /// `epsilon_override` replaces [`M2N::epsilon`] when it is `Some` positive value (a
+    /// non-positive or NaN override is ignored). The search state ([`M2N::parameters`],
+    /// [`M2N::error`]) is reset first, and holds the best fit afterwards.
+    ///
+    /// Variant 2 with a non-zero mean is fitted about the mean: the search runs on the
+    /// moments of `X - E[X]` and the mean is added back to `mu_1` and `mu_2`, so a negative
+    /// `mu_2` can be recovered (#115). The row's `error` is always measured against the raw
+    /// moments in [`M2N::moments`].
+    ///
+    /// Returns at most one row: none if no start produced an admissible iterate that
+    /// improves on the initial error (the sum of squared moments). The result is random.
+    ///
+    /// # Errors
+    ///
+    /// - [`InputError::TooShort`] if [`M2N::moments`] has fewer than five entries.
+    /// - [`InputError::OutOfRange`] if [`M2N::variant`] is not 1 or 2.
+    ///
+    /// Non-finite or inconsistent moments (for example a negative implied variance) are not
+    /// errors: every attempt fails and the result is empty. With `epsilon == 0` the start grid
+    /// has `usize::MAX` points and the call effectively never returns; a negative or NaN
+    /// `epsilon` gives an empty grid and an empty result.
+    ///
+    /// ```
+    /// use openquant::ef3m::M2N;
+    ///
+    /// // Exact moments of 0.7 N(-1, 1) + 0.3 N(2, 0.5^2), fitted with five moments.
+    /// let truth = [-1.0, 2.0, 1.0, 0.5, 0.7];
+    /// let moments = M2N::with_defaults(vec![]).get_moments(&truth, true).unwrap();
+    /// let mut m2n = M2N::new(moments.clone(), 1e-4, 5.0, 1, 2, 100_000, 1);
+    /// let rows = m2n.single_fit_loop(None).unwrap();
+    /// assert_eq!(rows.len(), 1);
+    /// let fit = [rows[0].mu_1, rows[0].mu_2, rows[0].sigma_1, rows[0].sigma_2, rows[0].p_1];
+    /// // The starting p_1 is random, but at this epsilon the fit recovers the mixture.
+    /// assert!(fit.iter().zip(&truth).all(|(a, b)| (a - b).abs() < 0.05), "{fit:?}");
+    /// // The row's error is the squared error of its own parameters on the raw moments.
+    /// let implied = m2n.get_moments(&fit, true).unwrap();
+    /// let error: f64 = moments.iter().zip(&implied).map(|(a, b)| (a - b).powi(2)).sum();
+    /// assert!((error - rows[0].error).abs() < 1e-9);
+    ///
+    /// // Fewer than five moments are rejected.
+    /// assert!(M2N::with_defaults(vec![0.0, 1.0]).single_fit_loop(None).is_err());
+    /// ```
     pub fn single_fit_loop(
         &mut self,
         epsilon_override: Option<f64>,
@@ -357,6 +548,30 @@ impl M2N {
         self.moments.iter().zip(fitted.iter()).map(|(a, b)| (a - b).powi(2)).sum()
     }
 
+    /// Runs [`M2N::single_fit_loop`] [`M2N::n_runs`] times, each on a fresh copy of `self`,
+    /// and concatenates the rows (at most one per run). `self` is not modified.
+    ///
+    /// The runs execute serially whatever [`M2N::num_workers`] says. Summarise the rows with
+    /// [`most_likely_parameters`].
+    ///
+    /// # Errors
+    ///
+    /// Any error of [`M2N::single_fit_loop`]: [`InputError::TooShort`] for fewer than five
+    /// moments, [`InputError::OutOfRange`] for a `variant` other than 1 or 2.
+    ///
+    /// ```
+    /// use openquant::ef3m::{most_likely_parameters, M2N};
+    ///
+    /// let truth = [-1.0, 2.0, 1.0, 0.5, 0.7];
+    /// let moments = M2N::with_defaults(vec![]).get_moments(&truth, true).unwrap();
+    /// let rows = M2N::new(moments, 1e-4, 5.0, 5, 2, 100_000, 1).mp_fit().unwrap();
+    /// assert_eq!(rows.len(), 5);
+    /// let fit = most_likely_parameters(&rows, None, 1_000);
+    /// assert!((fit["mu_2"] - 2.0).abs() < 0.05 && (fit["p_1"] - 0.7).abs() < 0.05);
+    ///
+    /// let bad_variant = M2N::new(vec![0.0; 5], 1e-4, 5.0, 1, 3, 100, 1);
+    /// assert!(bad_variant.mp_fit().is_err());
+    /// ```
     pub fn mp_fit(&self) -> Result<Vec<FitResultRow>, InputError> {
         let mut out = Vec::new();
         for _ in 0..self.n_runs {
@@ -367,6 +582,26 @@ impl M2N {
     }
 }
 
+/// The `order`-th centred moment `E[(x - m_1)^order]` from raw moments
+/// `moments = [E[x], E[x^2], ...]`.
+///
+/// Uses the binomial expansion `sum_j C(order, j) (-m_1)^j m_{order - j}` with `m_0 = 1`, so
+/// only the first `order` raw moments are read. Order 0 gives 1 and order 1 gives 0 (up to
+/// rounding).
+///
+/// # Errors
+///
+/// [`InputError::TooShort`] if `moments` has fewer than `max(order, 1)` entries.
+///
+/// ```
+/// use openquant::ef3m::centered_moment;
+///
+/// // N(1, 2^2): E[x] = 1, E[x^2] = 5, E[x^3] = 13.
+/// let raw = [1.0, 5.0, 13.0];
+/// assert_eq!(centered_moment(&raw, 2).unwrap(), 4.0); // the variance
+/// assert_eq!(centered_moment(&raw, 3).unwrap(), 0.0); // symmetric
+/// assert!(centered_moment(&raw, 4).is_err());
+/// ```
 pub fn centered_moment(moments: &[f64], order: usize) -> Result<f64, InputError> {
     // The order-th centred moment is built from the first `order` raw moments.
     if moments.len() < order.max(1) {
@@ -385,6 +620,19 @@ pub fn centered_moment(moments: &[f64], order: usize) -> Result<f64, InputError>
     Ok(moment_c)
 }
 
+/// Raw moments `[E[x], E[x^2], ...]` from centred moments and the mean.
+///
+/// `central_moments` starts at the **first** centred moment, which is 0:
+/// `[0, E[(x - mu)^2], E[(x - mu)^3], ...]`. The output has the same length (at least 1):
+/// entry 0 is `dist_mean` and entry `n - 1` is `sum_k C(n, k) c_k mu^(n - k)` with `c_0 = 1`.
+/// The first centred moment is used as given in that sum, so pass 0 there.
+///
+/// ```
+/// use openquant::ef3m::raw_moment;
+///
+/// // N(1, 2^2): centred moments 0, 4, 0; raw moments 1, 5, 13.
+/// assert_eq!(raw_moment(&[0.0, 4.0, 0.0], 1.0), [1.0, 5.0, 13.0]);
+/// ```
 pub fn raw_moment(central_moments: &[f64], dist_mean: f64) -> Vec<f64> {
     let mut raw_moments = vec![dist_mean];
     let mut central = vec![1.0];
@@ -399,6 +647,34 @@ pub fn raw_moment(central_moments: &[f64], dist_mean: f64) -> Vec<f64> {
     raw_moments
 }
 
+/// The most likely value of each parameter over many fits: for each column of `data`
+/// separately, the peak of a Gaussian kernel density, rounded to five decimals.
+///
+/// This is how López de Prado and Foreman (2014) summarise the random EF3M runs. Columns
+/// are `mu_1`, `mu_2`, `sigma_1`, `sigma_2`, `p_1` and `error`; those named in
+/// `ignore_columns` are skipped (default `["error"]`; `Some(&[])` keeps all six, unknown
+/// names are ignored). The bandwidth is `std * n^(-1/5)` (population standard deviation,
+/// floored at `1e-6`), and the density is evaluated on `max(res, 10)` evenly spaced points
+/// from the column's minimum to its maximum; the first highest point wins. A column whose
+/// values are all equal (within `1e-15`) returns that value.
+///
+/// The returned values may come from different runs and need not reproduce the moments;
+/// the runs must also agree on which component is which for the mode to mean anything.
+/// Returns an empty map for empty `data`.
+///
+/// ```
+/// use openquant::ef3m::{most_likely_parameters, FitResultRow};
+///
+/// let row = |mu_2: f64| FitResultRow {
+///     mu_1: -1.0, mu_2, sigma_1: 1.0, sigma_2: 0.5, p_1: 0.7, error: 0.0,
+/// };
+/// // Three runs agree on mu_2 = 2, one outlier at 3.
+/// let rows = [row(2.0), row(2.0), row(2.0), row(3.0)];
+/// let fit = most_likely_parameters(&rows, None, 11);
+/// assert_eq!(fit["mu_2"], 2.0);
+/// assert_eq!(fit["p_1"], 0.7); // constant column
+/// assert!(!fit.contains_key("error")); // ignored by default
+/// ```
 pub fn most_likely_parameters(
     data: &[FitResultRow],
     ignore_columns: Option<&[&str]>,
