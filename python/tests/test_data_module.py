@@ -80,3 +80,45 @@ def test_align_calendar_marks_missing_bars():
     missing = msft.filter(pl.col("is_missing_bar"))
     assert missing.height == 1
     assert str(missing["ts"][0]).startswith("2024-01-02")
+
+
+def _raw_df_frame() -> pl.DataFrame:
+    day_us = 86_400 * 1_000_000
+    base = 1_704_067_200 * 1_000_000  # 2024-01-01 00:00:00 UTC
+    return pl.DataFrame(
+        {
+            "symbol": ["MSFT", "AAPL", "AAPL", "MSFT"],
+            "ts_us": [base + 2 * day_us, base + day_us, base + day_us, base],
+            "open": [372.2, 185.0, 185.05, 370.1],
+            "high": [373.1, 186.2, 186.3, 372.0],
+            "low": [371.4, 184.7, 184.6, 369.9],
+            "close": [372.0, 185.9, 186.0, 371.5],
+            "volume": [5500.0, 7000.0, 7100.0, 6000.0],
+            "adj_close": [371.9, 185.8, 185.9, 371.3],
+        }
+    )
+
+
+def test_core_dataframe_bindings_accept_polars_frames():
+    # These take a polars DataFrame through pyo3-polars'
+    # `FromPyObject for PyDataFrame`, the code `vendor/pyo3-polars` patches.
+    # Unpatched 0.20.0 passes an integer `compat_level` to `Series.to_arrow`,
+    # which Python polars >= 1.32.3 rejects with a TypeError.
+    # See vendor/README.md.
+    from openquant import _core
+
+    raw = _raw_df_frame()
+
+    cleaned, report = _core.data.clean_ohlcv_df(raw, True)
+    assert isinstance(cleaned, pl.DataFrame)
+    assert cleaned["symbol"].to_list() == ["AAPL", "MSFT", "MSFT"]
+    assert cleaned["close"].to_list() == [186.0, 371.5, 372.0]
+    assert report["rows_removed_by_deduplication"] == 1
+
+    quality = _core.data.quality_report_df(raw)
+    assert quality["row_count"] == 4
+
+    aligned = _core.data.align_calendar_df(cleaned, 86_400)
+    msft = aligned.filter(pl.col("symbol") == "MSFT")
+    assert msft.height == 3
+    assert msft["is_missing_bar"].to_list() == [False, True, False]
