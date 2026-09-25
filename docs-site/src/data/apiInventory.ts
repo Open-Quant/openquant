@@ -25,7 +25,14 @@ export const apiInventory = {
       "align_calendar",
       "clean_ohlcv",
       "data_quality_report",
-      "load_ohlcv"
+      "dataset_hash",
+      "default_cache_dir",
+      "fetch",
+      "fetch_symbol",
+      "load_ohlcv",
+      "quality_failures",
+      "record_dataset_hash",
+      "symbols"
     ],
     "feature_diagnostics": [
       "feature_screen_report",
