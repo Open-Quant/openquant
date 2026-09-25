@@ -2,16 +2,17 @@
 title: "cross_validation"
 description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
 module: "cross_validation"
-api_surface: "rust-only"
+api_surface: "both"
 afml_chapter:
   - "7"
+  - "12"
 citation:
-  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4)."
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4). Chapter 12: §12.4 The Combinatorial Purged Cross-Validation Method."
 rust_api:
   - "PurgedKFold"
   - "ml_get_train_times"
@@ -19,7 +20,20 @@ rust_api:
   - "SimpleClassifier"
   - "Scoring"
   - "TrainTestSplit"
+  - "PurgedSplit"
+  - "PurgedSplitDiagnostics"
+  - "CpcvSplit"
+  - "CpcvPath"
+  - "naive_kfold_splits"
+  - "count_train_test_overlaps"
   - "CrossValidationError"
+python_api:
+  - "cross_validation.purged_kfold_splits"
+  - "cross_validation.split_with_diagnostics"
+  - "cross_validation.cpcv_splits"
+  - "cross_validation.cpcv_paths"
+  - "cross_validation.naive_kfold_splits"
+  - "cross_validation.count_train_test_overlaps"
 sidebar:
   badge: Module
 ---
@@ -32,8 +46,8 @@ between. If a training label's span overlaps a test label's span, the two share 
 model has been shown part of the answer, and the fold's score is inflated. Shuffling makes it
 worse, since it scatters such pairs across every fold boundary.
 
-This module is Rust-only. Python bindings are tracked in
-[#42](https://github.com/Open-Quant/openquant/issues/42).
+From Python, `openquant.cross_validation` returns the same splits as numpy index arrays, to
+use with any model (see [From Python](#from-python)).
 
 ## Purging and embargo
 
@@ -109,7 +123,58 @@ $\ell$ the longest label span in samples. Both points are recorded on
 [#94](https://github.com/Open-Quant/openquant/issues/94).
 
 `pct_embargo` is a fraction of the *whole sample count*, rounded up: 0.01 on 5,000 samples
-is 50 samples. AFML suggests a value around 0.01.
+is 50 samples. AFML suggests a value around 0.01. `new` rejects values outside $[0, 1)$, and
+information sets that end before they start.
+
+## Diagnostics and combinatorial splits
+
+`split_with_diagnostics(n_samples)` returns the same folds as `split`, each as a
+`PurgedSplit` whose `diagnostics` say why each excluded sample was excluded.
+`purged_indices` overlap the test window. `embargo_indices` lie inside an embargo window,
+whether or not they were also purged, so an embargo that adds nothing shows up as
+`embargo_indices` contained in `purged_indices`. `test_ranges` gives the test set as ranges.
+Training is every sample in none of the three. `overlap_count_after_purge` counts training
+labels that still intersect a test label. It is always 0, and is there so a pipeline can
+assert it.
+
+`cpcv_splits(n_samples, k)` is combinatorial purged CV (AFML §12.4). It returns one
+`CpcvSplit` for each of the $\binom{N}{k}$ ways to test $k$ of the $N$ folds at once, in
+lexicographic order of `test_fold_ids`. Adjacent test folds form one block, and each block is
+purged and embargoed like a `split` fold, so `k = 1` gives back `split_with_diagnostics`.
+`cpcv_paths(k)` returns the $\varphi[N,k] = \frac{k}{N}\binom{N}{k}$ backtest paths those splits
+make. Path $j$ takes, for each fold, the $j$-th split that tests it: `split_for_fold[g]` is that
+split's `split_id`. The numbering matches [`backtesting-engine`](/modules/backtesting-engine/)'s
+`run_cpcv`, which also scores returns along the paths.
+
+`naive_kfold_splits` is the unpurged baseline §7.3 warns against, and
+`count_train_test_overlaps(info_sets, train, test)` counts training samples whose span
+intersects some test sample's. Together they measure the leak that purging removes.
+
+```rust
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::{count_train_test_overlaps, naive_kfold_splits, PurgedKFold};
+
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info_sets: Vec<_> =
+    (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+let cv = PurgedKFold::new(5, info_sets.clone(), 0.15)?;
+
+// The third fold of the example above, with the reason for each exclusion.
+let fold = &cv.split_with_diagnostics(40)?[2];
+assert_eq!(fold.diagnostics.test_ranges, vec![(16, 24)]);
+assert_eq!(fold.diagnostics.purged_indices, vec![13, 14, 15, 24, 25, 26]);
+// Six samples each side; 13-15 and 24-26 were purged as well.
+let embargoed: Vec<usize> = (10..=15).chain(24..=29).collect();
+assert_eq!(fold.diagnostics.embargo_indices, embargoed);
+
+// N = 5, k = 2: C(5, 2) = 10 splits and 2/5 * 10 = 4 paths.
+assert_eq!(cv.cpcv_splits(40, 2)?.len(), 10);
+assert_eq!(cv.cpcv_paths(2)?.len(), 4);
+
+// Unpurged, the same fold trains on 6 labels that overlap the test window.
+let (train, test) = &naive_kfold_splits(40, 5)?[2];
+assert_eq!(count_train_test_overlaps(&info_sets, train, test)?, 6);
+```
 
 ## Scoring
 
@@ -158,6 +223,61 @@ assert_eq!(scores.len(), 5);
 assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
 ```
 
+## From Python
+
+`openquant.cross_validation` returns indices and fits nothing, so any model can use them.
+`t0` and `t1` are required: `t0[i]` is when label $i$ starts and `t1[i]` when it resolves.
+They can be numpy `datetime64` arrays, pandas or polars datetime columns, `datetime` objects,
+ISO strings, or plain integers such as bar positions. The splitting is the Rust code above.
+
+| Function | Returns |
+| --- | --- |
+| `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | `[(train_idx, test_idx), ...]`, numpy int arrays |
+| `split_with_diagnostics(t0, t1, n_splits, pct_embargo)` | one dict per fold: the indices plus `test_ranges`, `purged_indices`, `embargo_indices`, `overlap_count_after_purge` |
+| `cpcv_splits(t0, t1, n_splits, n_test_splits, pct_embargo)` | the same dicts for the $\binom{N}{k}$ CPCV splits, with `test_fold_ids` |
+| `cpcv_paths(n_splits, n_test_splits)` | an `(n_paths, n_splits)` array: `paths[p, g]` is the split whose predictions path `p` uses for fold `g` |
+| `naive_kfold_splits(n_samples, n_splits)` | the unpurged baseline |
+| `count_train_test_overlaps(t0, t1, train, test)` | the number of leaking training samples |
+
+```python
+import numpy as np
+from openquant import cross_validation as cv
+
+# The example above: 40 hourly labels, each resolved 3 hours after it starts.
+t0 = np.datetime64("2024-01-02T09:00") + np.arange(40) * np.timedelta64(1, "h")
+t1 = t0 + np.timedelta64(3, "h")
+
+train, test = cv.purged_kfold_splits(t0, t1, n_splits=5, pct_embargo=0.15)[2]
+print("test", test.min(), "-", test.max(), "train", train.tolist())
+
+fold = cv.split_with_diagnostics(t0, t1, n_splits=5, pct_embargo=0.15)[2]
+print("purged", fold["purged_indices"].tolist())
+
+splits = cv.cpcv_splits(t0, t1, n_splits=5, n_test_splits=2, pct_embargo=0.15)
+print(len(splits), "CPCV splits; split 1 tests folds", splits[1]["test_fold_ids"])
+print(cv.cpcv_paths(n_splits=5, n_test_splits=2))
+
+naive_train, naive_test = cv.naive_kfold_splits(40, 5)[2]
+print("naive fold 2 overlaps:", cv.count_train_test_overlaps(t0, t1, naive_train, naive_test))
+```
+
+```text
+test 16 - 23 train [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+purged [13, 14, 15, 24, 25, 26]
+10 CPCV splits; split 1 tests folds (0, 2)
+[[0 0 1 2 3]
+ [1 4 4 5 6]
+ [2 5 7 7 8]
+ [3 6 8 9 9]]
+naive fold 2 overlaps: 6
+```
+
+The list from `purged_kfold_splits` is a valid `cv=` for scikit-learn:
+`cross_val_score(model, X, y, cv=splits)` or `GridSearchCV(model, grid, cv=splits)`.
+scikit-learn then passes `sample_weight` to `fit` but not to the scorer (the bug Snippet 7.4
+fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
+`purged_search` weights the score as well.
+
 ## What to watch for
 
 - **Sample weights are used to fit, not to score.** Snippet 7.4 exists because scikit-learn's
@@ -178,8 +298,10 @@ assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
   (Snippet 7.1). It applies no embargo and nothing else in the crate calls it; use it when
   you build your own splits, for instance several disjoint test blocks at once.
 - **One path is not a backtest.** Purged k-fold gives one out-of-sample prediction per
-  sample, hence one performance path. Combinatorial purged CV, in
-  [`backtesting-engine`](/modules/backtesting-engine/), gives a distribution of them.
+  sample, hence one performance path. `cpcv_splits` and `cpcv_paths` give $\varphi[N,k]$ of
+  them, and [`backtesting-engine`](/modules/backtesting-engine/)'s `run_cpcv` scores each.
+- **CPCV grows fast.** $\binom{N}{k}$ splits each hold their own index vectors: $N = 10$,
+  $k = 5$ is 252 splits. Only an overflowing count is an error (`TooManySplits`).
 
 ## Related modules
 

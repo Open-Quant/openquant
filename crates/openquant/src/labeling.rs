@@ -1,33 +1,101 @@
+//! Triple-barrier labeling and meta-labeling (AFML chapter 3).
+//!
+//! An event at bar `t0` with target `trgt` (a volatility estimate known at `t0`, e.g. from
+//! Snippet 3.1) is resolved by whichever barrier the close path reaches first: a profit
+//! target at `pt * trgt`, a stop at `-sl * trgt`, or a vertical (time) barrier (§3.4,
+//! Snippet 3.2). The label is the sign of the return at that point (Snippet 3.5); with a
+//! side from a primary model it is instead 1 if the side-signed return is positive and 0
+//! otherwise (meta-labeling, §3.6, Snippets 3.6–3.7).
+//!
+//! Conventions:
+//!
+//! - Prices are `(timestamp, close)` pairs in increasing time. Events, targets, sides and
+//!   vertical barriers are joined to them by **exact** timestamp; an event whose timestamp is
+//!   not a bar is skipped silently.
+//! - Returns are simple, `p_t / p_t0 - 1`, from the event bar's close, multiplied by the side
+//!   when one is given (a missing side is taken as `+1` for the barriers).
+//! - A barrier is touched only when the return goes **strictly** beyond it, and only closes
+//!   are checked. A multiple of zero disables that barrier.
+//! - The label at a vertical barrier is the sign of the return there, not 0.
+//!
+//! ```
+//! use chrono::{Duration, NaiveDate};
+//! use openquant::labeling::{add_vertical_barrier, get_bins, get_events};
+//!
+//! let t0 = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+//! let day = |d: i64| t0 + Duration::days(d);
+//! let prices = [100.0, 100.5, 101.0, 103.5, 102.0, 101.0, 100.0, 99.0];
+//! let close: Vec<_> = prices.iter().enumerate().map(|(i, p)| (day(i as i64), *p)).collect();
+//!
+//! // One event on day 0, a 2% target, barriers one target wide, a five-day limit.
+//! let events = vec![day(0)];
+//! let target = vec![(day(0), 0.02)];
+//! let vertical = add_vertical_barrier(&events, &close, 5, 0, 0, 0);
+//! let found = get_events(&close, &events, (1.0, 1.0), &target, 0.0, 1, Some(&vertical), None);
+//! let bins = get_bins(&found, &close);
+//!
+//! // +1.0% on day 2 is inside the barrier; +3.5% on day 3 is beyond it.
+//! assert_eq!(found[0].1.t1, Some(day(3)));
+//! let (_, ret, _, label, side) = bins[0];
+//! assert!((ret - 0.035).abs() < 1e-12);
+//! assert_eq!((label, side), (1, None));
+//! ```
+#![deny(missing_docs)]
+
 use chrono::{Duration, NaiveDateTime};
 use std::collections::HashMap;
 
+/// A triple-barrier event, keyed elsewhere by its start timestamp `t0`.
 #[derive(Debug, Clone)]
 pub struct Event {
+    /// When the event resolved: the first barrier touch or the vertical barrier, whichever
+    /// is earlier. `None` when there is no vertical barrier and no horizontal barrier has
+    /// been touched yet (the outcome is unknown).
     pub t1: Option<NaiveDateTime>,
+    /// Target return (the unit of the horizontal barriers), known at `t0`.
     pub trgt: f64,
+    /// Side from a primary model (`+1` long, `-1` short), for meta-labeling.
     pub side: Option<f64>,
+    /// Profit-taking multiple of `trgt` (0 disables the barrier).
     pub pt: f64,
+    /// Stop-loss multiple of `trgt` (0 disables the barrier).
     pub sl: f64,
 }
 
+/// Parameters of [`triple_barrier_events`].
 #[derive(Debug, Clone, Copy)]
 pub struct TripleBarrierConfig<'a> {
+    /// Profit-taking multiple of the target (0 disables it).
     pub pt: f64,
+    /// Stop-loss multiple of the target (0 disables it).
     pub sl: f64,
+    /// Events whose target is not above this (or is `NaN`) are dropped.
     pub min_ret: f64,
+    /// `(event, vertical barrier)` pairs, e.g. from [`add_vertical_barrier`]; events without
+    /// one have no time limit.
     pub vertical_barrier_times: Option<&'a [(NaiveDateTime, NaiveDateTime)]>,
 }
 
+/// A labelled event.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LabeledEvent {
+    /// Event start `t0`.
     pub timestamp: NaiveDateTime,
+    /// Simple return from `t0` to `t1`, multiplied by the side when there is one.
     pub ret: f64,
+    /// The event's target.
     pub trgt: f64,
+    /// `-1`, `0` or `1` without a side; `0` or `1` with one (meta-label).
     pub label: i8,
+    /// The event's side, if any.
     pub side: Option<f64>,
 }
 
-/// Add vertical barrier for each event by shifting timestamp forward.
+/// Vertical (time) barriers: for each event, the first bar at or after the event time plus
+/// the given offset (AFML Snippet 3.4).
+///
+/// Returns `(event, barrier)` pairs. An event too close to the end of `close` to have such a
+/// bar gets no pair at all (no shortened barrier). `close` must be in increasing time.
 pub fn add_vertical_barrier(
     t_events: &[NaiveDateTime],
     close: &[(NaiveDateTime, f64)],
@@ -98,7 +166,17 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
     }
 }
 
-/// Construct triple-barrier events.
+/// Triple-barrier events: resolves each event's end time `t1` (AFML Snippets 3.3 and 3.6).
+///
+/// Events are dropped when their timestamp is not a bar of `close`, their target is missing,
+/// `NaN` or not above `config.min_ret`, or (when `side_prediction` is given) they have no
+/// side. For each kept event, `t1` is the first bar whose side-signed simple return from
+/// `t0` goes strictly beyond `pt * trgt` or `-sl * trgt`, or the vertical barrier if that is
+/// earlier. With no vertical barrier and no touch, `t1` stays `None`. Returns
+/// `(t0, event)` pairs in `t_events` order.
+///
+/// An event on the last bar with no vertical barrier gets `t1 = t0`, and so a zero return,
+/// rather than `None`.
 pub fn triple_barrier_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
@@ -146,11 +224,14 @@ pub fn triple_barrier_events(
     events
 }
 
-/// Label triple-barrier outcomes.
+/// Labels resolved events by the return from `t0` to `t1` (AFML Snippets 3.5 and 3.7).
 ///
 /// Label regime:
-/// - `{-1, 0, 1}` when `side` is absent (standard triple-barrier labels)
-/// - `{0, 1}` when `side` is present (meta-labeling)
+/// - `{-1, 0, 1}` when `side` is absent (standard triple-barrier labels): the sign of the
+///   return, 0 only for an exactly zero return;
+/// - `{0, 1}` when `side` is present (meta-labeling): 1 if the side-signed return is positive.
+///
+/// Events with `t1 = None`, or whose `t0` or `t1` is not a bar of `close`, are skipped.
 pub fn triple_barrier_labels(
     events: &[(NaiveDateTime, Event)],
     close: &[(NaiveDateTime, f64)],
@@ -201,7 +282,8 @@ pub fn triple_barrier_labels(
     out
 }
 
-/// Label outcomes in meta-labeling mode (`{0, 1}` labels).
+/// Meta-labels (`{0, 1}`, AFML §3.6): [`triple_barrier_labels`] restricted to events that
+/// carry a side.
 pub fn meta_labels(
     events: &[(NaiveDateTime, Event)],
     close: &[(NaiveDateTime, f64)],
@@ -211,7 +293,10 @@ pub fn meta_labels(
     triple_barrier_labels(&with_side, close)
 }
 
-/// Backward-compatible triple-barrier API.
+/// mlfinlab-compatible form of [`triple_barrier_events`] (AFML Snippet 3.6's `getEvents`).
+///
+/// `pt_sl` is `(profit multiple, stop multiple)`. `num_threads` is ignored; it is kept so
+/// mlfinlab call sites port unchanged.
 // Mirrors the mlfinlab `get_events` signature.
 #[allow(clippy::too_many_arguments)]
 pub fn get_events(
@@ -234,7 +319,8 @@ pub fn get_events(
     )
 }
 
-/// Backward-compatible label API.
+/// mlfinlab-compatible form of [`triple_barrier_labels`] (AFML Snippet 3.7's `getBins`),
+/// returning `(t0, ret, trgt, label, side)` tuples.
 pub fn get_bins(
     events: &[(NaiveDateTime, Event)],
     close: &[(NaiveDateTime, f64)],
@@ -245,7 +331,11 @@ pub fn get_bins(
         .collect()
 }
 
-/// Drop labels whose frequency is below `min_pct`.
+/// Drops under-represented labels (AFML Snippet 3.8).
+///
+/// Repeatedly removes the rarest label while its share is at most `min_pct` and at least
+/// three distinct labels remain. Rows are `(t0, ret, trgt, label, side)` as from
+/// [`get_bins`].
 pub fn drop_labels(
     events: &[(NaiveDateTime, f64, f64, i8, Option<f64>)],
     min_pct: f64,

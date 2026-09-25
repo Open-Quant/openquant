@@ -69,44 +69,50 @@ impl RiskMetrics {
         self.calculate_expected_shortfall(&first_col(returns)?, confidence_level)
     }
 
+    /// Conditional drawdown at risk (Chekhlov, Uryasev and Zabarankin, 2005): the mean of the
+    /// worst `1 - confidence_level` share of the drawdown series.
+    ///
+    /// `cumulative` must be a cumulative series — an equity curve, a price or a cumulative
+    /// return — not per-period returns: the drawdown is `running_max(cumulative) - cumulative`,
+    /// in the units of the input. The threshold is the "higher" `confidence_level`-quantile of
+    /// the drawdowns, and every drawdown at or above it is averaged, so the tail is never empty.
+    ///
+    /// `confidence_level` is the **upper-tail** level here: 0.95 averages the worst 5% of
+    /// drawdowns. This is the opposite of [`Self::calculate_value_at_risk`] and
+    /// [`Self::calculate_expected_shortfall`], which take the lower-tail probability (0.05).
     pub fn calculate_conditional_drawdown_risk(
         &self,
-        returns: &[f64],
+        cumulative: &[f64],
         confidence_level: f64,
     ) -> Result<f64, RiskMetricsError> {
         validate_confidence(confidence_level)?;
-        if returns.is_empty() {
+        if cumulative.is_empty() {
             return Err(RiskMetricsError::EmptyInput);
         }
 
         let mut running_max = f64::NEG_INFINITY;
-        let mut drawdown = Vec::with_capacity(returns.len());
-        for &v in returns {
+        let mut drawdown = Vec::with_capacity(cumulative.len());
+        for &v in cumulative {
             running_max = running_max.max(v);
             drawdown.push(running_max - v);
         }
 
-        let mut dd_running_max = f64::NEG_INFINITY;
-        let mut max_drawdown = Vec::with_capacity(drawdown.len());
-        for &v in &drawdown {
-            dd_running_max = dd_running_max.max(v);
-            max_drawdown.push(dd_running_max);
-        }
-
-        let q = quantile_higher(&max_drawdown, confidence_level)?;
-        let tail: Vec<f64> = max_drawdown.into_iter().filter(|v| *v > q).collect();
+        let q = quantile_higher(&drawdown, confidence_level)?;
+        let tail: Vec<f64> = drawdown.into_iter().filter(|v| *v >= q).collect();
         if tail.is_empty() {
+            // only reachable when q is NaN (NaN in the input)
             return Ok(f64::NAN);
         }
         Ok(tail.iter().sum::<f64>() / tail.len() as f64)
     }
 
+    /// [`Self::calculate_conditional_drawdown_risk`] on the first column of `cumulative`.
     pub fn calculate_conditional_drawdown_risk_from_matrix(
         &self,
-        returns: &DMatrix<f64>,
+        cumulative: &DMatrix<f64>,
         confidence_level: f64,
     ) -> Result<f64, RiskMetricsError> {
-        self.calculate_conditional_drawdown_risk(&first_col(returns)?, confidence_level)
+        self.calculate_conditional_drawdown_risk(&first_col(cumulative)?, confidence_level)
     }
 }
 

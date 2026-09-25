@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -31,22 +31,15 @@ and how each can mislead; this page covers what the Python functions do with the
 
 ## The model is fixed
 
-Every function here fits the same model: ridge-regularised least squares of the 0/1 label
-on the features. It is fast and has no dependencies, and it is the first thing to know about
-any number this module reports, for two reasons.
+Every function here fits the same model: a logistic regression of the 0/1 label on the
+features, fitted by Newton's method (iteratively reweighted least squares) with a tiny L2
+penalty of 0.001 that keeps the coefficients finite when a fold is perfectly separable.
+`sample_weight` weights each row's log-likelihood. It has no dependencies, and it is the
+first thing to know about any number this module reports.
 
 Importance is always importance *to a model*. A feature that matters through a threshold, an
 interaction, or any non-monotone effect is invisible to a linear model and will be scored as
 noise here.
-
-:::caution[The model's probabilities are miscalibrated]
-The fitted value is passed through a sigmoid although least squares already produces a number
-on the probability scale, so predictions are squeezed into roughly 0.4–0.8. On the balanced
-data below the model predicts class 1 for 93% of rows. `scoring="accuracy"` and `"f1"`
-therefore measure little more than class balance, and every log-loss figure is compressed
-toward −0.69. *Rankings* under `neg_log_loss` are still informative; the *levels* are not.
-Tracked in [#99](https://github.com/Open-Quant/openquant/issues/99).
-:::
 
 Use these reports for screening. Measure importance for the model you will trade with
 [`feature_importance`](/modules/feature-importance/) or your own code.
@@ -96,32 +89,30 @@ print(f"{pair['feature_a']} ~ {pair['feature_b']}: corr {pair['corr']:.3f}, "
 
 ```text
 feature      MDI     MDA     SFI
-a          0.524   0.108  -0.645
-a_copy     0.103   0.011  -0.647
-b          0.336   0.042  -0.698
-noise_1    0.020  -0.000  -0.724
-noise_2    0.017   0.000  -0.724
-a ~ a_copy: corr 0.981, singly 0.119, jointly 0.121
+a          0.538   0.625  -0.474
+a_copy     0.093   0.014  -0.482
+b          0.337   0.410  -0.633
+noise_1    0.018  -0.001  -0.696
+noise_2    0.015  -0.005  -0.695
+a ~ a_copy: corr 0.981, singly 0.639, jointly 0.656
 ```
 
-Read across the `a_copy` row. MDA says it is nearly worthless, 0.011 against 0.108 for `a`.
-SFI says it is as good as `a`: −0.647 against −0.645. Both are right. Given `a`, the model
+Read across the `a_copy` row. MDA says it is nearly worthless, 0.014 against 0.625 for `a`.
+SFI says it is nearly as good as `a`: −0.482 against −0.474. Both are right. Given `a`, the model
 has no use for a noisier copy of it, and damaging the copy costs nothing; on its own, the
 copy carries almost all of `a`'s information. This is the substitution effect, and it is the
 reason to never drop a feature on one method's say-so: remove `a` from this set and `a_copy`
 becomes the most important feature in it.
 
 <figure>
-<img class="dark:sl-hidden" src="/figures/ch8-importance-light.svg" alt="Three bar charts of importance for five features. Under the coefficient-based MDI, feature a leads, b follows, and a_copy is small. Under MDA, a dominates, b is about 40 percent of it, and a_copy is near zero. Under SFI, measured as improvement over a coin flip, a and a_copy are nearly equal, b is marginally negative and both noise features are clearly negative." />
-<img class="light:sl-hidden" src="/figures/ch8-importance-dark.svg" alt="Three bar charts of importance for five features. Under the coefficient-based MDI, feature a leads, b follows, and a_copy is small. Under MDA, a dominates, b is about 40 percent of it, and a_copy is near zero. Under SFI, measured as improvement over a coin flip, a and a_copy are nearly equal, b is marginally negative and both noise features are clearly negative." />
-<figcaption>Same data, same model, three answers. SFI is drawn as the gain over a coin flip's log loss of −0.693; its levels are depressed by the calibration problem above.</figcaption>
+<img class="dark:sl-hidden" src="/figures/ch8-importance-light.svg" alt="Three bar charts of importance for five features. Under the coefficient-based MDI, feature a leads, b follows, and a_copy is small. Under MDA, a dominates, b is about two-thirds of it, and a_copy is near zero. Under SFI, measured as improvement over a coin flip, a and a_copy are nearly equal, b is clearly positive and both noise features are marginally negative." />
+<img class="light:sl-hidden" src="/figures/ch8-importance-dark.svg" alt="Three bar charts of importance for five features. Under the coefficient-based MDI, feature a leads, b follows, and a_copy is small. Under MDA, a dominates, b is about two-thirds of it, and a_copy is near zero. Under SFI, measured as improvement over a coin flip, a and a_copy are nearly equal, b is clearly positive and both noise features are marginally negative." />
+<figcaption>Same data, same model, three answers. SFI is drawn as the gain over a coin flip's log loss of −0.693.</figcaption>
 </figure>
 
-Do not read the SFI *levels*. `b` scores −0.698, marginally worse than a coin flip's −0.693,
-although it is genuinely informative, and the noise features score −0.724. Both are symptoms
-of the miscalibration above rather than facts about the features: a model whose
-probabilities cannot go below 0.4 pays a log-loss penalty on every negative. The ordering —
-`a` and `a_copy` together, then `b`, then noise — is the part to trust.
+SFI levels are out-of-sample log losses, so compare them with a coin flip's −0.693. The
+informative features beat it, `b` by less because it carries less of the signal on its own;
+the noise features land just below it, which is what fitting pure noise costs out of sample.
 
 ## What each function returns
 
@@ -132,7 +123,7 @@ block recording the split settings and `mean_base_score`.
 
 | Function | Notes |
 | --- | --- |
-| `mda_importance` | `scoring` is `"neg_log_loss"` (default), `"accuracy"` or `"f1"` — use the default until #99 is closed; test-fold scores use `sample_weight` |
+| `mda_importance` | `scoring` is `"neg_log_loss"` (default), `"accuracy"` or `"f1"` (threshold 0.5); test-fold scores use `sample_weight` |
 | `sfi_importance` | raw cross-validated score per feature; compare with −0.693 for log loss |
 | `mdi_importance` | **not MDI** — see below |
 | `orthogonalize_features_pca` | standardise, then project on the components explaining `variance_threshold` (default 0.95) |
@@ -141,7 +132,7 @@ block recording the split settings and `mean_base_score`.
 
 In the substitution report, `dilution_ratio` is joint importance over the sum of single
 importances, and `flag_substitution_risk` is set when it exceeds 1.15. In the example
-it is 1.02 and unflagged: the linear model concentrated on `a` and never split credit with
+it is 1.03 and unflagged: the linear model concentrated on `a` and never split credit with
 the copy. A tree ensemble on the same data would split it, and the ratio would be well above
 one. The report is only as sensitive as the fixed model lets it be.
 
@@ -152,11 +143,14 @@ one. The report is only as sensitive as the fixed model lets it be.
   absolute coefficients. That is a reasonable in-sample ranking *if the features are on a
   common scale* — it does not standardise them, so a feature measured in basis points will
   outrank the same feature measured in percent. Standardise first, or ignore this column.
-- **MDA shifts rather than shuffles.** The column is rotated by `fold_index + 1` rows. For
-  serially correlated features that barely disturbs them and importance is badly
-  understated: 0.009 instead of 0.155 at an autocorrelation of 0.99
-  ([#98](https://github.com/Open-Quant/openquant/issues/98)). The example above uses
-  independent draws, which hides the problem. Real features are not independent draws.
+- **MDA of a very persistent feature is still somewhat understated.** The column is shuffled
+  within each test fold, as in Snippet 8.3, with `random.Random(seed)` (`seed=42` by
+  default, also taken by `substitution_effect_report`, and echoed in `cv["seed"]`). When a
+  feature moves so slowly that one fold spans only a few of its swings, shuffling among the
+  fold's bunched-together values damages it less than shuffling the whole sample would. Up
+  to an autocorrelation of about 0.95 this is negligible; at 0.99 it is noticeable. Before
+  [#98](https://github.com/Open-Quant/openquant/issues/98) was fixed the column was rotated
+  by a few rows instead, and such a feature scored 0.103 instead of 0.646.
 - **`feature_screen_report` keeps the higher-variance feature of a correlated pair.** On the
   example it rejects `a` and keeps `a_copy`, the noisier one, because noise adds variance.
   The screen never looks at `y`, so it cannot know better. Use it to find the pairs; choose

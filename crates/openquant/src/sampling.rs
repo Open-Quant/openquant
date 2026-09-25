@@ -1,6 +1,6 @@
 use crate::util::InputError;
 use rand::distributions::{Distribution, WeightedIndex};
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 /// Indicator matrix (rows=bar_index, cols=labels), values 0/1.
 pub fn get_ind_matrix(
@@ -112,11 +112,30 @@ pub fn bootstrap_loop_run(
     Ok(avg_unique)
 }
 
-/// Sequential bootstrap (indices of samples).
+/// Sequential bootstrap (AFML Snippet 4.5): label indices drawn one at a time, each with
+/// probability proportional to its average uniqueness given the draws so far.
+///
+/// Draws from the thread-local generator, so repeated calls differ. Use
+/// [`seq_bootstrap_with_rng`] for a reproducible sample.
 pub fn seq_bootstrap(
     ind_mat: &[Vec<u8>],
     sample_length: Option<usize>,
     warmup_samples: Option<Vec<usize>>,
+) -> Result<Vec<usize>, InputError> {
+    seq_bootstrap_with_rng(ind_mat, sample_length, warmup_samples, &mut thread_rng())
+}
+
+/// [`seq_bootstrap`] drawing from the supplied generator; a seeded generator gives a
+/// reproducible sample.
+///
+/// `sample_length` defaults to the number of labels. `warmup_samples` forces the first draws
+/// (taken from the end of the list); every later draw is from the uniqueness-weighted
+/// distribution.
+pub fn seq_bootstrap_with_rng<R: Rng + ?Sized>(
+    ind_mat: &[Vec<u8>],
+    sample_length: Option<usize>,
+    warmup_samples: Option<Vec<usize>>,
+    rng: &mut R,
 ) -> Result<Vec<usize>, InputError> {
     let n_labels = label_count(ind_mat)?;
     let target_len = sample_length.unwrap_or(n_labels);
@@ -126,7 +145,7 @@ pub fn seq_bootstrap(
     if n_labels == 0 {
         return Err(InputError::TooShort { name: "ind_mat", len: 0, min: 1 });
     }
-    let mut phi: Vec<usize> = Vec::new();
+    let mut phi: Vec<usize> = Vec::with_capacity(target_len);
     let mut warm = warmup_samples.unwrap_or_default();
     if let Some(&bad) = warm.iter().find(|&&w| w >= n_labels) {
         return Err(InputError::OutOfRange {
@@ -138,13 +157,17 @@ pub fn seq_bootstrap(
     let mut prev_conc = vec![0.0; ind_mat.len()];
 
     while phi.len() < target_len {
-        let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc)?;
-        let sum: f64 = avg_unique.iter().sum();
-        let prob_iter = avg_unique.iter().map(|p| if sum > 0.0 { *p / sum } else { 1.0 });
-        // Weights are non-negative, finite and not all zero by construction.
-        let dist = WeightedIndex::new(prob_iter).expect("valid sampling weights");
-        let mut rng = thread_rng();
-        let choice = warm.pop().unwrap_or_else(|| dist.sample(&mut rng));
+        let choice = match warm.pop() {
+            Some(w) => w,
+            None => {
+                let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc)?;
+                let sum: f64 = avg_unique.iter().sum();
+                let prob_iter = avg_unique.iter().map(|p| if sum > 0.0 { *p / sum } else { 1.0 });
+                // Weights are non-negative, finite and not all zero by construction.
+                let dist = WeightedIndex::new(prob_iter).expect("valid sampling weights");
+                dist.sample(rng)
+            }
+        };
         phi.push(choice);
         for (i, row) in ind_mat.iter().enumerate() {
             prev_conc[i] += row[choice] as f64;

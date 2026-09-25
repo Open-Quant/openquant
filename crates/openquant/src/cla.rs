@@ -1,51 +1,136 @@
+//! The Critical Line Algorithm (Markowitz, 1956; Bailey and López de Prado, 2013), the
+//! mean-variance benchmark of AFML chapter 16.
+//!
+//! [`CLA::allocate`] computes every turning point of the efficient frontier under box bounds
+//! and the budget constraint (weights sum to 1), exactly, walking from the maximum-return
+//! portfolio (`lambda = inf`) down to the minimum-variance portfolio (`lambda = 0`). Between
+//! two consecutive turning points every efficient portfolio is a convex combination of
+//! them. From the turning points it can also return the minimum-variance portfolio, the
+//! maximum-Sharpe portfolio (risk-free rate zero), or about 100 points along the frontier.
+//!
+//! Conventions:
+//!
+//! - Price matrices have one row per observation (oldest first) and one column per asset.
+//!   From prices, returns are **simple** returns, and expected returns are annualised with
+//!   `252 / step` periods per year, where `step` is 1 (daily), 5 (`resample_by = "W"`) or
+//!   21 (`"M"`). Resampling is positional: every 5th or 21st row.
+//! - Expected returns and covariance supplied directly are used as given (no annualisation).
+//! - Weights are returned in the column order of the inputs.
+//!
+//! Methods whose names begin with an underscore are public for parity testing with the
+//! reference implementation; [`CLA::allocate`] already calls them.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::cla::{WeightBounds, CLA};
+//!
+//! # fn main() -> Result<(), openquant::cla::ClaError> {
+//! let mu = DMatrix::from_column_slice(4, 1, &[0.03, 0.07, 0.09, 0.04]);
+//! let vol = [0.05, 0.16, 0.22, 0.15];
+//! let rho = [
+//!     [1.0, 0.1, 0.1, 0.1],
+//!     [0.1, 1.0, 0.8, 0.0],
+//!     [0.1, 0.8, 1.0, 0.0],
+//!     [0.1, 0.0, 0.0, 1.0],
+//! ];
+//! let cov = DMatrix::from_fn(4, 4, |i, j| rho[i][j] * vol[i] * vol[j]);
+//!
+//! let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
+//! cla.allocate(None, Some(&mu), Some(&cov), None, None)?;
+//!
+//! // The walk starts fully in the highest-return asset and ends at minimum variance.
+//! assert_eq!(cla.weights.first().unwrap(), &vec![0.0, 0.0, 1.0, 0.0]);
+//! assert_eq!(*cla.lambdas.last().unwrap(), 0.0);
+//! for w in &cla.weights {
+//!     assert!((w.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use crate::util::resample::{freq_step, resample_prices};
 use chrono::NaiveDate;
 use nalgebra::{DMatrix, DVector};
 
 #[derive(Debug, PartialEq, thiserror::Error)]
+/// Errors returned by [`CLA`] and [`ReturnsEstimation`].
 pub enum ClaError {
+    /// Neither prices nor both expected returns and a covariance matrix were supplied.
     #[error("supply asset prices, or expected returns and a covariance matrix")]
     MissingInputs,
+    /// The price index does not match the data, the covariance of the free assets is
+    /// singular, or the critical line did not terminate (the message says which).
     #[error("invalid asset prices: {0}")]
     InvalidAssetPrices(&'static str),
+    /// The expected-returns method is not `"mean"` or `"exponential"`.
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    /// The solution name is not one of the four supported.
     #[error("unknown solution: {0}")]
     UnknownSolution(String),
+    /// Inputs disagree on the number of assets, expected returns are not a vector, or the
+    /// bounds cannot sum to one (lower bounds above 1 in total, or upper bounds below 1).
     #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
+    /// Internal bookkeeping vectors disagree in length.
     #[error("asset index out of range")]
     IndexError,
+    /// Too few observations to form a return, a zero price, or no assets.
     #[error("no data")]
     NoData,
 }
 
+/// A price matrix with a date index.
 #[derive(Clone)]
 pub struct AssetPrices {
+    /// Prices, one row per date (oldest first) and one column per asset.
     pub data: DMatrix<f64>,
+    /// The date of each row; must have one entry per row of `data`.
     pub index: Vec<NaiveDate>,
 }
 
 impl AssetPrices {
+    /// Wraps a price matrix and its date index. Nothing is validated here; [`CLA::allocate`]
+    /// checks that the index is non-empty and matches the number of rows.
     pub fn new(data: DMatrix<f64>, index: Vec<NaiveDate>) -> Self {
         AssetPrices { data, index }
     }
 }
 
+/// Price input to [`CLA::allocate`].
 pub enum AssetPricesInput<'a> {
+    /// Prices with a date index.
     Prices(&'a AssetPrices),
+    /// A bare price matrix, one row per observation (at least two rows).
     RawMatrix(&'a DMatrix<f64>),
 }
 
+/// Box bounds on the portfolio weights.
 #[derive(Clone)]
 pub enum WeightBounds {
+    /// The same `(lower, upper)` bound for every asset.
     Tuple(f64, f64),
+    /// Per-asset `(lowers, uppers)`, each with one entry per asset.
     Lists(Vec<f64>, Vec<f64>),
 }
 
+/// Expected-return and return estimators used by [`CLA`] when it is given prices.
+///
+/// All take a price matrix with one row per observation (oldest first), optionally
+/// resampled positionally with `resample_by` (`"W"`/`"week"`/`"weekly"` keeps every 5th row,
+/// `"M"`/`"month"`/`"monthly"` every 21st; anything else is daily), and compute simple
+/// returns.
 pub struct ReturnsEstimation;
 
 impl ReturnsEstimation {
+    /// Annualised mean simple return per asset: the mean periodic return times
+    /// `252 / step`.
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::NoData`] if fewer than two (resampled) rows remain, or a price used as a
+    /// denominator is zero.
     pub fn calculate_mean_historical_returns(
         asset_prices: &DMatrix<f64>,
         resample_by: Option<&str>,
@@ -60,6 +145,14 @@ impl ReturnsEstimation {
         Ok(out)
     }
 
+    /// Annualised exponentially weighted mean simple return per asset, with smoothing
+    /// `alpha = 2 / (span + 1)` seeded at the first return (no bias adjustment), times
+    /// `252 / step`.
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::NoData`] if fewer than two (resampled) rows remain, or a price used as a
+    /// denominator is zero.
     pub fn calculate_exponential_historical_returns(
         asset_prices: &DMatrix<f64>,
         resample_by: Option<&str>,
@@ -80,6 +173,12 @@ impl ReturnsEstimation {
         Ok(out)
     }
 
+    /// Periodic simple returns, one row per (resampled) period after the first.
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::NoData`] if fewer than two (resampled) rows remain, or a price used as a
+    /// denominator is zero.
     pub fn calculate_returns(
         asset_prices: &DMatrix<f64>,
         resample_by: Option<&str>,
@@ -89,18 +188,37 @@ impl ReturnsEstimation {
     }
 }
 
+/// Critical Line Algorithm solver and its results.
+///
+/// Build with [`CLA::new`], call [`CLA::allocate`], then read the public fields.
 pub struct CLA {
+    /// Bounds on the weights.
     pub weight_bounds: WeightBounds,
+    /// How expected returns are estimated from prices: `"mean"` or `"exponential"`.
     pub calculate_expected_returns: String,
+    /// The requested solution: every turning point (maximum return first) for
+    /// `"cla_turning_points"`, one portfolio for `"min_volatility"` and `"max_sharpe"`, or the
+    /// frontier points for `"efficient_frontier"`. Each inner vector has one weight per asset.
     pub weights: Vec<Vec<f64>>,
+    /// Risk-aversion parameter at each turning point, falling to 0 at minimum variance. The
+    /// first entry is infinite (the starting portfolio, which the first proper turning point
+    /// repeats).
     pub lambdas: Vec<f64>,
+    /// Budget-constraint multiplier at each turning point.
     pub gammas: Vec<f64>,
+    /// Indices of the assets strictly inside their bounds at each turning point.
     pub free_weights: Vec<Vec<usize>>,
+    /// Expected returns as an `n x 1` column.
     pub expected_returns: DMatrix<f64>,
+    /// The `n x n` covariance matrix.
     pub cov_matrix: DMatrix<f64>,
+    /// Per-asset lower bounds.
     pub lower_bounds: Vec<f64>,
+    /// Per-asset upper bounds.
     pub upper_bounds: Vec<f64>,
+    /// Expected return of each frontier point (filled only for `"efficient_frontier"`).
     pub efficient_frontier_means: Vec<f64>,
+    /// Volatility of each frontier point (filled only for `"efficient_frontier"`).
     pub efficient_frontier_sigma: Vec<f64>,
 }
 
@@ -111,6 +229,8 @@ impl Default for CLA {
 }
 
 impl CLA {
+    /// Creates a solver with the given bounds and expected-return method (`"mean"` or
+    /// `"exponential"`; checked only when [`CLA::allocate`] estimates from prices).
     pub fn new(weight_bounds: WeightBounds, calculate_expected_returns: &str) -> Self {
         CLA {
             weight_bounds,
@@ -128,6 +248,34 @@ impl CLA {
         }
     }
 
+    /// Runs the Critical Line Algorithm and stores the requested solution in
+    /// [`CLA::weights`].
+    ///
+    /// Supply either prices (`asset_prices`, from which missing expected returns and
+    /// covariance are estimated) or both `expected_asset_returns` (an `n x 1` or `1 x n`
+    /// matrix) and `covariance_matrix` (`n x n`). `resample_by` only applies to prices.
+    /// `solution` is one of `"cla_turning_points"` (default), `"min_volatility"`,
+    /// `"max_sharpe"` (maximises `mu'w / sigma`, i.e. a zero risk-free rate) or
+    /// `"efficient_frontier"`. [`CLA::lambdas`], [`CLA::gammas`] and [`CLA::free_weights`]
+    /// always describe the turning points.
+    ///
+    /// If every expected return is identical, `1e-5` is added to the last one so the walk has
+    /// a starting asset.
+    ///
+    /// # Errors
+    ///
+    /// - [`ClaError::MissingInputs`] if no prices are given and either expected returns or
+    ///   covariance is missing.
+    /// - [`ClaError::InvalidAssetPrices`] if an [`AssetPrices`] index is empty or does not
+    ///   match its rows, if the covariance of the free assets is singular, or if the walk
+    ///   does not terminate.
+    /// - [`ClaError::NoData`] if a price matrix has fewer than two rows, contains a zero
+    ///   price, or there are no assets.
+    /// - [`ClaError::UnknownReturns`] if expected returns must be estimated and the method is
+    ///   not `"mean"` or `"exponential"`.
+    /// - [`ClaError::DimensionMismatch`] if the inputs disagree on the number of assets,
+    ///   expected returns are not a vector, or the bounds cannot sum to one.
+    /// - [`ClaError::UnknownSolution`] for any other `solution` name.
     pub fn allocate(
         &mut self,
         asset_prices: Option<AssetPricesInput<'_>>,
@@ -224,6 +372,16 @@ impl CLA {
         Ok(())
     }
 
+    /// Sets expected returns, covariance and bounds from prices (called by
+    /// [`CLA::allocate`]; public for parity testing).
+    ///
+    /// Supplied `expected_asset_returns` or `covariance_matrix` take precedence over the
+    /// estimates from `asset_prices`. Clears previous results.
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::NoData`], [`ClaError::UnknownReturns`] or [`ClaError::DimensionMismatch`]
+    /// under the same conditions as [`CLA::allocate`].
     pub fn _initialise(
         &mut self,
         asset_prices: &DMatrix<f64>,
@@ -267,6 +425,12 @@ impl CLA {
         Ok(())
     }
 
+    /// Removes turning points whose weights do not sum to 1 or break a bound by more than
+    /// `tol` (called by [`CLA::allocate`]; public for parity testing).
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::IndexError`] if the result vectors or bounds disagree in length.
     pub fn _purge_num_err(&mut self, tol: f64) -> Result<(), ClaError> {
         if self.weights.len() != self.lambdas.len()
             || self.weights.len() != self.gammas.len()
@@ -305,6 +469,12 @@ impl CLA {
         Ok(())
     }
 
+    /// Removes turning points whose expected return is below that of a later point
+    /// (called by [`CLA::allocate`]; public for parity testing).
+    ///
+    /// # Errors
+    ///
+    /// [`ClaError::IndexError`] if the result vectors disagree in length.
     pub fn _purge_excess(&mut self) -> Result<(), ClaError> {
         if self.weights.len() != self.lambdas.len()
             || self.weights.len() != self.gammas.len()
@@ -374,6 +544,8 @@ fn pct_change(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, ClaError> {
     Ok(out)
 }
 
+/// Sample covariance (ddof = 1) of a returns matrix with one row per observation and one
+/// column per asset. Fewer than two rows give a zero matrix.
 pub fn covariance(returns: &DMatrix<f64>) -> DMatrix<f64> {
     let rows = returns.nrows();
     let cols = returns.ncols();

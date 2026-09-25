@@ -1,7 +1,5 @@
 import pytest
-
 from _core_fixtures import finite_max, finite_mean, load_csv_columns
-
 from openquant import microstructural
 
 

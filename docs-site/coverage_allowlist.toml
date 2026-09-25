@@ -21,3 +21,7 @@ expires = 2026-12-31
 [python.bars]
 reason = "Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted."
 expires = 2026-12-31
+
+[rust.dynamic_allocation]
+reason = "AFML Ch 21's partition/trajectory search (#112), new. It needs a page (or a section of the Ch 21 combinatorial-optimization page, rewritten in #114, claiming it) once #114 lands."
+expires = 2026-12-31

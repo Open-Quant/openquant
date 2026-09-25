@@ -43,20 +43,23 @@ uv run --python .venv/bin/python python -c "import openquant; print('ok')"
 
 The Python distribution will be published as **`pyopenquant`**; the import name is
 `openquant`. Do not `pip install openquant` - that name on PyPI belongs to an
-unrelated project.
+unrelated project. The extension builds against a patched `pyo3-polars`
+checked in under `vendor/` (see `vendor/README.md`), so it ships only as a
+wheel. The `openquant` Rust crate does not depend on that patch.
 
 ## Quick Start
 ```bash
-# Fast validation (default CI path)
+# Fast validation (what CI runs on every PR)
 cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 
-# Long-running SADF hotspot (explicit)
+# Long-running SADF hotspot (explicit; CI runs it nightly and on release tags)
 cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
 
 # Benchmarks
 cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
 
-# Collect + check benchmark thresholds
+# Collect + check benchmark thresholds against the committed baseline (machine-specific;
+# CI instead compares a PR's head with its base on the same runner)
 python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
 python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json
 ```
@@ -108,6 +111,11 @@ bun run dev
 ```
 
 Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.
+
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test and docs gates, and pull
+request conventions, and [tests/FIXTURES.md](tests/FIXTURES.md) for where the test
+fixtures come from. Report security problems privately ([SECURITY.md](SECURITY.md)).
 
 ## License
 MIT (`LICENSE`)

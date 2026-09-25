@@ -1,18 +1,23 @@
 mod helpers;
 
 mod backtest_stats;
+mod backtesting_engine;
 mod bars;
 mod bet_sizing;
 mod cla;
 mod codependence;
+mod cross_validation;
 mod data;
+mod dynamic_allocation;
 mod ef3m;
 mod ensemble;
 mod fast_ewma;
+mod feature_importance;
 mod filters;
 mod fracdiff;
 mod hcaa;
 mod hrp;
+mod hyperparameter_tuning;
 mod labeling;
 mod microstructural;
 mod onc;
@@ -59,5 +64,10 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     onc::register(py, m)?;
     cla::register(py, m)?;
     sb_bagging::register(py, m)?;
+    cross_validation::register(py, m)?;
+    backtesting_engine::register(py, m)?;
+    feature_importance::register(py, m)?;
+    hyperparameter_tuning::register(py, m)?;
+    dynamic_allocation::register(py, m)?;
     Ok(())
 }

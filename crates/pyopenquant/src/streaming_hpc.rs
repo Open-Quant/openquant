@@ -6,18 +6,25 @@ use crate::helpers::to_py_err;
 /// Python-facing stream event: `(timestamp_ns, price, buy_volume, sell_volume, venue_id)`.
 type StreamEventRow = (i64, f64, f64, f64, usize);
 
-/// Python-facing snapshot: `(timestamp_ns, price, vpin, hhi, normalized_risk_score, is_alert)`.
-type SnapshotRow = (i64, f64, Option<f64>, Option<f64>, Option<f64>, bool);
+/// Python-facing snapshot:
+/// `(timestamp_ns, price, vpin, hhi, normalized_risk_score, is_alert, vpin_cdf)`.
+/// `vpin_cdf` is last so that the first six positions keep their meaning.
+type SnapshotRow = (i64, f64, Option<f64>, Option<f64>, Option<f64>, bool, Option<f64>);
 
+/// `vpin_cdf_threshold` applies to the empirical CDF of VPIN over the last `cdf_lookback` VPIN
+/// values (one per completed bucket), not to raw VPIN; e.g. 0.99 with `cdf_lookback >= 50`.
+/// HHI weights venues by their share of volume over the last `lookback_events` events.
 #[pyfunction(name = "run_streaming_pipeline")]
+#[allow(clippy::too_many_arguments)]
 fn shpc_run_streaming_pipeline(
     py: Python<'_>,
     events: Vec<StreamEventRow>,
     bucket_volume: f64,
     support_buckets: usize,
     lookback_events: usize,
-    vpin_threshold: f64,
+    vpin_cdf_threshold: f64,
     hhi_threshold: f64,
+    cdf_lookback: usize,
 ) -> PyResult<PyObject> {
     let stream_events: Vec<openquant::streaming_hpc::StreamEvent> = events
         .into_iter()
@@ -31,10 +38,10 @@ fn shpc_run_streaming_pipeline(
         .collect();
 
     let cfg = openquant::streaming_hpc::StreamingPipelineConfig {
-        vpin: openquant::streaming_hpc::VpinConfig { bucket_volume, support_buckets },
+        vpin: openquant::streaming_hpc::VpinConfig { bucket_volume, support_buckets, cdf_lookback },
         hhi: openquant::streaming_hpc::HhiConfig { lookback_events },
         thresholds: openquant::streaming_hpc::AlertThresholds {
-            vpin: vpin_threshold,
+            vpin_cdf: vpin_cdf_threshold,
             hhi: hhi_threshold,
         },
     };
@@ -47,7 +54,17 @@ fn shpc_run_streaming_pipeline(
     let snapshots: Vec<SnapshotRow> = report
         .snapshots
         .into_iter()
-        .map(|s| (s.timestamp_ns, s.price, s.vpin, s.hhi, s.normalized_risk_score, s.is_alert))
+        .map(|s| {
+            (
+                s.timestamp_ns,
+                s.price,
+                s.vpin,
+                s.hhi,
+                s.normalized_risk_score,
+                s.is_alert,
+                s.vpin_cdf,
+            )
+        })
         .collect();
     d.set_item("snapshots", snapshots)?;
 
