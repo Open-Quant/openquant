@@ -135,7 +135,10 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
         let end_ts = ev.t1.unwrap_or(last_ts);
         let end_idx = close_index.get(&end_ts).copied().unwrap_or(close.len() - 1);
         if end_idx <= start_idx {
-            ev.t1 = Some(end_ts);
+            // No bar after t0 to check. A vertical barrier at or before t0 stays as it is; with
+            // no vertical barrier (an event on the last bar) the outcome is unknown and t1
+            // stays None, as below. Filling in `last_ts` here used to give t1 = t0 and a
+            // label of 0 (#162).
             continue;
         }
 
@@ -172,11 +175,9 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
 /// `NaN` or not above `config.min_ret`, or (when `side_prediction` is given) they have no
 /// side. For each kept event, `t1` is the first bar whose side-signed simple return from
 /// `t0` goes strictly beyond `pt * trgt` or `-sl * trgt`, or the vertical barrier if that is
-/// earlier. With no vertical barrier and no touch, `t1` stays `None`. Returns
-/// `(t0, event)` pairs in `t_events` order.
-///
-/// An event on the last bar with no vertical barrier gets `t1 = t0`, and so a zero return,
-/// rather than `None`.
+/// earlier. With no vertical barrier and no touch, `t1` stays `None`; that includes an event
+/// on the last bar, which has no later bar to touch. Such events are kept here and skipped
+/// by [`triple_barrier_labels`]. Returns `(t0, event)` pairs in `t_events` order.
 pub fn triple_barrier_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
