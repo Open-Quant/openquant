@@ -137,7 +137,9 @@ mutations.
    confirmed by reading (row-major fill into `from_vec`); no test here exercises them.
    Tracked in #93.
 2. **backtesting_engine embargoes before the test block as well as after - deviation from AFML
-   7.4.2, conservative.** `src/backtesting_engine.rs:602` (`test_idx.saturating_sub(embargo_width)`).
+   7.4.2, conservative.** *Fixed by #94: the embargo now follows each test block only, counted
+   from the end of the purge as in Snippet 7.3; the test below is no longer ignored.*
+   `src/backtesting_engine.rs:602` (`test_idx.saturating_sub(embargo_width)`).
    AFML embargoes only the samples that follow a test set. Not a leak; it discards training data
    (2 x h per fold). Could be a deliberate design choice, but it is undocumented and
    `cross_validation::PurgedKFold` in this same crate has the same two-sided shape, so I lean
