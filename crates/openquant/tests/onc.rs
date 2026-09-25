@@ -74,9 +74,21 @@ fn test_get_onc_clusters() {
     let result = get_onc_clusters(&corr, 50).unwrap();
 
     assert!(result.clusters.len() >= 5);
-    assert!(contains_cluster(&result.clusters, &[11, 14, 18]));
-    assert!(contains_cluster(&result.clusters, &[0, 2, 3, 10, 12, 13, 20, 22, 23]));
-    assert!(contains_cluster(&result.clusters, &[5, 6, 7, 25, 26, 27]));
+    // The clusters that ONC (MLAM snippets 4.1-4.2, scikit-learn KMeans) finds under every seed:
+    // tests/fixtures/onc/generate_breast_cancer.py.
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/onc/breast_cancer_reference.json");
+    let reference: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for cluster in reference["stable_clusters"].as_array().unwrap() {
+        let members: Vec<usize> =
+            cluster.as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+        assert!(
+            contains_cluster(&result.clusters, &members),
+            "missing {members:?}; got {:?}",
+            result.clusters
+        );
+    }
 }
 
 #[test]

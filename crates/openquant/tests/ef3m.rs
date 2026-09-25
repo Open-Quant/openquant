@@ -36,6 +36,10 @@ fn test_get_moments() {
     }
 }
 
+// The moment vector [0.7, 2.6, 0.4, 25.0, -59.8] used below is the first five raw moments of the
+// mixture mu = (-2, 1), sigma = (2, 1), p_1 = 0.1, the example of Lopez de Prado and Foreman
+// (2014); e.g. E[x] = 0.1 * -2 + 0.9 * 1 = 0.7 and E[x^2] = 0.1 * (4 + 4) + 0.9 * (1 + 1) = 2.6.
+// The other inputs are arbitrary; every expected value in this file is computed in the test.
 #[test]
 fn test_iter_4_checks_and_success() {
     assert!(M2N::with_defaults(vec![1.0, 2.0, 3.0, 4.0, 5.0]).iter_4(3.0, 1.0).is_empty());

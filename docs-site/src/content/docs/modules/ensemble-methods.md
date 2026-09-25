@@ -2,7 +2,7 @@
 title: "ensemble_methods"
 description: "Diagnostics for bagged ensembles: how much variance averaging removes, given how correlated the estimators are."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -174,7 +174,7 @@ assert!((decision.expected_bagging_variance - 0.328).abs() < 1e-12);
 - **The formula assumes equal variances and one average correlation.** A few strong models
   among many weak ones, or clusters of near-identical models, break it; the realised column
   in the example is the honest check.
-- **From Python, vote and label outputs are `bytes`.** Wrap them in `list()`.
+- **From Python, vote and label outputs are lists of 0/1 ints.**
   `bias_variance_noise` returns a plain tuple `(bias_sq, variance, noise, mse)` with `noise`
   `None` unless `y_expected` is passed, and
   `recommend_bagging_vs_boosting` a dict.

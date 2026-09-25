@@ -26,5 +26,8 @@ fn test_ewma() {
 
     assert_eq!(ewma_res.len(), price_arr.len());
     assert_eq!(ewma_res[0], price_arr[0]);
-    assert!((ewma_res[1] - 1100.0).abs() < 1e-5);
+    // By hand: the first two prices are 1205 and 1005, alpha = 2 / 21, so the adjusted EWMA is
+    // (1005 + (19/21) 1205) / (1 + 19/21) = (21 * 1005 + 19 * 1205) / 40 = 44000 / 40 = 1100.
+    assert_eq!(&price_arr[..2], &[1205.0, 1005.0]);
+    assert!((ewma_res[1] - 1100.0).abs() < 1e-9);
 }

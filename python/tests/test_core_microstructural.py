@@ -1,6 +1,13 @@
+import math
+
 import pytest
-from _core_fixtures import finite_max, finite_mean, load_csv_columns
+from _core_fixtures import finite_max, finite_mean, load_csv_columns, load_json
 from openquant import microstructural
+
+# Written by tests/fixtures/microstructural_features/generate.py (AFML ch. 19 in pandas).
+REFERENCE = load_json("microstructural_features/reference.json")
+# Same arithmetic as the reference, so only rounding separates the two.
+REL_TOL = 1e-9
 
 
 def _load_dollar_bars():
@@ -8,6 +15,16 @@ def _load_dollar_bars():
         "microstructural_features/dollar_bar_sample.csv",
         ["close", "high", "low", "cum_dollar", "cum_vol"],
     )
+
+
+def _assert_matches(series, key):
+    expected = REFERENCE[key]
+    first = expected["first_finite"]
+    assert all(math.isnan(v) for v in series[:first]), key
+    assert math.isfinite(series[first]), key
+    assert finite_max(series) == pytest.approx(expected["max"], rel=REL_TOL)
+    assert finite_mean(series) == pytest.approx(expected["mean"], rel=REL_TOL)
+    assert series[expected["position"]] == pytest.approx(expected["at_position"], rel=REL_TOL)
 
 
 def test_first_generation_features():
@@ -21,21 +38,10 @@ def test_first_generation_features():
     for series in (roll, roll_impact, corwin_schultz, bekker):
         assert len(series) == len(close)
 
-    assert abs(finite_max(roll) - 7.1584) < 1e-3
-    assert abs(finite_mean(roll) - 2.341) < 1e-3
-    assert abs(roll[25] - 1.176) < 1e-3
-
-    assert abs(finite_max(roll_impact) - 1.022e-7) < 1e-8
-    assert abs(finite_mean(roll_impact) - 3.3445e-8) < 1e-8
-    assert abs(roll_impact[25] - 1.6807e-8) < 1e-6
-
-    assert abs(finite_max(corwin_schultz) - 0.01652) < 1e-4
-    assert abs(finite_mean(corwin_schultz) - 0.00151602) < 1e-4
-    assert abs(corwin_schultz[25] - 0.00139617) < 1e-4
-
-    assert abs(finite_max(bekker) - 0.018773) < 1e-4
-    assert abs(finite_mean(bekker) - 0.001456) < 1e-4
-    assert abs(bekker[25] - 0.000517) < 1e-4
+    _assert_matches(roll, "roll_measure")
+    _assert_matches(roll_impact, "roll_impact")
+    _assert_matches(corwin_schultz, "corwin_schultz")
+    _assert_matches(bekker, "becker_parkinson")
 
 
 def test_second_generation_bar_based_lambdas():
@@ -46,17 +52,9 @@ def test_second_generation_bar_based_lambdas():
     amihud = microstructural.get_bar_based_amihud_lambda(close, cum_dollar, 20)
     hasbrouck = microstructural.get_bar_based_hasbrouck_lambda(close, cum_dollar, 20)
 
-    assert abs(finite_max(kyle) - 0.000163423) < 1e-6
-    assert abs(finite_mean(kyle) - 7.02e-5) < 1e-5
-    assert abs(kyle[25] - 7.76e-5) < 1e-5
-
-    assert abs(finite_max(amihud) - 4.057838e-11) < 1e-13
-    assert abs(finite_mean(amihud) - 1.7213e-11) < 1e-12
-    assert abs(amihud[25] - 1.8439e-11) < 1e-12
-
-    assert abs(finite_max(hasbrouck) - 3.39527e-7) < 1e-9
-    assert abs(finite_mean(hasbrouck) - 1.44037e-7) < 1e-8
-    assert abs(hasbrouck[25] - 1.5433e-7) < 1e-8
+    _assert_matches(kyle, "kyle_lambda")
+    _assert_matches(amihud, "amihud_lambda")
+    _assert_matches(hasbrouck, "hasbrouck_lambda")
 
 
 def test_third_generation_vpin():
@@ -66,13 +64,8 @@ def test_third_generation_vpin():
     vpin_1 = microstructural.get_vpin(cum_vol, buy_volume, 1)
     vpin_20 = microstructural.get_vpin(cum_vol, buy_volume, 20)
 
-    assert abs(finite_max(vpin_1) - 0.999) < 1e-3
-    assert abs(finite_mean(vpin_1) - 0.501) < 1e-3
-    assert abs(vpin_1[25] - 0.554) < 1e-3
-
-    assert abs(finite_max(vpin_20) - 0.6811) < 1e-3
-    assert abs(finite_mean(vpin_20) - 0.500) < 1e-3
-    assert abs(vpin_20[45] - 0.4638) < 1e-3
+    _assert_matches(vpin_1, "vpin_1")
+    _assert_matches(vpin_20, "vpin_20")
 
 
 def test_tick_rule_encoding():
@@ -91,10 +84,20 @@ def test_entropy_calculations():
     encoding = microstructural.quantile_mapping(message_array, 2)
     encoded = microstructural.encode_array(message_array, encoding)
 
-    assert abs(microstructural.get_shannon_entropy(message) - 1.0) < 1e-3
-    assert abs(microstructural.get_lempel_ziv_entropy(message) - 0.625) < 1e-3
-    assert abs(plug_in - 0.985) < 1e-3
-    assert abs(microstructural.get_konto_entropy(message, 0) - 0.9682) < 1e-3
+    # Worked by hand from AFML ch. 18 for "11100001":
+    # Shannon: four 1s and four 0s, so -2 * (1/2) log2(1/2) = 1.
+    assert microstructural.get_shannon_entropy(message) == pytest.approx(1.0, abs=1e-12)
+    # Lempel-Ziv (snippet 18.2): library 1, 11, 0, 00, 01 -> 5 words / 8 chars.
+    assert microstructural.get_lempel_ziv_entropy(message) == pytest.approx(5 / 8, abs=1e-12)
+    # Plug-in, word length 1 (snippet 18.1): the snippet's pmf reads msg[i-1] for
+    # i in 1..len, i.e. "1110000" (the last character is not counted):
+    # p(1) = 3/7, p(0) = 4/7.
+    p1, p0 = 3 / 7, 4 / 7
+    assert plug_in == pytest.approx(-(p1 * math.log2(p1) + p0 * math.log2(p0)), abs=1e-12)
+    # Kontoyiannis, expanding window (snippets 18.3-18.4): points i = 1..4 with
+    # match length + 1 of 2, 2, 1, 4, so h = mean(log2(i+1) / L_i).
+    konto = (math.log2(2) / 2 + math.log2(3) / 2 + math.log2(4) / 1 + math.log2(5) / 4) / 4
+    assert microstructural.get_konto_entropy(message, 0) == pytest.approx(konto, abs=1e-12)
     assert abs(plug_in - microstructural.get_plug_in_entropy(encoded, 1)) < 1e-9
 
 

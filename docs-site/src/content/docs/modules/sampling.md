@@ -2,7 +2,7 @@
 title: "sampling"
 description: "Label concurrency, average uniqueness and the sequential bootstrap, for training sets whose labels overlap in time."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -64,7 +64,7 @@ The example is the one AFML works by hand in §4.5.3: three labels over six bars
 from openquant import sampling
 
 spans = [(0, 2), (2, 3), (4, 5)]  # (first bar, last bar) of each label, inclusive
-ind = [list(row) for row in sampling.get_ind_matrix(spans, list(range(6)))]
+ind = sampling.get_ind_matrix(spans, list(range(6)))
 for bar, row in enumerate(ind):
     print(f"bar {bar}: {row}  concurrent = {sum(row)}")
 
@@ -140,7 +140,7 @@ from openquant import sampling
 # 40 labels of 10 bars each, a new one every 3 bars: every label overlaps six others.
 n, length, step = 40, 10, 3
 spans = [(step * i, step * i + length - 1) for i in range(n)]
-ind = [list(row) for row in sampling.get_ind_matrix(spans, list(range(step * n + length)))]
+ind = sampling.get_ind_matrix(spans, list(range(step * n + length)))
 
 def sample_uniqueness(drawn):
     return sampling.get_ind_mat_average_uniqueness([[row[c] for c in drawn] for row in ind])
@@ -214,9 +214,9 @@ length and a warm-up index beyond the last label are each an `InputError`.
   not an error: both `num_concurrent_events` and `get_ind_matrix` truncate the span silently.
 - **`num_concurrent_events` ignores its third argument.** It is kept for signature
   compatibility with Snippet 4.1; pass an empty list.
-- **From Python, rows come back as `bytes`.** `get_ind_matrix` returns a list of `bytes`
-  objects. Indexing one gives an `int` and the other functions accept them as they are, but
-  wrap rows in `list()` before slicing columns or printing, as the examples do.
+- **From Python, the matrix is a list of lists of 0/1 ints**, one inner list per bar. Each
+  cell is an eight-byte pointer where Rust stores one byte, so the density warning above bites
+  sooner from Python.
 - **Uniqueness is not a weight yet.** A sample weight also reflects how much happened during
   the label; see [`sample-weights`](/modules/sample-weights/).
 

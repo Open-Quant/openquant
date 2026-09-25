@@ -89,14 +89,25 @@ def notebook_fingerprint(text: str) -> list[str]:
     for idx, cell in enumerate(nb["cells"]):
         lines.append(f"## cell {idx} [{cell['cell_type']}]")
         lines.extend("".join(cell["source"]).splitlines())
+        # Where the kernel splits stdout into stream outputs depends on flush timing, so
+        # consecutive stdout outputs are joined and compared as one.
+        stdout: list[str] = []
+
+        def flush_stdout() -> None:
+            if stdout:
+                lines.append("-> stream:stdout")
+                lines.extend(normalize_text("".join(stdout)).splitlines())
+                stdout.clear()
+
         for out in cell.get("outputs", []):
             kind = out["output_type"]
             if kind == "stream" and out["name"] == "stderr":
                 continue  # warnings and one-off notices (font cache builds) vary by machine
             if kind == "stream":
-                lines.append(f"-> stream:{out['name']}")
-                lines.extend(normalize_text("".join(out["text"])).splitlines())
-            elif kind == "error":
+                stdout.append("".join(out["text"]))
+                continue
+            flush_stdout()
+            if kind == "error":
                 lines.append(f"-> error {out['ename']}: {out['evalue']}")
             else:
                 for mime, data in sorted(out.get("data", {}).items()):
@@ -108,6 +119,7 @@ def notebook_fingerprint(text: str) -> list[str]:
                     if not isinstance(data, str):
                         data = json.dumps(data, sort_keys=True, indent=1)
                     lines.extend(normalize_text(data).splitlines())
+        flush_stdout()
     return lines
 
 

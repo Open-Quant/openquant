@@ -1,0 +1,18 @@
+{
+  "source": "MLAM ch. 3 snippets 3.1-3.3 and Szekely, Rizzo & Bakirov (2007), in numpy 2.5.3 on tests/fixtures/codependence/random_state_42.csv",
+  "n_obs": 1000,
+  "corr_x_y1": 0.10122137068537165,
+  "angular_distance_x_y1": 0.6703650607372927,
+  "absolute_angular_distance_x_y1": 0.6703650607372927,
+  "squared_angular_distance_x_y1": 0.7034750294490113,
+  "distance_correlation_x_y1": 0.529291364408913,
+  "distance_correlation_x_y2": 0.5216239463593741,
+  "optimal_bins_univariate": 15,
+  "optimal_bins_bivariate_x_y1": 9,
+  "mutual_info_x_y1": 0.5228688725834145,
+  "mutual_info_normalised_x_y1": 0.6409642333987833,
+  "mutual_info_x_y1_10_bins": 0.6264238716396385,
+  "variation_of_information_x_y1": 1.425767548566149,
+  "variation_of_information_normalised_x_y1": 0.7316744843171117,
+  "variation_of_information_x_y1_10_bins": 1.4184909443978817
+}

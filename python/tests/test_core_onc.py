@@ -2,7 +2,7 @@ import csv
 import math
 
 import pytest
-from _core_fixtures import FIXTURES
+from _core_fixtures import FIXTURES, load_json
 from openquant import onc
 
 
@@ -46,15 +46,16 @@ def test_get_onc_clusters_on_breast_cancer_fixture():
     # (onc.rs::stabilize_breast_cancer_parity), so these assertions cannot fail; see
     # test_onc_30_assets_clusters_depend_on_the_data below.
     corr = _load_breast_cancer_correlation()
-    assert corr[0][2] == pytest.approx(0.9978552814938109, abs=1e-9)  # radius vs perimeter
+    reference = load_json("onc/breast_cancer_reference.json")
+    assert corr[0][2] == pytest.approx(reference["corr_0_2"], abs=1e-12)  # radius vs perimeter
 
     result = onc.get_onc_clusters(corr, 50)
     clusters = _cluster_sets(result)
 
     assert len(clusters) >= 5
-    assert [11, 14, 18] in clusters
-    assert [0, 2, 3, 10, 12, 13, 20, 22, 23] in clusters
-    assert [5, 6, 7, 25, 26, 27] in clusters
+    # The clusters ONC finds under every seed in tests/fixtures/onc/generate_breast_cancer.py.
+    for cluster in reference["stable_clusters"]:
+        assert cluster in clusters
 
 
 def test_onc_output_is_a_consistent_reordering_of_the_input():

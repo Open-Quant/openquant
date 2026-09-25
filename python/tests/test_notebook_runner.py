@@ -99,6 +99,18 @@ def test_fingerprint_ignores_float_noise_and_png_bytes_but_not_text() -> None:
     assert runner.notebook_fingerprint(nb("0.2", "AAAA")) != base
 
 
+def test_fingerprint_ignores_where_stdout_is_split() -> None:
+    runner = _load("run_notebooks")
+
+    def nb(*chunks: str) -> str:
+        outputs = [{"output_type": "stream", "name": "stdout", "text": [c]} for c in chunks]
+        return json.dumps({"cells": [{"cell_type": "code", "source": ["x"], "outputs": outputs}]})
+
+    base = runner.notebook_fingerprint(nb("a\nb\n"))
+    assert runner.notebook_fingerprint(nb("a", "\nb\n")) == base
+    assert runner.notebook_fingerprint(nb("a\n", "c\n")) != base
+
+
 def test_every_notebook_is_run_or_excluded_with_a_reason() -> None:
     runner = _load("run_notebooks")
     notebooks = runner.discover()

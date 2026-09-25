@@ -1,0 +1,18 @@
+{
+  "source": "AFML ch. 14 (snippet 14.3, section 14.7) and Bailey & Lopez de Prado (2012, 2014) in numpy 2.5.3 / scipy 1.18.1 / pandas 3.0.6",
+  "bets_concentration": 2.011144542685298,
+  "bets_concentration_negated": 2.011144542685298,
+  "all_bets_concentration": {
+    "positive": 0.0014938051716085793,
+    "negative": 0.00162616728130437,
+    "time": 0.019599883871562966
+  },
+  "sharpe_ratio": 0.9874838622020375,
+  "information_ratio": 0.7335594404929422,
+  "psr": 0.9572778803273129,
+  "dsr": 0.958365811747866,
+  "dsr_sample_variance": 0.15237512361221794,
+  "dsr_benchmark_from_params": 1.012241157280674,
+  "dsr_from_params": 0.9417400125058399,
+  "min_trl": 228.73497911054173
+}

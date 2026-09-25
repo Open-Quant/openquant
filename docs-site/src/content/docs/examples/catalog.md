@@ -22,20 +22,21 @@ only `cargo`.
 | File | Run it with | Demonstrates |
 |---|---|---|
 | `crates/openquant/examples/research_notebook_smoke.rs` | `cargo run -p openquant --example research_notebook_smoke` | The minimum Rust path: CUSUM event sampling → max-Sharpe allocation → VaR/ES/CDaR. ~30 lines, asserts its own invariants. |
-| `notebooks/python/scripts/run_notebooks.py` | `just notebooks-run` | Executes all eight research notebooks in a Jupyter kernel and saves their tables and figures; fails on any cell error. CI runs it and checks the committed outputs are current. |
+| `notebooks/python/scripts/run_notebooks.py` | `just notebooks-run` | Executes all ten research notebooks in a Jupyter kernel and saves their tables and figures; fails on any cell error. CI runs it and checks the committed outputs are current. |
 | `notebooks/python/scripts/smoke_all.py` | `just notebook-smoke` | Plain-script mirror of the core notebook calls; a quick check that the Python surface works. |
 | `experiments/run_pipeline.py` | `just exp-run` | A config-driven pipeline run (`experiments/configs/futures_oil_baseline.toml`) that writes artifacts to `experiments/artifacts`. |
 | `python/benchmarks/benchmark_pipeline.py` | `just py-bench` | Times the mid-frequency pipeline over 30 iterations at 2048 bars. |
 | `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Ingestion and bar-building throughput at 200k rows × 4 symbols. Use this if you want a real memory profile before feeding it production data. |
 | `python/tests/` | `just py-test` | Nine test modules that double as usage examples — `test_pipeline_api.py` and `test_bindings_contract.py` are the two worth reading first. |
 
-The eight notebooks under `notebooks/python/` are numbered in reading
+The ten notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
-`08_algo_wheel_experiments.ipynb`. They are committed with their outputs,
+`10_hrp_vs_ivp_cla_oos.ipynb`. Notebooks 09 and 10 are research runbooks,
+listed under [Runbooks](#runbooks) below. They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
-All of them run on synthetic data: `06_afml_real_data_end_to_end.ipynb`
-reads the SYNTHETIC `SYN_A`..`SYN_E` sample through `openquant.data.fetch`,
-and runs on real data only when you pass your own `source=`.
+All of them run on synthetic data: `06_afml_real_data_end_to_end.ipynb`, `09` and `10`
+read the SYNTHETIC `SYN_A`..`SYN_E` sample through `openquant.data.fetch`,
+and run on real data only when you pass your own source.
 
 ### Figures from the executed notebooks
 
@@ -53,6 +54,9 @@ and runs on real data only when you pass your own `source=`.
 Studies that state a hypothesis up front and end with a promotion decision, each with a page under
 Runbooks:
 
+- [Fracdiff: stationarity versus memory](/runbooks/fracdiff-stationarity-memory/) —
+  `09_fracdiff_stationarity_memory.ipynb`, the FFD d-sweep (AFML Fig. 5.5) on SYNTHETIC data,
+  checked against simulated series of known memory.
 - [HRP vs IVP and CLA out of sample](/runbooks/hrp-vs-ivp-cla-oos/) —
   `10_hrp_vs_ivp_cla_oos.ipynb`, AFML §16.6's Monte Carlo on SYNTHETIC data.
 

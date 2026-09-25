@@ -9,7 +9,74 @@ use openquant::microstructural_features::{
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rand_distr::{Distribution, Normal};
+use serde::Deserialize;
 use std::path::Path;
+
+/// Summary of one feature series, as written by
+/// `tests/fixtures/microstructural_features/generate.py` (AFML ch. 19 in pandas).
+#[derive(Deserialize)]
+struct Summary {
+    max: f64,
+    mean: f64,
+    position: usize,
+    at_position: f64,
+    first_finite: usize,
+}
+
+#[derive(Deserialize)]
+struct Reference {
+    roll_measure: Summary,
+    roll_impact: Summary,
+    corwin_schultz: Summary,
+    becker_parkinson: Summary,
+    kyle_lambda: Summary,
+    amihud_lambda: Summary,
+    hasbrouck_lambda: Summary,
+    vpin_1: Summary,
+    vpin_20: Summary,
+}
+
+fn load_reference() -> Reference {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/microstructural_features/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn finite_max(v: &[f64]) -> f64 {
+    v.iter().cloned().filter(|x| x.is_finite()).fold(f64::NAN, f64::max)
+}
+
+fn finite_mean(v: &[f64]) -> f64 {
+    let kept: Vec<f64> = v.iter().cloned().filter(|x| x.is_finite()).collect();
+    kept.iter().sum::<f64>() / kept.len() as f64
+}
+
+fn assert_rel(name: &str, actual: f64, expected: f64, rel: f64) {
+    assert!(
+        (actual - expected).abs() <= rel * expected.abs(),
+        "{name}: got {actual:e}, expected {expected:e} (rel tol {rel:e})"
+    );
+}
+
+/// Same arithmetic as the reference, so only rounding separates the two.
+const REL_TOL: f64 = 1e-9;
+
+fn assert_matches(name: &str, series: &[f64], expected: &Summary) {
+    assert!(
+        series[..expected.first_finite].iter().all(|x| x.is_nan()),
+        "{name}: expected NaN before position {}",
+        expected.first_finite
+    );
+    assert!(series[expected.first_finite].is_finite(), "{name}: first finite value misplaced");
+    assert_rel(&format!("{name} max"), finite_max(series), expected.max, REL_TOL);
+    assert_rel(&format!("{name} mean"), finite_mean(series), expected.mean, REL_TOL);
+    assert_rel(
+        &format!("{name}[{}]", expected.position),
+        series[expected.position],
+        expected.at_position,
+        REL_TOL,
+    );
+}
 
 /// `(close, high, low, cum_dollar, cum_volume)` columns.
 type DollarBarColumns = (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>);
@@ -36,48 +103,15 @@ fn load_dollar_bars() -> DollarBarColumns {
 
 #[test]
 fn test_second_generation_intra_bar() {
-    let (close, _high, _low, cum_dollar, _volume) = load_dollar_bars();
-    let volume: Vec<f64> = {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/microstructural_features/dollar_bar_sample.csv");
-        let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();
-        let mut v = Vec::new();
-        for rec in rdr.records() {
-            let rec = rec.unwrap();
-            v.push(rec[5].parse::<f64>().unwrap());
-        }
-        v
-    };
-    let kyle = get_bar_based_kyle_lambda(&close, &volume, 20).unwrap();
+    let (close, _high, _low, cum_dollar, cum_vol) = load_dollar_bars();
+    let reference = load_reference();
+    let kyle = get_bar_based_kyle_lambda(&close, &cum_vol, 20).unwrap();
     let amihud = get_bar_based_amihud_lambda(&close, &cum_dollar, 20).unwrap();
     let hasbrouck = get_bar_based_hasbrouck_lambda(&close, &cum_dollar, 20).unwrap();
-    let max = |v: &[f64]| v.iter().cloned().fold(f64::NAN, f64::max);
-    let mean = |v: &[f64]| {
-        let mut sum = 0.0;
-        let mut count: f64 = 0.0;
-        for x in v.iter() {
-            if x.is_finite() {
-                sum += *x;
-                count += 1.0;
-            }
-        }
-        if count > 0.0 {
-            sum / count
-        } else {
-            f64::NAN
-        }
-    };
-    assert!((max(&kyle) - 0.000163423).abs() < 1e-6);
-    assert!((mean(&kyle) - 7.02e-5).abs() < 1e-5);
-    assert!((kyle[25] - 7.76e-5).abs() < 1e-5);
 
-    assert!((max(&amihud) - 4.057838e-11).abs() < 1e-13);
-    assert!((mean(&amihud) - 1.7213e-11).abs() < 1e-12);
-    assert!((amihud[25] - 1.8439e-11).abs() < 1e-12);
-
-    assert!((max(&hasbrouck) - 3.39527e-7).abs() < 1e-9);
-    assert!((mean(&hasbrouck) - 1.44037e-7).abs() < 1e-8);
-    assert!((hasbrouck[25] - 1.5433e-7).abs() < 1e-8);
+    assert_matches("kyle", &kyle, &reference.kyle_lambda);
+    assert_matches("amihud", &amihud, &reference.amihud_lambda);
+    assert_matches("hasbrouck", &hasbrouck, &reference.hasbrouck_lambda);
 }
 
 #[test]
@@ -86,29 +120,10 @@ fn test_third_generation_features() {
     let bvc = get_bvc_buy_volume(&close, &cum_vol, 20).unwrap();
     let vpin1 = get_vpin(&cum_vol, &bvc, 1).unwrap();
     let vpin20 = get_vpin(&cum_vol, &bvc, 20).unwrap();
-    let max = |v: &[f64]| v.iter().cloned().fold(f64::NAN, f64::max);
-    let mean = |v: &[f64]| {
-        let mut sum = 0.0;
-        let mut count: f64 = 0.0;
-        for x in v.iter() {
-            if x.is_finite() {
-                sum += *x;
-                count += 1.0;
-            }
-        }
-        if count > 0.0 {
-            sum / count
-        } else {
-            f64::NAN
-        }
-    };
-    assert!((max(&vpin1) - 0.999).abs() < 1e-3);
-    assert!((mean(&vpin1) - 0.501).abs() < 1e-3);
-    assert!((vpin1[25] - 0.554).abs() < 1e-3);
+    let reference = load_reference();
 
-    assert!((max(&vpin20) - 0.6811).abs() < 1e-3);
-    assert!((mean(&vpin20) - 0.500).abs() < 1e-3);
-    assert!((vpin20[45] - 0.4638).abs() < 1e-3);
+    assert_matches("vpin_1", &vpin1, &reference.vpin_1);
+    assert_matches("vpin_20", &vpin20, &reference.vpin_20);
 }
 
 #[test]
@@ -128,10 +143,22 @@ fn test_entropy_calculations() {
     let plug_in_arr = get_plug_in_entropy(&encode_array_f64(&message_array, &qmap), 1).unwrap();
     let lempel = get_lempel_ziv_entropy(message);
     let konto = get_konto_entropy(message, 0);
-    assert!((shannon - 1.0).abs() < 1e-3);
-    assert!((lempel - 0.625).abs() < 1e-3);
-    assert!((plug_in - 0.985).abs() < 1e-3);
-    assert!((konto - 0.9682).abs() < 1e-3);
+    // Worked by hand from AFML ch. 18 for "11100001":
+    // Shannon: four 1s and four 0s, so -2 * (1/2) log2(1/2) = 1.
+    assert!((shannon - 1.0).abs() < 1e-12);
+    // Lempel-Ziv (snippet 18.2): library 1, 11, 0, 00, 01 -> 5 words / 8 chars.
+    assert!((lempel - 5.0 / 8.0).abs() < 1e-12);
+    // Plug-in, word length 1 (snippet 18.1): the snippet's pmf reads msg[i-1] for
+    // i in 1..len, i.e. "1110000" (the last character is not counted):
+    // p(1) = 3/7, p(0) = 4/7.
+    let p1: f64 = 3.0 / 7.0;
+    let p0: f64 = 4.0 / 7.0;
+    assert!((plug_in - -(p1 * p1.log2() + p0 * p0.log2())).abs() < 1e-12);
+    // Kontoyiannis, expanding window (snippets 18.3-18.4): points i = 1..4 with
+    // match length + 1 of 2, 2, 1, 4, so h = mean(log2(i+1) / L_i).
+    let konto_expected =
+        (2f64.log2() / 2.0 + 3f64.log2() / 2.0 + 4f64.log2() / 1.0 + 5f64.log2() / 4.0) / 4.0;
+    assert!((konto - konto_expected).abs() < 1e-12);
     assert!((plug_in - plug_in_arr).abs() < 1e-9);
 }
 
@@ -225,37 +252,11 @@ fn test_first_generation_features() {
     assert_eq!(cs.len(), close.len());
     assert_eq!(bekker.len(), close.len());
 
-    let max = |v: &[f64]| v.iter().cloned().fold(f64::NAN, f64::max);
-    let mean = |v: &[f64]| {
-        let mut sum = 0.0;
-        let mut count: f64 = 0.0;
-        for x in v.iter() {
-            if x.is_finite() {
-                sum += *x;
-                count += 1.0;
-            }
-        }
-        if count > 0.0 {
-            sum / count
-        } else {
-            f64::NAN
-        }
-    };
-    assert!((max(&roll) - 7.1584).abs() < 1e-3);
-    assert!((mean(&roll) - 2.341).abs() < 1e-3);
-    assert!((roll[25] - 1.176).abs() < 1e-3);
-
-    assert!((max(&roll_imp) - 1.022e-7).abs() < 1e-8);
-    assert!((mean(&roll_imp) - 3.3445e-8).abs() < 1e-8);
-    assert!((roll_imp[25] - 1.6807e-8).abs() < 1e-6);
-
-    assert!((max(&cs) - 0.01652).abs() < 1e-4);
-    assert!((mean(&cs) - 0.00151602).abs() < 1e-4);
-    assert!((cs[25] - 0.00139617).abs() < 1e-4);
-
-    assert!((max(&bekker) - 0.018773).abs() < 1e-4);
-    assert!((mean(&bekker) - 0.001456).abs() < 1e-4);
-    assert!((bekker[25] - 0.000517).abs() < 1e-4);
+    let reference = load_reference();
+    assert_matches("roll", &roll, &reference.roll_measure);
+    assert_matches("roll_impact", &roll_imp, &reference.roll_impact);
+    assert_matches("corwin_schultz", &cs, &reference.corwin_schultz);
+    assert_matches("bekker_parkinson", &bekker, &reference.becker_parkinson);
 }
 
 #[test]

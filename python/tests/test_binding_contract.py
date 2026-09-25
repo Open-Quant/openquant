@@ -78,7 +78,11 @@ CORE_SUBMODULES = _core_submodules()
 def test_core_submodules_are_discovered():
     # Guards the introspection itself: an empty walk would make every
     # parametrized check below vacuously green.
-    assert len(CORE_SUBMODULES) >= 27
+    lib_rs = TESTS_DIR.parents[1] / "crates" / "pyopenquant" / "src" / "lib.rs"
+    registered = re.findall(r"^\s*(\w+)::register\(py, m\)\?;", lib_rs.read_text(), re.MULTILINE)
+    # 32 today, fast_ewma included; README.md and the setup docs quote this count.
+    assert len(registered) == 32
+    assert CORE_SUBMODULES == sorted(registered)
     for name in CORE_SUBMODULES:
         assert _public_callables(getattr(_core, name)), f"_core.{name} exposes no callables"
 

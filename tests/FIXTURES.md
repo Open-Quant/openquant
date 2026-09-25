@@ -5,7 +5,7 @@ regenerate it. This answers hypothesis H4 of `docs/design/production-readiness-b
 ("fixtures derived from mlfinlab tests have acceptable license provenance") as far as
 it can be answered from public sources; the open items are listed at the end.
 
-Last checked: 2026-09-24. This is a record of facts, not legal advice.
+Last checked: 2026-09-25. This is a record of facts, not legal advice.
 
 ## mlfinlab's license history
 
@@ -65,8 +65,8 @@ Hudson and Thames's rights in the files, not any third-party data vendor's.
 ### Regenerated from a seed (no data copied)
 
 - `codependence/random_state_42.csv`: the three series mlfinlab's
-  `test_codependence.py` builds in its `setUp`. Regenerates exactly (maximum difference
-  0.0) with:
+  `test_codependence.py` builds in its `setUp`. Regenerates to within floating-point
+  rounding, not bit-for-bit (maximum difference 3.6e-15 with numpy 2.5.3 on arm64), with:
 
   ```python
   import numpy as np
@@ -86,49 +86,78 @@ Hudson and Thames's rights in the files, not any third-party data vendor's.
 
 ### Generated in this repository from independent references
 
-Each has a `generate.py` beside it that does not import `openquant` or mlfinlab. They
-implement AFML snippets or call numpy, scipy, pandas or scikit-learn; the docstring of
-each script gives the source and the command.
+Each has a generator beside it that does not import `openquant` or mlfinlab. They
+implement a published formula (AFML chapter and snippet, or the paper cited in the
+docstring) with numpy, scipy, pandas or scikit-learn, and read only the BSD-3 mlfinlab
+v0.8.0 CSVs listed above, scikit-learn's copy of the breast-cancer data, or seeded
+synthetic data. The docstring of each script gives the source and the command to rerun it
+(`uv run --with ... python <path>`). The generators and the files they write are this
+repository's own work, under its MIT license; no value in them was copied from mlfinlab
+code or tests of any version.
 
-| Fixture | Generator | Inputs |
-| --- | --- | --- |
-| `feature_importance/pca_reference.json` | `feature_importance/generate.py` | synthetic, seeded |
-| `hrp/reference.json` | `hrp/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance |
-| `onc/silhouette_reference.json` | `onc/generate.py` | synthetic, seeded |
-| `sample_weights/reference.json` | `sample_weights/generate.py` | `filters/dollar_bar_sample.csv` |
-| `volatility/daily_vol_reference.json` | `volatility/generate.py` | `filters/dollar_bar_sample.csv` |
-| `portfolio_optimization/qp_reference.json` | `portfolio_optimization/generate_qp_reference.py` | `expected_returns_weekly` and `covariance_weekly` from `mean_variance_fixture.json` (see below) |
+| Fixture | Generator | Inputs | Method |
+| --- | --- | --- | --- |
+| `feature_importance/pca_reference.json` | `feature_importance/generate.py` | synthetic, seeded | see the docstring |
+| `hrp/reference.json` | `hrp/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | see the docstring |
+| `onc/silhouette_reference.json` | `onc/generate.py` | synthetic, seeded | see the docstring |
+| `sample_weights/reference.json` | `sample_weights/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
+| `volatility/daily_vol_reference.json` | `volatility/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
+| `portfolio_optimization/qp_reference.json` | `portfolio_optimization/generate_qp_reference.py` | `expected_returns_weekly` and `covariance_weekly` from `mean_variance_fixture.json` | scipy SLSQP |
+| `filters/events.json` | `filters/generate.py` | `filters/dollar_bar_sample.csv` | CUSUM: AFML snippet 2.4 on log prices; z-score: rolling mean + k rolling std (stated in the docstring) |
+| `bet_sizing/prob_dynamic_budget.json` | `bet_sizing/generate_prob_dynamic_budget.py` | hand-written events of `bet_sizing.rs` | AFML snippets 10.1-10.4, section 10.2 (budget) |
+| `bet_sizing/reserve_fixture.json` | `bet_sizing/generate_reserve.py` | synthetic, `numpy default_rng(138)` | AFML section 10.2 (reserve); two-Gaussian fit by EM |
+| `portfolio_optimization/mean_variance_fixture.json` | `portfolio_optimization/generate_mean_variance.py` | `portfolio_optimization/stock_prices.csv` | simple returns; inverse variance; min variance by scipy SLSQP; weekly (mu, C) |
+| `backtest_statistics/reference.json` | `backtest_statistics/generate.py` | `backtest_statistics/dollar_bar_sample.csv`, inline inputs | AFML ch. 14 (snippet 14.3, section 14.7), Bailey & Lopez de Prado 2012/2014 |
+| `codependence/reference.json` | `codependence/generate.py` | `codependence/random_state_42.csv` | MLAM ch. 3 (snippets 3.1-3.3), Szekely, Rizzo & Bakirov 2007 |
+| `microstructural_features/reference.json` | `microstructural_features/generate.py` | `microstructural_features/dollar_bar_sample.csv` | AFML ch. 19 (19.3-19.5) |
+| `structural_breaks/reference.json` | `structural_breaks/generate.py` | `structural_breaks/dollar_bar_sample.csv` | AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) |
+| `volatility/range_reference.json` | `volatility/generate_range.py` | `backtest_statistics/dollar_bar_sample.csv` | Parkinson 1980, Garman & Klass 1980, Yang & Zhang 2000 |
+| `etf_trick/reference.json` | `etf_trick/generate.py` | the five `etf_trick/*.csv` | AFML section 2.4.1 (ETF trick), snippet 2.2 (roll gaps) |
+| `labeling/reference.json` | `labeling/generate.py` | `filters/dollar_bar_sample.csv` | AFML snippets 2.4, 3.1-3.5 |
+| `onc/breast_cancer_reference.json` | `onc/generate_breast_cancer.py` | `onc/breast_cancer.csv` | MLAM snippets 4.1-4.2 with scikit-learn KMeans; clusters found under every seed |
+
+`portfolio_optimization/mean_variance_fixture.json` keeps only the blocks the tests read
+(`weights.inverse_variance`, `weights.min_volatility`, `expected_returns_weekly`,
+`covariance_weekly`). The old file's other weights and its `errors` block, which held
+mlfinlab's error messages, were not used by any test and are gone. It uses simple returns
+(the convention of AFML chapter 16, of #126's `portfolio_optimization`, and of `cla`, `hrp`
+and `hcaa`). If the returns convention ever changes:
+
+```bash
+uv run --with pandas --with scipy python tests/fixtures/portfolio_optimization/generate_mean_variance.py
+uv run --with numpy --with scipy python tests/fixtures/portfolio_optimization/generate_qp_reference.py
+```
 
 ### Output of running mlfinlab: provenance not established
 
-These files hold values computed by running mlfinlab code. `docs/python_pytest_baseline.md`
-records that the reference environment was a local mlfinlab checkout described as
-"v1.0", with local modifications; v1.0 postdates the April 2020 license change (v0.12.3
-was already "All Rights Reserved"), and the exact revision and its license were not
-recorded. The generators for some of them are not in this repository.
+None. The four files that used to be listed here (`filters/events.json`,
+`bet_sizing/reserve_fixture.json`, `bet_sizing/prob_dynamic_budget.json`,
+`portfolio_optimization/mean_variance_fixture.json`) were regenerated from independent
+references by #138 and are listed in the table above.
 
-| File | What it is | Generator |
-| --- | --- | --- |
-| `filters/events.json` | `cusum_filter` / `z_score_filter` output on `dollar_bar_sample.csv` | inline script in `filters/README.md` (imports mlfinlab) |
-| `bet_sizing/reserve_fixture.json` | EF3M fit and `bet_size` on a 500-sample synthetic set | `scripts/gen_bet_sizing_fixtures.py` in the mlfinlab checkout, not in this repository (`crates/openquant/tests/fixtures/bet_sizing/README.md`) |
-| `bet_sizing/prob_dynamic_budget.json` | bet-sizing outputs (probability, dynamic, budget) | not recorded |
-| `portfolio_optimization/mean_variance_fixture.json` | mean-variance weights, plus weekly expected returns and covariance of `stock_prices.csv`; its `errors` block holds mlfinlab's own error message | not recorded |
+### Inline expected values
 
-Computed numbers are not obviously copyrightable, but whether they may be kept, and
-whether they should be replaced with independent references (as was done for
-`sample_weights`, `volatility` and `hrp`), is for the maintainer to decide.
+Values that were written into tests and quoted from mlfinlab's test suite now come from one
+of the fixtures above, or are derived by hand in a comment next to the assertion.
 
-The same applies to expected values written inline in tests that were quoted from
-mlfinlab's test suite (see `tests/crosswalk.md` and `docs/test-sensitivity-audit.md`,
-"mlfinlab reference literals"): which mlfinlab version they were copied from is not
-recorded.
+| Test | Now checked against |
+| --- | --- |
+| `backtest_statistics.rs`, `test_core_backtest_stats.py` | `backtest_statistics/reference.json`; holding period and drawdowns by hand |
+| `codependence.rs`, `test_core_codependence.py` | `codependence/reference.json` |
+| `microstructural_features.rs`, `test_core_microstructural.py` | `microstructural_features/reference.json`; entropies of "11100001" by hand |
+| `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` (the Chu-Stinchcombe-White statistic is also pinned to the library's own output; see the FINDING test) |
+| `volatility_features.rs`, `test_core_volatility.py` | `volatility/range_reference.json` |
+| `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` (the two ETF values that remain inline pin the library's own output; see the FINDING test) |
+| `labeling.rs` | `labeling/reference.json` |
+| `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json` |
+| `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage) |
+| `fast_ewma.rs`, `test_core_fast_ewma.py` | by hand: (21 * 1005 + 19 * 1205) / 40 = 1100 |
+| `sampling.rs` | by hand, AFML section 4.5.3's worked example (5/6, 3/4, 1; 6/7; 5/14, 3/14, 6/14) |
+| `ef3m.rs`, `test_core_ef3m.py` | expected values computed in the test; the moment vector is the example of Lopez de Prado & Foreman (2014), derivable by hand |
 
 ## Open items
 
-1. Record, or recover, the mlfinlab revision used for the four "output of running
-   mlfinlab" files above, or regenerate them from independent references.
-2. Record which mlfinlab version the inline expected values were quoted from.
-3. Decide whether the BSD notice below should also ship in any source distribution that
+1. Decide whether the BSD notice below should also ship in any source distribution that
    includes `tests/fixtures/` (it does today only because this file is in the repository).
 
 ## mlfinlab BSD 3-Clause notice
