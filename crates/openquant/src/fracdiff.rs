@@ -62,8 +62,13 @@ pub fn get_weights(diff_amt: f64, size: usize) -> Vec<f64> {
 /// Weights are generated with the same recursion as [`get_weights`] until the next one is
 /// smaller than `thresh` in absolute value, or until `lim` weights have been produced,
 /// whichever comes first. The result is oldest lag first (last element `w_0 = 1`). Returns an
-/// empty vector when `lim == 0`. The cap only takes effect for `lim >= 2`: with `lim == 1`
-/// the loop stops on the threshold alone.
+/// empty vector when `lim == 0` and `[1.0]` when `lim == 1`; the result never has more than
+/// `lim` elements.
+///
+/// The cap is what guarantees termination: for a non-integer `diff_amt` the weights never
+/// reach zero, so a `thresh <= 0` (or `NaN`) never stops the expansion and the result has
+/// exactly `lim` weights. Such a threshold is accepted, not rejected, and simply means "cap
+/// only".
 ///
 /// `thresh` is a floor on a single weight's magnitude, not a share of cumulative weight as in
 /// [`frac_diff`].
@@ -74,25 +79,23 @@ pub fn get_weights(diff_amt: f64, size: usize) -> Vec<f64> {
 /// // d = 1: the expansion ends at an exact zero after two weights.
 /// assert_eq!(get_weights_ffd(1.0, 1e-5, 100), vec![-1.0, 1.0]);
 /// assert_eq!(get_weights_ffd(0.5, 1e-2, 10_000).len(), 10);
+///
+/// // A zero threshold never stops the expansion; the cap does.
+/// assert_eq!(get_weights_ffd(0.5, 0.0, 1), vec![1.0]);
+/// assert_eq!(get_weights_ffd(0.5, 0.0, 4), vec![-0.0625, -0.125, -0.5, 1.0]);
 /// ```
 pub fn get_weights_ffd(diff_amt: f64, thresh: f64, lim: usize) -> Vec<f64> {
     if lim == 0 {
         return Vec::new();
     }
     let mut weights = vec![1.0];
-    let mut k = 1usize;
-    let mut ctr = 0usize;
-    loop {
-        let next = -weights[weights.len() - 1] * (diff_amt - k as f64 + 1.0) / k as f64;
+    while weights.len() < lim {
+        let k = weights.len();
+        let next = -weights[k - 1] * (diff_amt - k as f64 + 1.0) / k as f64;
         if next.abs() < thresh {
             break;
         }
         weights.push(next);
-        k += 1;
-        ctr += 1;
-        if ctr == lim - 1 {
-            break;
-        }
     }
     weights.reverse();
     weights

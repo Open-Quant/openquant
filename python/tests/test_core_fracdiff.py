@@ -68,6 +68,13 @@ def test_frac_diff_lengths_and_leading_nan():
         assert math.isnan(out[0])
 
 
+def test_get_weights_ffd_honours_lim_even_with_zero_threshold():
+    # #169: lim == 1 used to be ignored, so a zero threshold never stopped the expansion.
+    assert fracdiff.get_weights_ffd(0.5, 0.0, 1) == [1.0]
+    assert fracdiff.get_weights_ffd(0.5, 0.0, 4) == pytest.approx([-0.0625, -0.125, -0.5, 1.0])
+    assert fracdiff.frac_diff_ffd([4.0], 0.5, 0.0) == [4.0]
+
+
 def test_fracdiff_rejects_invalid_arguments():
     with pytest.raises(OverflowError):
         fracdiff.get_weights(0.5, -1)
