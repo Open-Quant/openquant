@@ -176,8 +176,7 @@ Both return `(event start, weight)` pairs in the order the events were given.
   timestamps, so an event time that is not a bar time still works. An `end` before its
   `start` is rejected with `SampleWeightsError::EndBeforeStart`, which names the first
   offending event (a `ValueError` from Python). From Python, timestamps are
-  `"%Y-%m-%d %H:%M:%S"` strings with whole seconds
-  ([#87](https://github.com/Open-Quant/openquant/issues/87)).
+  `"%Y-%m-%d %H:%M:%S"` strings with an optional fractional second.
 - **Class imbalance is a separate correction.** Neither function looks at the label. AFML
   §4.8 handles imbalance with `class_weight='balanced'` in the learner, on top of these.
 
