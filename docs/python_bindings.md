@@ -190,6 +190,15 @@ Default behavior:
 - configurable scoring: `neg_log_loss`, `accuracy`, `f1`
 - notebook-ready outputs: polars tables + viz payload dictionaries
 
+### Validation, backtesting, feature importance and tuning (AFML Ch.7-9, 12)
+These return indices and score results; the model stays in Python, so any scikit-learn-style
+estimator works. Label spans `t0`/`t1` (datetimes or integers) are required wherever purging
+happens. Full documentation is on each module page.
+- `openquant.cross_validation`: `purged_kfold_splits`, `split_with_diagnostics`, `cpcv_splits`, `cpcv_paths`, `naive_kfold_splits`, `count_train_test_overlaps` (numpy index arrays; usable as scikit-learn `cv=`)
+- `openquant.backtesting_engine`: `cpcv_path_count`, `run_cpcv` (per-split out-of-sample returns in, split and path statistics out), `assemble_cpcv_paths`
+- `openquant.feature_importance`: `mean_decrease_impurity`, `mean_decrease_accuracy`, `single_feature_importance`, `mda_from_probabilities`, `sfi_from_probabilities`
+- `openquant.hyperparameter_tuning`: `expand_param_grid`, `sample_param_sets`, `classification_score`, `purged_search`
+
 Example:
 
 ```python

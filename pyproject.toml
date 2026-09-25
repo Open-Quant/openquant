@@ -20,7 +20,7 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["polars>=1.0,<2", "pyarrow>=15,<20"]
+dependencies = ["numpy>=1.26,<3", "polars>=1.0,<2", "pyarrow>=15,<20"]
 
 [project.urls]
 Homepage = "https://open-quant.github.io/openquant/"
@@ -42,6 +42,9 @@ dev = [
   "pytest-cov>=5",
   "ruff==0.16.9",
   "mypy==2.3.1",
+  # numpy 2.5 needs Python 3.12 and its stubs use `type` statements, which mypy rejects when
+  # checking for 3.11 ([tool.mypy] python_version). Keeps the lint environment on 2.4.
+  "numpy<2.5",
 ]
 
 [tool.ruff]
@@ -58,7 +61,8 @@ files = ["python/openquant", "python/tests"]
 mypy_path = "python"
 warn_unused_ignores = true
 
-# The compiled extension ships no stubs yet; pandas is an optional extra.
+# The compiled extension ships no stubs yet; pandas is an optional extra, and scikit-learn
+# (used when installed) is not a dependency at all.
 [[tool.mypy.overrides]]
-module = ["openquant._core", "openquant._core.*", "pandas", "pandas.*"]
+module = ["openquant._core", "openquant._core.*", "pandas", "pandas.*", "sklearn", "sklearn.*"]
 ignore_missing_imports = true

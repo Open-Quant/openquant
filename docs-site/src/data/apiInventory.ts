@@ -14,12 +14,25 @@ export const apiInventory = {
       "to_polars_signal_frame",
       "to_polars_weights_frame"
     ],
+    "backtesting_engine": [
+      "assemble_cpcv_paths",
+      "cpcv_path_count",
+      "run_cpcv"
+    ],
     "bars": [
       "bar_diagnostics",
       "build_dollar_bars",
       "build_tick_bars",
       "build_time_bars",
       "build_volume_bars"
+    ],
+    "cross_validation": [
+      "count_train_test_overlaps",
+      "cpcv_paths",
+      "cpcv_splits",
+      "naive_kfold_splits",
+      "purged_kfold_splits",
+      "split_with_diagnostics"
     ],
     "data": [
       "align_calendar",
@@ -57,6 +70,19 @@ export const apiInventory = {
       "orthogonalize_features_pca",
       "sfi_importance",
       "substitution_effect_report"
+    ],
+    "feature_importance": [
+      "mda_from_probabilities",
+      "mean_decrease_accuracy",
+      "mean_decrease_impurity",
+      "sfi_from_probabilities",
+      "single_feature_importance"
+    ],
+    "hyperparameter_tuning": [
+      "classification_score",
+      "expand_param_grid",
+      "purged_search",
+      "sample_param_sets"
     ],
     "pipeline": [
       "run_mid_frequency_pipeline",
@@ -269,7 +295,8 @@ export const apiInventory = {
       "as_f64",
       "as_i64",
       "classification_score",
-      "expand_param_grid"
+      "expand_param_grid",
+      "sample_param_sets"
     ],
     "openquant::labeling": [
       "add_vertical_barrier",
@@ -402,6 +429,9 @@ export const apiInventory = {
     "pyopenquant::backtest_stats": [
       "register"
     ],
+    "pyopenquant::backtesting_engine": [
+      "register"
+    ],
     "pyopenquant::bars": [
       "register"
     ],
@@ -412,6 +442,9 @@ export const apiInventory = {
       "register"
     ],
     "pyopenquant::codependence": [
+      "register"
+    ],
+    "pyopenquant::cross_validation": [
       "register"
     ],
     "pyopenquant::data": [
@@ -427,6 +460,9 @@ export const apiInventory = {
       "register"
     ],
     "pyopenquant::fast_ewma": [
+      "register"
+    ],
+    "pyopenquant::feature_importance": [
       "register"
     ],
     "pyopenquant::filters": [
@@ -455,6 +491,9 @@ export const apiInventory = {
       "report_to_pydict"
     ],
     "pyopenquant::hrp": [
+      "register"
+    ],
+    "pyopenquant::hyperparameter_tuning": [
       "register"
     ],
     "pyopenquant::labeling": [
