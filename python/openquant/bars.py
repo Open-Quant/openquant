@@ -53,8 +53,8 @@ def _rows_to_frame(symbol: str, rows: list[tuple[str, str, float, float, float, 
         }
     ).with_columns(
         pl.lit(symbol).alias("symbol"),
-        pl.col("start_ts").str.strptime(pl.Datetime, strict=False),
-        pl.col("ts").str.strptime(pl.Datetime, strict=False),
+        data._parse_ts(pl.col("start_ts")),
+        data._parse_ts(pl.col("ts")),
         pl.col("close").alias("adj_close"),
     ).select(
         [

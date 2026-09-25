@@ -2,7 +2,7 @@
 title: "portfolio_optimization"
 description: "Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe ratio, and minimum risk for a target return."
 status: authored
-last_authored: '2026-09-21'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -131,11 +131,21 @@ covariance estimate.
 `allocate_min_vol`, `allocate_max_sharpe`, `allocate_efficient_risk`,
 `allocate_inverse_variance` and `allocate_with_solution(prices, solution, options)` take a
 matrix of prices, rows by date and columns by asset, and estimate the inputs themselves:
-**log** returns, their sample covariance, and an expected return that is either the mean
-(`ReturnsMethod::Mean`) or an exponentially weighted mean
-(`ReturnsMethod::Exponential { span }`), multiplied by 252 to annualise.
-`compute_expected_and_covariance` returns those estimates without solving anything.
-`resample_by` of `"W"` or `"M"` keeps every 5th or 21st row first.
+**simple** returns $p_t/p_{t-1}-1$, the same convention as [`cla`](/modules/cla/),
+[`hrp`](/modules/hrp/) and [`hcaa`](/modules/hcaa/); an expected return that is either
+their mean (`ReturnsMethod::Mean`) or an exponentially weighted mean
+(`ReturnsMethod::Exponential { span }`); and their sample covariance. Simple returns are the
+consistent choice for a one-period problem on weights, because a portfolio's simple return is
+the weighted sum of its assets' simple returns, which is not true of log returns.
+
+**Everything is annual.** The expected returns *and* the covariance are multiplied by the
+number of periods in a year, $252/\text{step}$, so `portfolio_return` is
+$\mu^\top w$, `portfolio_risk` is the annualised volatility $\sqrt{w^\top\Sigma w}$, and
+`portfolio_sharpe` is $(\mu^\top w-r_f)/\sqrt{w^\top\Sigma w}$ in annual units. Give
+`risk_free_rate` and `target_return` as annual figures. `compute_expected_and_covariance`
+returns the same annualised $\mu$ and $\Sigma$ without solving anything, so passing them to
+`allocate_from_inputs` reproduces the result from prices. `resample_by` of `"W"` or `"M"`
+keeps every 5th or 21st row first, and the annualisation factor becomes 252/5 or 252/21.
 
 ## From Rust
 
@@ -175,21 +185,18 @@ assert!(matches!(
 
 ## What to watch for
 
-- **From prices, this module uses log returns; [`cla`](/modules/cla/), [`hrp`](/modules/hrp/)
-  and [`hcaa`](/modules/hcaa/) use simple returns.** The mean log return is lower by about
-  half the variance, which penalises volatile assets, so the same prices give different
-  maximum-Sharpe weights here and in `cla` — 0.955 against 0.928 in one asset on a test
-  history. Given identical $\mu$ and $\Sigma$ the two agree to 1e-9
-  ([#110](https://github.com/Open-Quant/openquant/issues/110)). Use `allocate_from_inputs`
-  with your own estimates when the convention matters.
-- **From prices, the reported return is annual and the reported risk is not.** Expected
-  returns are multiplied by 252 and the covariance is left per period, so `portfolio_risk` is
-  a daily volatility beside an annual `portfolio_return`, and `portfolio_sharpe` divides one
-  by the other: 23.7 on a history whose annualised Sharpe ratio is 1.49. The *weights* are
-  unaffected as long as `risk_free_rate` and `target_return` are annual figures. With
-  `allocate_from_inputs` the units are whatever you supplied, as in the example (#110).
-- **`portfolio_sharpe` is zero for every solution except `"max_sharpe"`.** Zero means "not
-  computed".
+- **With `allocate_from_inputs` the units are yours.** `portfolio_sharpe` is
+  $(\mu^\top w-r_f)/\sqrt{w^\top\Sigma w}$ in whatever units $\mu$, $\Sigma$ and
+  `risk_free_rate` were given in, so they must agree: an annual $\mu$ with a daily $\Sigma$
+  overstates the Sharpe ratio by $\sqrt{252}$. The weights do not depend on the scale of
+  $\Sigma$, only the reported risk and Sharpe ratio do.
+- **`portfolio_sharpe` is reported for every solution**, not only `"max_sharpe"`; it is the
+  Sharpe ratio of the portfolio returned, against `risk_free_rate`. It is 0 only when the
+  portfolio's risk is 0. Before [#110](https://github.com/Open-Quant/openquant/issues/110)
+  was fixed it was 0 for the other three solutions, and from prices it divided an annual
+  return by a daily volatility, so it read about 16 times ($\sqrt{252}$) too high.
+- **It is in-sample.** The maximum-Sharpe portfolio's `portfolio_sharpe` is the best ratio on
+  the history it was fitted to, by construction, and overstates what the portfolio will earn.
 - **A target return that cannot be met is reported as `OptimizationFailed`**, with the text
   "no portfolio satisfies the constraints". The same error covers a solver that did not
   converge. Bounds that cannot sum to one are caught earlier as `InfeasibleBounds`, with the
@@ -208,7 +215,8 @@ assert!(matches!(
 ## Related modules
 
 - [`cla`](/modules/cla/) — the whole efficient frontier from the same inputs, by the
-  critical line algorithm.
+  critical line algorithm. From the same prices, or the same $\mu$ and $\Sigma$, the two
+  modules find the same maximum-Sharpe portfolio.
 - [`hrp`](/modules/hrp/), [`hcaa`](/modules/hcaa/) — allocation without inverting $\Sigma$
   or estimating $\mu$.
 - [`risk-metrics`](/modules/risk-metrics/) — tail risk of the resulting portfolio.

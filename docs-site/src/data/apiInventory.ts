@@ -151,9 +151,14 @@ export const apiInventory = {
       "validate"
     ],
     "openquant::cross_validation": [
+      "count_train_test_overlaps",
+      "cpcv_paths",
+      "cpcv_splits",
       "ml_get_train_times",
+      "naive_kfold_splits",
       "new",
-      "split"
+      "split",
+      "split_with_diagnostics"
     ],
     "openquant::data_processing": [
       "align_calendar_columns",
@@ -171,6 +176,16 @@ export const apiInventory = {
       "run_bars",
       "standard_bars",
       "time_bars"
+    ],
+    "openquant::dynamic_allocation": [
+      "all_weights",
+      "dynamic_optimal_portfolio",
+      "new",
+      "partition_count",
+      "pigeonhole_partitions",
+      "trajectory_sharpe_ratio",
+      "transaction_costs",
+      "weight_count"
     ],
     "openquant::ef3m": [
       "centered_moment",
@@ -343,6 +358,7 @@ export const apiInventory = {
     "openquant::streaming_hpc": [
       "completed_buckets",
       "current",
+      "current_cdf",
       "generate_synthetic_flash_crash_stream",
       "new",
       "on_event",
@@ -394,6 +410,9 @@ export const apiInventory = {
     "pyopenquant::data": [
       "register"
     ],
+    "pyopenquant::dynamic_allocation": [
+      "register"
+    ],
     "pyopenquant::ef3m": [
       "register"
     ],
@@ -417,9 +436,12 @@ export const apiInventory = {
       "build_labeling_events",
       "build_ohlcv_columns",
       "build_trades",
+      "format_naive_datetime",
       "format_naive_datetimes",
       "matrix_from_rows",
       "pair_timestamps_values",
+      "parse_datetime_str",
+      "parse_naive_datetime",
       "parse_naive_datetimes",
       "parse_one_naive_datetime",
       "parse_vertical_barriers",

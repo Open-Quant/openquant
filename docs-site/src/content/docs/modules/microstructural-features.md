@@ -2,7 +2,7 @@
 title: "microstructural_features"
 description: "Spread, price-impact, order-flow and entropy features estimated from bars or from trades."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -231,11 +231,12 @@ trades-based features and entropies for bars of the given tick counts. It is Rus
 
 ## What to watch for
 
-- **`get_trades_based_hasbrouck_lambda` returns approximately zero.** It regresses the
-  *absolute* return on signed volume, so buys and sells cancel. On a simulation with a true
-  $\lambda$ of 1e-5 it returns −1.7e-8; the signed regression gives 9.997e-6
-  ([#105](https://github.com/Open-Quant/openquant/issues/105)). The bar-based version is not
-  affected.
+- **`get_trades_based_hasbrouck_lambda` changed in a fix.** Earlier versions regressed the
+  *absolute* return on signed volume, so buys and sells cancelled and the estimate was near
+  zero under balanced flow. It now regresses the signed return, as in AFML: on 5,000 simulated
+  trades with a true $\lambda$ of 1e-5 it returns 1.0001e-5, where it returned −4.2e-8
+  ([#105](https://github.com/Open-Quant/openquant/issues/105)). Results computed before the
+  fix are not comparable.
 - **The Roll measure takes the absolute value of the covariance.** Roll's formula needs a
   *negative* autocovariance and is undefined otherwise. Following mlfinlab, this function
   uses $2\sqrt{\lvert\operatorname{cov}\rvert}$, so a trending series with *positive*

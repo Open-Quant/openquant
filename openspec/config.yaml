@@ -1,9 +1,13 @@
 schema: spec-driven
 
+# Project context shown when creating change artifacts.
 context: |
-  OpenQuant: Rust implementations of methods from López de Prado, Advances in
-  Financial Machine Learning (AFML), in crates/openquant, with PyO3 bindings in
-  crates/pyopenquant exposed as the `openquant` Python package (python/openquant).
-  Statistics must match the formulas in AFML and the papers it cites, and are
-  tested against hand-computed values. Work is tracked as GitHub issues and the
-  reviewed work records in .ai-dlc/work/.
+  OpenQuant: a Rust implementation of the methods in López de Prado, Advances in Financial
+  Machine Learning (AFML), with PyO3 bindings. Workspace crates: crates/openquant (core),
+  crates/pyopenquant (bindings, exposed as the `openquant` Python package in python/openquant).
+  Public Rust functions return typed errors (thiserror enums registered in
+  crates/openquant/tests/error_types.rs), never panic on invalid input, and carry rustdoc.
+  Behaviour taken from AFML cites the chapter, section and snippet. Statistics must match the
+  formulas in AFML and the papers it cites, and are tested against hand-computed values.
+  Requirements are owned by docs/design/production-readiness-brief.md (OUT-/RQ- IDs); work is
+  tracked as GitHub issues and the reviewed work records in .ai-dlc/work/.

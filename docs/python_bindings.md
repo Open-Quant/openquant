@@ -36,7 +36,7 @@ uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquan
 ### `openquant.risk`
 - `calculate_value_at_risk(returns, confidence_level)`
 - `calculate_expected_shortfall(returns, confidence_level)`
-- `calculate_conditional_drawdown_risk(returns, confidence_level)`
+- `calculate_conditional_drawdown_risk(returns, confidence_level)` — `returns` must be a cumulative (equity) series; `confidence_level` is the upper-tail level (0.95 = worst 5%)
 
 Input conventions:
 - `returns`: list of floats
@@ -50,7 +50,8 @@ Input conventions:
 
 Input conventions:
 - `close`: list of floats
-- `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`
+- `timestamps`: list of strings formatted as `%Y-%m-%d %H:%M:%S`, with an optional fractional
+  second (e.g. `2024-01-02 09:30:01.760917`); returned timestamps keep the fraction
 - timestamp variants require `len(close) == len(timestamps)`
 
 ### `openquant.bars` (AFML Ch.2 event-driven bars; Rust core via PyO3)
@@ -79,7 +80,7 @@ Notes:
 - `meta_labels(...)`
 
 Input conventions:
-- `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings
+- `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings (fractional seconds allowed)
 - `close_prices`: list of floats
 - `t_events`: event timestamps
 - `target_timestamps` + `target_values`: target/volatility inputs
@@ -93,7 +94,7 @@ Label regimes:
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`
 - `get_ind_mat_average_uniqueness(ind_mat)`
-- `seq_bootstrap(ind_mat, sample_length=None, warmup_samples=None)`
+- `seq_bootstrap(ind_mat, sample_length=None, warmup_samples=None, random_state=None)`
 
 Input conventions:
 - `label_endtime`: list of `(start_idx, end_idx)` tuples
@@ -115,6 +116,9 @@ Input conventions:
 
 Return conventions:
 - tuple `(weights, portfolio_risk, portfolio_return, portfolio_sharpe)`
+- from prices: simple returns; return, risk (volatility) and Sharpe ratio are all annualised
+  with 252 periods a year, and `risk_free_rate` is an annual rate. `portfolio_sharpe` is
+  reported for every solution.
 
 Input conventions:
 - `prices`: rectangular nested list of floats (`rows=time`, `cols=assets`)
@@ -217,7 +221,8 @@ summary = openquant.pipeline.summarize_pipeline(pipe)
 - `ValueError: close/timestamps length mismatch`
   - Align prices and timestamps one-to-one before calling timestamp APIs.
 - `ValueError: invalid datetime ...`
-  - Use `%Y-%m-%d %H:%M:%S` timestamp strings.
+  - Use `%Y-%m-%d %H:%M:%S` timestamp strings, optionally with a fractional second
+    (`%Y-%m-%d %H:%M:%S.%f`). `str(datetime)` produces this format.
 - `ModuleNotFoundError: No module named 'openquant'`
   - Re-run `uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml`.
 
@@ -225,3 +230,4 @@ summary = openquant.pipeline.summarize_pipeline(pipe)
 
 - The binding layer is intentionally thin: Rust `openquant` remains the source of truth.
 - Polars-first adapters, plotting payload builders, and notebook flywheel helpers are included for research UX.
+- The extension builds against a patched `pyo3-polars` 0.20.0 in `vendor/pyo3-polars`, applied through `[patch.crates-io]` in the root `Cargo.toml`. Without it, polars `DataFrame` arguments fail on Python polars 1.32.3 and later. `vendor/README.md` describes the change. `crates/pyopenquant` is therefore `publish = false` and ships only as a wheel built from this repository.

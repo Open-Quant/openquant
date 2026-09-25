@@ -54,6 +54,14 @@ impl Default for AllocationOptions<'_> {
     }
 }
 
+/// An allocation and its statistics under the inputs it was solved with.
+///
+/// From prices, every figure is annualised by the same factor, `252 / step` periods a year:
+/// `portfolio_return` is `mu'w` with `mu` the annualised mean simple return, `portfolio_risk` is
+/// `sqrt(w' Sigma w)` with `Sigma` the annualised covariance, and `portfolio_sharpe` is
+/// `(portfolio_return - risk_free_rate) / portfolio_risk`, so `risk_free_rate` is an annual rate.
+/// From `allocate_from_inputs` the units are the caller's. `portfolio_sharpe` is computed for
+/// every solution, and is 0 only when the risk is 0.
 #[derive(Debug, Clone)]
 pub struct MeanVariance {
     pub weights: Vec<f64>,
@@ -70,6 +78,9 @@ pub fn returns_method_from_str(name: &str) -> Result<ReturnsMethod, AllocError> 
     }
 }
 
+/// Simple returns `p_t / p_{t-1} - 1`, the convention of `cla`, `hrp` and `hcaa`. A portfolio's
+/// simple return is the weighted sum of its assets' simple returns, which is what a one-period
+/// mean-variance problem on weights assumes; the same is not true of log returns.
 fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, AllocError> {
     let rows = prices.nrows();
     let cols = prices.ncols();
@@ -83,12 +94,15 @@ fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, AllocError
             if prev == 0.0 {
                 return Err(AllocError::NaNResult("price contained zero"));
             }
-            out[(r - 1, c)] = (prices[(r, c)] / prev).ln();
+            out[(r - 1, c)] = prices[(r, c)] / prev - 1.0;
         }
     }
     Ok(out)
 }
 
+/// Annualised expected simple returns and their annualised sample covariance: the inputs the
+/// price-based allocators solve with. Both are scaled by `252 / step`, so passing the pair to
+/// `allocate_from_inputs` gives the same result as `allocate_with_solution` on the prices.
 pub fn compute_expected_and_covariance(
     prices: &DMatrix<f64>,
     returns_method: ReturnsMethod,
@@ -135,7 +149,9 @@ fn returns_and_means(
             }
         }
     }
-    Ok((expected, covariance(&returns)))
+    // The covariance is annualised by the same factor as the means, so the reported risk and
+    // Sharpe ratio are in one unit. Scaling it by a constant moves none of the optimisers.
+    Ok((expected, covariance(&returns) * freq))
 }
 
 fn covariance(returns: &DMatrix<f64>) -> DMatrix<f64> {
@@ -374,6 +390,27 @@ fn efficient_risk_from_inputs(
     solve_qp(cov, &a, &lower, &upper).map_err(qp_failure)
 }
 
+/// Risk, return and Sharpe ratio of `weights`, all in the units of `exp_ret` and `cov`.
+fn summarise(
+    weights: Vec<f64>,
+    exp_ret: &[f64],
+    cov: &DMatrix<f64>,
+    risk_free: f64,
+) -> Result<MeanVariance, AllocError> {
+    let risk = quad_risk(cov, &weights).max(0.0).sqrt();
+    if !risk.is_finite() {
+        return Err(AllocError::NaNResult("risk not finite"));
+    }
+    let port_ret = dot(exp_ret, &weights);
+    let sharpe = if risk > 0.0 { (port_ret - risk_free) / risk } else { 0.0 };
+    Ok(MeanVariance {
+        weights,
+        portfolio_risk: risk,
+        portfolio_return: port_ret,
+        portfolio_sharpe: sharpe,
+    })
+}
+
 pub fn allocate_inverse_variance(prices: &DMatrix<f64>) -> Result<MeanVariance, AllocError> {
     allocate_inverse_variance_with(prices, &AllocationOptions::default())
 }
@@ -382,16 +419,7 @@ pub fn allocate_inverse_variance_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
 ) -> Result<MeanVariance, AllocError> {
-    let (exp_ret, cov) = returns_and_means(prices, opts)?;
-    let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
-    let w = inverse_variance(&cov, &bounds)?;
-    let risk = quad_risk(&cov, &w).sqrt();
-    Ok(MeanVariance {
-        weights: w.clone(),
-        portfolio_risk: risk,
-        portfolio_return: dot(&exp_ret, &w),
-        portfolio_sharpe: 0.0,
-    })
+    allocate_with_solution(prices, "inverse_variance", opts)
 }
 
 pub fn allocate_min_vol(
@@ -407,16 +435,7 @@ pub fn allocate_min_vol_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
 ) -> Result<MeanVariance, AllocError> {
-    let (exp_ret, cov) = returns_and_means(prices, opts)?;
-    let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
-    let w = solve_min_vol(&cov, &bounds)?;
-    let risk = quad_risk(&cov, &w).sqrt();
-    Ok(MeanVariance {
-        weights: w.clone(),
-        portfolio_risk: risk,
-        portfolio_return: dot(&exp_ret, &w),
-        portfolio_sharpe: 0.0,
-    })
+    allocate_with_solution(prices, "min_volatility", opts)
 }
 
 pub fn allocate_max_sharpe(
@@ -434,21 +453,7 @@ pub fn allocate_max_sharpe_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
 ) -> Result<MeanVariance, AllocError> {
-    let (exp_ret, cov) = returns_and_means(prices, opts)?;
-    let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
-    let weights = solve_max_sharpe(&cov, &exp_ret, opts.risk_free_rate, &bounds)?;
-    let risk = quad_risk(&cov, &weights).sqrt();
-    if !risk.is_finite() {
-        return Err(AllocError::NaNResult("risk not finite"));
-    }
-    let port_ret = dot(&exp_ret, &weights);
-    let sharpe = if risk > 0.0 { (port_ret - opts.risk_free_rate) / risk } else { 0.0 };
-    Ok(MeanVariance {
-        weights,
-        portfolio_risk: risk,
-        portfolio_return: port_ret,
-        portfolio_sharpe: sharpe,
-    })
+    allocate_with_solution(prices, "max_sharpe", opts)
 }
 
 pub fn allocate_efficient_risk(
@@ -465,22 +470,7 @@ pub fn allocate_efficient_risk_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
 ) -> Result<MeanVariance, AllocError> {
-    let (exp_ret, cov) = returns_and_means(prices, opts)?;
-    let bounds = build_bounds(cov.nrows(), &opts.bounds, opts.tuple_bounds);
-    let weights = efficient_risk_from_inputs(
-        &exp_ret,
-        &cov,
-        opts.target_return,
-        &bounds,
-        opts.risk_free_rate,
-    )?;
-    let risk = quad_risk(&cov, &weights).sqrt();
-    Ok(MeanVariance {
-        weights: weights.clone(),
-        portfolio_risk: risk,
-        portfolio_return: dot(&exp_ret, &weights),
-        portfolio_sharpe: 0.0,
-    })
+    allocate_with_solution(prices, "efficient_risk", opts)
 }
 
 pub fn allocate_from_inputs(
@@ -493,56 +483,22 @@ pub fn allocate_from_inputs(
         return Err(AllocError::DimensionMismatch);
     }
     let bounds = build_bounds(covariance.nrows(), &opts.bounds, opts.tuple_bounds);
-    match solution {
-        "inverse_variance" => {
-            let w = inverse_variance(covariance, &bounds)?;
-            Ok(MeanVariance {
-                portfolio_risk: quad_risk(covariance, &w).sqrt(),
-                portfolio_return: dot(expected_returns, &w),
-                portfolio_sharpe: 0.0,
-                weights: w,
-            })
-        }
-        "min_volatility" => {
-            let w = solve_min_vol(covariance, &bounds)?;
-            Ok(MeanVariance {
-                portfolio_risk: quad_risk(covariance, &w).sqrt(),
-                portfolio_return: dot(expected_returns, &w),
-                portfolio_sharpe: 0.0,
-                weights: w,
-            })
-        }
+    let weights = match solution {
+        "inverse_variance" => inverse_variance(covariance, &bounds)?,
+        "min_volatility" => solve_min_vol(covariance, &bounds)?,
         "max_sharpe" => {
-            let w = solve_max_sharpe(covariance, expected_returns, opts.risk_free_rate, &bounds)?;
-            let risk = quad_risk(covariance, &w).sqrt();
-            Ok(MeanVariance {
-                portfolio_risk: risk,
-                portfolio_return: dot(expected_returns, &w),
-                portfolio_sharpe: if risk > 0.0 {
-                    (dot(expected_returns, &w) - opts.risk_free_rate) / risk
-                } else {
-                    0.0
-                },
-                weights: w,
-            })
+            solve_max_sharpe(covariance, expected_returns, opts.risk_free_rate, &bounds)?
         }
-        "efficient_risk" => {
-            let w = efficient_risk_from_inputs(
-                expected_returns,
-                covariance,
-                opts.target_return,
-                &bounds,
-                opts.risk_free_rate,
-            )?;
-            Ok(MeanVariance {
-                portfolio_risk: quad_risk(covariance, &w).sqrt(),
-                portfolio_return: dot(expected_returns, &w),
-                portfolio_sharpe: 0.0,
-                weights: w,
-            })
-        }
-        other => Err(AllocError::UnknownSolution(other.to_string())),
-    }
+        "efficient_risk" => efficient_risk_from_inputs(
+            expected_returns,
+            covariance,
+            opts.target_return,
+            &bounds,
+            opts.risk_free_rate,
+        )?,
+        other => return Err(AllocError::UnknownSolution(other.to_string())),
+    };
+    summarise(weights, expected_returns, covariance, opts.risk_free_rate)
 }
 
 pub fn allocate_with_solution(

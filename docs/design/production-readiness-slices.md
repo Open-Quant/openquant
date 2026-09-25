@@ -88,6 +88,6 @@ Local IDs are draft identifiers until published to the tracker.
 
 ## Beads carry-over
 
-OQ-nbr.7 -> `res-evaluation-module`; OQ-nbr.8, OQ-nbr.9 -> `res-notebook-runner`; OQ-nbr.10, OQ-g5v -> `res-cell-contract`; closed-but-unmerged OQ-nbr.4, OQ-nbr.5, OQ-det -> `res-recover-stranded-work`.
+OQ-nbr.7 -> `res-evaluation-module`; OQ-nbr.8, OQ-nbr.9 -> `res-notebook-runner`; OQ-nbr.10, OQ-g5v -> `res-cell-contract`; closed-but-unmerged OQ-nbr.4, OQ-nbr.5, OQ-det -> `res-recover-stranded-work`. Their outcomes, and those of `f31de34` and the two legacy branches, are recorded in `docs/decisions/0002-stranded-work-outcomes.md`, which also answers the brief's decision 4.
 
 Decision: proceed.
