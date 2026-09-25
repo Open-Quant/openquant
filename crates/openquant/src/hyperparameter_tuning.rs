@@ -309,6 +309,26 @@ where
     C: SimpleClassifier,
     F: Fn(&ParamSet) -> C,
 {
+    let params = sample_param_sets(param_space, n_iter, seed)?;
+    search_over_params(build_classifier, params, data, n_splits, pct_embargo, scoring)
+}
+
+/// The `n_iter` parameter sets [`randomized_search`] evaluates for `param_space` and `seed`,
+/// in the same order.
+///
+/// Each draw samples every key of `param_space` in key order from one `StdRng` seeded with
+/// `seed`, so the same inputs always give the same sets. Useful to run the search's
+/// candidates through a model this crate cannot call, for example from Python.
+///
+/// # Errors
+/// [`TuningError::Empty`] when `param_space` is empty, [`TuningError::Invalid`] when `n_iter`
+/// is 0, and the distribution errors of [`RandomParamDistribution`] (`EmptyChoice`,
+/// `InvalidUniformBounds`, log-uniform bound errors, `InvalidIntRange`).
+pub fn sample_param_sets(
+    param_space: &BTreeMap<String, RandomParamDistribution>,
+    n_iter: usize,
+    seed: u64,
+) -> Result<Vec<ParamSet>, TuningError> {
     if param_space.is_empty() {
         return Err(TuningError::Empty("param_space"));
     }
@@ -317,21 +337,15 @@ where
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
-    let keys: Vec<String> = param_space.keys().cloned().collect();
     let mut params = Vec::with_capacity(n_iter);
     for _ in 0..n_iter {
         let mut draw = ParamSet::new();
-        for key in &keys {
-            let dist = param_space
-                .get(key)
-                .ok_or_else(|| TuningError::MissingDistribution(key.clone()))?;
-            let value = sample_distribution(dist, &mut rng)?;
-            draw.insert(key.clone(), value);
+        for (key, dist) in param_space {
+            draw.insert(key.clone(), sample_distribution(dist, &mut rng)?);
         }
         params.push(draw);
     }
-
-    search_over_params(build_classifier, params, data, n_splits, pct_embargo, scoring)
+    Ok(params)
 }
 
 fn sample_distribution<R: Rng + ?Sized>(
