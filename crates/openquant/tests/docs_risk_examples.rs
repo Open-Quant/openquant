@@ -57,10 +57,15 @@ fn strategy_risk_page() -> Result<(), Box<dyn std::error::Error>> {
     assert!((needed - 0.7222).abs() < 1e-4);
     assert!((sharpe_asymmetric(needed, 260.0, payout)? - 2.0).abs() < 1e-6);
 
-    // Precision of exactly one half never reaches a positive target, at any frequency.
+    // Precision of exactly one half never reaches a positive target, at any frequency,
+    // and below one half the Sharpe ratio is negative, so no frequency reaches one.
     assert!(matches!(
         implied_frequency_symmetric(0.5, 1.0),
         Err(StrategyRiskError::InvalidInput(_))
+    ));
+    assert!(matches!(
+        implied_frequency_symmetric(0.45, 2.0),
+        Err(StrategyRiskError::NoValidRoot(_))
     ));
     Ok(())
 }
