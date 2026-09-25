@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -96,15 +96,15 @@ print(f"{pair['feature_a']} ~ {pair['feature_b']}: corr {pair['corr']:.3f}, "
 
 ```text
 feature      MDI     MDA     SFI
-a          0.524   0.108  -0.645
+a          0.524   0.113  -0.645
 a_copy     0.103   0.011  -0.647
-b          0.336   0.042  -0.698
+b          0.336   0.052  -0.698
 noise_1    0.020  -0.000  -0.724
-noise_2    0.017   0.000  -0.724
-a ~ a_copy: corr 0.981, singly 0.119, jointly 0.121
+noise_2    0.017  -0.000  -0.724
+a ~ a_copy: corr 0.981, singly 0.124, jointly 0.126
 ```
 
-Read across the `a_copy` row. MDA says it is nearly worthless, 0.011 against 0.108 for `a`.
+Read across the `a_copy` row. MDA says it is nearly worthless, 0.011 against 0.113 for `a`.
 SFI says it is as good as `a`: −0.647 against −0.645. Both are right. Given `a`, the model
 has no use for a noisier copy of it, and damaging the copy costs nothing; on its own, the
 copy carries almost all of `a`'s information. This is the substitution effect, and it is the
@@ -152,11 +152,14 @@ one. The report is only as sensitive as the fixed model lets it be.
   absolute coefficients. That is a reasonable in-sample ranking *if the features are on a
   common scale* — it does not standardise them, so a feature measured in basis points will
   outrank the same feature measured in percent. Standardise first, or ignore this column.
-- **MDA shifts rather than shuffles.** The column is rotated by `fold_index + 1` rows. For
-  serially correlated features that barely disturbs them and importance is badly
-  understated: 0.009 instead of 0.155 at an autocorrelation of 0.99
-  ([#98](https://github.com/Open-Quant/openquant/issues/98)). The example above uses
-  independent draws, which hides the problem. Real features are not independent draws.
+- **MDA of a very persistent feature is still somewhat understated.** The column is shuffled
+  within each test fold, as in Snippet 8.3, with `random.Random(seed)` (`seed=42` by
+  default, also taken by `substitution_effect_report`, and echoed in `cv["seed"]`). When a
+  feature moves so slowly that one fold spans only a few of its swings, shuffling among the
+  fold's bunched-together values damages it less than shuffling the whole sample would. Up
+  to an autocorrelation of about 0.95 this is negligible; at 0.99 it is noticeable. Before
+  [#98](https://github.com/Open-Quant/openquant/issues/98) was fixed the column was rotated
+  by a few rows instead, and such a feature scored 0.009 instead of 0.155.
 - **`feature_screen_report` keeps the higher-variance feature of a correlated pair.** On the
   example it rejects `a` and keeps `a_copy`, the noisier one, because noise adds variance.
   The screen never looks at `y`, so it cannot know better. Use it to find the pairs; choose

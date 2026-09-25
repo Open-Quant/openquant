@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
 use nalgebra::{DMatrix, SymmetricEigen};
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 
 use crate::cross_validation::{ml_cross_val_score, Scoring, SimpleClassifier};
 
@@ -75,6 +78,11 @@ pub fn mean_decrease_impurity(
     Ok(out)
 }
 
+/// Mean decrease accuracy (AFML Snippet 8.3): for each split, fit on the train rows, score the
+/// test rows, then score them again with one feature column shuffled; importance is the relative
+/// loss of score. Shuffles draw from a `StdRng` seeded with `seed`, so a given seed always
+/// gives the same result.
+#[allow(clippy::too_many_arguments)]
 pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     model: &mut C,
     x: &[Vec<f64>],
@@ -83,11 +91,13 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     splits: &[(Vec<usize>, Vec<usize>)],
     sample_weight: Option<&[f64]>,
     scoring: Scoring,
+    seed: u64,
 ) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
     validate_xy(x, y, feature_names)?;
 
     let n_features = feature_names.len();
     let mut per_feature = vec![Vec::new(); n_features];
+    let mut rng = StdRng::seed_from_u64(seed);
 
     for (train_idx, test_idx) in splits {
         let x_train = rows(x, train_idx);
@@ -103,7 +113,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
 
         for (j, scores) in per_feature.iter_mut().enumerate() {
             let mut x_perm = x_test.clone();
-            permute_col(&mut x_perm, j);
+            permute_col(&mut x_perm, j, &mut rng);
             let perm = score_model(model, &x_perm, &y_test, sw_test.as_deref(), scoring);
             let imp = match scoring {
                 Scoring::NegLogLoss => {
@@ -366,15 +376,14 @@ fn score_model<C: SimpleClassifier>(
     }
 }
 
-fn permute_col(x: &mut [Vec<f64>], col: usize) {
-    if x.len() <= 1 {
-        return;
+/// Shuffles one column of `x` in place, as AFML Snippet 8.3 does with `np.random.shuffle`.
+/// A shuffle (unlike a rotation) breaks the feature-label link however persistent the feature is.
+fn permute_col(x: &mut [Vec<f64>], col: usize, rng: &mut StdRng) {
+    let mut values: Vec<f64> = x.iter().map(|row| row[col]).collect();
+    values.shuffle(rng);
+    for (row, v) in x.iter_mut().zip(values) {
+        row[col] = v;
     }
-    let last = x[x.len() - 1][col];
-    for i in (1..x.len()).rev() {
-        x[i][col] = x[i - 1][col];
-    }
-    x[0][col] = last;
 }
 
 fn pack_stats(feature_names: &[String], values: &[Vec<f64>]) -> BTreeMap<String, ImportanceStats> {
