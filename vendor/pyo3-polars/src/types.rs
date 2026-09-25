@@ -23,6 +23,8 @@ use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedStr;
 #[cfg(feature = "dtype-struct")]
 use pyo3::types::PyList;
+#[cfg(feature = "lazy")]
+use pyo3::types::PyBytes;
 use pyo3::types::{PyDict, PyString};
 
 #[cfg(feature = "dtype-categorical")]

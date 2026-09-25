@@ -1,17 +1,20 @@
 import sys as _sys
 
-from . import _core
-from . import adapters
-from . import backtesting_engine
-from . import bars
-from . import cross_validation
-from . import data
-from . import feature_diagnostics
-from . import feature_importance
-from . import hyperparameter_tuning
-from . import pipeline
-from . import research
-from . import viz
+from . import (
+    _core,
+    adapters,
+    backtesting_engine,
+    bars,
+    cross_validation,
+    data,
+    evaluation,
+    feature_diagnostics,
+    feature_importance,
+    hyperparameter_tuning,
+    pipeline,
+    research,
+    viz,
+)
 
 # Compiled submodules re-exported as-is. `backtesting_engine`, `bars`,
 # `cross_validation`, `data`, `feature_importance`, `hyperparameter_tuning` and
@@ -41,6 +44,7 @@ hcaa = _core.hcaa
 onc = _core.onc
 cla = _core.cla
 sb_bagging = _core.sb_bagging
+dynamic_allocation = _core.dynamic_allocation
 
 _CORE_REEXPORTS = [
     "risk",
@@ -67,6 +71,7 @@ _CORE_REEXPORTS = [
     "onc",
     "cla",
     "sb_bagging",
+    "dynamic_allocation",
 ]
 
 # Compiled submodules are attributes, not files, so `import openquant.hrp`
@@ -81,6 +86,7 @@ __all__ = [
     "bars",
     "cross_validation",
     "data",
+    "evaluation",
     "feature_diagnostics",
     "feature_importance",
     "hyperparameter_tuning",

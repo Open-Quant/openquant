@@ -18,6 +18,12 @@ fn risk_metrics_page() -> Result<(), Box<dyn std::error::Error>> {
     // Nothing lies strictly below the minimum, so the tail is empty.
     assert!(risk.calculate_expected_shortfall(&returns, 0.0)?.is_nan());
 
+    // Conditional drawdown at risk takes a cumulative series, and 0.9 means the worst 10%.
+    // Drawdowns 0 0 1 0 4 1. At 0.6 the threshold is the fourth-smallest, 1; (1, 1, 4) average 2.
+    let equity = [1.0, 3.0, 2.0, 5.0, 1.0, 4.0];
+    assert_eq!(risk.calculate_conditional_drawdown_risk(&equity, 0.6)?, 2.0);
+    assert_eq!(risk.calculate_conditional_drawdown_risk(&equity, 0.9)?, 4.0);
+
     let covariance = DMatrix::from_row_slice(2, 2, &[0.04, 0.01, 0.01, 0.09]);
     assert!((risk.calculate_variance(&covariance, &[0.6, 0.4])? - 0.0336).abs() < 1e-12);
     assert_eq!(

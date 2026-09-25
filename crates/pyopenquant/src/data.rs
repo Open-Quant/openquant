@@ -6,7 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3_polars::PyDataFrame;
 
-use crate::helpers::{build_ohlcv_columns, report_to_pydict, to_py_err};
+use crate::helpers::{build_ohlcv_columns, format_naive_datetime, report_to_pydict, to_py_err};
 
 /// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, quality_report)`.
 type CleanOhlcvColumns =
@@ -49,10 +49,8 @@ fn data_clean_ohlcv(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
-    out_report
-        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
-    out_report
-        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
+    out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
     Ok((
         clean.timestamps_us,
@@ -89,10 +87,8 @@ fn data_quality_report(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
-    out_report
-        .set_item("ts_min", report.ts_min.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
-    out_report
-        .set_item("ts_max", report.ts_max.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()))?;
+    out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
+    out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", 0)?;
     Ok(out_report.into_pyobject(py).unwrap().into_any().unbind())
 }

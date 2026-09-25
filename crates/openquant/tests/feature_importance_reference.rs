@@ -61,7 +61,6 @@ fn mdi_ignores_zero_importances_hand_worked() {
 ///     sample std = sqrt(0.02 / 2) = 0.1,   standard error = 0.1 / sqrt(3) = 0.0577350269...
 /// (A population std would give sqrt(0.02 / 3) / sqrt(3) = 0.0471404521...)
 #[test]
-#[ignore = "FINDING: feature_importance MDI/MDA standard errors use the population std (ddof=0); AFML snippets 8.2/8.3 use pandas .std() (ddof=1), so reported std is too small by sqrt((n-1)/n)"]
 fn mdi_standard_error_uses_sample_std_hand_worked() {
     let imp = vec![vec![0.6, 0.4], vec![0.8, 0.2], vec![0.7, 0.3]];
     let mdi = mean_decrease_impurity(&imp, &names(2)).unwrap();
@@ -90,8 +89,15 @@ fn mdi_standard_error_is_symmetric_for_mirrored_columns() {
 
 type Splits = Vec<(Vec<usize>, Vec<usize>)>;
 
+/// MDA shuffles each test-fold column with a seeded RNG (snippet 8.3's `np.random.shuffle`). A
+/// two-row column has only two orders, and a shuffle may leave it in place. With this seed the
+/// f0 column of fold A is swapped, which is the case the numbers below are worked for. (A seed
+/// that left it in place would give f0 an importance of 0 there instead of 1. Fold B scores 0
+/// for f0 in either order, and f1 is never read.)
+const SEED: u64 = 2;
+
 /// Two folds whose test sets have two rows each, so "permute the column" can only mean "swap the
-/// two values": the expected numbers do not depend on how the library shuffles.
+/// two values" (given `SEED`, see above).
 ///
 ///            f0   f1   y
 ///   row 0    +1   -1   1      fold A tests rows 0,1
@@ -124,6 +130,7 @@ fn mda_accuracy_hand_worked() {
         &splits,
         None,
         Scoring::Accuracy,
+        SEED,
     )
     .unwrap();
     assert!((mda["f0"].mean - 0.5).abs() < 1e-15, "{}", mda["f0"].mean);
@@ -149,6 +156,7 @@ fn mda_neg_log_loss_hand_worked() {
         &splits,
         None,
         Scoring::NegLogLoss,
+        SEED,
     )
     .unwrap();
     let want = (1.0 - 0.9f64.ln() / 0.1f64.ln()) / 2.0;
@@ -161,7 +169,6 @@ fn mda_neg_log_loss_hand_worked() {
 /// Accuracy importances of f0 over the two folds are (1, 0): sample std = sqrt(0.5),
 /// standard error = sqrt(0.5) / sqrt(2) = 0.5. (Population std would give 0.5 / sqrt(2) = 0.3536.)
 #[test]
-#[ignore = "FINDING: feature_importance MDI/MDA standard errors use the population std (ddof=0); AFML snippets 8.2/8.3 use pandas .std() (ddof=1), so reported std is too small by sqrt((n-1)/n)"]
 fn mda_standard_error_uses_sample_std_hand_worked() {
     let (x, y, splits) = mda_data();
     let mda = mean_decrease_accuracy(
@@ -172,6 +179,7 @@ fn mda_standard_error_uses_sample_std_hand_worked() {
         &splits,
         None,
         Scoring::Accuracy,
+        SEED,
     )
     .unwrap();
     assert!((mda["f0"].std - 0.5).abs() < 1e-12, "{}", mda["f0"].std);
@@ -305,7 +313,6 @@ fn pca_rank_correlations_match_scipy_without_ties() {
 /// With several components the importance vector is tiled and therefore tied. scipy (and
 /// mlfinlab, which calls it) uses average ranks for Spearman and tau-b for Kendall.
 #[test]
-#[ignore = "FINDING: feature_pca_analysis rank correlations mishandle ties (ordinal ranks for Spearman, tau-a over untied pairs for Kendall); differs from scipy spearmanr/kendalltau whenever more than one PC is kept"]
 fn pca_rank_correlations_match_scipy_with_ties() {
     let r = pca_reference();
     let case = &r.several_components;
@@ -322,7 +329,6 @@ fn pca_rank_correlations_match_scipy_with_ties() {
 /// AFML 8.4.2 / mlfinlab use scipy.stats.weightedtau (Vigna's additive hyperbolic weighting by
 /// rank).
 #[test]
-#[ignore = "FINDING: feature_pca_analysis weighted_kendall_rank is a home-grown 1/(1+i+j) positional weighting, not scipy.stats.weightedtau as in AFML 8.4.2 / mlfinlab; values differ"]
 fn pca_weighted_kendall_matches_scipy_weightedtau() {
     let r = pca_reference();
     for case in [&r.one_component, &r.several_components] {

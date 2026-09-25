@@ -23,7 +23,7 @@ uv run --python .venv/bin/python python experiments/run_pipeline.py \
 
 Each run writes a deterministic folder:
 
-- `run_manifest.json` (config hash, git sha, versions, seed)
+- `run_manifest.json` (config hash, git sha, versions, seed, `dataset_hash`: the content hash of the data the run used, see `openquant.data.dataset_hash`)
 - `metrics.parquet` (summary table)
 - `events.parquet` (event stage output)
 - `signals.parquet` (signal timeline)

@@ -2,7 +2,7 @@
 title: "ensemble_methods"
 description: "Diagnostics for bagged ensembles: how much variance averaging removes, given how correlated the estimators are."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -125,7 +125,7 @@ residuals, or predictions on a de-meaned target, to get the $\bar\rho$ the formu
 | `aggregate_classification_vote(rows)` | majority vote over 0/1 labels; **a tie goes to 1** |
 | `aggregate_classification_probability_mean(rows, threshold)` | mean probability per observation, and the label at `threshold` |
 | `bootstrap_sample_indices(n, size, seed)` | `size` uniform draws from `0..n`, reproducible |
-| `bias_variance_noise(y_true, rows)` | squared bias, variance, and MSE across models, averaged over observations |
+| `bias_variance_noise(y_true, rows, y_expected=None)` | squared bias, variance, noise and MSE across models, averaged over observations; `noise` only when the noiseless target `y_expected` is given |
 | `recommend_bagging_vs_boosting(...)` | the formula above plus a rule-of-thumb label |
 
 `recommend_bagging_vs_boosting` returns `Boosting` if base accuracy is below 0.55, *or*
@@ -163,22 +163,20 @@ assert!((decision.expected_bagging_variance - 0.328).abs() < 1e-12);
 
 ## What to watch for
 
-- **`sequential_bootstrap_sample_indices` draws a uniform bootstrap.** To make the result
-  depend on `seed`, it fills `seq_bootstrap`'s warm-up list with as many uniform indices as
-  the sample is long, so the uniqueness-weighted draw never happens. For a given seed it
-  returns exactly what `bootstrap_sample_indices` returns. Use
-  [`sampling.seq_bootstrap`](/modules/sampling/) directly until
-  [#90](https://github.com/Open-Quant/openquant/issues/90) is closed.
-- **`noise` in `bias_variance_noise` is always zero.** It is computed as
-  MSE − bias² − variance, and with bias and variance defined against the observed `y_true`
-  those three satisfy the identity exactly. Separating irreducible noise from bias needs the
-  noiseless target, which only a simulation has. Read `bias_sq` as "bias plus noise".
-  Also on #90.
+- **`sequential_bootstrap_sample_indices` is `sampling.seq_bootstrap` with a seed.** The
+  same `seed` gives the same indices, but not the indices `bootstrap_sample_indices` gives
+  for that seed: the two draw from different distributions.
+- **`noise` in `bias_variance_noise` needs the noiseless target.** Against the observed
+  `y_true` alone, bias² + variance = MSE exactly and noise cannot be told apart from bias, so
+  `noise` is `None` and `bias_sq` means "bias plus noise". Pass `y_expected` = E[y|x] (known in
+  a simulation, as in §6.2) and bias² is measured against it, `noise` = mean((y_true −
+  y_expected)²), and bias² + variance + noise = MSE in expectation (not exactly in one sample).
 - **The formula assumes equal variances and one average correlation.** A few strong models
   among many weak ones, or clusters of near-identical models, break it; the realised column
   in the example is the honest check.
 - **From Python, vote and label outputs are `bytes`.** Wrap them in `list()`.
-  `bias_variance_noise` returns a plain tuple `(bias_sq, variance, noise, mse)`, and
+  `bias_variance_noise` returns a plain tuple `(bias_sq, variance, noise, mse)` with `noise`
+  `None` unless `y_expected` is passed, and
   `recommend_bagging_vs_boosting` a dict.
 - **Majority vote discards confidence.** Averaging probabilities keeps it, and the averaged
   probability is what [`bet-sizing`](/modules/bet-sizing/) wants as input.

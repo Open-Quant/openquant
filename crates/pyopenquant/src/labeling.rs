@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
 
 use crate::helpers::{
-    build_labeling_events, pair_timestamps_values, parse_naive_datetimes, parse_vertical_barriers,
-    LabelingEventArgs,
+    build_labeling_events, format_naive_datetime, pair_timestamps_values, parse_datetime_str,
+    parse_naive_datetime, parse_naive_datetimes, parse_vertical_barriers, LabelingEventArgs,
 };
 
 /// Python-facing event row: `(timestamp, t1, trgt, side, pt, sl)`.
@@ -34,9 +34,7 @@ fn labeling_add_vertical_barrier(
     );
     Ok(barriers
         .into_iter()
-        .map(|(a, b)| {
-            (a.format("%Y-%m-%d %H:%M:%S").to_string(), b.format("%Y-%m-%d %H:%M:%S").to_string())
-        })
+        .map(|(a, b)| (format_naive_datetime(&a), format_naive_datetime(&b)))
         .collect())
 }
 
@@ -83,8 +81,8 @@ fn labeling_triple_barrier_events(
         .into_iter()
         .map(|(ts, ev)| {
             (
-                ts.format("%Y-%m-%d %H:%M:%S").to_string(),
-                ev.t1.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+                format_naive_datetime(&ts),
+                ev.t1.map(|v| format_naive_datetime(&v)),
                 ev.trgt,
                 ev.side,
                 ev.pt,
@@ -133,15 +131,7 @@ fn labeling_triple_barrier_labels(
     })?;
     Ok(openquant::labeling::triple_barrier_labels(&events, &close)
         .into_iter()
-        .map(|row| {
-            (
-                row.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                row.ret,
-                row.trgt,
-                row.label,
-                row.side,
-            )
-        })
+        .map(|row| (format_naive_datetime(&row.timestamp), row.ret, row.trgt, row.label, row.side))
         .collect())
 }
 
@@ -186,15 +176,7 @@ fn labeling_meta_labels(
     })?;
     Ok(openquant::labeling::meta_labels(&events, &close)
         .into_iter()
-        .map(|row| {
-            (
-                row.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                row.ret,
-                row.trgt,
-                row.label,
-                row.side,
-            )
-        })
+        .map(|row| (format_naive_datetime(&row.timestamp), row.ret, row.trgt, row.label, row.side))
         .collect())
 }
 
@@ -258,8 +240,8 @@ fn labeling_get_events(
         .into_iter()
         .map(|(ts, ev)| {
             (
-                ts.format("%Y-%m-%d %H:%M:%S").to_string(),
-                ev.t1.map(|v| v.format("%Y-%m-%d %H:%M:%S").to_string()),
+                format_naive_datetime(&ts),
+                ev.t1.map(|v| format_naive_datetime(&v)),
                 ev.trgt,
                 ev.side,
                 ev.pt,
@@ -281,16 +263,8 @@ fn labeling_get_bins(
     let parsed_events: Vec<(chrono::NaiveDateTime, openquant::labeling::Event)> = events
         .into_iter()
         .map(|(ts_str, t1_str, trgt, side, pt, sl)| {
-            let ts = chrono::NaiveDateTime::parse_from_str(&ts_str, "%Y-%m-%d %H:%M:%S").map_err(
-                |e| pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}")),
-            )?;
-            let t1 = t1_str
-                .map(|s| {
-                    chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").map_err(|e| {
-                        pyo3::exceptions::PyValueError::new_err(format!("invalid datetime: {e}"))
-                    })
-                })
-                .transpose()?;
+            let ts = parse_naive_datetime(&ts_str, "datetime")?;
+            let t1 = t1_str.map(|s| parse_naive_datetime(&s, "datetime")).transpose()?;
             Ok((ts, openquant::labeling::Event { t1, trgt, side, pt, sl }))
         })
         .collect::<PyResult<Vec<_>>>()?;
@@ -298,9 +272,7 @@ fn labeling_get_bins(
     let bins = openquant::labeling::get_bins(&parsed_events, &close);
     Ok(bins
         .into_iter()
-        .map(|(ts, ret, trgt, label, side)| {
-            (ts.format("%Y-%m-%d %H:%M:%S").to_string(), ret, trgt, label, side)
-        })
+        .map(|(ts, ret, trgt, label, side)| (format_naive_datetime(&ts), ret, trgt, label, side))
         .collect())
 }
 
@@ -309,7 +281,7 @@ fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> Vec<BinRow> {
     let parsed: Vec<(chrono::NaiveDateTime, f64, f64, i8, Option<f64>)> = events
         .into_iter()
         .filter_map(|(ts_str, ret, trgt, label, side)| {
-            let ts = chrono::NaiveDateTime::parse_from_str(&ts_str, "%Y-%m-%d %H:%M:%S").ok()?;
+            let ts = parse_datetime_str(&ts_str).ok()?;
             Some((ts, ret, trgt, label, side))
         })
         .collect();
@@ -317,9 +289,7 @@ fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> Vec<BinRow> {
     let result = openquant::labeling::drop_labels(&parsed, min_pct);
     result
         .into_iter()
-        .map(|(ts, ret, trgt, label, side)| {
-            (ts.format("%Y-%m-%d %H:%M:%S").to_string(), ret, trgt, label, side)
-        })
+        .map(|(ts, ret, trgt, label, side)| (format_naive_datetime(&ts), ret, trgt, label, side))
         .collect()
 }
 

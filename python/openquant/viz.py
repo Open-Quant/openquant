@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import polars as pl
+
+from .data import _parse_ts
 
 
 def prepare_feature_importance_payload(
@@ -10,7 +13,7 @@ def prepare_feature_importance_payload(
     importance: Sequence[float],
     std: Sequence[float] | None = None,
     top_n: int | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if len(feature_names) != len(importance):
         raise ValueError("feature_names/importance length mismatch")
     if std is not None and len(std) != len(importance):
@@ -23,7 +26,7 @@ def prepare_feature_importance_payload(
     if top_n is not None:
         df = df.head(top_n)
 
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         "chart": "bar",
         "x": df["feature"].to_list(),
         "y": df["importance"].to_list(),
@@ -41,7 +44,7 @@ def prepare_feature_importance_comparison_payload(
     right_values: Sequence[float],
     left_name: str = "left",
     right_name: str = "right",
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if len(left_labels) != len(left_values):
         raise ValueError("left_labels/left_values length mismatch")
     if len(right_labels) != len(right_values):
@@ -53,11 +56,13 @@ def prepare_feature_importance_comparison_payload(
     }
 
 
-def prepare_drawdown_payload(timestamps: Sequence[str], equity_curve: Sequence[float]) -> dict[str, object]:
+def prepare_drawdown_payload(
+    timestamps: Sequence[str], equity_curve: Sequence[float]
+) -> dict[str, Any]:
     if len(timestamps) != len(equity_curve):
         raise ValueError("timestamps/equity_curve length mismatch")
     df = pl.DataFrame({"ts": list(timestamps), "equity": list(equity_curve)}).with_columns(
-        pl.col("ts").str.strptime(pl.Datetime, strict=False)
+        _parse_ts(pl.col("ts"))
     )
     df = df.with_columns((pl.col("equity") / pl.col("equity").cum_max() - 1.0).alias("drawdown"))
     return {
@@ -73,7 +78,7 @@ def prepare_regime_payload(
     timestamps: Sequence[str],
     score: Sequence[float],
     threshold: float = 0.0,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if len(timestamps) != len(score):
         raise ValueError("timestamps/score length mismatch")
     regimes = [1 if s >= threshold else -1 for s in score]
@@ -90,10 +95,10 @@ def prepare_frontier_payload(
     volatility: Sequence[float],
     returns: Sequence[float],
     sharpe: Sequence[float] | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if len(volatility) != len(returns):
         raise ValueError("volatility/returns length mismatch")
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         "chart": "scatter",
         "x": list(volatility),
         "y": list(returns),
@@ -112,12 +117,16 @@ def prepare_cluster_payload(
     node_id: Sequence[str],
     parent_id: Sequence[str | None],
     height: Sequence[float] | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if len(node_id) != len(parent_id):
         raise ValueError("node_id/parent_id length mismatch")
     if height is not None and len(height) != len(node_id):
         raise ValueError("height/node_id length mismatch")
-    payload: dict[str, object] = {"chart": "tree", "node_id": list(node_id), "parent_id": list(parent_id)}
+    payload: dict[str, Any] = {
+        "chart": "tree",
+        "node_id": list(node_id),
+        "parent_id": list(parent_id),
+    }
     if height is not None:
         payload["height"] = list(height)
     return payload

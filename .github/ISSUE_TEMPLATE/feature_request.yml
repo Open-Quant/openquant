@@ -1,0 +1,55 @@
+name: Feature or method request
+description: A method from AFML (or a related paper) that is missing, or a change to an existing API.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OpenQuant implements the methods of *Advances in Financial Machine Learning* and
+        closely related work. Requests that name a precise source are much easier to act on.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of request
+      options:
+        - New method (not implemented yet)
+        - Missing Python binding for an existing Rust function
+        - Change to an existing API
+        - Documentation or example
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: afml-reference
+    attributes:
+      label: AFML or paper reference
+      description: Chapter, section and snippet (e.g. "Chapter 21, Snippet 21.1"), or the paper (authors, year, title, DOI).
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The research or production task this would enable, and what you do today instead.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: Function names, inputs and outputs, in Rust and/or Python.
+      render: text
+  - type: textarea
+    id: verification
+    attributes:
+      label: How would we know it is right?
+      description: An independent reference to test against, e.g. worked values in the book, a published table, or a reference implementation with an open license.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this.

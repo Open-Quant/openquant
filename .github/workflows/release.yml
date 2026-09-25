@@ -16,10 +16,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Format/Lint/Test (fast)
         run: |
-          cargo fmt -- --check
+          cargo fmt --all -- --check
           cargo clippy --workspace --all-targets --all-features -- -D warnings
           cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
       - name: Package dry-run
         run: cargo package -p openquant
-      - name: Benchmark compile check
-        run: cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run
+      - name: Benchmark compile check (all benches)
+        run: cargo bench -p openquant --no-run
+
+  # docs/stabilization_productionization.md makes the long SADF test a
+  # pre-release gate; it runs here in parallel with the checks above.
+  release-slow-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Long SADF test
+        run: cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored

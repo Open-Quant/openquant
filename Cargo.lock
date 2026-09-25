@@ -1843,6 +1843,7 @@ dependencies = [
  "polars",
  "pyo3",
  "pyo3-polars",
+ "rand",
 ]
 
 [[package]]

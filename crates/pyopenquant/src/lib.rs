@@ -8,6 +8,7 @@ mod cla;
 mod codependence;
 mod cross_validation;
 mod data;
+mod dynamic_allocation;
 mod ef3m;
 mod ensemble;
 mod fast_ewma;
@@ -67,5 +68,6 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     backtesting_engine::register(py, m)?;
     feature_importance::register(py, m)?;
     hyperparameter_tuning::register(py, m)?;
+    dynamic_allocation::register(py, m)?;
     Ok(())
 }

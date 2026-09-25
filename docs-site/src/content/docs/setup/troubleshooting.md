@@ -1,8 +1,8 @@
 ---
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
-status: reviewed
-last_validated: '2026-08-30'
+status: authored
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -112,8 +112,8 @@ uv venv --python 3.11 .venv
 uv sync --group dev
 ```
 
-or per-invocation, which is what `.github/workflows/python-bindings.yml`
-does:
+or per-invocation, which is what the `docs-checks` job in
+`.github/workflows/ci.yml` does:
 
 ```bash
 uv run --python .venv/bin/python --with maturin \
@@ -161,6 +161,33 @@ not just a re-install.
 environment and the `[lib] name = "_core"` / `module-name =
 "openquant._core"` wiring in `crates/pyopenquant/Cargo.toml` and
 `pyproject.toml`; the failure itself was not triggered here.
+
+## ``TypeError: argument 'pydf': `compat_level` has invalid type: 'int'``
+
+**Symptom** — `import openquant` works, but any `openquant._core.data.*_df`
+call that takes a polars `DataFrame` raises this `TypeError`.
+
+**Cause** — the extension was built against unpatched `pyo3-polars` 0.20.0.
+That release passes an integer `compat_level` to Python `Series.to_arrow`,
+and Python polars 1.32.3 and later reject it. The repository fixes this with
+`vendor/pyo3-polars`, applied through `[patch.crates-io]` in the root
+`Cargo.toml`. You get the error when that entry is removed, or when the
+extension is built outside this workspace.
+
+**Fix** — build from the repository root with the `[patch.crates-io]` entry
+in place, and check that `Cargo.lock` resolves `pyo3-polars` without a
+`source = "registry+..."` line. Then rebuild:
+
+```bash
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+```
+
+`vendor/README.md` describes the patch and what would let us drop it.
+
+**Status: reproduced** with polars 1.38.1 by removing the `[patch]` entry
+and calling `_core.data.clean_ohlcv_df`. It is covered by
+`test_core_dataframe_bindings_accept_polars_frames` in
+`python/tests/test_data_module.py`.
 
 ## `linker 'cc' not found` (Linux)
 

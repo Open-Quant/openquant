@@ -1,7 +1,5 @@
-import polars as pl
-import pytest
-
 import openquant
+import pytest
 
 
 def test_to_polars_signal_frame_and_stream_buffer():
@@ -36,17 +34,23 @@ def test_to_polars_event_frame():
 
 def test_to_polars_indicator_matrix():
     ind = [[1, 0, 1], [0, 1, 1], [1, 1, 0]]
-    df = openquant.adapters.to_polars_indicator_matrix(ind, bar_index=[10, 11, 12], label_names=["a", "b", "c"])
+    df = openquant.adapters.to_polars_indicator_matrix(
+        ind, bar_index=[10, 11, 12], label_names=["a", "b", "c"]
+    )
     assert df.columns == ["bar_index", "a", "b", "c"]
     assert df["a"].to_list() == [1, 0, 1]
 
 
 def test_to_polars_weights_frontier_backtest():
-    w = openquant.adapters.to_polars_weights_frame(["A", "B"], [0.4, 0.6], as_of="2024-01-01 16:00:00")
+    w = openquant.adapters.to_polars_weights_frame(
+        ["A", "B"], [0.4, 0.6], as_of="2024-01-01 16:00:00"
+    )
     assert w.columns == ["asset", "weight", "as_of"]
     assert w["weight"].sum() == pytest.approx(1.0)
 
-    frontier = openquant.adapters.to_polars_frontier_frame([0.1, 0.2], [0.08, 0.12], sharpe=[0.8, 0.6])
+    frontier = openquant.adapters.to_polars_frontier_frame(
+        [0.1, 0.2], [0.08, 0.12], sharpe=[0.8, 0.6]
+    )
     assert frontier.columns == ["volatility", "return", "sharpe", "point_id"]
     assert frontier.height == 2
 
@@ -61,7 +65,9 @@ def test_to_polars_weights_frontier_backtest():
 
 
 def test_viz_payloads():
-    fi = openquant.viz.prepare_feature_importance_payload(["f1", "f2", "f3"], [0.2, 0.7, 0.1], std=[0.01, 0.02, 0.03], top_n=2)
+    fi = openquant.viz.prepare_feature_importance_payload(
+        ["f1", "f2", "f3"], [0.2, 0.7, 0.1], std=[0.01, 0.02, 0.03], top_n=2
+    )
     assert fi["chart"] == "bar"
     assert fi["x"] == ["f2", "f1"]
 
