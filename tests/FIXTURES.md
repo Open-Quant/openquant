@@ -150,7 +150,7 @@ of the fixtures above, or are derived by hand in a comment next to the assertion
 | `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` |
 | `labeling.rs` | `labeling/reference.json` |
 | `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json` |
-| `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage) |
+| `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage: `hrp.rs` on the Snippet 16.4 distance of distances, `hcaa.rs` on pairwise distances) |
 | `fast_ewma.rs`, `test_core_fast_ewma.py` | by hand: (21 * 1005 + 19 * 1205) / 40 = 1100 |
 | `sampling.rs` | by hand, AFML section 4.5.3's worked example (5/6, 3/4, 1; 6/7; 5/14, 3/14, 6/14) |
 | `ef3m.rs`, `test_core_ef3m.py` | expected values computed in the test; the moment vector is the example of Lopez de Prado & Foreman (2014), derivable by hand |

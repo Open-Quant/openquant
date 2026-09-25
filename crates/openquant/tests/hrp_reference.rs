@@ -7,7 +7,7 @@
 
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
-use openquant::hrp::HierarchicalRiskParity;
+use openquant::hrp::{HierarchicalRiskParity, HrpDistance, HrpError};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde::Deserialize;
@@ -25,12 +25,46 @@ use std::path::Path;
 /// 1e-9 is one decade above that bound and eight decades below the ~1e-1 scale of a weight.
 const REF_TOL: f64 = 1e-9;
 
+/// One tree and its weights. The top level of a case is the `Correlation` tree; the
+/// `distance_of_distances` object is the book's Snippet 16.4 tree.
+#[derive(Deserialize, Clone)]
+struct Variant {
+    link: Vec<[usize; 2]>,
+    order: Vec<usize>,
+    weights: Vec<f64>,
+}
+
 #[derive(Deserialize)]
 struct Case {
+    link: Vec<[usize; 2]>,
     order: Vec<usize>,
     weights: Vec<f64>,
     #[serde(default)]
     cov: Vec<Vec<f64>>,
+    distance_of_distances: Variant,
+}
+
+impl Case {
+    fn variant(&self, distance: HrpDistance) -> Variant {
+        match distance {
+            HrpDistance::Correlation => Variant {
+                link: self.link.clone(),
+                order: self.order.clone(),
+                weights: self.weights.clone(),
+            },
+            HrpDistance::DistanceOfDistances => self.distance_of_distances.clone(),
+        }
+    }
+}
+
+const BOTH: [HrpDistance; 2] = [HrpDistance::Correlation, HrpDistance::DistanceOfDistances];
+
+/// Tree (merge list), leaf order and weights all match the reference for `hrp.distance`.
+fn assert_matches(hrp: &HierarchicalRiskParity, case: &Case, what: &str) {
+    let want = case.variant(hrp.distance);
+    assert_eq!(hrp.clusters, want.link, "{what} {:?}: tree", hrp.distance);
+    assert_eq!(hrp.ordered_indices, want.order, "{what} {:?}: leaf order", hrp.distance);
+    assert_close(&hrp.weights, &want.weights, REF_TOL, what);
 }
 
 fn reference() -> HashMap<String, Case> {
@@ -68,10 +102,11 @@ fn assert_close(got: &[f64], want: &[f64], tol: f64, what: &str) {
 fn weights_match_independent_reference_on_price_fixture() {
     let (prices, names) = load_prices_and_names();
     let case = &reference()["stock_prices"];
-    let mut hrp = HierarchicalRiskParity::new();
-    hrp.allocate(&names, Some(&prices), None, None, None, false).unwrap();
-    assert_eq!(hrp.ordered_indices, case.order);
-    assert_close(&hrp.weights, &case.weights, REF_TOL, "stock_prices");
+    for distance in BOTH {
+        let mut hrp = HierarchicalRiskParity::with_distance(distance);
+        hrp.allocate(&names, Some(&prices), None, None, None, false).unwrap();
+        assert_matches(&hrp, case, "stock_prices");
+    }
 }
 
 #[test]
@@ -79,10 +114,11 @@ fn weights_match_independent_reference_on_random_covariance() {
     let case = &reference()["random_cov_8"];
     let n = case.cov.len();
     let cov = DMatrix::from_fn(n, n, |i, j| case.cov[i][j]);
-    let mut hrp = HierarchicalRiskParity::new();
-    hrp.allocate(&names(n), None, None, Some(&cov), None, false).unwrap();
-    assert_eq!(hrp.ordered_indices, case.order);
-    assert_close(&hrp.weights, &case.weights, REF_TOL, "random_cov_8");
+    for distance in BOTH {
+        let mut hrp = HierarchicalRiskParity::with_distance(distance);
+        hrp.allocate(&names(n), None, None, Some(&cov), None, false).unwrap();
+        assert_matches(&hrp, case, "random_cov_8");
+    }
 }
 
 /// `use_shrinkage = true` multiplies every off-diagonal covariance by 0.9. The reference applies
@@ -93,15 +129,16 @@ fn shrunk_weights_match_independent_reference() {
     let (prices, names) = load_prices_and_names();
     let reference = reference();
     let case = &reference["stock_prices_shrunk"];
-    let mut hrp = HierarchicalRiskParity::new();
-    hrp.allocate(&names, Some(&prices), None, None, None, true).unwrap();
-    assert_eq!(hrp.ordered_indices, case.order);
-    assert_close(&hrp.weights, &case.weights, REF_TOL, "stock_prices_shrunk");
+    for distance in BOTH {
+        let mut hrp = HierarchicalRiskParity::with_distance(distance);
+        hrp.allocate(&names, Some(&prices), None, None, None, true).unwrap();
+        assert_matches(&hrp, case, "stock_prices_shrunk");
 
-    // and shrinkage must actually change the answer, by far more than the tolerance
-    let plain = &reference["stock_prices"].weights;
-    let moved = hrp.weights.iter().zip(plain).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
-    assert!(moved > 1e-4, "shrinkage moved the weights by only {moved}");
+        // and shrinkage must actually change the answer, by far more than the tolerance
+        let plain = reference["stock_prices"].variant(distance).weights;
+        let moved = hrp.weights.iter().zip(&plain).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+        assert!(moved > 1e-4, "{distance:?}: shrinkage moved the weights by only {moved}");
+    }
 }
 
 /// Weekly resampling keeps rows 4, 9, 14, ... of the price matrix. The reference does exactly
@@ -110,10 +147,11 @@ fn shrunk_weights_match_independent_reference() {
 fn weekly_resampled_weights_match_independent_reference() {
     let (prices, names) = load_prices_and_names();
     let case = &reference()["stock_prices_weekly"];
-    let mut hrp = HierarchicalRiskParity::new();
-    hrp.allocate(&names, Some(&prices), None, None, Some("W"), false).unwrap();
-    assert_eq!(hrp.ordered_indices, case.order);
-    assert_close(&hrp.weights, &case.weights, REF_TOL, "stock_prices_weekly");
+    for distance in BOTH {
+        let mut hrp = HierarchicalRiskParity::with_distance(distance);
+        hrp.allocate(&names, Some(&prices), None, None, Some("W"), false).unwrap();
+        assert_matches(&hrp, case, "stock_prices_weekly");
+    }
 }
 
 /// Same claim without any reference file: asking the library to resample weekly must equal
@@ -176,14 +214,15 @@ fn uncorrelated_assets_get_inverse_variance_weights() {
 fn weights_are_invariant_to_covariance_scale() {
     let case = &reference()["random_cov_8"];
     let n = case.cov.len();
-    for scale in [1e-4, 7.0, 2.5e3] {
+    for (distance, scale) in BOTH.into_iter().flat_map(|d| [(d, 1e-4), (d, 7.0), (d, 2.5e3)]) {
+        let want = case.variant(distance);
         let cov = DMatrix::from_fn(n, n, |i, j| case.cov[i][j] * scale);
-        let mut hrp = HierarchicalRiskParity::new();
+        let mut hrp = HierarchicalRiskParity::with_distance(distance);
         hrp.allocate(&names(n), None, None, Some(&cov), None, false).unwrap();
-        assert_eq!(hrp.ordered_indices, case.order);
+        assert_eq!(hrp.ordered_indices, want.order);
         // The EPSILON term is not scale-free: at scale 1e-4 variances are ~1e-4, so it costs
         // 2.2e-16 / 1e-4 ~ 2e-12 per level over 3 levels.
-        assert_close(&hrp.weights, &case.weights, 1e-10, "scaled covariance");
+        assert_close(&hrp.weights, &want.weights, 1e-10, "scaled covariance");
     }
 }
 
@@ -200,5 +239,46 @@ fn prices_returns_and_covariance_inputs_agree() {
     let mut from_returns = HierarchicalRiskParity::new();
     from_returns.allocate(&names, None, Some(&returns), None, None, false).unwrap();
     assert_eq!(from_prices.weights, from_returns.weights);
-    assert_close(&from_returns.weights, &reference()["stock_prices"].weights, REF_TOL, "returns");
+    let want = reference()["stock_prices"].variant(HrpDistance::default()).weights;
+    assert_close(&from_returns.weights, &want, REF_TOL, "returns");
+}
+
+/// The two distances build different trees on every fixture case (the reference says so, and
+/// the library agrees), so the tests above pin two distinct code paths.
+#[test]
+fn the_two_distances_build_different_trees_on_the_fixtures() {
+    for (name, case) in &reference() {
+        assert_ne!(case.link, case.distance_of_distances.link, "{name}: reference trees agree");
+    }
+    let (prices, names) = load_prices_and_names();
+    let mut pairwise = HierarchicalRiskParity::with_distance(HrpDistance::Correlation);
+    pairwise.allocate(&names, Some(&prices), None, None, None, false).unwrap();
+    let mut book = HierarchicalRiskParity::with_distance(HrpDistance::DistanceOfDistances);
+    book.allocate(&names, Some(&prices), None, None, None, false).unwrap();
+    assert_ne!(pairwise.clusters, book.clusters);
+}
+
+/// `new()` clusters on the default distance, and the names parse case-insensitively.
+#[test]
+fn default_distance_and_parsing() {
+    assert_eq!(HierarchicalRiskParity::new().distance, HrpDistance::default());
+    assert_eq!("correlation".parse(), Ok(HrpDistance::Correlation));
+    assert_eq!("Distance_Of_Distances".parse(), Ok(HrpDistance::DistanceOfDistances));
+    assert_eq!(
+        "euclidean".parse::<HrpDistance>(),
+        Err(HrpError::UnknownDistance("euclidean".to_string()))
+    );
+}
+
+/// Two assets: d~_01 = sqrt(d_01^2 + d_01^2) = sqrt(2) d_01, so both distances give the one
+/// possible tree and the same weights.
+#[test]
+fn two_assets_do_not_depend_on_the_distance() {
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.012, 0.012, 0.01]);
+    let mut a = HierarchicalRiskParity::with_distance(HrpDistance::Correlation);
+    a.allocate(&names(2), None, None, Some(&cov), None, false).unwrap();
+    let mut b = HierarchicalRiskParity::with_distance(HrpDistance::DistanceOfDistances);
+    b.allocate(&names(2), None, None, Some(&cov), None, false).unwrap();
+    assert_eq!(a.clusters, b.clusters);
+    assert_eq!(a.weights, b.weights);
 }

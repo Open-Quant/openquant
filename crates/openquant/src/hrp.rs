@@ -3,9 +3,10 @@
 //! HRP allocates without inverting the covariance matrix, in three steps:
 //!
 //! 1. **Tree clustering** (§16.4.1): correlations become distances
-//!    `d = sqrt((1 - rho) / 2)` and assets are merged by single linkage on those pairwise
-//!    distances (as mlfinlab does; AFML's snippet clusters on distances between the columns
-//!    of the distance matrix, which usually but not always gives the same tree).
+//!    `d = sqrt((1 - rho) / 2)`, and by default assets are merged by single linkage on the
+//!    distance between columns of that matrix, `d~_ij = sqrt(sum_n (d_ni - d_nj)^2)`, as
+//!    AFML's Snippet 16.4 does. [`HrpDistance::Correlation`] clusters on `d` itself instead
+//!    (mlfinlab's choice, and this library's before #167); the two often give different trees.
 //! 2. **Quasi-diagonalisation** (§16.4.2): assets are reordered so similar ones are adjacent.
 //! 3. **Recursive bisection** (§16.4.3): the ordered list is split in halves and weight is
 //!    divided between the halves in inverse proportion to their inverse-variance cluster
@@ -17,7 +18,7 @@
 //!
 //! ```
 //! use nalgebra::DMatrix;
-//! use openquant::hrp::HierarchicalRiskParity;
+//! use openquant::hrp::{HierarchicalRiskParity, HrpDistance};
 //!
 //! # fn main() -> Result<(), openquant::hrp::HrpError> {
 //! // Assets 0 and 1 are nearly the same bet; asset 2 is independent. All have variance 0.04.
@@ -37,6 +38,11 @@
 //! // 0.038 / (0.038 + 0.040) and a and b share the rest equally.
 //! assert!((model.weights[2] - 0.038 / 0.078).abs() < 1e-12);
 //! assert!((model.weights[0] - model.weights[1]).abs() < 1e-12);
+//!
+//! // Clustering on the pairwise distances instead builds the same tree here (it need not).
+//! let mut pairwise = HierarchicalRiskParity::with_distance(HrpDistance::Correlation);
+//! pairwise.allocate(&names, None, None, Some(&covariance), None, false)?;
+//! assert_eq!(pairwise.clusters, model.clusters);
 //! # Ok(())
 //! # }
 //! ```
@@ -57,6 +63,42 @@ pub enum HrpError {
     /// [`HierarchicalRiskParity::plot_clusters`] was called before `allocate`.
     #[error("no clusters yet: call allocate first")]
     MissingClusters,
+    /// A distance name given to [`HrpDistance`]'s `FromStr` is not `"correlation"` or
+    /// `"distance_of_distances"`.
+    #[error("unknown distance: {0} (expected \"correlation\" or \"distance_of_distances\")")]
+    UnknownDistance(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Which distance the single-linkage tree is built on (AFML §16.4.1).
+///
+/// Both start from the correlation distance `d_ij = sqrt((1 - rho_ij) / 2)`.
+pub enum HrpDistance {
+    /// Cluster on `d` itself, as a pairwise distance matrix. This is what mlfinlab does, and
+    /// was this library's only behaviour before #167.
+    Correlation,
+    /// Cluster on the Euclidean distance between columns of `d`,
+    /// `d~_ij = sqrt(sum_n (d_ni - d_nj)^2)`: two assets are close when they are at similar
+    /// distances from every asset. This is the second step of AFML §16.4.1, and what Snippet
+    /// 16.4's `sch.linkage(dist, 'single')` computes, because scipy reads a square matrix as
+    /// one observation per row. The default: on the §16.5 Monte Carlo (10,000 runs) it gives
+    /// lower out-of-sample variance than [`Correlation`](Self::Correlation) and about half the
+    /// turnover.
+    #[default]
+    DistanceOfDistances,
+}
+
+impl std::str::FromStr for HrpDistance {
+    type Err = HrpError;
+
+    /// Parses `"correlation"` or `"distance_of_distances"` (case-insensitive).
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name.to_ascii_lowercase().as_str() {
+            "correlation" => Ok(Self::Correlation),
+            "distance_of_distances" => Ok(Self::DistanceOfDistances),
+            _ => Err(HrpError::UnknownDistance(name.to_string())),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -97,12 +139,19 @@ pub struct HierarchicalRiskParity {
     /// The single-linkage merges, scipy-style: ids below `n` are assets and `n + k` is the
     /// cluster formed by merge `k`.
     pub clusters: Vec<[usize; 2]>,
+    /// The distance the tree is built on; set it before calling [`allocate`](Self::allocate).
+    pub distance: HrpDistance,
 }
 
 impl HierarchicalRiskParity {
-    /// Creates an allocator with no results.
+    /// Creates an allocator with no results that clusters on [`HrpDistance::default`].
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates an allocator with no results that clusters on `distance`.
+    pub fn with_distance(distance: HrpDistance) -> Self {
+        Self { distance, ..Self::default() }
     }
 
     /// Computes HRP weights and stores them with the tree in the public fields.
@@ -177,7 +226,12 @@ impl HierarchicalRiskParity {
 
         let corr = cov2corr(&covariance)?;
         let distances = corr_to_distances(&corr);
-        self.clusters = single_linkage_children(&distances);
+        self.clusters = match self.distance {
+            HrpDistance::Correlation => single_linkage_children(&distances),
+            HrpDistance::DistanceOfDistances => {
+                single_linkage_children(&distance_of_distances(&distances))
+            }
+        };
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);
 
         self.seriated_distances = Some(seriate_matrix(&distances, &self.ordered_indices));
@@ -301,6 +355,24 @@ fn corr_to_distances(corr: &DMatrix<f64>) -> DMatrix<f64> {
         }
     }
     d
+}
+
+/// `d~_ij = sqrt(sum_n (d_ni - d_nj)^2)`: the Euclidean distance between columns `i` and `j`.
+/// The diagonal of `d` is taken as exactly 0 (rounding in `cov2corr` can leave `rho_ii` a few
+/// ulps below 1).
+fn distance_of_distances(distances: &DMatrix<f64>) -> DMatrix<f64> {
+    let mut d = distances.clone_owned();
+    d.fill_diagonal(0.0);
+    let n = d.nrows();
+    let mut out = DMatrix::zeros(n, n);
+    for i in 0..n {
+        for j in i + 1..n {
+            let s: f64 = (0..n).map(|k| (d[(k, i)] - d[(k, j)]).powi(2)).sum();
+            out[(i, j)] = s.sqrt();
+            out[(j, i)] = out[(i, j)];
+        }
+    }
+    out
 }
 
 fn single_linkage_children(distance: &DMatrix<f64>) -> Vec<[usize; 2]> {
