@@ -177,10 +177,7 @@ fn test_quasi_diagonalization() {
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
     hcaa.allocate(&names, Some(&prices), None, None, None, "equal_weighting", 0.05, Some(5), None)
         .unwrap();
-    assert_eq!(
-        hcaa.ordered_indices,
-        vec![13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19]
-    );
+    assert_eq!(hcaa.ordered_indices, reference_leaf_order());
 }
 
 #[test]
@@ -232,4 +229,19 @@ fn test_value_error_for_allocation_metric() {
         .allocate(&names, Some(&prices), None, None, None, "random_metric", 0.05, Some(5), None)
         .unwrap_err();
     assert!(matches!(err, HcaaError::UnknownAllocationMetric(_)));
+}
+
+/// Leaf order of scipy's single-linkage dendrogram on the same prices
+/// (tests/fixtures/hrp/generate.py).
+fn reference_leaf_order() -> Vec<usize> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/hrp/reference.json");
+    let reference: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    reference["stock_prices"]["order"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().unwrap() as usize)
+        .collect()
 }

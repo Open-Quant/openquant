@@ -2,7 +2,7 @@
 title: "labeling"
 description: "Triple-barrier labels and meta-labels: what happened after each event, measured in units of that moment's volatility."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -105,7 +105,7 @@ vol_stamps, vol_values = [t for t, _ in vol], [v for _, v in vol]
 events = filters.cusum_filter_timestamps(close, stamps, 0.02)
 
 # 3. How long to wait: a vertical barrier two days after each event.
-vertical = labeling.add_vertical_barrier(events, stamps, close, 2, 0, 0, 0)
+vertical = labeling.add_vertical_barrier(events, stamps, close, num_days=2)
 
 # 4. Barriers at 1.5 daily vols either side; ignore events whose target is under 0.5%.
 found = labeling.get_events(stamps, close, events, (1.5, 1.5), vol_stamps, vol_values, 0.005,
@@ -180,7 +180,10 @@ be tuned for recall, because the secondary one is there to restore precision.
   labels that cost more to trade than they are worth.
 - **Time limit.** `add_vertical_barrier` looks up the first bar at or after the event time
   plus the offset. An event too close to the end of the series to have one gets no vertical
-  barrier at all, rather than a shortened one.
+  barrier at all, rather than a shortened one. From Python the offset is
+  `num_days`, `num_hours`, `num_minutes` and `num_seconds`, each defaulting to 0 and summed;
+  leaving all four at 0 is a `ValueError`, since a zero offset puts the barrier on the event
+  itself.
 - **Rare classes.** `drop_labels(bins, min_pct)` removes the rarest class while it holds no
   more than `min_pct` of the observations and at least three classes remain (Snippet 3.8).
 

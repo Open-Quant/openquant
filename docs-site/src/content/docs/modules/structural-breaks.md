@@ -2,7 +2,7 @@
 title: "structural_breaks"
 description: "Tests for a change of regime in a price series: the supremum ADF test for explosive behaviour, a Chow-type Dickey-Fuller test, and the Chu-Stinchcombe-White CUSUM test."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -192,6 +192,11 @@ assert!(matches!(
   are slow, and AFML's §17.4.2.3 puts a full tick history at supercomputer scale. Compute it
   on sampled bars, cap the look-back by passing a trailing slice, or parallelise over end
   dates yourself.
+- **Build the extension with `--release` before running SADF from Python.** `maturin
+  develop` builds an unoptimised debug extension unless told otherwise, and the many small
+  regressions above are where that shows: a full-series run took about 7.5 minutes per model
+  through a debug build ([#77](https://github.com/Open-Quant/openquant/issues/77)). Use
+  `maturin develop --release` or `just py-develop-release`.
 - **Critical values are not supplied.** SADF does not follow a Dickey–Fuller distribution;
   its critical values depend on the sample length and `min_length` and come from simulation
   (Phillips, Shi and Yu, 2015). As a feature this does not matter, since the model learns its
