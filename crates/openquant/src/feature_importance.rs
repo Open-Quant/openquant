@@ -1,3 +1,45 @@
+//! Feature importance for models validated on purged folds (AFML Chapter 8).
+//!
+//! - [`mean_decrease_impurity`] (MDI, §8.3.1, Snippet 8.2) — in-sample; aggregates per-tree
+//!   impurity importances you computed elsewhere (this crate has no tree learner). Zeros are
+//!   treated as missing, as in the snippet.
+//! - [`mean_decrease_accuracy`] (MDA, §8.3.2, Snippet 8.3) — out-of-sample; relative loss of
+//!   test-fold score when one feature column is shuffled, `(s_k - s_kj) / (s_max - s_kj)` with
+//!   `s_max` = 0 for negative log loss and 1 for accuracy/F1.
+//! - [`single_feature_importance`] (SFI, §8.4.1, Snippet 8.4) — out-of-sample; the raw
+//!   cross-validated score of the model fitted on each feature alone.
+//! - [`get_orthogonal_features`] and [`feature_pca_analysis`] (§8.4.2, Snippets 8.5–8.6) —
+//!   PCA-orthogonalised features, and rank correlations between an importance vector and the
+//!   PCA loadings as an unsupervised sanity check.
+//!
+//! Conventions:
+//! - Feature matrices are row-major `Vec<Vec<f64>>`: one row per sample, one column per
+//!   feature, columns in the order of `feature_names`. Labels are `0.0`/`1.0`.
+//! - `splits` are `(train_indices, test_indices)` pairs into the rows, typically from
+//!   [`crate::cross_validation::PurgedKFold`].
+//! - Results map feature name to [`ImportanceStats`], whose `std` is the **standard error of
+//!   the mean**, not a standard deviation: MDI and MDA divide the sample deviation (ddof 1) by
+//!   `sqrt(n)`, SFI the population deviation (ddof 0). A standard error from one fold or tree is
+//!   0, not `NaN`.
+//! - Each method is fooled differently: MDI gives noise features a share, MDA lets correlated
+//!   features hide each other (substitution), SFI misses features that matter only jointly.
+//!
+//! ```
+//! use openquant::feature_importance::{mean_decrease_impurity, FeatureImportanceError};
+//!
+//! # fn main() -> Result<(), FeatureImportanceError> {
+//! let per_tree = vec![vec![0.6, 0.3, 0.1], vec![0.5, 0.3, 0.2], vec![0.7, 0.2, 0.1]];
+//! let names: Vec<String> = ["f0", "f1", "f2"].map(String::from).to_vec();
+//! let mdi = mean_decrease_impurity(&per_tree, &names)?;
+//! // Means 0.6, 0.267, 0.133 already sum to 1.
+//! assert!((mdi["f0"].mean - 0.6).abs() < 1e-12);
+//! // Sample deviation of (0.6, 0.5, 0.7) is 0.1; its standard error over 3 trees is 0.1 / sqrt(3).
+//! assert!((mdi["f0"].std - 0.1 / 3f64.sqrt()).abs() < 1e-12);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use std::collections::BTreeMap;
 
 use nalgebra::{DMatrix, SymmetricEigen};
@@ -7,40 +49,89 @@ use rand::SeedableRng;
 
 use crate::cross_validation::{ml_cross_val_score, Scoring, SimpleClassifier};
 
+/// Errors returned by the feature-importance functions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum FeatureImportanceError {
+    /// [`plot_feature_importance`] could not write its CSV; carries the I/O error message.
     #[error("failed to write output file: {0}")]
     WriteOutput(String),
+    /// The named input is empty.
     #[error("{0} cannot be empty")]
     Empty(&'static str),
+    /// A per-tree importance row does not have one entry per feature name.
     #[error("importance row length mismatch")]
     ImportanceRowLengthMismatch,
+    /// The named input does not have one entry per feature.
     #[error("{0} length mismatch")]
     LengthMismatch(&'static str),
+    /// PCA feature rows do not all have the same length.
     #[error("ragged feature rows")]
     RaggedFeatureRows,
+    /// `x` or `y` is empty.
     #[error("x and y cannot be empty")]
     EmptyXy,
+    /// `x` and `y` have different numbers of rows.
     #[error("x/y length mismatch")]
     XyLengthMismatch,
+    /// The rows of `x` do not all have the same length.
     #[error("ragged x rows")]
     RaggedX,
 }
 
+/// Importance of one feature.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ImportanceStats {
+    /// Mean importance across trees (MDI) or folds (MDA, SFI).
     pub mean: f64,
+    /// **Standard error** of `mean` (despite the name): the deviation divided by `sqrt(n)`.
     pub std: f64,
 }
 
+/// Correlations between an importance vector and PCA loadings, from
+/// [`feature_pca_analysis`] (AFML Snippet 8.6). Each is 0 where SciPy would return `NaN`
+/// because an input is constant.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PcaCorrelation {
+    /// Pearson correlation of the (repeated) importances with `|eigenvector * eigenvalue|`.
     pub pearson: f64,
+    /// Spearman correlation (average ranks for ties), as `scipy.stats.spearmanr`.
     pub spearman: f64,
+    /// Kendall tau-b, as `scipy.stats.kendalltau`.
     pub kendall: f64,
+    /// `scipy.stats.weightedtau(importance, 1 / pca_rank)` with hyperbolic weights, where
+    /// `pca_rank` ranks each feature's summed absolute loading (1 = largest, ties averaged).
     pub weighted_kendall_rank: f64,
 }
 
+/// Mean decrease impurity aggregation (AFML §8.3.1, Snippet 8.2).
+///
+/// `per_tree_importances` holds one row per tree, each with one impurity importance per
+/// feature in `feature_names` order (e.g. scikit-learn's `feature_importances_` of every
+/// estimator). Following the snippet, **a zero is treated as missing** (the snippet trains with
+/// `max_features = 1`, where 0 means "never offered to the tree"); with other settings this
+/// inflates the mean, so replace zeros with a tiny positive number if 0 means "useless". Per
+/// feature the mean over non-missing trees is taken and its standard error is the sample
+/// deviation (ddof 1) times `n_trees^-0.5`, with `n_trees` counting every tree. Means and
+/// standard errors are then divided by the sum of the means, so the means sum to 1. A feature
+/// that is zero in every tree gets 0; if no mean is positive, everything is 0.
+///
+/// # Errors
+///
+/// - [`FeatureImportanceError::Empty`] if `per_tree_importances` or `feature_names` is empty.
+/// - [`FeatureImportanceError::ImportanceRowLengthMismatch`] if a row's length differs from
+///   `feature_names.len()`.
+///
+/// ```
+/// use openquant::feature_importance::mean_decrease_impurity;
+///
+/// // The zero is dropped: f0 averages 0.5 over one tree, f1 averages 0.75 over two.
+/// let per_tree = vec![vec![0.0, 1.0], vec![0.5, 0.5]];
+/// let names: Vec<String> = ["f0", "f1"].map(String::from).to_vec();
+/// let mdi = mean_decrease_impurity(&per_tree, &names).unwrap();
+/// assert!((mdi["f0"].mean - 0.5 / 1.25).abs() < 1e-12);
+/// assert!((mdi["f1"].mean - 0.75 / 1.25).abs() < 1e-12);
+/// assert_eq!(mdi["f0"].std, 0.0); // one observation
+/// ```
 pub fn mean_decrease_impurity(
     per_tree_importances: &[Vec<f64>],
     feature_names: &[String],
@@ -83,6 +174,62 @@ pub fn mean_decrease_impurity(
 /// test rows, then score them again with one feature column shuffled; importance is the relative
 /// loss of score. Shuffles draw from a `StdRng` seeded with `seed`, so a given seed always
 /// gives the same result.
+///
+/// For each split in `splits` (`(train_indices, test_indices)` into the rows of `x`), `model`
+/// is fitted on the training rows (with their `sample_weight`), the test rows are scored, and
+/// then each feature column is shuffled in turn within the test rows and scored again. The
+/// per-fold importance is `(base - perm) / (0 - perm)` for [`Scoring::NegLogLoss`] and
+/// `(base - perm) / (1 - perm)` for [`Scoring::Accuracy`] and [`Scoring::F1`]; it is 0 when
+/// the denominator is 0 or the ratio is not finite. Test-fold scores **are** weighted by
+/// `sample_weight`. Accuracy and F1 use [`SimpleClassifier::predict`] (so an override is
+/// honoured), negative log loss uses [`SimpleClassifier::predict_proba`]. The result is the mean
+/// over folds and its standard error (sample deviation, ddof 1, over `sqrt(n_folds)`).
+///
+/// 1 means damaging the feature destroyed everything the model had, 0 that the model did not
+/// need it, negative that it did better without it. Because the shuffle stays within each test
+/// fold, a very persistent feature is somewhat understated.
+///
+/// # Errors
+///
+/// - [`FeatureImportanceError::EmptyXy`] if `x` or `y` is empty.
+/// - [`FeatureImportanceError::XyLengthMismatch`] if `x.len() != y.len()`.
+/// - [`FeatureImportanceError::LengthMismatch`] (`"feature_names"`) if the first row of `x`
+///   does not have one entry per feature name.
+/// - [`FeatureImportanceError::RaggedX`] if the rows of `x` differ in length.
+///
+/// # Panics
+///
+/// If a split index is out of range for `x`, if `sample_weight` is shorter than an index it is
+/// read at, or if `model` returns fewer predictions than rows.
+///
+/// ```
+/// use openquant::cross_validation::{Scoring, SimpleClassifier};
+/// # use openquant::feature_importance::FeatureImportanceError;
+///
+/// /// A fixed rule: P(y = 1) is the first column. `fit` learns nothing.
+/// struct FirstColumn;
+/// impl SimpleClassifier for FirstColumn {
+///     fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _w: Option<&[f64]>) {}
+///     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+///         x.iter().map(|r| r[0]).collect()
+///     }
+/// }
+///
+/// let y = [0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0];
+/// let splits = vec![((4..8).collect::<Vec<_>>(), (0..4).collect()), ((0..4).collect(), (4..8).collect())];
+/// let names: Vec<String> = ["signal", "noise"].map(String::from).to_vec();
+///
+/// let x: Vec<Vec<f64>> = y.iter().enumerate().map(|(i, v)| vec![*v, i as f64 / 8.0]).collect();
+/// let mda = openquant::feature_importance::mean_decrease_accuracy(
+///     &mut FirstColumn, &x, &y, &names, &splits, None, Scoring::Accuracy, 7,
+/// )?;
+/// // The model never reads the second column, so shuffling it changes nothing.
+/// assert_eq!(mda["noise"].mean, 0.0);
+/// assert_eq!(mda["noise"].std, 0.0);
+/// // Shuffling the first column costs every correct prediction it moves: (1 - s) / (1 - s) = 1.
+/// assert_eq!(mda["signal"].mean, 1.0);
+/// # Ok::<(), FeatureImportanceError>(())
+/// ```
 #[allow(clippy::too_many_arguments)]
 pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     model: &mut C,
@@ -139,6 +286,55 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     Ok(pack_stats(feature_names, &per_feature))
 }
 
+/// Single feature importance (AFML §8.4.1, Snippet 8.4): cross-validate `clf` on each feature
+/// alone.
+///
+/// For each feature, `clf` is fitted and scored with
+/// [`ml_cross_val_score`] on the one-column matrix over `splits`. The value is the **raw** cross-validated score, not a ratio: for negative
+/// log loss compare it with `-ln 2 ≈ -0.693`, a coin flip. `sample_weight` is passed to `fit`
+/// only; test folds are scored unweighted. The standard error is the population deviation
+/// (ddof 0) over `sqrt(n_folds)`.
+///
+/// # Errors
+///
+/// - [`FeatureImportanceError::EmptyXy`] if `x` or `y` is empty.
+/// - [`FeatureImportanceError::XyLengthMismatch`] if `x.len() != y.len()`.
+/// - [`FeatureImportanceError::LengthMismatch`] (`"feature_names"`) if the first row of `x`
+///   does not have one entry per feature name.
+/// - [`FeatureImportanceError::RaggedX`] if the rows of `x` differ in length.
+///
+/// # Panics
+///
+/// If a split index is out of range for `x`, if `sample_weight` is shorter than an index it is
+/// read at, or if `clf` returns fewer predictions than rows.
+///
+/// ```
+/// use openquant::cross_validation::{Scoring, SimpleClassifier};
+/// # use openquant::feature_importance::FeatureImportanceError;
+///
+/// /// A fixed rule: P(y = 1) is the first column. `fit` learns nothing.
+/// struct FirstColumn;
+/// impl SimpleClassifier for FirstColumn {
+///     fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _w: Option<&[f64]>) {}
+///     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+///         x.iter().map(|r| r[0]).collect()
+///     }
+/// }
+///
+/// let y = [0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0];
+/// let splits = vec![((4..8).collect::<Vec<_>>(), (0..4).collect()), ((0..4).collect(), (4..8).collect())];
+/// let names: Vec<String> = ["signal", "noise"].map(String::from).to_vec();
+///
+/// // Feature 0 is the label itself; feature 1 is its opposite.
+/// let x: Vec<Vec<f64>> = y.iter().map(|v| vec![*v, 1.0 - v]).collect();
+/// let sfi = openquant::feature_importance::single_feature_importance(
+///     &mut FirstColumn, &x, &y, &names, &splits, None, Scoring::Accuracy,
+/// )?;
+/// assert_eq!(sfi["signal"].mean, 1.0);
+/// assert_eq!(sfi["noise"].mean, 0.0);
+/// assert_eq!(sfi["signal"].std, 0.0);
+/// # Ok::<(), FeatureImportanceError>(())
+/// ```
 pub fn single_feature_importance<C: SimpleClassifier>(
     clf: &mut C,
     x: &[Vec<f64>],
@@ -163,6 +359,35 @@ pub fn single_feature_importance<C: SimpleClassifier>(
     Ok(out)
 }
 
+/// Orthogonal features by PCA (AFML §8.4.2, Snippet 8.5).
+///
+/// `feature_rows` is row-major (one row per sample). Each column is standardised (population
+/// deviation; a constant column becomes 0), the eigenvectors of `Z'Z` are sorted by
+/// descending eigenvalue, and the smallest leading set whose cumulative share of the
+/// eigenvalues reaches `variance_thresh` is kept (at least one; all of them if
+/// `variance_thresh > 1`). Returns `Z` projected onto those eigenvectors: one row per sample,
+/// one column per kept component. Eigenvector signs are arbitrary. An empty `feature_rows`
+/// returns an empty vector.
+///
+/// # Errors
+///
+/// [`FeatureImportanceError::RaggedFeatureRows`] if the rows differ in length.
+///
+/// # Panics
+///
+/// If `feature_rows` is non-empty but its rows have no columns.
+///
+/// ```
+/// use openquant::feature_importance::get_orthogonal_features;
+///
+/// // Two perfectly correlated columns carry one component.
+/// let rows = vec![vec![1.0, 2.0], vec![2.0, 4.0], vec![3.0, 6.0]];
+/// let pcs = get_orthogonal_features(&rows, 0.95).unwrap();
+/// assert!(pcs.iter().all(|r| r.len() == 1));
+/// // Standardised columns are (-sqrt(1.5), 0, sqrt(1.5)); the component is their sum / sqrt(2).
+/// assert!((pcs[0][0].abs() - 3f64.sqrt()).abs() < 1e-12);
+/// assert!(pcs[1][0].abs() < 1e-12);
+/// ```
 pub fn get_orthogonal_features(
     feature_rows: &[Vec<f64>],
     variance_thresh: f64,
@@ -174,6 +399,44 @@ pub fn get_orthogonal_features(
     Ok((to_dmatrix(&x_std) * evec).row_iter().map(|r| r.iter().copied().collect()).collect())
 }
 
+/// Correlate an importance vector with PCA loadings (AFML §8.4.2, Snippet 8.6).
+///
+/// The PCA is that of [`get_orthogonal_features`] with `variance_thresh`. With `k` kept
+/// components, the loadings `|eigenvector_ij * eigenvalue_j|` (all features, component by
+/// component) are correlated with `feature_importance_mean` repeated `k` times, giving Pearson,
+/// Spearman and Kendall tau-b as `scipy.stats` computes them (average ranks for the ties the
+/// repetition creates). The weighted Kendall compares the importances with `1 / pca_rank`, where
+/// `pca_rank` ranks each feature's summed absolute loading. Agreement between the supervised
+/// and unsupervised rankings is weak evidence that the model has not simply overfit.
+///
+/// # Errors
+///
+/// - [`FeatureImportanceError::Empty`] (`"feature_rows"`) if `feature_rows` is empty.
+/// - [`FeatureImportanceError::LengthMismatch`] (`"feature_importance_mean"`) if the
+///   importance vector does not have one entry per column of the first row.
+/// - [`FeatureImportanceError::RaggedFeatureRows`] if the rows differ in length.
+///
+/// # Panics
+///
+/// If the rows have no columns (and `feature_importance_mean` is empty).
+///
+/// ```
+/// use openquant::feature_importance::feature_pca_analysis;
+///
+/// // Columns 0 and 1 are identical and orthogonal to column 2: eigenvalues 8, 4, 0.
+/// let rows = vec![
+///     vec![1.0, 1.0, 1.0],
+///     vec![1.0, 1.0, -1.0],
+///     vec![-1.0, -1.0, 1.0],
+///     vec![-1.0, -1.0, -1.0],
+/// ];
+/// // A 0.5 threshold keeps only the first component, loadings (8/sqrt 2, 8/sqrt 2, 0).
+/// let corr = feature_pca_analysis(&rows, &[0.5, 0.4, 0.1], 0.5).unwrap();
+/// assert!((corr.pearson - 0.970725).abs() < 1e-6);
+/// assert!((corr.spearman - 0.75f64.sqrt()).abs() < 1e-12);
+/// assert!((corr.kendall - 2.0 / 6f64.sqrt()).abs() < 1e-12);
+/// assert!((corr.weighted_kendall_rank - 0.768706).abs() < 1e-6);
+/// ```
 pub fn feature_pca_analysis(
     feature_rows: &[Vec<f64>],
     feature_importance_mean: &[f64],
@@ -220,6 +483,15 @@ pub fn feature_pca_analysis(
     Ok(PcaCorrelation { pearson, spearman, kendall, weighted_kendall_rank: weighted })
 }
 
+/// Write importances to a CSV file (the name is mlfinlab's; nothing is plotted).
+///
+/// With `output_path = Some(path)` it writes `oob_score,<oob>`, `oos_score,<oos>`, a header
+/// `feature,mean,std`, and one line per feature in name order, overwriting `path`. With
+/// `None` it does nothing.
+///
+/// # Errors
+///
+/// [`FeatureImportanceError::WriteOutput`] if the file cannot be written.
 pub fn plot_feature_importance(
     importance: &BTreeMap<String, ImportanceStats>,
     oob_score: f64,

@@ -1,11 +1,70 @@
+//! Training sample weights for overlapping labels (AFML Chapter 4).
+//!
+//! Two independent weightings of triple-barrier events, meant to be passed to a learner as
+//! `sample_weight` (AFML suggests multiplying them, §4.7):
+//! - [`get_weights_by_return`] — return attribution (§4.6, Snippet 4.10): each label is
+//!   credited with the absolute sum of the log returns inside its span, each divided by the
+//!   number of labels alive at that bar; the weights are rescaled to sum to the number of
+//!   labels.
+//! - [`get_weights_by_time_decay`] — time decay (§4.7, Snippet 4.11): a piecewise-linear decay
+//!   along **cumulative average uniqueness** (not calendar time), with the newest label at
+//!   weight 1. These weights are not rescaled.
+//!
+//! Conventions:
+//! - Events are `(start, end, label)` triples; the label (third element) is not used. Spans are
+//!   inclusive, `[start, end]`, and matched to `close` by exact timestamp comparison.
+//! - `close` is the `(timestamp, price)` bar series the labels were built on, in ascending
+//!   time order. Prices, not returns; log returns are computed once over the whole series, so
+//!   a label also collects the return arriving at its `start` bar.
+//! - Both functions return one `(event start, weight)` pair per event, in input order,
+//!   duplicates included.
+//! - Concurrency and cumulative uniqueness are computed over the events passed in: compute
+//!   weights on the training fold only, or the future's label density leaks into the past.
+//! - Class imbalance (§4.8) is a separate correction; neither function looks at the label.
+//!
+//! ```
+//! use chrono::{Duration, NaiveDate};
+//! use openquant::sample_weights::{get_weights_by_return, get_weights_by_time_decay};
+//!
+//! # fn main() -> Result<(), openquant::sample_weights::SampleWeightsError> {
+//! let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 30, 0).unwrap();
+//! let prices = [100.0, 100.5, 101.5, 101.0, 101.2, 101.1, 103.0, 103.2];
+//! let close: Vec<_> =
+//!     prices.iter().enumerate().map(|(i, p)| (open + Duration::minutes(i as i64), *p)).collect();
+//! let at = |i: usize| close[i].0;
+//! // A and B overlap on bars 1-3; C and D stand alone.
+//! let events =
+//!     vec![(at(0), at(3), 1.0), (at(1), at(3), 1.0), (at(4), at(5), -1.0), (at(6), at(7), 1.0)];
+//!
+//! let by_return = get_weights_by_return(&events, &close)?;
+//! let expected = [0.631794, 0.631794, 0.125670, 2.610742];
+//! for ((_, w), e) in by_return.iter().zip(expected) {
+//!     assert!((w - e).abs() < 1e-6);
+//! }
+//!
+//! let by_decay = get_weights_by_time_decay(&events, &close, 0.5)?;
+//! let expected = [0.60, 0.68, 0.84, 1.00];
+//! for ((_, w), e) in by_decay.iter().zip(expected) {
+//!     assert!((w - e).abs() < 1e-12);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use chrono::NaiveDateTime;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 
+/// Errors returned by the sample-weight functions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SampleWeightsError {
+    /// An event's `end` precedes its `start`.
     #[error("event {index} ends before it starts")]
-    EndBeforeStart { index: usize },
+    EndBeforeStart {
+        /// Position (in the input slice) of the first offending event.
+        index: usize,
+    },
 }
 
 /// Reject events whose end precedes their start; such a span holds no bars to weight.
@@ -62,7 +121,44 @@ fn get_av_uniqueness_from_triple_barrier(
     t_w
 }
 
-/// Sample weights by return attribution.
+/// Sample weights by return attribution (AFML §4.6, Snippet 4.10).
+///
+/// For each event `i`, `w_i = |sum_{t in [start_i, end_i]} r_t / c_t|`, where `r_t` is the log
+/// return arriving at bar `t` (`ln(close_t / close_{t-1})`, computed over the whole series, so
+/// the return arriving at `start_i` is included) and `c_t` is the number of events whose span
+/// contains bar `t`. The weights are then scaled to sum to the number of events (mean 1),
+/// unless they are all zero, in which case they are returned unscaled.
+///
+/// `triple_barrier_events` are `(start, end, label)` with the label ignored; `close` is
+/// `(timestamp, price)` in ascending time order with strictly positive prices (a non-positive
+/// price yields a non-finite log return and non-finite weights). Returns
+/// `(event start, weight)` per event, in input order. An empty `triple_barrier_events` returns
+/// an empty vector.
+///
+/// A single large move (a gap or bad print) can take most of the total weight, and a label
+/// over a flat stretch gets a weight near zero.
+///
+/// # Errors
+///
+/// [`SampleWeightsError::EndBeforeStart`] if any event's `end` precedes its `start`.
+///
+/// ```
+/// use chrono::{Duration, NaiveDate};
+/// use openquant::sample_weights::get_weights_by_return;
+///
+/// let t0 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 30, 0).unwrap();
+/// let close: Vec<_> = [100.0, 110.0, 99.0]
+///     .iter()
+///     .enumerate()
+///     .map(|(i, p)| (t0 + Duration::minutes(i as i64), *p))
+///     .collect();
+/// // Two non-overlapping events: |ln(1.1)| and |ln(0.9)|, rescaled to sum to 2.
+/// let events = vec![(close[1].0, close[1].0, 1.0), (close[2].0, close[2].0, -1.0)];
+/// let w = get_weights_by_return(&events, &close).unwrap();
+/// let (a, b) = (1.1f64.ln().abs(), 0.9f64.ln().abs());
+/// assert!((w[0].1 - 2.0 * a / (a + b)).abs() < 1e-12);
+/// assert!((w[0].1 + w[1].1 - 2.0).abs() < 1e-12);
+/// ```
 pub fn get_weights_by_return(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close: &[(NaiveDateTime, f64)],
@@ -104,11 +200,47 @@ pub fn get_weights_by_return(
     Ok(weights)
 }
 
-/// Sample weights by time decay.
+/// Sample weights by time decay (AFML §4.7, Snippet 4.11).
+///
+/// Each event's average uniqueness is the mean of `1 / c_t` over the bars of `close` in its
+/// span (`c_t` = number of events containing bar `t`, floored at 1); an event covering no bar
+/// has uniqueness 0. With `x_i` the cumulative uniqueness in start order and `X` its total, the
+/// weight is `max(0, a + b x_i)` with `b = (1 - decay) / X` for `decay >= 0`,
+/// `b = 1 / ((decay + 1) X)` for `decay < 0`, and `a = 1 - b X`, so the newest event has
+/// weight 1. AFML's domain is `decay` in `(-1, 1]`: `1` is no decay, `0 < decay < 1` decays
+/// linearly toward `decay`, `0` toward 0, and `-1 < decay < 0` zeroes the oldest `-decay`
+/// fraction of cumulative uniqueness. The oldest weight *approaches* `decay` rather than
+/// equalling it, because the line is anchored at `x = 0`. `decay` is not validated. The
+/// weights are not rescaled and do not include return attribution; `close` prices are not
+/// used, only its timestamps.
 ///
 /// Returns one `(start, weight)` pair per event, in input order. Cumulative uniqueness is
 /// accumulated in start order; events that share a start keep their input order (a stable
 /// sort), so each takes its own cumulative position and the later-listed one counts as newer.
+///
+/// # Errors
+///
+/// [`SampleWeightsError::EndBeforeStart`] if any event's `end` precedes its `start`.
+///
+/// ```
+/// use chrono::{Duration, NaiveDate};
+/// use openquant::sample_weights::get_weights_by_time_decay;
+///
+/// let t0 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 30, 0).unwrap();
+/// let close: Vec<_> = (0..4).map(|i| (t0 + Duration::minutes(i), 100.0)).collect();
+/// // Four non-overlapping one-bar events: x = 1, 2, 3, 4 and X = 4.
+/// let events: Vec<_> = close.iter().map(|(t, _)| (*t, *t, 1.0)).collect();
+///
+/// // decay = 0: b = 1/4, a = 0.
+/// let w = get_weights_by_time_decay(&events, &close, 0.0).unwrap();
+/// let got: Vec<f64> = w.iter().map(|(_, w)| *w).collect();
+/// assert_eq!(got, vec![0.25, 0.5, 0.75, 1.0]);
+///
+/// // decay = -0.5: b = 1/2, a = -1; the oldest half is clipped to 0.
+/// let w = get_weights_by_time_decay(&events, &close, -0.5).unwrap();
+/// let got: Vec<f64> = w.iter().map(|(_, w)| *w).collect();
+/// assert_eq!(got, vec![0.0, 0.0, 0.5, 1.0]);
+/// ```
 pub fn get_weights_by_time_decay(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close: &[(NaiveDateTime, f64)],

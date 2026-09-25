@@ -8,10 +8,20 @@ Run from the repository root:
 
 This is a direct transcription of Lopez de Prado, "Advances in Financial Machine Learning",
 snippets 16.1-16.4 (getIVP, getClusterVar, getQuasiDiag, getRecBipart), with the clustering
-step done by scipy.  It shares no code with the Rust library.  The one deliberate choice: the
-condensed correlation-distance matrix d_ij = sqrt((1 - rho_ij) / 2) is handed to
-scipy.cluster.hierarchy.linkage(method="single") as pairwise distances (what mlfinlab does),
-not as an observation matrix (what the book's snippet 16.4 does).
+step done by scipy.  It shares no code with the Rust library.  Every case is computed with both
+trees the library offers (openquant.hrp's `distance` option):
+
+  * "correlation" (the top-level `link`, `order`, `weights` of each case): the condensed
+    correlation-distance matrix d_ij = sqrt((1 - rho_ij) / 2) is handed to
+    scipy.cluster.hierarchy.linkage(method="single") as pairwise distances, as mlfinlab does.
+  * "distance_of_distances" (the nested object of that name): the square matrix d is handed to
+    linkage exactly as the book's snippet 16.4 does (`sch.linkage(dist, 'single')`).  scipy
+    reads a square array as one observation per row, so this clusters on the Euclidean
+    distance between columns of d, d~_ij = sqrt(sum_n (d_ni - d_nj)^2), the second step of
+    AFML section 16.4.1.  The script asserts that it equals linkage on condensed pdist(d).
+
+`link` is the (left, right) merge list of scipy's linkage matrix: ids below n are assets and
+n + k is the cluster formed by merge k.
 
 Cases written to reference.json:
   * stock_prices: the 23-ETF price fixture, simple returns, sample covariance (ddof=1).
@@ -27,10 +37,11 @@ Cases written to reference.json:
 import csv
 import json
 import pathlib
+import warnings
 
 import numpy as np
 import scipy.cluster.hierarchy as sch
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import pdist, squareform
 
 HERE = pathlib.Path(__file__).resolve().parent
 PRICES = HERE.parent / "portfolio_optimization" / "stock_prices.csv"
@@ -74,15 +85,37 @@ def get_rec_bipart(cov, sort_ix):
     return w
 
 
-def hrp(cov):
+def linkage(dist, distance):
+    if distance == "correlation":
+        return sch.linkage(squareform(dist, checks=False), method="single")
+    # Snippet 16.4 verbatim: the square matrix goes in, so scipy treats rows as observations
+    # (and warns that it "looks suspiciously like an uncondensed distance matrix").
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", sch.ClusterWarning)
+        link = sch.linkage(dist, method="single")
+    check = sch.linkage(pdist(dist, metric="euclidean"), method="single")
+    assert np.array_equal(link[:, [0, 1, 3]], check[:, [0, 1, 3]])
+    assert np.allclose(link[:, 2], check[:, 2], rtol=1e-12, atol=0.0)
+    return link
+
+
+def hrp(cov, distance):
     std = np.sqrt(np.diag(cov))
     corr = cov / np.outer(std, std)
     dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0.0, None))
     np.fill_diagonal(dist, 0.0)
-    link = sch.linkage(squareform(dist, checks=False), method="single")
+    link = linkage(dist, distance)
+    pairs = [[int(a), int(b)] for a, b in link[:, :2]]
+    assert all(a < b for a, b in pairs)
     order = get_quasi_diag(link)
     weights = get_rec_bipart(cov, order)
-    return order, weights
+    return {"link": pairs, "order": order, "weights": weights.tolist()}
+
+
+def both(cov):
+    out = hrp(cov, "correlation")
+    out["distance_of_distances"] = hrp(cov, "distance_of_distances")
+    return out
 
 
 def load_prices():
@@ -102,18 +135,15 @@ def main():
     names, prices = load_prices()
     out = {}
 
-    order, weights = hrp(cov_from_prices(prices))
-    out["stock_prices"] = {"names": names, "order": order, "weights": weights.tolist()}
+    out["stock_prices"] = {"names": names, **both(cov_from_prices(prices))}
 
     cov = cov_from_prices(prices)
     shrunk = cov * 0.9
     np.fill_diagonal(shrunk, np.diag(cov))
-    order, weights = hrp(shrunk)
-    out["stock_prices_shrunk"] = {"order": order, "weights": weights.tolist()}
+    out["stock_prices_shrunk"] = both(shrunk)
 
     weekly = prices[4::5]
-    order, weights = hrp(cov_from_prices(weekly))
-    out["stock_prices_weekly"] = {"order": order, "weights": weights.tolist()}
+    out["stock_prices_weekly"] = both(cov_from_prices(weekly))
 
     rng = np.random.default_rng(20260919)
     a = rng.normal(size=(40, 8))
@@ -121,12 +151,13 @@ def main():
     a[:, 5] += 0.6 * a[:, 4]
     a *= rng.uniform(0.5, 2.0, size=8)
     cov = np.cov(a, rowvar=False, ddof=1)
-    order, weights = hrp(cov)
-    out["random_cov_8"] = {"cov": cov.tolist(), "order": order, "weights": weights.tolist()}
+    out["random_cov_8"] = {"cov": cov.tolist(), **both(cov)}
 
     (HERE / "reference.json").write_text(json.dumps(out, indent=1) + "\n")
     for k, v in out.items():
+        dd = v["distance_of_distances"]
         print(k, "order", v["order"], "sum", sum(v["weights"]))
+        print(" " * len(k), "d~   ", dd["order"], "same tree" if dd["link"] == v["link"] else "")
 
 
 if __name__ == "__main__":

@@ -1,30 +1,125 @@
+//! Hierarchical Clustering-based Asset Allocation (HCAA): split weight down a single-linkage
+//! cluster tree with a choice of risk measure.
+//!
+//! References: Raffinot (2017), *Hierarchical clustering-based asset allocation*, Journal of
+//! Portfolio Management 44(2); AFML Chapter 16 (§16.4, the tree and quasi-diagonalisation,
+//! Snippets 16.1–16.2).
+//!
+//! The tree is single linkage on the pairwise correlation distance `sqrt(2 (1 - rho))`, the
+//! tree of HRP's [`HrpDistance::Correlation`](crate::hrp::HrpDistance::Correlation) option;
+//! HRP's default instead clusters on the distance between rows of that distance matrix, as
+//! AFML's Snippet 16.4 does. Weight starts at 1 at the root. At each of the top `k - 1` merges (`k` = `optimal_num_clusters`)
+//! the node's weight is split between its children, the left one receiving a share `alpha`
+//! set by `allocation_metric`; below that cut each subtree is one cluster whose weight is
+//! shared equally (`"equal_weighting"`) or by inverse variance (every other metric). Each side
+//! of a split is scored as its inverse-variance portfolio:
+//!
+//! | `allocation_metric` | `alpha` (left share) |
+//! | --- | --- |
+//! | `"minimum_variance"` | `1 - var_L / (var_L + var_R)` |
+//! | `"minimum_standard_deviation"` | `1 - sd_L / (sd_L + sd_R)` |
+//! | `"expected_shortfall"` | `1 - es_L / (es_L + es_R)` |
+//! | `"conditional_drawdown_risk"` | `1 - cdd_L / (cdd_L + cdd_R)` |
+//! | `"sharpe_ratio"` | `sr_L / (sr_L + sr_R)`, falling back to minimum variance outside `[0, 1]` |
+//! | `"equal_weighting"` | `0.5` |
+//!
+//! What is **not** implemented: Raffinot's gap-statistic choice of the number of clusters.
+//! With `optimal_num_clusters = None` there is no cut and every merge is split down to single
+//! assets; pick the count yourself (for example with [`crate::onc`]).
+//!
+//! Conventions:
+//! - Matrices are `T x N`: rows are dates in ascending order, columns are assets in the order
+//!   of `asset_names`. Covariance is `N x N` in the same order.
+//! - Returns derived from prices are simple returns `p_t / p_{t-1} - 1` (after optional
+//!   resampling). Estimated expected returns are **annualised** by 252 periods; covariance and
+//!   tail measures are per-period.
+//! - `confidence_level` is the **tail probability** (e.g. 0.05) for both tail metrics.
+//! - Expected shortfall and conditional drawdown are computed here (on each side's
+//!   inverse-variance portfolio), not by [`crate::risk_metrics`]. Expected shortfall is returned
+//!   as a positive loss; the drawdown is relative to the running peak of a wealth curve
+//!   starting at 1.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::hcaa::{HcaaError, HierarchicalClusteringAssetAllocation};
+//!
+//! # fn main() -> Result<(), HcaaError> {
+//! // a and b are correlated (0.8), c is independent and more volatile.
+//! let covariance = DMatrix::from_row_slice(
+//!     3,
+//!     3,
+//!     &[0.010, 0.016, 0.000, 0.016, 0.040, 0.000, 0.000, 0.000, 0.090],
+//! );
+//! let names: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+//! let mut model = HierarchicalClusteringAssetAllocation::new("mean");
+//! model.allocate(
+//!     &names, None, None, Some(&covariance), None, "minimum_variance", 0.05, None, None,
+//! )?;
+//!
+//! // The root splits c from {a, b}. {a, b} as an inverse-variance portfolio (0.8, 0.2) has
+//! // variance 0.01312, so c gets 0.01312 / (0.01312 + 0.09).
+//! assert_eq!(model.ordered_indices, vec![2, 0, 1]);
+//! assert!((model.weights[2] - 0.01312 / 0.10312).abs() < 1e-12);
+//! assert!((model.weights.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use crate::util::resample::{freq_step, resample_prices};
 use nalgebra::DMatrix;
 
+/// Errors returned by [`HierarchicalClusteringAssetAllocation::allocate`].
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum HcaaError {
+    /// Missing or unusable data. Returned when no prices, returns or covariance are supplied;
+    /// when `asset_names` is empty; when prices have fewer than two rows (after resampling) or a
+    /// zero price is divided by; when a covariance must be estimated from fewer than two return
+    /// rows; and when a covariance diagonal entry is not strictly positive.
     #[error("no data: supply asset prices or returns")]
     NoData,
+    /// `allocation_metric` is not one of the six supported names.
     #[error("unknown allocation metric: {0}")]
     UnknownAllocationMetric(String),
+    /// The expected-returns method given to
+    /// [`HierarchicalClusteringAssetAllocation::new`] is neither `"mean"` nor `"exponential"`
+    /// (checked only when it is needed).
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    /// `"sharpe_ratio"` was requested with neither `expected_asset_returns` nor prices.
     #[error("the sharpe_ratio metric needs expected returns")]
     MissingExpectedReturnsForSharpe,
+    /// A tail metric (`"expected_shortfall"` or `"conditional_drawdown_risk"`) was requested
+    /// without a return history (neither returns nor prices).
     #[error("tail-risk metrics need asset returns")]
     MissingReturnsForTailRisk,
+    /// Input shapes disagree; the message names which.
     #[error("dimension mismatch: {0}")]
     DimensionMismatch(&'static str),
+    /// `optimal_num_clusters` is zero or exceeds the number of assets.
     #[error(
         "optimal_num_clusters must be between 1 and {assets} (the asset count), got {requested}"
     )]
-    InvalidNumClusters { requested: usize, assets: usize },
+    InvalidNumClusters {
+        /// The requested number of clusters.
+        requested: usize,
+        /// The number of assets.
+        assets: usize,
+    },
 }
 
+/// HCAA allocator; call [`allocate`](Self::allocate), then read the public fields.
+///
+/// The fields are empty until the first successful `allocate` and are overwritten by each
+/// successful call; a call that returns an error leaves them as they were.
 #[derive(Debug, Clone)]
 pub struct HierarchicalClusteringAssetAllocation {
+    /// Portfolio weights, one per asset in `asset_names` order; non-negative and summing to 1.
     pub weights: Vec<f64>,
+    /// Asset indices in quasi-diagonal (dendrogram leaf) order.
     pub ordered_indices: Vec<usize>,
+    /// Single-linkage merges in SciPy linkage convention: row `i` merges the two listed nodes
+    /// (smaller id first) into node `N + i`, where ids below `N` are assets.
     pub clusters: Vec<[usize; 2]>,
     calculate_expected_returns: String,
 }
@@ -36,6 +131,11 @@ impl Default for HierarchicalClusteringAssetAllocation {
 }
 
 impl HierarchicalClusteringAssetAllocation {
+    /// Create an allocator that estimates expected returns (for `"sharpe_ratio"` from prices)
+    /// with `calculate_expected_returns`: `"mean"` (annualised mean of per-period returns) or
+    /// `"exponential"` (annualised exponentially weighted mean, span 500, newest weighted
+    /// most). Matching is case-insensitive; an unknown name is only rejected when it is used,
+    /// with [`HcaaError::UnknownReturns`]. [`Default`] uses `"mean"`.
     pub fn new(calculate_expected_returns: &str) -> Self {
         Self {
             weights: Vec::new(),
@@ -45,6 +145,86 @@ impl HierarchicalClusteringAssetAllocation {
         }
     }
 
+    /// Compute HCAA weights (Raffinot 2017) and store them with the tree in `self`.
+    ///
+    /// Arguments:
+    /// - `asset_names` — one name per asset; its length `N` fixes the asset count and order.
+    /// - `asset_prices` — optional `T x N` price matrix (rows ascending in time). Used only
+    ///   when `asset_returns` is `None`; converted to simple returns after resampling.
+    /// - `asset_returns` — optional `T x N` matrix of per-period returns; takes precedence
+    ///   over prices.
+    /// - `covariance_matrix` — optional `N x N` covariance; if `None` it is the sample
+    ///   covariance (denominator `T - 1`) of the returns.
+    /// - `expected_asset_returns` — `N` expected returns for `"sharpe_ratio"`; if `None` they
+    ///   are estimated (annualised by 252) from the returns, but **only when `asset_prices`
+    ///   is supplied**. Ignored by other metrics.
+    /// - `allocation_metric` — one of `"minimum_variance"`, `"minimum_standard_deviation"`,
+    ///   `"sharpe_ratio"`, `"equal_weighting"`, `"expected_shortfall"`,
+    ///   `"conditional_drawdown_risk"` (see the [module table](self)).
+    /// - `confidence_level` — tail probability for the two tail metrics (e.g. 0.05); not
+    ///   validated, clamped into `[0, 1]` when the quantile is taken (nearest-rank, rounded).
+    /// - `optimal_num_clusters` — where to cut the tree, in `1..=N`; `None` means `N` (no cut).
+    /// - `resample_by` — for prices only: `"W"`/`"week"`/`"weekly"` keeps every 5th row,
+    ///   `"M"`/`"month"`/`"monthly"` every 21st (the last row of each block; case-insensitive);
+    ///   anything else keeps every row.
+    ///
+    /// A split whose `alpha` is not finite uses 0.5; `alpha` is clamped to `[0, 1]`.
+    ///
+    /// # Errors
+    ///
+    /// - [`HcaaError::NoData`] if prices, returns and covariance are all `None`, or
+    ///   `asset_names` is empty, or prices have fewer than two rows after resampling or a zero
+    ///   price in a denominator, or the covariance must be estimated from fewer than two
+    ///   return rows, or a covariance diagonal entry is `<= 0`.
+    /// - [`HcaaError::UnknownAllocationMetric`] for an unsupported `allocation_metric`.
+    /// - [`HcaaError::DimensionMismatch`] if the (non-empty) returns do not have `N` columns,
+    ///   the covariance is not `N x N`, or `expected_asset_returns` does not have length `N`
+    ///   (checked only for `"sharpe_ratio"`).
+    /// - [`HcaaError::MissingExpectedReturnsForSharpe`] for `"sharpe_ratio"` with neither
+    ///   `expected_asset_returns` nor `asset_prices`.
+    /// - [`HcaaError::UnknownReturns`] if expected returns must be estimated and the method
+    ///   given to [`new`](Self::new) is unknown.
+    /// - [`HcaaError::MissingReturnsForTailRisk`] for a tail metric without a return history.
+    /// - [`HcaaError::InvalidNumClusters`] if `optimal_num_clusters` is `Some(0)` or exceeds
+    ///   `N`.
+    ///
+    /// ```
+    /// use nalgebra::DMatrix;
+    /// use openquant::hcaa::{HcaaError, HierarchicalClusteringAssetAllocation};
+    ///
+    /// let covariance = DMatrix::from_row_slice(
+    ///     3,
+    ///     3,
+    ///     &[0.010, 0.016, 0.000, 0.016, 0.040, 0.000, 0.000, 0.000, 0.090],
+    /// );
+    /// let names: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+    /// let mut model = HierarchicalClusteringAssetAllocation::default();
+    /// let metric = "minimum_standard_deviation";
+    ///
+    /// // No cut: the root splits c from {a, b} by standard deviation (0.3 vs sqrt(0.01312)),
+    /// // then {a, b} is split by standard deviation too (0.1 vs 0.2: 2/3 to a).
+    /// model.allocate(&names, None, None, Some(&covariance), None, metric, 0.05, None, None)?;
+    /// let expected = [0.482459, 0.241230, 0.276311];
+    /// for (w, e) in model.weights.iter().zip(expected) {
+    ///     assert!((w - e).abs() < 1e-6);
+    /// }
+    ///
+    /// // Cut into two clusters: {a, b} is one cluster, shared by inverse variance (0.8, 0.2).
+    /// model.allocate(&names, None, None, Some(&covariance), None, metric, 0.05, Some(2), None)?;
+    /// let expected = [0.578951, 0.144738, 0.276311];
+    /// for (w, e) in model.weights.iter().zip(expected) {
+    ///     assert!((w - e).abs() < 1e-6);
+    /// }
+    ///
+    /// // Tail metrics need a return history, not just a covariance matrix.
+    /// assert_eq!(
+    ///     model.allocate(
+    ///         &names, None, None, Some(&covariance), None, "expected_shortfall", 0.05, None, None,
+    ///     ),
+    ///     Err(HcaaError::MissingReturnsForTailRisk)
+    /// );
+    /// # Ok::<(), HcaaError>(())
+    /// ```
     #[allow(clippy::too_many_arguments)]
     pub fn allocate(
         &mut self,

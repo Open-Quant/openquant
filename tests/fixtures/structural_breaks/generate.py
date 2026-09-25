@@ -32,8 +32,11 @@ drops only the constant; a lag list [1, 2, 5, 7] means dy lags 1, 2, 5, 7 in
 addition to the lagged level; the SM models take y (or log y) of the series
 passed in.
 
-Where the library departs from AFML the AFML value is the reference and the
-library's convention is recomputed under "library_convention" (see "notes").
+The SM-Power time index is t = row position + 1 (AFML's log t needs t >= 1).
+The library matches every value here since #166 (SADF) and #173 (CSW), so no
+"library_convention" is recomputed any more; "notes" records what changed.
+"sadf_prefix" also records every value on the 60-bar prefix, so each SADF
+model is checked value by value.
 
 Each regression is computed from a Givens-updated QR factor of [X | y] (one per
 window start, grown one row at a time), so no normal equations are formed.
@@ -65,15 +68,12 @@ def chow_type_stat(y, min_length):
 
 
 # --- 17.3.2 Chu-Stinchcombe-White ----------------------------------------------------
-def chu_stinchcombe_white(y, test_type, afml=True):
+def chu_stinchcombe_white(y, test_type):
     dy2 = np.diff(y) ** 2
     crit, stat = [], []
     for t in range(2, len(y)):  # 0-based t; AFML's 1-based t is t + 1
         ssq = dy2[:t].sum()  # the t differences up to bar t
-        if afml:
-            sigma = np.sqrt(ssq / t)  # (t_afml - 1)^-1 * sum, then sigma (not sigma^2)
-        else:
-            sigma = ssq / (t - 1)  # library: divisor t - 1 and variance in the denominator
+        sigma = np.sqrt(ssq / t)  # (t_afml - 1)^-1 * sum, then sigma (not sigma^2)
         diff = y[t] - y[:t]
         if test_type == "two_sided":
             diff = np.abs(diff)
@@ -86,7 +86,7 @@ def chu_stinchcombe_white(y, test_type, afml=True):
 
 
 # --- 17.4.2 / 17.4.3 SADF -------------------------------------------------------------
-def get_y_x(series, model, lags, add_const, variant="afml"):
+def get_y_x(series, model, lags, add_const):
     """Snippet 17.2 getYX (with snippet 17.3 lagDF) plus the 17.4.3 SM designs.
 
     Returns y, X and the column of X whose t-stat is taken.
@@ -99,10 +99,8 @@ def get_y_x(series, model, lags, add_const, variant="afml"):
         cols = [series[rows - 1]] + [dy[rows - 1 - l] for l in lags]
         if add_const:
             cols.append(np.ones(len(rows)))
-        if model == "quadratic" and variant == "afml":
+        if model == "quadratic":
             cols += [trend, trend ** 2]  # AFML 'ctt'
-        elif model == "quadratic":
-            cols.append(trend ** 2)  # library: t^2 only
         else:
             cols.append(trend)
         return dy[rows - 1], np.column_stack(cols)
@@ -113,30 +111,27 @@ def get_y_x(series, model, lags, add_const, variant="afml"):
     if model == "sm_exp":
         return np.log(series[rows]), np.column_stack([trend, np.ones(len(rows))])
     if model == "sm_power":
-        t = trend + 1.0 if variant == "afml" else trend  # library: log(0) on the first row
-        with np.errstate(divide="ignore"):
-            return np.log(series[rows]), np.column_stack([np.log(t), np.ones(len(rows))])
+        return np.log(series[rows]), np.column_stack([np.log(trend + 1.0), np.ones(len(rows))])
     raise ValueError(model)
 
 
-def sadf(series, model, lags, add_const, min_length, variant="afml"):
+def sadf(series, model, lags, add_const, min_length):
     """SADF_t for every row position t >= min_length (snippets 17.1 and 17.4).
 
     R[s] is the R factor of [X | y] over rows s..t for window start s; row t is
     folded into every R[s] with s <= t by Givens rotations. With k regressors,
     R[s][:k, :k] b = R[s][:k, k] gives beta and R[s][k, k]^2 is e'e.
     """
-    y, x = get_y_x(series, model, lags, add_const, variant)
+    y, x = get_y_x(series, model, lags, add_const)
     n, k = x.shape
-    use_abs = model.startswith("sm_") and variant == "afml"
-    first_start = 1 if (model == "sm_power" and variant != "afml") else 0
+    use_abs = model.startswith("sm_")
     a = np.column_stack([x, y])
     m = k + 1
     R = np.zeros((n, m, m))
     out = []
-    for t in range(first_start, n):
-        v = np.tile(a[t], (t + 1 - first_start, 1))
-        Rt = R[first_start: t + 1]
+    for t in range(n):
+        v = np.tile(a[t], (t + 1, 1))
+        Rt = R[: t + 1]
         for j in range(m):
             p, q = Rt[:, j, j].copy(), v[:, j].copy()
             r = np.hypot(p, q)
@@ -148,7 +143,7 @@ def sadf(series, model, lags, add_const, min_length, variant="afml"):
             v[:, j:] = -s[:, None] * top + c[:, None] * bot
         if t < min_length:
             continue
-        starts = np.arange(first_start, t - min_length + 2)  # windows of >= min_length rows
+        starts = np.arange(t - min_length + 2)  # windows of >= min_length rows
         Rs = R[starts]
         rinv = np.linalg.inv(Rs[:, :k, :k])
         beta0 = np.einsum("ij,ij->i", rinv[:, 0, :], Rs[:, :k, k])
@@ -168,13 +163,10 @@ started = time.time()
 
 chow = chow_type_stat(LOG_P, 10)
 csw = {}
-csw_lib = {}
 for tt in ("one_sided", "two_sided"):
-    crit, st = chu_stinchcombe_white(LOG_P, tt, afml=True)
-    _, st_lib = chu_stinchcombe_white(LOG_P, tt, afml=False)
+    crit, st = chu_stinchcombe_white(LOG_P, tt)
     csw[tt] = {"critical_value": {**stats(crit), "at_20": float(crit[20])},
                "stat": {**stats(st), "at_20": float(st[20])}}
-    csw_lib[tt] = {"stat": {**stats(st_lib), "at_20": float(st_lib[20])}}
 
 MIN_LENGTH, LAGS = 20, 5
 CASES = {  # name -> (model, lags, add_const)
@@ -186,22 +178,16 @@ CASES = {  # name -> (model, lags, add_const)
     "sm_poly_2": ("sm_poly_2", LAGS, True),
     "sm_exp": ("sm_exp", LAGS, True),
 }
-LIB_DIFFERS = {"sm_power", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp"}
 PREFIX = 60
 
-sadf_out, sadf_lib, prefix_out, prefix_lib = {}, {}, {}, {}
+sadf_out, prefix_out = {}, {}
 for name, (model, lags, add_const) in CASES.items():
     full = sadf(LOG_P, model, lags, add_const, MIN_LENGTH)
     pre = sadf(LOG_P[:PREFIX], model, lags, add_const, MIN_LENGTH)
     assert np.array_equal(pre, full[: len(pre)]), name
     sadf_out[name] = {**stats(full), "at_29": float(full[29])}
-    prefix_out[name] = {"len": int(len(pre)), "at_29": float(pre[29])}
-    if name in LIB_DIFFERS:
-        lib = sadf(LOG_P, model, lags, add_const, MIN_LENGTH, variant="library")
-        lib_pre = sadf(LOG_P[:PREFIX], model, lags, add_const, MIN_LENGTH, variant="library")
-        assert np.array_equal(lib_pre, lib[: len(lib_pre)]), name
-        sadf_lib[name] = {**stats(lib), "at_29": float(lib[29])}
-        prefix_lib[name] = {"len": int(len(lib_pre)), "at_29": float(lib_pre[29])}
+    prefix_out[name] = {"len": int(len(pre)), "at_29": float(pre[29]),
+                        "values": [float(v) for v in pre]}
 
 out = {
     "source": "AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) in numpy %s on "
@@ -211,20 +197,14 @@ out = {
     "chu_stinchcombe_white": csw,
     "sadf": {"min_length": MIN_LENGTH, "lags": LAGS, "lags_array": [1, 2, 5, 7], "models": sadf_out},
     "sadf_prefix": {"n_bars": PREFIX, "models": prefix_out},
-    "library_convention": {
-        "chu_stinchcombe_white": csw_lib,
-        "sadf": sadf_lib,
-        "sadf_prefix": prefix_lib,
-    },
     "notes": {
         "chu_stinchcombe_white": "AFML divides y_t - y_n by sigma_t (a standard deviation) with "
-            "sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divides by the "
-            "variance and uses t-2 as the divisor. Critical values do not depend on either.",
-        "quadratic": "AFML 'ctt' has const, t and t^2; the library omits the linear t.",
-        "sm_models": "AFML 17.4.3 takes the sup of |beta| / se; the library takes the sup of the "
-            "signed ratio.",
-        "sm_power": "AFML: log t with t = 1, 2, ...; the library uses log of the 0-based row "
-            "position, so the first row is log(0) = -inf and the window starting there is dropped.",
+            "sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divided by the "
+            "variance until #104 and used t-2 as the divisor until #173; it now matches. "
+            "Critical values do not depend on either.",
+        "sadf": "Until #166 the library's 'quadratic' omitted the linear t of AFML's 'ctt', its "
+            "sm_* models took the sup of the signed beta / se rather than |beta| / se, and "
+            "sm_power used log(0) on the first row. It now matches the values here.",
     },
 }
 (HERE / "reference.json").write_text(json.dumps(out, indent=2) + "\n")

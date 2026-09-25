@@ -63,17 +63,25 @@ the specification:
 | `model` | Regression |
 | --- | --- |
 | `"linear"` | the ADF above plus a linear time trend |
-| `"quadratic"` | the ADF above plus a squared time trend |
+| `"quadratic"` | the ADF above plus a linear and a squared time trend (Snippet 17.2's `ctt`) |
 | `"sm_poly_1"` | the level of the series on a quadratic polynomial in time |
 | `"sm_poly_2"` | the log of the series on a quadratic polynomial in time |
 | `"sm_exp"` | the log of the series on time |
-| `"sm_power"` | the log of the series on the log of time |
+| `"sm_power"` | the log of the series on the log of time, with time counted from 1 |
 
 The four `sm_` models are the sub- and super-martingale tests of §17.4.3, which look for
-trends of a given shape instead of explosiveness. For them the statistic is the $t$-ratio of
-the first trend coefficient, `add_const` is ignored and `lags` only sets where the output
-starts, and three of them take a logarithm, so they need a *positive* input: prices, not log
-prices.
+trends of a given shape instead of explosiveness. Their statistic is the *absolute*
+$t$-ratio of the trend coefficient — the one on $t^2$ for the polynomials, on $t$ for
+`sm_exp`, on $\log t$ for `sm_power` — because a trend in either direction counts:
+
+$$
+\mathrm{SMT}_t \;=\; \sup_{t_0\,\le\, t-\tau}\;\frac{\lvert\hat\beta_{t_0,t}\rvert}{\hat\sigma_{\hat\beta_{t_0,t}}}
+$$
+
+so it is never negative. For these models `add_const` is ignored and `lags` only sets where
+the output starts, and three of them take a logarithm, so they need a *positive* input:
+prices, not log prices. AFML also describes dividing by $(t-t_0)^{\varphi}$ to favour
+longer windows; that penalty is not implemented ($\varphi=0$).
 
 ## Chow-type Dickey–Fuller: when did it turn?
 
@@ -185,7 +193,11 @@ assert!(matches!(
   $\hat\sigma_t^{2}\sqrt{t-n}$, so the result depended on the units of the series: on random
   walks with a 1% step it exceeded its critical value on 94% of bars. It now follows the book
   and is unchanged by rescaling the series; on the same walks it exceeds the critical value on
-  about 4% of bars at any step size. From Python it returns the tuple
+  about 4% of bars at any step size. Since
+  [#173](https://github.com/Open-Quant/openquant/issues/173) $\hat\sigma_t^2$ is also the
+  book's mean of the squared differences up to bar $t$; it used to divide their sum by one
+  fewer than their number, which made early statistics slightly small (the one-sided maximum
+  on the test fixture moved from 5.3797 to 5.3921). From Python it returns the tuple
   `(critical_values, statistics)`, in that order.
 - **SADF is cubic in the sample length.** Every bar refits a regression for every admissible
   start: $O(n^2)$ regressions of up to $n$ rows. A few hundred bars are quick, a few thousand
@@ -201,11 +213,16 @@ assert!(matches!(
   its critical values depend on the sample length and `min_length` and come from simulation
   (Phillips, Shi and Yu, 2015). As a feature this does not matter, since the model learns its
   own thresholds. As a test, simulate random walks of your length and read off the quantile.
-- **`"quadratic"` replaces the linear trend with a squared one**; it does not add a second
-  term. A specification with both is not available.
-- **`"sm_power"` regresses on the log of time starting from time zero**, whose logarithm is
-  $-\infty$. Windows that include the first row produce no statistic and are skipped
-  silently, so that model effectively starts one bar late.
+- **`"quadratic"` and the `sm_` models changed in
+  [#166](https://github.com/Open-Quant/openquant/issues/166).** Before it, `"quadratic"` had
+  only the squared trend (no linear $t$), the `sm_` models took the supremum of the *signed*
+  $t$-ratio, so a falling trend scored low, and `"sm_power"` took $\log 0$ on its first row
+  and silently dropped the windows starting there. Values computed with earlier versions of
+  these four models are not comparable; `"linear"` is unchanged.
+- **Time is the row's position in the whole input, not in the window.** It makes no
+  difference to the polynomial and exponential models, whose trend coefficient does not
+  depend on where time starts, but `"sm_power"`'s $\log t$ does: passing a trailing slice
+  instead of the full history changes its values.
 - **A window whose regression is singular is skipped, not reported.** If every window at a
   bar is singular — a constant stretch of prices — that bar's SADF is $-\infty$.
 - **Detection lags the break.** As the example shows, the statistic crosses a threshold well

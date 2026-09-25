@@ -1,4 +1,5 @@
 //! Fixed-step resampling of a price matrix (rows are dates, columns are assets).
+#![deny(missing_docs)]
 
 use nalgebra::DMatrix;
 

@@ -137,14 +137,14 @@ fn test_value_error_for_incorrect_dimensions() {
     assert!(matches!(err, HrpError::DimensionMismatch(_)));
 }
 
-/// Leaf order of scipy's single-linkage dendrogram on the same prices
-/// (tests/fixtures/hrp/generate.py).
+/// Leaf order of scipy's single-linkage dendrogram on the same prices, clustered on the distance
+/// of distances as Snippet 16.4 does (tests/fixtures/hrp/generate.py).
 fn reference_leaf_order() -> Vec<usize> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/hrp/reference.json");
     let reference: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    reference["stock_prices"]["order"]
+    reference["stock_prices"]["distance_of_distances"]["order"]
         .as_array()
         .unwrap()
         .iter()

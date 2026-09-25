@@ -33,6 +33,15 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # missing_docs is enforced per module (#![deny(missing_docs)] at the top of each
+      # documented file) until the last modules are documented; this gate catches broken
+      # intra-doc links crate-wide and runs every doctest.
+      - name: Rustdoc (broken intra-doc links)
+        run: cargo doc -p openquant --no-deps
+        env:
+          RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links
+      - name: Doctests
+        run: cargo test -p openquant --doc
       # test_sadf_test is #[ignore]d for runtime (about an hour in debug); it and
       # every other ignored test except known FINDING tests run in nightly.yml.
       - name: Tests (fast)
