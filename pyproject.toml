@@ -35,4 +35,14 @@ module-name = "openquant._core"
 features = []
 
 [dependency-groups]
-dev = ["maturin>=1.7,<2.0", "pytest>=8,<9"]
+# nbclient + ipykernel execute the research notebooks in a real Jupyter kernel so
+# rich outputs (tables, inline figures) are kept; matplotlib draws the figures.
+# Used by `just notebooks-run` and .github/workflows/notebooks.yml only.
+dev = [
+  "maturin>=1.7,<2.0",
+  "pytest>=8,<9",
+  "nbclient>=0.10,<1",
+  "nbformat>=5.10,<6",
+  "ipykernel>=6.29,<8",
+  "matplotlib>=3.9,<4",
+]
