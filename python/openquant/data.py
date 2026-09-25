@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
-from datetime import date, datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import tempfile
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import Callable, Iterable, Mapping
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Literal, Protocol, overload, runtime_checkable
 from urllib.parse import quote
 
 import polars as pl
-
 
 CANONICAL_OHLCV_COLUMNS = [
     "ts",
@@ -83,12 +82,30 @@ def _validate_required_columns(df: pl.DataFrame) -> None:
         raise ValueError(f"missing required OHLCV columns: {', '.join(missing)}")
 
 
+# Timestamp strings from the Rust bindings: "%Y-%m-%d %H:%M:%S" with an optional fractional
+# second (6 digits, or 9 below a microsecond). polars infers a format from the first value only, so a column
+# mixing whole and fractional seconds must be parsed with this explicit format.
+TS_FORMAT = "%Y-%m-%d %H:%M:%S%.f"
+
+
+def _parse_ts(expr: pl.Expr) -> pl.Expr:
+    """Parse timestamp strings, keeping fractional seconds (to microseconds).
+
+    Strings in `TS_FORMAT` are parsed with it; anything else (dates, ISO `T` forms) falls back
+    to polars' format inference, as before.
+    """
+    return pl.coalesce(
+        expr.str.strptime(pl.Datetime, TS_FORMAT, strict=False),
+        expr.str.strptime(pl.Datetime, strict=False),
+    )
+
+
 def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
     frame = _canonicalize_columns(df)
     _validate_required_columns(frame)
 
     lf = frame.lazy().with_columns(
-        pl.col("ts").cast(pl.Utf8).str.strptime(pl.Datetime, strict=False),
+        _parse_ts(pl.col("ts").cast(pl.Utf8)),
         pl.col("symbol").cast(pl.Utf8),
         pl.col("open").cast(pl.Float64),
         pl.col("high").cast(pl.Float64),
@@ -107,19 +124,26 @@ def _format_ts(v: Any) -> str | None:
     if v is None:
         return None
     if hasattr(v, "strftime"):
-        return v.strftime("%Y-%m-%d %H:%M:%S")
+        # Same form as str(datetime) and the Rust bindings: no fraction on a whole second.
+        out = v.strftime("%Y-%m-%d %H:%M:%S")
+        if getattr(v, "microsecond", 0):
+            out += f".{v.microsecond:06d}"
+        return out
     return str(v)
 
 
-def _gap_expr(symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600) -> pl.Expr:
+def _gap_expr(
+    symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600
+) -> pl.Expr:
     threshold_us = int(threshold_seconds) * 1_000_000
-    return (
-        (symbol_expr == symbol_expr.shift(1))
-        & ((ts_us_expr - ts_us_expr.shift(1)) > threshold_us)
+    return (symbol_expr == symbol_expr.shift(1)) & (
+        (ts_us_expr - ts_us_expr.shift(1)) > threshold_us
     )
 
 
-def _build_quality_report(sorted_df: pl.DataFrame, rows_removed_by_deduplication: int) -> dict[str, Any]:
+def _build_quality_report(
+    sorted_df: pl.DataFrame, rows_removed_by_deduplication: int
+) -> dict[str, Any]:
     if sorted_df.height == 0:
         return {
             "row_count": 0,
@@ -138,11 +162,17 @@ def _build_quality_report(sorted_df: pl.DataFrame, rows_removed_by_deduplication
             pl.len().alias("row_count"),
             pl.col("symbol").n_unique().alias("symbol_count"),
             (
-                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                (
+                    (pl.col("symbol") == pl.col("symbol").shift(1))
+                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                )
                 .cast(pl.UInt32)
                 .sum()
             ).alias("duplicate_key_count"),
-            _gap_expr(pl.col("symbol"), pl.col("ts_us")).cast(pl.UInt32).sum().alias("gap_interval_count"),
+            _gap_expr(pl.col("symbol"), pl.col("ts_us"))
+            .cast(pl.UInt32)
+            .sum()
+            .alias("gap_interval_count"),
             pl.col("ts").min().alias("ts_min"),
             pl.col("ts").max().alias("ts_max"),
         )
@@ -174,23 +204,54 @@ def _interval_to_seconds(interval: str) -> int:
     raise ValueError(f"unsupported interval format: {interval}")
 
 
+@overload
 def clean_ohlcv(
     df: pl.DataFrame,
     *,
-    dedupe_keep: str = "last",
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: Literal[False] = ...,
+) -> pl.DataFrame: ...
+
+
+@overload
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: Literal[True],
+) -> tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+@overload
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: bool = ...,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = "last",
     return_report: bool = False,
 ) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
     if dedupe_keep not in {"first", "last"}:
         raise ValueError("dedupe_keep must be 'first' or 'last'")
 
-    base_lf = _prepare_ohlcv_lf(df).with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
+    base_lf = _prepare_ohlcv_lf(df).with_columns(
+        pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us")
+    )
     sorted_lf = base_lf.sort(["symbol", "ts_us"])
 
     duplicate_key_count = int(
-        sorted_lf
-        .select(
+        sorted_lf.select(
             (
-                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                (
+                    (pl.col("symbol") == pl.col("symbol").shift(1))
+                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                )
                 .cast(pl.UInt32)
                 .sum()
             ).alias("duplicate_key_count")
@@ -364,7 +425,7 @@ def dataset_hash(df: pl.DataFrame) -> str:
     h = hashlib.sha256()
     h.update((DATASET_HASH_VERSION + "\n").encode("utf-8"))
     for name, kind in zip(cols, kinds):
-        h.update(f"{json.dumps(name, ensure_ascii=False)}:{kind}\n".encode("utf-8"))
+        h.update(f"{json.dumps(name, ensure_ascii=False)}:{kind}\n".encode())
     for row in canonical.iter_rows():
         h.update(("\t".join(_hash_field(v) for v in row) + "\n").encode("utf-8"))
     return "sha256:" + h.hexdigest()
@@ -440,12 +501,18 @@ class LocalFileSource:
     new cache namespace instead of serving stale bars.
     """
 
-    def __init__(self, path: str | Path, *, name: str = "local-file", terms: str | None = None) -> None:
+    def __init__(
+        self, path: str | Path, *, name: str = "local-file", terms: str | None = None
+    ) -> None:
         self.path = Path(path)
         if not self.path.exists():
             raise FileNotFoundError(f"file not found: {self.path}")
         self.name = name
-        self.terms = terms if terms is not None else f"local file {self.path.name}; terms are the file owner's"
+        self.terms = (
+            terms
+            if terms is not None
+            else f"local file {self.path.name}; terms are the file owner's"
+        )
         self.version = hashlib.sha256(self.path.read_bytes()).hexdigest()[:16]
         self._frame: pl.DataFrame | None = None
 
@@ -583,19 +650,25 @@ def _atomic_write(path: Path, write: Callable[[Path], None]) -> None:
             os.remove(tmp)
 
 
-def _normalize_source_frame(raw: Any, source_name: str, symbol: str, start: date, end: date) -> pl.DataFrame:
+def _normalize_source_frame(
+    raw: Any, source_name: str, symbol: str, start: date, end: date
+) -> pl.DataFrame:
     frame = raw if isinstance(raw, pl.DataFrame) else pl.DataFrame(raw)
     frame = _canonicalize_columns(frame)
     if "symbol" in frame.columns:
         if frame.filter(pl.col("symbol").cast(pl.Utf8) != symbol).height:
-            raise ValueError(f"source {source_name!r} returned rows for other symbols when asked for {symbol!r}")
+            raise ValueError(
+                f"source {source_name!r} returned rows for other symbols when asked for {symbol!r}"
+            )
     else:
         frame = frame.with_columns(pl.lit(symbol).alias("symbol"))
     cleaned = clean_ohlcv(frame)
     assert isinstance(cleaned, pl.DataFrame)
     cleaned = cleaned.filter(pl.col("ts").dt.date().is_between(start, end, closed="both"))
     if cleaned.height == 0:
-        raise ValueError(f"source {source_name!r} returned no usable rows for {symbol!r} between {start} and {end}")
+        raise ValueError(
+            f"source {source_name!r} returned no usable rows for {symbol!r} between {start} and {end}"
+        )
     return cleaned
 
 
@@ -650,7 +723,9 @@ def fetch(
         raise ValueError(f"start {start_d} is after end {end_d}")
     src: Any = LocalSampleSource() if source is None else source
     if not isinstance(src, DataSource):
-        raise TypeError("source must have a `name` string and a `fetch_symbol(symbol, start, end)` method")
+        raise TypeError(
+            "source must have a `name` string and a `fetch_symbol(symbol, start, end)` method"
+        )
     root = Path(cache_dir).expanduser() if cache_dir is not None else default_cache_dir()
 
     frames: list[pl.DataFrame] = []
@@ -668,8 +743,12 @@ def fetch(
                 raise CacheMissError(f"cache entry {data_path} does not match its recorded hash")
         if frame is None:
             if offline:
-                raise CacheMissError(f"{sym!r} {start_d}..{end_d} from {src.name!r} is not cached in {root}")
-            frame = _normalize_source_frame(src.fetch_symbol(sym, start_d, end_d), src.name, sym, start_d, end_d)
+                raise CacheMissError(
+                    f"{sym!r} {start_d}..{end_d} from {src.name!r} is not cached in {root}"
+                )
+            frame = _normalize_source_frame(
+                src.fetch_symbol(sym, start_d, end_d), src.name, sym, start_d, end_d
+            )
             entry = {
                 "format": CACHE_FORMAT,
                 "source": src.name,
@@ -683,10 +762,11 @@ def fetch(
                 "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             }
             _atomic_write(data_path, frame.write_parquet)
-            _atomic_write(
-                meta_path,
-                lambda p, e=entry: p.write_text(json.dumps(e, indent=2, sort_keys=True) + "\n", encoding="utf-8"),
-            )
+
+            def _write_meta(p: Path, e: dict[str, Any] = entry) -> None:
+                p.write_text(json.dumps(e, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            _atomic_write(meta_path, _write_meta)
             cache_status[sym] = "refresh" if refresh else "miss"
         frames.append(frame)
 

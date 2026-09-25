@@ -1,13 +1,6 @@
 import sys as _sys
 
-from . import _core
-from . import adapters
-from . import bars
-from . import data
-from . import feature_diagnostics
-from . import pipeline
-from . import research
-from . import viz
+from . import _core, adapters, bars, data, evaluation, feature_diagnostics, pipeline, research, viz
 
 # Compiled submodules re-exported as-is. `bars`, `data` and `pipeline` are
 # deliberately absent: the pure-Python modules imported above wrap the compiled
@@ -36,6 +29,7 @@ hcaa = _core.hcaa
 onc = _core.onc
 cla = _core.cla
 sb_bagging = _core.sb_bagging
+dynamic_allocation = _core.dynamic_allocation
 
 _CORE_REEXPORTS = [
     "risk",
@@ -62,6 +56,7 @@ _CORE_REEXPORTS = [
     "onc",
     "cla",
     "sb_bagging",
+    "dynamic_allocation",
 ]
 
 # Compiled submodules are attributes, not files, so `import openquant.hrp`
@@ -74,6 +69,7 @@ __all__ = [
     *_CORE_REEXPORTS,
     "bars",
     "data",
+    "evaluation",
     "feature_diagnostics",
     "pipeline",
     "research",

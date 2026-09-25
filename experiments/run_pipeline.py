@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tomllib
+from typing import Sequence
 
 import polars as pl
 
@@ -73,6 +75,94 @@ def _merged_run_cfg(cfg: dict) -> dict:
     return merged_cfg
 
 
+def _drawdown_from_equity(equity: Sequence[float]) -> list[float]:
+    """Fractional drawdown from the running peak: equity / peak - 1 (0 while peak <= 0)."""
+    peak = float("-inf")
+    drawdown: list[float] = []
+    for value in equity:
+        peak = max(peak, value)
+        drawdown.append((value / peak) - 1.0 if peak > 0.0 else 0.0)
+    return drawdown
+
+
+def _line_path(values: Sequence[float], width: int, height: int, pad: int) -> str:
+    plot_w = width - 2 * pad
+    plot_h = height - 2 * pad
+    if not values:
+        mid_y = pad + (plot_h / 2.0)
+        return f"M {pad:.2f} {mid_y:.2f} L {width - pad:.2f} {mid_y:.2f}"
+
+    min_v = min(values)
+    max_v = max(values)
+    if len(values) == 1:
+        x_vals = [pad + (plot_w / 2.0)]
+    else:
+        step = plot_w / float(len(values) - 1)
+        x_vals = [pad + (i * step) for i in range(len(values))]
+
+    if max_v == min_v:
+        y_vals = [pad + (plot_h / 2.0) for _ in values]
+    else:
+        y_vals = [pad + ((max_v - value) / (max_v - min_v)) * plot_h for value in values]
+
+    commands = [f"M {x_vals[0]:.2f} {y_vals[0]:.2f}"]
+    commands.extend(f"L {x_vals[idx]:.2f} {y_vals[idx]:.2f}" for idx in range(1, len(x_vals)))
+    return " ".join(commands)
+
+
+def _write_line_chart_svg(
+    *,
+    values: Sequence[float],
+    output_path: Path,
+    title: str,
+    stroke: str,
+) -> None:
+    """Write a fixed-size SVG line chart. Same values in, same bytes out."""
+    width = 960
+    height = 420
+    pad = 44
+    path_d = _line_path(values, width=width, height=height, pad=pad)
+    y_axis = f"M {pad:.2f} {pad:.2f} L {pad:.2f} {height - pad:.2f}"
+    x_axis = f"M {pad:.2f} {height - pad:.2f} L {width - pad:.2f} {height - pad:.2f}"
+    min_v = min(values) if values else 0.0
+    max_v = max(values) if values else 0.0
+    title_text = html.escape(title)
+    body = "\n".join(
+        [
+            f"<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}' "
+            f"viewBox='0 0 {width} {height}' role='img' aria-labelledby='chart-title'>",
+            "<rect width='100%' height='100%' fill='#ffffff'/>",
+            f"<text id='chart-title' x='{pad}' y='24' font-family='monospace' font-size='16' "
+            f"fill='#111827'>{title_text}</text>",
+            f"<text x='{pad}' y='40' font-family='monospace' font-size='12' fill='#374151'>"
+            f"min={min_v:.6f} max={max_v:.6f} n={len(values)}</text>",
+            f"<path d='{y_axis}' fill='none' stroke='#9ca3af' stroke-width='1'/>",
+            f"<path d='{x_axis}' fill='none' stroke='#9ca3af' stroke-width='1'/>",
+            f"<path d='{path_d}' fill='none' stroke='{stroke}' stroke-width='2'/>",
+            "</svg>",
+            "",
+        ]
+    )
+    output_path.write_text(body, encoding="utf-8")
+
+
+def _write_plot_artifacts(backtest: pl.DataFrame, run_dir: Path, run_name: str) -> None:
+    """Write equity_curve.svg and drawdown.svg from the backtest frame's `equity` column."""
+    equity = [float(x) for x in backtest["equity"].to_list()]
+    _write_line_chart_svg(
+        values=equity,
+        output_path=run_dir / "equity_curve.svg",
+        title=f"Equity Curve: {run_name}",
+        stroke="#1d4ed8",
+    )
+    _write_line_chart_svg(
+        values=_drawdown_from_equity(equity),
+        output_path=run_dir / "drawdown.svg",
+        title=f"Drawdown: {run_name}",
+        stroke="#b91c1c",
+    )
+
+
 def _write_run_artifacts(
     run_dir: Path,
     *,
@@ -89,6 +179,7 @@ def _write_run_artifacts(
     out["frames"]["signals"].write_parquet(run_dir / "signals.parquet")
     out["frames"]["weights"].write_parquet(run_dir / "weights.parquet")
     out["frames"]["backtest"].write_parquet(run_dir / "backtest.parquet")
+    _write_plot_artifacts(out["frames"]["backtest"], run_dir, run_name)
 
     run_manifest = openquant.research.research_run_manifest(
         manifest_cfg,

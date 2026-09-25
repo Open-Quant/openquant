@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, nanmean
-
 from openquant import volatility
 
 

@@ -1,0 +1,55 @@
+# Weekly, grouped dependency updates. One pull request per ecosystem for minor and patch
+# bumps; major bumps arrive one per dependency so each breaking change is reviewed alone.
+version: 2
+updates:
+  # Rust workspace (crates/openquant, crates/pyopenquant). vendor/pyo3-polars is a
+  # [patch.crates-io] path dependency and is not updated by Dependabot.
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Python: pyproject.toml + uv.lock at the repository root.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Documentation site. CI installs with `bun install --frozen-lockfile`, so bun.lock is
+  # the lockfile that must be updated (the bun ecosystem does that; npm would not).
+  - package-ecosystem: "bun"
+    directory: "/docs-site"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docs-site-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns: ["*"]

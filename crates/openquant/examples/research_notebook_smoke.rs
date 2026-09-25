@@ -25,7 +25,14 @@ fn main() {
     let rm = RiskMetrics;
     let _ = rm.calculate_value_at_risk(&ret, 0.05).expect("var");
     let _ = rm.calculate_expected_shortfall(&ret, 0.05).expect("es");
-    let _ = rm.calculate_conditional_drawdown_risk(&ret, 0.05).expect("cdar");
+    let equity: Vec<f64> = ret
+        .iter()
+        .scan(1.0, |w, r| {
+            *w *= 1.0 + r;
+            Some(*w)
+        })
+        .collect();
+    let _ = rm.calculate_conditional_drawdown_risk(&equity, 0.95).expect("cdar");
 
     println!("rust notebook smoke: ok");
 }

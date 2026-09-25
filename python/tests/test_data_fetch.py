@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
 import sys
-
-import polars as pl
-import pytest
+from datetime import date
+from pathlib import Path
 
 import openquant
+import polars as pl
+import pytest
 from openquant import data
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -73,7 +72,9 @@ def test_fetch_default_sample_passes_quality_report(tmp_path):
 
 def test_second_call_is_served_from_cache_without_the_source(tmp_path, monkeypatch):
     src = CountingSource()
-    first, meta1 = data.fetch(["AAA", "BBB"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, return_meta=True)
+    first, meta1 = data.fetch(
+        ["AAA", "BBB"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, return_meta=True
+    )
     assert len(src.calls) == 2
     assert meta1["cache"] == {"AAA": "miss", "BBB": "miss"}
 
@@ -81,15 +82,21 @@ def test_second_call_is_served_from_cache_without_the_source(tmp_path, monkeypat
         raise ConnectionError("network is down")
 
     monkeypatch.setattr(src, "fetch_symbol", offline)
-    second, meta2 = data.fetch(["AAA", "BBB"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, return_meta=True)
+    second, meta2 = data.fetch(
+        ["AAA", "BBB"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, return_meta=True
+    )
     assert meta2["cache"] == {"AAA": "hit", "BBB": "hit"}
     assert second.equals(first)
     assert meta2["dataset_hash"] == meta1["dataset_hash"]
 
     # offline=True also succeeds, and a request that is not cached raises instead of fetching.
-    assert data.fetch(["BBB", "AAA"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, offline=True).equals(first)
+    assert data.fetch(
+        ["BBB", "AAA"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path, offline=True
+    ).equals(first)
     with pytest.raises(data.CacheMissError):
-        data.fetch(["AAA"], "2024-01-01", "2024-03-29", source=src, cache_dir=tmp_path, offline=True)
+        data.fetch(
+            ["AAA"], "2024-01-01", "2024-03-29", source=src, cache_dir=tmp_path, offline=True
+        )
     with pytest.raises(ConnectionError):
         data.fetch(["CCC"], "2024-01-01", "2024-02-29", source=src, cache_dir=tmp_path)
 
@@ -98,14 +105,19 @@ def test_cache_layout_and_sidecar(tmp_path):
     src = CountingSource()
     df = data.fetch("A/B", "2024-01-01", "2024-01-31", source=src, cache_dir=tmp_path)
     entry_dir = tmp_path / "test-counting" / "A%2FB"
-    assert sorted(p.name for p in entry_dir.iterdir()) == ["2024-01-01_2024-01-31.json", "2024-01-01_2024-01-31.parquet"]
+    assert sorted(p.name for p in entry_dir.iterdir()) == [
+        "2024-01-01_2024-01-31.json",
+        "2024-01-01_2024-01-31.parquet",
+    ]
     sidecar = json.loads((entry_dir / "2024-01-01_2024-01-31.json").read_text())
     assert sidecar["format"] == data.CACHE_FORMAT
     assert sidecar["source"] == "test-counting"
     assert sidecar["symbol"] == "A/B"
     assert sidecar["terms"] == "test data"
     assert sidecar["rows"] == df.height
-    assert sidecar["dataset_hash"] == data.dataset_hash(pl.read_parquet(entry_dir / "2024-01-01_2024-01-31.parquet"))
+    assert sidecar["dataset_hash"] == data.dataset_hash(
+        pl.read_parquet(entry_dir / "2024-01-01_2024-01-31.parquet")
+    )
 
 
 def test_version_and_refresh_and_tampering_refetch(tmp_path):
@@ -155,10 +167,18 @@ def test_fetch_rejects_bad_requests(tmp_path):
 
 def test_source_output_is_cleaned_and_checked(tmp_path):
     def messy(symbol, start, end):
-        bars = _bars(symbol, date(2023, 12, 1), date(2024, 2, 15)).with_columns(pl.lit(symbol).alias("ticker"))
+        bars = _bars(symbol, date(2023, 12, 1), date(2024, 2, 15)).with_columns(
+            pl.lit(symbol).alias("ticker")
+        )
         return pl.concat([bars, bars.head(3)])  # duplicates and rows outside the range
 
-    df = data.fetch("X", "2024-01-01", "2024-01-31", source=data.CallableSource(messy, name="messy"), cache_dir=tmp_path)
+    df = data.fetch(
+        "X",
+        "2024-01-01",
+        "2024-01-31",
+        source=data.CallableSource(messy, name="messy"),
+        cache_dir=tmp_path,
+    )
     assert df["ts"].dt.date().min() >= date(2024, 1, 1)
     assert df["ts"].dt.date().max() <= date(2024, 1, 31)
     assert data.data_quality_report(df)["duplicate_key_count"] == 0
@@ -167,11 +187,19 @@ def test_source_output_is_cleaned_and_checked(tmp_path):
         return _bars(symbol, start, end).with_columns(pl.lit("OTHER").alias("symbol"))
 
     with pytest.raises(ValueError, match="other symbols"):
-        data.fetch("X", "2024-01-01", "2024-01-31", source=data.CallableSource(wrong_symbol, name="wrong"), cache_dir=tmp_path)
+        data.fetch(
+            "X",
+            "2024-01-01",
+            "2024-01-31",
+            source=data.CallableSource(wrong_symbol, name="wrong"),
+            cache_dir=tmp_path,
+        )
 
 
 def test_quality_failures_flags_bad_reports(tmp_path):
-    ok = data.data_quality_report(data.fetch("SYN_A", "2022-01-01", "2022-01-31", cache_dir=tmp_path))
+    ok = data.data_quality_report(
+        data.fetch("SYN_A", "2022-01-01", "2022-01-31", cache_dir=tmp_path)
+    )
     assert data.quality_failures(ok) == []
     assert "no rows" in data.quality_failures({**ok, "row_count": 0})
     assert data.quality_failures({**ok, "duplicate_key_count": 2})
@@ -187,7 +215,7 @@ def test_adapter_protocol():
     assert isinstance(data.CallableSource(lambda s, a, b: None, name="x"), data.DataSource)
     assert not isinstance(object(), data.DataSource)
     with pytest.raises(TypeError):
-        data.CallableSource("not callable", name="x")  # type: ignore[arg-type]
+        data.CallableSource("not callable", name="x")
 
 
 def test_callable_source_passes_dates_and_accepts_plain_mappings(tmp_path):
@@ -195,10 +223,19 @@ def test_callable_source_passes_dates_and_accepts_plain_mappings(tmp_path):
 
     def fn(symbol, start, end):
         seen.append((symbol, start, end))
-        return {"date": ["2024-01-02", "2024-01-03"], "open": [1.0, 2.0], "high": [2.0, 3.0], "low": [0.5, 1.5], "close": [1.5, 2.5], "volume": [10, 20]}
+        return {
+            "date": ["2024-01-02", "2024-01-03"],
+            "open": [1.0, 2.0],
+            "high": [2.0, 3.0],
+            "low": [0.5, 1.5],
+            "close": [1.5, 2.5],
+            "volume": [10, 20],
+        }
 
     src = data.CallableSource(fn, name="vendor-x", terms="https://example.invalid/terms")
-    df, meta = data.fetch("ZZZ", date(2024, 1, 1), "2024-01-05", source=src, cache_dir=tmp_path, return_meta=True)
+    df, meta = data.fetch(
+        "ZZZ", date(2024, 1, 1), "2024-01-05", source=src, cache_dir=tmp_path, return_meta=True
+    )
     assert seen == [("ZZZ", date(2024, 1, 1), date(2024, 1, 5))]
     assert df.height == 2
     assert df["adj_close"].to_list() == df["close"].to_list()
@@ -208,7 +245,9 @@ def test_callable_source_passes_dates_and_accepts_plain_mappings(tmp_path):
 
 def test_local_file_source_versions_by_content(tmp_path):
     path = tmp_path / "mine.csv"
-    _bars("M", date(2024, 1, 1), date(2024, 1, 31)).with_columns(pl.lit("M").alias("symbol")).write_csv(path)
+    _bars("M", date(2024, 1, 1), date(2024, 1, 31)).with_columns(
+        pl.lit("M").alias("symbol")
+    ).write_csv(path)
     src = data.LocalFileSource(path, name="mine")
     assert src.symbols == ["M"]
     v1 = src.version
@@ -229,7 +268,12 @@ def test_sample_source_is_labelled_synthetic():
 def test_committed_sample_matches_its_generator(tmp_path):
     out = tmp_path / "sample.csv"
     subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "data" / "make_synthetic_sample.py"), "--out", str(out)],
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "data" / "make_synthetic_sample.py"),
+            "--out",
+            str(out),
+        ],
         check=True,
         capture_output=True,
     )
@@ -260,12 +304,22 @@ def test_changing_the_data_changes_the_hash(tmp_path):
     df = data.fetch(["SYN_A", "SYN_D"], "2022-01-01", "2022-12-31", cache_dir=tmp_path)
     h = data.dataset_hash(df)
     changed = [
-        df.with_columns(pl.when(pl.int_range(pl.len()) == 17).then(pl.col("close") + 1e-9).otherwise(pl.col("close")).alias("close")),
+        df.with_columns(
+            pl.when(pl.int_range(pl.len()) == 17)
+            .then(pl.col("close") + 1e-9)
+            .otherwise(pl.col("close"))
+            .alias("close")
+        ),
         df.head(df.height - 1),
         pl.concat([df, df.tail(1)]),
         df.rename({"volume": "vol"}),
         df.with_columns(pl.col("volume").cast(pl.Int64)),
-        df.with_columns(pl.when(pl.col("symbol") == "SYN_A").then(pl.lit("SYN_Z")).otherwise(pl.col("symbol")).alias("symbol")),
+        df.with_columns(
+            pl.when(pl.col("symbol") == "SYN_A")
+            .then(pl.lit("SYN_Z"))
+            .otherwise(pl.col("symbol"))
+            .alias("symbol")
+        ),
         df.with_columns(pl.col("ts") + pl.duration(days=1)),
         df.with_columns(pl.col("ts").dt.replace_time_zone("UTC")),
         df.drop("adj_close"),
@@ -276,8 +330,17 @@ def test_changing_the_data_changes_the_hash(tmp_path):
 
 
 def test_hash_handles_nulls_and_rejects_unsupported_types():
-    a = pl.DataFrame({"x": [1.0, None], "s": ["a", None], "b": [True, None], "d": [date(2024, 1, 1), None]})
-    b = pl.DataFrame({"x": [1.0, 0.0], "s": ["a", ""], "b": [True, False], "d": [date(2024, 1, 1), date(1970, 1, 1)]})
+    a = pl.DataFrame(
+        {"x": [1.0, None], "s": ["a", None], "b": [True, None], "d": [date(2024, 1, 1), None]}
+    )
+    b = pl.DataFrame(
+        {
+            "x": [1.0, 0.0],
+            "s": ["a", ""],
+            "b": [True, False],
+            "d": [date(2024, 1, 1), date(1970, 1, 1)],
+        }
+    )
     assert data.dataset_hash(a) == data.dataset_hash(a.reverse())
     assert data.dataset_hash(a) != data.dataset_hash(b)
     assert data.dataset_hash(pl.DataFrame()) == data.dataset_hash(pl.DataFrame())
@@ -308,7 +371,9 @@ def test_record_dataset_hash_into_manifest(tmp_path):
 
 
 def _load_runner():
-    spec = importlib.util.spec_from_file_location("oq_runner_for_hash", REPO_ROOT / "experiments" / "run_pipeline.py")
+    spec = importlib.util.spec_from_file_location(
+        "oq_runner_for_hash", REPO_ROOT / "experiments" / "run_pipeline.py"
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -327,7 +392,9 @@ def test_run_manifests_record_the_dataset_hash(tmp_path):
 
     grid_dir = runner.run_grid(cfg, grid, tmp_path / "grid")
     manifests = [json.loads((grid_dir / "run_manifest.json").read_text())]
-    manifests += [json.loads((p / "run_manifest.json").read_text()) for p in grid_dir.iterdir() if p.is_dir()]
+    manifests += [
+        json.loads((p / "run_manifest.json").read_text()) for p in grid_dir.iterdir() if p.is_dir()
+    ]
     assert len(manifests) >= 4
     assert {m["dataset_hash"] for m in manifests} == {expected}
 

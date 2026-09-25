@@ -18,6 +18,7 @@ fn asserted() -> BTreeSet<&'static str> {
         assert_error::<openquant::combinatorial_optimization::CombinatorialOptimizationError>(),
         assert_error::<openquant::cross_validation::CrossValidationError>(),
         assert_error::<openquant::data_processing::DataProcessingError>(),
+        assert_error::<openquant::dynamic_allocation::DynamicAllocationError>(),
         assert_error::<openquant::ensemble_methods::EnsembleError>(),
         assert_error::<openquant::etf_trick::EtfTrickError>(),
         assert_error::<openquant::feature_importance::FeatureImportanceError>(),
@@ -115,7 +116,7 @@ fn messages_are_unchanged_by_the_move_to_typed_errors() {
         |d| chrono::NaiveDate::from_ymd_opt(2024, 1, d).unwrap().and_hms_opt(0, 0, 0).unwrap();
     let spans = vec![(day(1), day(2)), (day(2), day(3))];
     // PurgedKFold is not Debug, so unwrap_err is unavailable.
-    let err = PurgedKFold::new(1, spans, 0.0).err().expect("one split is invalid");
+    let err = PurgedKFold::new(1, spans, 0.0).expect_err("one split is invalid");
     assert_eq!(err, CrossValidationError::InvalidSplits { n_splits: 1, n_samples: 2 });
     assert_eq!(err.to_string(), "n_splits must be between 2 and the number of samples (2), got 1");
     assert_eq!(

@@ -15,8 +15,7 @@
 - Notebook-first platform artifacts are present:
   Python bindings (`crates/pyopenquant`), Python API package (`python/openquant`),
   notebook starter packs (`notebooks/python`, `notebooks/rust`), experiment scaffold (`experiments/`),
-  and CI smoke workflows (`.github/workflows/python-bindings.yml`,
-  `.github/workflows/notebooks-examples-smoke.yml`).
+  and CI smoke jobs (the `python` jobs in `.github/workflows/ci.yml`).
 
 ## Reconciliation status
 - Reconciliation source of truth: `docs/reconciliation_closure_history.md`.
@@ -27,7 +26,7 @@
     commit `27a2007` never reached `main`. Recovery is tracked in GitHub issue #33.
 
 ## Quality and CI posture
-- Core CI workflows are present for lint/test, benchmark regression, release checks, bindings smoke,
-  and notebook/example smoke.
+- What each CI workflow enforces, and on which events, is tabulated in
+  `docs/stabilization_productionization.md` (CI/Automation).
 - Remaining work is tracked as GitHub issues #31-#61; the scope and evidence behind them is in
   `docs/design/production-readiness-brief.md`.
