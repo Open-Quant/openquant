@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-09-24**.
+Numbers below were regenerated on **2026-09-25**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,9 +41,9 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 9 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
+| `generated` | 8 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 32 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 33 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 11 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
@@ -69,9 +69,9 @@ split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 | | Count |
 |---|---|
 | Modules with a documentation page | 39 |
-| …written by hand, with a citation and executed examples | 31 |
+| …written by hand, with a citation and executed examples | 32 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 5 |
+| …generated, carrying the base template only | 4 |
 <!-- coverage:end:module-depth -->
 
 A base-template page is not a stub — it has a concept overview, mathematical
