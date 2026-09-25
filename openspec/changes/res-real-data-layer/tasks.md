@@ -11,4 +11,4 @@
 ## 2. Owner decisions (open)
 
 - [ ] 2.1 Choose a real redistributable sample from the candidates in `DATA_SOURCES.md`, or keep the synthetic one
-- [ ] 2.2 Route notebook 06 through `fetch` once 2.1 is decided (it still scrapes Stooq)
+- [ ] 2.2 Route notebook 06 through `fetch` once 2.1 is decided (#45 already routes it through `fetch` on the SYNTHETIC sample; only the `source=` changes)

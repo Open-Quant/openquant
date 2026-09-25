@@ -1,0 +1,102 @@
+name: Notebooks
+
+# Executes every research runbook (notebooks/python/NN_*.ipynb) in a Jupyter
+# kernel with `just notebooks-run`, then fails if the committed outputs or the
+# exported docs figures are stale (`just notebooks-verify`). Market data comes
+# from openquant.data.fetch's default source, the committed SYNTHETIC sample,
+# through a cached Parquet store: no job makes a network call for data.
+#
+# Kept separate from ci.yml so it can be folded into the consolidated python
+# job later; the setup steps (uv, Python 3.13, maturin develop) mirror it.
+on:
+  pull_request:
+    paths:
+      - "notebooks/**"
+      - "python/**"
+      - "crates/**"
+      - "docs-site/public/figures/notebooks/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "justfile"
+      - ".github/workflows/notebooks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "notebooks/**"
+      - "python/**"
+      - "crates/**"
+      - "docs-site/public/figures/notebooks/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "justfile"
+      - ".github/workflows/notebooks.yml"
+  schedule:
+    # Nightly, so a change outside the path filter that breaks a runbook is caught within a day.
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: notebooks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run-notebooks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      OPENQUANT_DATA_CACHE: ${{ github.workspace }}/.cache/openquant-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - uses: extractions/setup-just@v2
+      - name: Cache cargo registry + build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-notebooks-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-notebooks-
+      # The Parquet cache openquant.data.fetch fills from the committed sample.
+      - name: Cache the synthetic sample data
+        uses: actions/cache@v4
+        with:
+          path: .cache/openquant-data
+          key: openquant-data-${{ hashFiles('python/openquant/_sample_data/**', 'python/openquant/data.py') }}
+      - name: Create virtual environment
+        run: uv venv --python 3.13 .venv
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      # --no-install-project: the extension is built once, by maturin below.
+      - name: Install dev dependencies (nbclient, ipykernel, matplotlib)
+        run: uv sync --locked --group dev --no-install-project
+      - name: Build + install the openquant extension
+        run: uv run --no-sync maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+      - name: Execute every notebook (fails on any cell error)
+        run: just notebooks-run
+      - name: Upload executed notebooks and figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executed-notebooks
+          path: |
+            notebooks/python/*.ipynb
+            docs-site/public/figures/notebooks/
+          if-no-files-found: error
+          retention-days: 14
+      # Compares the freshly executed files with the committed ones, ignoring
+      # PNG bytes and float noise (see run_notebooks.py). A failure means the
+      # PR changed what a notebook prints or draws without re-running it.
+      - name: Committed outputs are up to date
+        run: just notebooks-verify
