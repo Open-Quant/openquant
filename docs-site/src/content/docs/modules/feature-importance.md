@@ -2,7 +2,7 @@
 title: "feature_importance"
 description: "MDI, MDA and SFI feature importance, and a PCA cross-check, for models validated on purged folds."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -54,7 +54,7 @@ to 1. Following the snippet, **a zero is treated as missing, not as zero** — s
 below.
 
 **Mean decrease accuracy** (§8.3.2). Fit on each training fold, score the test fold, then
-damage one feature's column in the test fold and score again. With $s_k$ the score of fold
+shuffle one feature's column in the test fold and score again. With $s_k$ the score of fold
 $k$ and $s_{k,j}$ the score with feature $j$ damaged,
 
 $$
@@ -64,7 +64,9 @@ $$
 where $s^{\max}$ is the best attainable score: 0 for negative log loss, 1 for accuracy and F1.
 A value of 1 means damaging the feature destroyed everything the model had; 0 means the model
 did not need it; negative means the model did better without it. Scores here *are* weighted
-by `sample_weight` on the test fold, as Snippet 8.3 does.
+by `sample_weight` on the test fold, as Snippet 8.3 does. The last argument is the seed for
+the shuffles: the same seed gives the same result, and a different seed a slightly different
+one.
 
 **Single feature importance** (§8.4.1). Cross-validate the model on each feature alone.
 There is nothing to substitute for, so correlated features cannot hide each other. The value
@@ -121,11 +123,11 @@ let info: Vec<_> =
 let splits = PurgedKFold::new(5, info, 0.0)?.split(n)?;
 
 let mut model = MeanDiff { k: 4.0, w: vec![], b: 0.0 };
-let mda = mean_decrease_accuracy(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss)?;
+let mda = mean_decrease_accuracy(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss, 42)?;
 let sfi = single_feature_importance(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss)?;
 
-assert!((mda["strong"].mean - 0.751).abs() < 1e-3);
-assert!((mda["weak"].mean - 0.234).abs() < 1e-3);
+assert!((mda["strong"].mean - 0.725).abs() < 1e-3);
+assert!((mda["weak"].mean - 0.187).abs() < 1e-3);
 assert!(mda["noise"].mean.abs() < 0.01);
 // Alone, the irrelevant feature scores a coin flip; the strong one is far better.
 assert!((sfi["noise"].mean + 0.696).abs() < 1e-3);
@@ -135,9 +137,9 @@ assert!((sfi["strong"].mean + 0.330).abs() < 1e-3);
 Printed to three decimals with their standard errors, the two results are:
 
 ```text
-strong  MDA +0.751 ± 0.006   SFI -0.330 ± 0.007
-weak    MDA +0.234 ± 0.024   SFI -0.666 ± 0.009
-noise   MDA -0.008 ± 0.002   SFI -0.696 ± 0.001
+strong  MDA +0.725 ± 0.015   SFI -0.330 ± 0.007
+weak    MDA +0.187 ± 0.016   SFI -0.666 ± 0.009
+noise   MDA -0.003 ± 0.003   SFI -0.696 ± 0.001
 ```
 
 The `±` is `ImportanceStats::std`, which despite the name is the standard error of the mean
@@ -161,13 +163,15 @@ Spearman and Kendall values mishandle ties, and the weighted Kendall is not
 
 ## What to watch for
 
-- **MDA here does not shuffle; it shifts the column by one row.** That keeps the result
-  deterministic, but a shifted copy of a *persistent* feature is almost the same feature, so
-  its measured importance collapses. With a feature autocorrelation of 0.99 the Python
-  implementation, which shares the design, reports 0.009 where a true shuffle gives 0.155
-  ([#98](https://github.com/Open-Quant/openquant/issues/98)). The example above uses
-  independent draws, where a shift is as good as a shuffle. **On real bar features, do not
-  trust a low MDA from this function until that issue is closed.**
+- **MDA of a very persistent feature is still somewhat understated.** The shuffle happens
+  within each test fold, as in Snippet 8.3. When a feature moves so slowly that one fold
+  spans only a few of its swings, the fold's values are bunched together, and shuffling
+  among them damages less than shuffling the whole sample would. On 2,000 rows in five
+  folds, an informative AR(1) feature scores about the same as an i.i.d. one up to an
+  autocorrelation of 0.95, and about 70% of it at 0.99. Before
+  [#98](https://github.com/Open-Quant/openquant/issues/98) was fixed the column was rotated
+  by one row instead of shuffled, which left such a feature almost unchanged and scored it at
+  about 3% of the i.i.d. value.
 - **MDI treats zero as missing.** Snippet 8.2 does this because it trains with
   `max_features=1`, where a zero means "this feature was never offered to the tree". With any
   other setting a zero means "offered and useless", and dropping it inflates the mean: a

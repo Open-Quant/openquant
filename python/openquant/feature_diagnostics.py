@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from math import ceil, exp, isfinite, log, sqrt
 from typing import Any, Sequence
@@ -287,8 +288,6 @@ def mdi_importance(
     if n_estimators < 2:
         raise ValueError("n_estimators must be >= 2")
 
-    import random
-
     rng = random.Random(seed)
     per_feature: list[list[float]] = [[] for _ in names]
 
@@ -327,21 +326,23 @@ def _score_with_perm_groups(
     scoring: str,
     sample_weight_train: Sequence[float] | None,
     sample_weight_test: Sequence[float] | None,
-    shift: int,
+    rng: random.Random,
 ) -> tuple[float, list[float]]:
     model = _fit_linear_probability_model(x_train, y_train, sample_weight_train)
     base = _score(y_test, _predict_proba(model, x_test), scoring, sample_weight_test)
 
     out: list[float] = []
     n = len(x_test)
-    s = shift % max(n, 1)
     for cols in groups:
+        # Shuffle the rows of the group's columns, as AFML Snippet 8.3 does with
+        # np.random.shuffle. All columns of a group get the same row order, so their
+        # joint distribution is kept and only their link to the label is broken.
+        order = list(range(n))
+        rng.shuffle(order)
         perm = [row[:] for row in x_test]
         for c in cols:
-            col = [row[c] for row in x_test]
-            shifted = col[-s:] + col[:-s] if s > 0 else col[:]
             for i in range(n):
-                perm[i][c] = shifted[i]
+                perm[i][c] = x_test[order[i]][c]
 
         perm_score = _score(y_test, _predict_proba(model, perm), scoring, sample_weight_test)
         if scoring == "neg_log_loss":
@@ -363,6 +364,7 @@ def mda_importance(
     pct_embargo: float = 0.01,
     scoring: str = "neg_log_loss",
     allow_unpurged: bool = False,
+    seed: int = 42,
 ) -> dict[str, object]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
@@ -373,8 +375,9 @@ def mda_importance(
 
     per_feature: list[list[float]] = [[] for _ in names]
     fold_scores: list[float] = []
+    rng = random.Random(seed)
 
-    for fold_idx, (train_idx, test_idx) in enumerate(splits):
+    for train_idx, test_idx in splits:
         x_train = [x[i] for i in train_idx]
         y_train = [yv[i] for i in train_idx]
         x_test = [x[i] for i in test_idx]
@@ -391,7 +394,7 @@ def mda_importance(
             scoring,
             w_train,
             w_test,
-            shift=fold_idx + 1,
+            rng,
         )
         fold_scores.append(base)
         for j, imp in enumerate(scores):
@@ -413,6 +416,7 @@ def mda_importance(
             "pct_embargo": pct_embargo,
             "fold_count": len(splits),
             "scoring": scoring,
+            "seed": seed,
             "mean_base_score": _mean(fold_scores),
         },
     }
@@ -606,6 +610,7 @@ def substitution_effect_report(
     corr_threshold: float = 0.9,
     orthogonalize: bool = True,
     allow_unpurged: bool = False,
+    seed: int = 42,
 ) -> dict[str, object]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
@@ -624,12 +629,14 @@ def substitution_effect_report(
         pct_embargo=pct_embargo,
         scoring=scoring,
         allow_unpurged=allow_unpurged,
+        seed=seed,
     )
     base_table: pl.DataFrame = mda["table"]
     base_map = {row["feature"]: float(row["mean"]) for row in base_table.to_dicts()}
 
     corr = _corr_matrix(x)
     pairs: list[dict[str, Any]] = []
+    rng = random.Random(seed)
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             corr_ij = corr[i][j]
@@ -637,7 +644,7 @@ def substitution_effect_report(
                 continue
 
             grouped_vals: list[float] = []
-            for fold_idx, (train_idx, test_idx) in enumerate(splits):
+            for train_idx, test_idx in splits:
                 x_train = [x[k] for k in train_idx]
                 y_train = [yv[k] for k in train_idx]
                 x_test = [x[k] for k in test_idx]
@@ -653,7 +660,7 @@ def substitution_effect_report(
                     scoring,
                     w_train,
                     w_test,
-                    shift=fold_idx + 1,
+                    rng,
                 )
                 grouped_vals.append(group_imp[0])
 
@@ -704,6 +711,7 @@ def substitution_effect_report(
             pct_embargo=pct_embargo,
             scoring=scoring,
             allow_unpurged=allow_unpurged,
+            seed=seed,
         )
         corr_abs_max = _max_abs_offdiag(corr)
         ortho_corr = _corr_matrix(x_ortho)
