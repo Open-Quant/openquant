@@ -2,7 +2,7 @@
 title: "sb_bagging"
 description: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a deliberately simple one-feature base learner."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -81,12 +81,12 @@ x = [[s, rng.gauss(0, 1)] for s in signal]
 y = [int(s + rng.gauss(0, 0.8) > 0) for s in signal]
 
 fit = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=50, random_state=7)
-predictions = list(fit["predictions"])  # the binding returns bytes; list() gives 0/1 ints
+predictions = fit["predictions"]  # a list of 0/1 ints
 in_sample = sum(p == t for p, t in zip(predictions, y)) / n
 print(f"in-sample accuracy {in_sample:.3f}   out-of-bag accuracy {fit['oob_score']:.3f}")
 
 again = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=50, random_state=7)
-print("same random_state, same predictions:", list(again["predictions"]) == predictions)
+print("same random_state, same predictions:", again["predictions"] == predictions)
 ```
 
 ```text

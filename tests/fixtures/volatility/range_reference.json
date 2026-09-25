@@ -1,0 +1,135 @@
+{
+  "source": "Parkinson (1980), Garman & Klass (1980), Yang & Zhang (2000) in pandas 3.0.6 on tests/fixtures/backtest_statistics/dollar_bar_sample.csv",
+  "window": 20,
+  "n_bars": 1000,
+  "parkinson": {
+    "n_nan": 19,
+    "mean_excluding_nan": 0.00149997479004313,
+    "samples": [
+      {
+        "position": 19,
+        "value": 0.0015867209440694266
+      },
+      {
+        "position": 20,
+        "value": 0.0015760922190720546
+      },
+      {
+        "position": 100,
+        "value": 0.0012701270386746737
+      },
+      {
+        "position": 500,
+        "value": 0.0015474385237153688
+      },
+      {
+        "position": 999,
+        "value": 0.001647775669343386
+      }
+    ]
+  },
+  "garman_klass": {
+    "n_nan": 19,
+    "mean_excluding_nan": 0.0014826110064938074,
+    "samples": [
+      {
+        "position": 19,
+        "value": 0.0015966021511279087
+      },
+      {
+        "position": 20,
+        "value": 0.001569305381597948
+      },
+      {
+        "position": 100,
+        "value": 0.0013894177280708456
+      },
+      {
+        "position": 500,
+        "value": 0.0015644606069558802
+      },
+      {
+        "position": 999,
+        "value": 0.0015497832031067102
+      }
+    ]
+  },
+  "yang_zhang": {
+    "n_nan": 20,
+    "mean_excluding_nan": 0.0016200017042037986,
+    "samples": [
+      {
+        "position": 19,
+        "value": null
+      },
+      {
+        "position": 20,
+        "value": 0.0017525165929879781
+      },
+      {
+        "position": 100,
+        "value": 0.0014536891050196592
+      },
+      {
+        "position": 500,
+        "value": 0.0017612779032739397
+      },
+      {
+        "position": 999,
+        "value": 0.001664101338618053
+      }
+    ]
+  },
+  "yang_zhang_paper": {
+    "n_nan": 20,
+    "mean_excluding_nan": 0.0014841229821895205,
+    "samples": [
+      {
+        "position": 19,
+        "value": null
+      },
+      {
+        "position": 20,
+        "value": 0.001577404933733648
+      },
+      {
+        "position": 100,
+        "value": 0.0013878696632692539
+      },
+      {
+        "position": 500,
+        "value": 0.0016227725107450571
+      },
+      {
+        "position": 999,
+        "value": 0.0015529770657313304
+      }
+    ]
+  },
+  "yang_zhang_paper_zero_mean": {
+    "n_nan": 20,
+    "mean_excluding_nan": 0.0015225060534080842,
+    "samples": [
+      {
+        "position": 19,
+        "value": null
+      },
+      {
+        "position": 20,
+        "value": 0.0016144981309410898
+      },
+      {
+        "position": 100,
+        "value": 0.0014218892880247373
+      },
+      {
+        "position": 500,
+        "value": 0.0016646016458139565
+      },
+      {
+        "position": 999,
+        "value": 0.0015909856101379372
+      }
+    ]
+  }
+}

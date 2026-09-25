@@ -1,5 +1,5 @@
 {
-  "source_csv": "mlfinlab/tests/test_data/dollar_bar_sample.csv",
+  "source": "tests/fixtures/filters/generate.py: AFML snippet 2.4 (CUSUM) and a rolling z-score rule, pandas 3.0.6, on tests/fixtures/filters/dollar_bar_sample.csv",
   "meta": {
     "rows": 1000,
     "columns": [

@@ -1,0 +1,68 @@
+{
+  "source": "AFML ch. 19 in pandas 3.0.6 / scipy 1.18.1 on dollar_bar_sample.csv",
+  "window": 20,
+  "n_bars": 1000,
+  "roll_measure": {
+    "max": 7.158451023275327,
+    "mean": 2.341811487878049,
+    "position": 25,
+    "at_position": 1.1765247665543592,
+    "first_finite": 21
+  },
+  "roll_impact": {
+    "max": 1.0224953732553878e-07,
+    "mean": 3.3445244615233154e-08,
+    "position": 25,
+    "at_position": 1.6807048036930033e-08,
+    "first_finite": 21
+  },
+  "corwin_schultz": {
+    "max": 0.01652241706501123,
+    "mean": 0.001516029856146612,
+    "position": 25,
+    "at_position": 0.0013961733778174274,
+    "first_finite": 20
+  },
+  "becker_parkinson": {
+    "max": 0.018773708491626975,
+    "mean": 0.0014565913933064535,
+    "position": 25,
+    "at_position": 0.000517178951378647,
+    "first_finite": 20
+  },
+  "kyle_lambda": {
+    "max": 0.00016342377858802313,
+    "mean": 7.020106492561369e-05,
+    "position": 25,
+    "at_position": 7.762171631099639e-05,
+    "first_finite": 20
+  },
+  "amihud_lambda": {
+    "max": 4.057838996757428e-11,
+    "mean": 1.7213209689839827e-11,
+    "position": 25,
+    "at_position": 1.8439862814639276e-11,
+    "first_finite": 20
+  },
+  "hasbrouck_lambda": {
+    "max": 3.3952759711716884e-07,
+    "mean": 1.4403716512797829e-07,
+    "position": 25,
+    "at_position": 1.54332489057387e-07,
+    "first_finite": 20
+  },
+  "vpin_1": {
+    "max": 0.9999745140777443,
+    "mean": 0.5011432932028491,
+    "position": 25,
+    "at_position": 0.5540520147069596,
+    "first_finite": 20
+  },
+  "vpin_20": {
+    "max": 0.6811842302833148,
+    "mean": 0.5000735297880221,
+    "position": 45,
+    "at_position": 0.46381730031763624,
+    "first_finite": 39
+  }
+}

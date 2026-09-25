@@ -39,6 +39,9 @@ fn sb_fit_predict_classifier(
     clf.fit(&x_mat, &y, &ind_mat, sample_weight.as_deref()).map_err(to_py_err)?;
     let predictions = clf.predict(&x_mat).map_err(to_py_err)?;
 
+    // Widened so the classes reach Python as a list of ints, not `bytes`.
+    let predictions: Vec<u32> = predictions.into_iter().map(u32::from).collect();
+
     let d = PyDict::new(py);
     d.set_item("predictions", predictions)?;
     d.set_item("oob_score", clf.oob_score_value)?;

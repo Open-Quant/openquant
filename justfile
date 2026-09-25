@@ -1,6 +1,6 @@
 set shell := ["bash", "-cu"]
 
-default := help
+# `help` is the first recipe, so a bare `just` lists the recipes.
 
 help:
     @just --list
@@ -60,6 +60,10 @@ bench-check:
 py-develop:
     uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 
+# Optimised build; use it for timing and for heavy calls such as structural_breaks.get_sadf.
+py-develop-release:
+    uv run --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
+
 py-build:
     uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquant/Cargo.toml --out dist
 
@@ -92,5 +96,17 @@ exp-run:
 
 notebook-smoke:
     uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+
+# Execute every notebooks/python/NN_*.ipynb in a Jupyter kernel (nbclient), in
+# place, and re-export docs-site/public/figures/notebooks/. Fails on any cell
+# error. Needs the extension built first (`just py-develop`). Extra arguments go
+# to the runner, e.g. `just notebooks-run --only 06` or `--check`.
+notebooks-run *args:
+    uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/run_notebooks.py {{args}}
+
+# Fails if the working-tree notebooks/figures differ from the committed ones
+# beyond float noise and image bytes; CI runs it after `just notebooks-run`.
+notebooks-verify ref="HEAD":
+    uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/run_notebooks.py --against-git {{ref}}
 
 research-smoke: py-develop notebook-smoke exp-run

@@ -12,6 +12,15 @@ type EventRow = (String, Option<String>, f64, Option<f64>, f64, f64);
 type BinRow = (String, f64, f64, i8, Option<f64>);
 
 #[pyfunction(name = "add_vertical_barrier")]
+#[pyo3(signature = (
+    t_events,
+    close_timestamps,
+    close_prices,
+    num_days=0,
+    num_hours=0,
+    num_minutes=0,
+    num_seconds=0
+))]
 fn labeling_add_vertical_barrier(
     t_events: Vec<String>,
     close_timestamps: Vec<String>,
@@ -21,6 +30,12 @@ fn labeling_add_vertical_barrier(
     num_minutes: i64,
     num_seconds: i64,
 ) -> PyResult<Vec<(String, String)>> {
+    if num_days == 0 && num_hours == 0 && num_minutes == 0 && num_seconds == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "add_vertical_barrier needs a non-zero horizon: pass at least one of \
+             num_days, num_hours, num_minutes or num_seconds",
+        ));
+    }
     let t_events = parse_naive_datetimes(t_events)?;
     let close =
         pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;

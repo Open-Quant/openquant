@@ -42,7 +42,8 @@ fn test_bet_size_probability_defaults() {
     let expected: Vec<f64> =
         fixture["prob_default"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
     for (r, e) in res.iter().map(|(_, v)| *v).zip(expected.iter()) {
-        assert!((r - e).abs() < 1e-6);
+        // statrs and scipy evaluate the normal CDF differently in the last ~1e-11.
+        assert!((r - e).abs() < 1e-9, "got {r}, reference {e}");
     }
 }
 
@@ -55,7 +56,7 @@ fn test_bet_size_probability_avg_active() {
         fixture["prob_avg"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
     assert_eq!(res.len(), expected.len());
     for (r, e) in res.iter().map(|(_, v)| *v).zip(expected.iter()) {
-        assert!((r - e).abs() < 1e-6);
+        assert!((r - e).abs() < 1e-9, "got {r}, reference {e}");
     }
 }
 
@@ -105,9 +106,13 @@ fn test_bet_size_dynamic() {
         .iter()
         .map(|v| v.as_f64().unwrap())
         .collect();
-    for ((b, tp, _), (eb, etp)) in res.iter().zip(exp_bs.iter().zip(exp_tpos.iter())) {
-        assert!((b - *eb).abs() < 1e-6);
-        assert!((tp - *etp).abs() < 1e-6);
+    let exp_lp: Vec<f64> =
+        fixture["dynamic"]["l_p"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    for (i, (b, tp, lp)) in res.iter().enumerate() {
+        assert!((b - exp_bs[i]).abs() < 1e-12, "row {i} bet size");
+        assert!((tp - exp_tpos[i]).abs() < 1e-12, "row {i} target position");
+        // Rows 1-3 cross zero, where AFML snippet 10.4's limit-price loop is empty and gives 0.
+        assert!((lp - exp_lp[i]).abs() < 1e-9, "row {i} limit price {lp}, reference {}", exp_lp[i]);
     }
 }
 
@@ -128,7 +133,7 @@ fn test_bet_size_budget() {
         .map(|v| v.as_f64().unwrap())
         .collect::<Vec<_>>();
     for (r, e) in res.iter().map(|(_, v)| *v).zip(exp.iter()) {
-        assert!((r - e).abs() < 1e-6);
+        assert!((r - e).abs() < 1e-12);
     }
 }
 
@@ -240,56 +245,47 @@ fn test_power_helpers_and_limit_price_equal_pos() {
     assert!(p.is_nan());
 }
 
+/// AFML 10.2 "reserve" sizing against tests/fixtures/bet_sizing/generate_reserve.py, which
+/// counts concurrent long and short bets and maps c_t through a fitted two-Gaussian mixture in
+/// scipy. The fit is taken as given (the library fits by EM with a random start, so its own fit
+/// is not reproducible); every one of the 500 rows is compared.
 #[test]
-fn test_bet_size_reserve_stub() {
-    // load fixture from Python run
+fn test_bet_size_reserve_matches_reference() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/bet_sizing/reserve_fixture.json");
     let file = File::open(path).expect("fixture");
     let v: Value = serde_json::from_reader(file).expect("json");
-    let fit_arr = v["fit"].as_array().expect("fit");
-    let fit: [f64; 5] = [
-        fit_arr[0].as_f64().unwrap(),
-        fit_arr[1].as_f64().unwrap(),
-        fit_arr[2].as_f64().unwrap(),
-        fit_arr[3].as_f64().unwrap(),
-        fit_arr[4].as_f64().unwrap(),
-    ];
-    let t1_vec = v["events_active"]["index"]
+    let floats = |key: &str| -> Vec<f64> {
+        v["events_active"][key].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect()
+    };
+    let fit_vec: Vec<f64> =
+        v["fit"].as_array().expect("fit").iter().map(|x| x.as_f64().unwrap()).collect();
+    let fit: [f64; 5] = fit_vec.try_into().unwrap();
+    let parse = |s: &Value| {
+        NaiveDateTime::parse_from_str(s.as_str().unwrap(), "%Y-%m-%d %H:%M:%S%.f").unwrap()
+    };
+    let t1_vec: Vec<(NaiveDateTime, NaiveDateTime)> = v["events_active"]["index"]
         .as_array()
         .unwrap()
         .iter()
-        .zip(v["events_active"]["t1"].as_array().unwrap().iter())
-        .map(|(s, e)| {
-            let st =
-                NaiveDateTime::parse_from_str(s.as_str().unwrap(), "%Y-%m-%d %H:%M:%S%.f").unwrap();
-            let en =
-                NaiveDateTime::parse_from_str(e.as_str().unwrap(), "%Y-%m-%d %H:%M:%S%.f").unwrap();
-            (st, en)
-        })
-        .collect::<Vec<_>>();
-    let c_t_vals: Vec<f64> =
-        v["events_active"]["c_t"].as_array().unwrap().iter().map(|c| c.as_f64().unwrap()).collect();
-    // compute bet sizes directly from c_t and fit parameters
-    let rust_bets: Vec<f64> = c_t_vals.iter().map(|c| single_bet_size_mixed(*c, &fit)).collect();
-    let expected_bets: Vec<f64> = v["events_active"]["bet_size"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .take(5)
-        .map(|x| x.as_f64().unwrap())
+        .zip(v["events_active"]["t1"].as_array().unwrap())
+        .map(|(s, e)| (parse(s), parse(e)))
         .collect();
-    for (rb, eb) in rust_bets.iter().take(5).zip(expected_bets.iter()) {
-        assert!((rb - eb).abs() < 1e-6);
-    }
+    let side = floats("side");
+    let (want_long, want_short, want_c, want_bet) =
+        (floats("active_long"), floats("active_short"), floats("c_t"), floats("bet_size"));
+    assert_eq!(t1_vec.len(), 500);
 
-    // test full reserve output when fit is supplied
-    let side = vec![1.0; t1_vec.len()];
-    let reserve_rows = bet_size_reserve_with_fit(&t1_vec, &side, &fit).unwrap();
-    assert_eq!(reserve_rows.len(), t1_vec.len());
-    for row in reserve_rows.iter().take(5) {
-        let expected = single_bet_size_mixed(row.3, &fit);
-        assert!((row.4 - expected).abs() < 1e-12);
+    let rows = bet_size_reserve_with_fit(&t1_vec, &side, &fit).unwrap();
+    assert_eq!(rows.len(), t1_vec.len());
+    for (i, (ts, long, short, c_t, bet)) in rows.iter().enumerate() {
+        assert_eq!(*ts, t1_vec[i].0, "row {i} timestamp");
+        assert_eq!(*long, want_long[i], "row {i} active_long");
+        assert_eq!(*short, want_short[i], "row {i} active_short");
+        assert_eq!(*c_t, want_c[i], "row {i} c_t");
+        // The mixture CDF is statrs here and scipy there; they differ by ~3e-11.
+        assert!((bet - want_bet[i]).abs() < 1e-9, "row {i}: bet {bet}, reference {}", want_bet[i]);
+        assert!((single_bet_size_mixed(*c_t, &fit) - bet).abs() < 1e-15);
     }
 }
 

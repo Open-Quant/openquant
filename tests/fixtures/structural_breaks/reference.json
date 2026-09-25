@@ -1,0 +1,208 @@
+{
+  "source": "AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) in numpy 2.5.3 on log(close) of tests/fixtures/structural_breaks/dollar_bar_sample.csv",
+  "n_bars": 1000,
+  "chow": {
+    "min_length": 10,
+    "len": 980,
+    "max": 0.179155470110305,
+    "mean": -0.6535177433530578,
+    "at_3": -0.6649782081552711
+  },
+  "chu_stinchcombe_white": {
+    "one_sided": {
+      "critical_value": {
+        "len": 998,
+        "max": 3.2655451625551906,
+        "mean": 2.7809305071156944,
+        "at_20": 2.446690491484342
+      },
+      "stat": {
+        "len": 998,
+        "max": 5.392119156881715,
+        "mean": 1.2607703336193608,
+        "at_20": 0.6241569267516742
+      }
+    },
+    "two_sided": {
+      "critical_value": {
+        "len": 998,
+        "max": 3.235629291673225,
+        "mean": 2.7692331358166493,
+        "at_20": 2.7152511342857
+      },
+      "stat": {
+        "len": 998,
+        "max": 8.587700724445606,
+        "mean": 1.89257292159869,
+        "at_20": 1.5126997489277074
+      }
+    }
+  },
+  "sadf": {
+    "min_length": 20,
+    "lags": 5,
+    "lags_array": [
+      1,
+      2,
+      5,
+      7
+    ],
+    "models": {
+      "sm_power": {
+        "len": 974,
+        "max": 49.14690529314391,
+        "mean": 29.010541968023198,
+        "at_29": 17.372923475396668
+      },
+      "linear": {
+        "len": 974,
+        "max": 2.2171262037520427,
+        "mean": -0.6695835553674775,
+        "at_29": -0.7170528906222478
+      },
+      "linear_no_const": {
+        "len": 972,
+        "max": 5.232414844444007,
+        "mean": 1.8992808857353112,
+        "at_29": 1.2524615675047341
+      },
+      "quadratic": {
+        "len": 974,
+        "max": 3.464929137853371,
+        "mean": -1.0021447809327835,
+        "at_29": -1.4600425365890217
+      },
+      "sm_poly_1": {
+        "len": 974,
+        "max": 47.29068027871743,
+        "mean": 26.032540048616653,
+        "at_29": 8.350038769085545
+      },
+      "sm_poly_2": {
+        "len": 974,
+        "max": 47.26419592928496,
+        "mean": 26.031268018520926,
+        "at_29": 8.353182083035616
+      },
+      "sm_exp": {
+        "len": 974,
+        "max": 51.05129140253935,
+        "mean": 28.916980766943507,
+        "at_29": 17.10037069132358
+      }
+    }
+  },
+  "sadf_prefix": {
+    "n_bars": 60,
+    "models": {
+      "sm_power": {
+        "len": 34,
+        "at_29": 17.372923475396668
+      },
+      "linear": {
+        "len": 34,
+        "at_29": -0.7170528906222478
+      },
+      "linear_no_const": {
+        "len": 32,
+        "at_29": 1.2524615675047341
+      },
+      "quadratic": {
+        "len": 34,
+        "at_29": -1.4600425365890217
+      },
+      "sm_poly_1": {
+        "len": 34,
+        "at_29": 8.350038769085545
+      },
+      "sm_poly_2": {
+        "len": 34,
+        "at_29": 8.353182083035616
+      },
+      "sm_exp": {
+        "len": 34,
+        "at_29": 17.10037069132358
+      }
+    }
+  },
+  "library_convention": {
+    "chu_stinchcombe_white": {
+      "one_sided": {
+        "stat": {
+          "len": 998,
+          "max": 3729.001403841245,
+          "mean": 836.5099765300039,
+          "at_20": 380.1379109861498
+        }
+      },
+      "two_sided": {
+        "stat": {
+          "len": 998,
+          "max": 5518.519585690808,
+          "mean": 1264.5828050317637,
+          "at_20": 921.297990714175
+        }
+      }
+    },
+    "sadf": {
+      "sm_power": {
+        "len": 974,
+        "max": 49.144709550487285,
+        "mean": 17.81404763706818,
+        "at_29": -4.281668645382805
+      },
+      "quadratic": {
+        "len": 974,
+        "max": 2.2485752649959614,
+        "mean": -0.6517606232307531,
+        "at_29": -1.065401928336418
+      },
+      "sm_poly_1": {
+        "len": 974,
+        "max": 47.29068027871743,
+        "mean": 21.02037321025128,
+        "at_29": 0.8268257284171155
+      },
+      "sm_poly_2": {
+        "len": 974,
+        "max": 47.26419592928496,
+        "mean": 21.010295334860125,
+        "at_29": 0.8226510953962353
+      },
+      "sm_exp": {
+        "len": 974,
+        "max": 51.05129140253935,
+        "mean": 17.63226630722685,
+        "at_29": -5.82121262946082
+      }
+    },
+    "sadf_prefix": {
+      "sm_power": {
+        "len": 34,
+        "at_29": -4.281668645382805
+      },
+      "quadratic": {
+        "len": 34,
+        "at_29": -1.065401928336418
+      },
+      "sm_poly_1": {
+        "len": 34,
+        "at_29": 0.8268257284171155
+      },
+      "sm_poly_2": {
+        "len": 34,
+        "at_29": 0.8226510953962353
+      },
+      "sm_exp": {
+        "len": 34,
+        "at_29": -5.82121262946082
+      }
+    }
+  },
+  "notes": {
+    "chu_stinchcombe_white": "AFML divides y_t - y_n by sigma_t (a standard deviation) with sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divides by the variance and uses t-2 as the divisor. Critical values do not depend on either.",
+    "quadratic": "AFML 'ctt' has const, t and t^2; the library omits the linear t.",
+    "sm_models": "AFML 17.4.3 takes the sup of |beta| / se; the library takes the sup of the signed ratio.",
+    "sm_power": "AFML: log t with t = 1, 2, ...; the library uses log of the 0-based row position, so the first row is log(0) = -inf and the window starting there is dropped."
+  }
+}

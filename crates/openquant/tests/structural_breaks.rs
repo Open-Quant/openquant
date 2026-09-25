@@ -6,7 +6,26 @@ use openquant::structural_breaks::{
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_distr::{Distribution, Normal};
+use serde_json::Value;
 use std::path::Path;
+
+/// AFML chapter 17 recomputed in numpy by tests/fixtures/structural_breaks/generate.py.
+fn reference() -> Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/structural_breaks/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn num(value: &Value, path: &[&str]) -> f64 {
+    path.iter().fold(value, |v, key| &v[*key]).as_f64().unwrap_or_else(|| panic!("{path:?}"))
+}
+
+fn assert_rel(got: f64, want: f64, rel: f64, what: &str) {
+    assert!(
+        (got - want).abs() <= rel * want.abs().max(1.0),
+        "{what}: got {got}, want {want} (rel tol {rel})"
+    );
+}
 
 fn load_close_prices() -> Vec<f64> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -51,10 +70,13 @@ fn test_chow_test() {
     let log_prices = log_prices();
     let stats = get_chow_type_stat(&log_prices, min_length).expect("chow stats");
 
+    let reference = reference();
+    let want = &reference["chow"];
     assert_eq!(log_prices.len() - min_length * 2, stats.len());
-    assert!((max(&stats) - 0.179).abs() < 0.001);
-    assert!((mean(&stats) + 0.653).abs() < 0.001);
-    assert!((stats[3] + 0.6649).abs() < 0.001);
+    assert_eq!(num(want, &["len"]) as usize, stats.len());
+    assert_rel(max(&stats), num(want, &["max"]), 1e-8, "chow max");
+    assert_rel(mean(&stats), num(want, &["mean"]), 1e-8, "chow mean");
+    assert_rel(stats[3], num(want, &["at_3"]), 1e-8, "chow [3]");
 }
 
 #[test]
@@ -68,26 +90,47 @@ fn test_chu_stinchcombe_white_test() {
     assert_eq!(log_prices.len() - 2, one_sided.critical_value.len());
     assert_eq!(log_prices.len() - 2, two_sided.critical_value.len());
 
-    assert!((max(&one_sided.critical_value) - 3.265).abs() < 0.001);
-    assert!((mean(&one_sided.critical_value) - 2.7809).abs() < 0.001);
-    assert!((one_sided.critical_value[20] - 2.4466).abs() < 0.001);
+    // The critical values (AFML 17.3.2) do not depend on how the statistic is scaled; the
+    // statistic itself is checked against AFML in test_chu_stinchcombe_white_statistic_matches_afml.
+    let reference = reference();
+    assert_csw_matches(&reference, &one_sided, &two_sided, "critical_value");
 
-    // The statistics deliberately differ from mlfinlab's, which divides by the variance instead
-    // of the standard deviation (#104). The critical values are unaffected.
+    // Pins of the library's own statistic since #104 (divides by sigma_t, not sigma_t^2). Not
+    // AFML values: sigma_t^2 still averages over one difference fewer than AFML (see the FINDING).
     assert!((max(&one_sided.stat) - 5.3797).abs() < 0.001);
     assert!((mean(&one_sided.stat) - 1.2582).abs() < 0.001);
     assert!((one_sided.stat[20] - 0.6098).abs() < 0.001);
-
-    assert!((max(&two_sided.critical_value) - 3.235).abs() < 0.001);
-    assert!((mean(&two_sided.critical_value) - 2.769).abs() < 0.001);
-    assert!((two_sided.critical_value[20] - 2.715).abs() < 0.001);
-
     assert!((max(&two_sided.stat) - 8.5793).abs() < 0.001);
     assert!((mean(&two_sided.stat) - 1.8875).abs() < 0.001);
     assert!((two_sided.stat[20] - 1.4779).abs() < 0.001);
 
     let invalid = get_chu_stinchcombe_white_statistics(&log_prices, "rubbish text");
     assert!(matches!(invalid, Err(StructuralBreakError::InvalidTestType(_))));
+}
+
+fn assert_csw_matches(
+    reference: &Value,
+    one_sided: &openquant::structural_breaks::ChuStinchcombeWhiteResult,
+    two_sided: &openquant::structural_breaks::ChuStinchcombeWhiteResult,
+    field: &str,
+) {
+    for (name, result) in [("one_sided", one_sided), ("two_sided", two_sided)] {
+        let want = &reference["chu_stinchcombe_white"][name];
+        let values = if field == "stat" { &result.stat } else { &result.critical_value };
+        let what = format!("{name} {field}");
+        assert_rel(max(values), num(want, &[field, "max"]), 1e-8, &format!("{what} max"));
+        assert_rel(mean(values), num(want, &[field, "mean"]), 1e-8, &format!("{what} mean"));
+        assert_rel(values[20], num(want, &[field, "at_20"]), 1e-8, &format!("{what} [20]"));
+    }
+}
+
+#[test]
+#[ignore = "FINDING: get_chu_stinchcombe_white_statistics averages sigma_t^2 over t-2 where AFML 17.3.2 uses t-1 (1-based t; the t-1 squared differences up to bar t), so the statistic is slightly low (one-sided max 5.3797 vs 5.3921). The sigma_t^2-for-sigma_t half of this finding was fixed by #104"]
+fn test_chu_stinchcombe_white_statistic_matches_afml() {
+    let log_prices = log_prices();
+    let one_sided = get_chu_stinchcombe_white_statistics(&log_prices, "one_sided").unwrap();
+    let two_sided = get_chu_stinchcombe_white_statistics(&log_prices, "two_sided").unwrap();
+    assert_csw_matches(&reference(), &one_sided, &two_sided, "stat");
 }
 
 #[test]
@@ -164,20 +207,10 @@ fn test_sadf_test() {
     assert_eq!(expected_len, sm_poly_2.len());
     assert_eq!(expected_len, sm_exp.len());
 
-    assert!((mean(&sm_power) - 17.814).abs() < 0.001);
-    assert!((sm_power[29] + 4.281).abs() < 0.001);
-    assert!((mean(&linear) + 0.669).abs() < 0.001);
-    assert!((linear[29] + 0.717).abs() < 0.001);
-    assert!((mean(&linear_no_const) - 1.899).abs() < 0.001);
-    assert!((linear_no_const[29] - 1.252).abs() < 0.001);
-    assert!((mean(&quadratic) + 0.651).abs() < 0.001);
-    assert!((quadratic[29] + 1.065).abs() < 0.001);
-    assert!((mean(&sm_poly_1) - 21.02).abs() < 0.001);
-    assert!((sm_poly_1[29] - 0.8268).abs() < 0.001);
-    assert!((mean(&sm_poly_2) - 21.01).abs() < 0.001);
-    assert!((sm_poly_2[29] - 0.822).abs() < 0.001);
-    assert!((mean(&sm_exp) - 17.632).abs() < 0.001);
-    assert!((sm_exp[29] + 5.821).abs() < 0.001);
+    // AFML 17.4.2 values. The quadratic and sub/super-martingale models depart from AFML and
+    // are checked in sadf_quadratic_and_martingale_models_match_afml.
+    let reference = reference();
+    assert_sadf_matches(&reference, &[("linear", &linear), ("linear_no_const", &linear_no_const)]);
 
     let ones = vec![1.0; log_prices.len()];
     let trivial =
@@ -192,4 +225,35 @@ fn test_sadf_test() {
     let (b_mean, b_var) = _get_betas(&singular_matrix, &singular_matrix).expect("betas");
     assert!(b_mean.iter().all(|v| v.is_nan()));
     assert!(b_var.iter().all(|row| row.iter().all(|v| v.is_nan())));
+}
+
+fn assert_sadf_matches(reference: &Value, models: &[(&str, &Vec<f64>)]) {
+    for (name, values) in models {
+        let want = &reference["sadf"]["models"][*name];
+        assert_eq!(num(want, &["len"]) as usize, values.len(), "{name} len");
+        // 1e-7: the normal-equations inverse (snippet 17.4, as in the library) is off from a
+        // QR solve by up to ~2e-9 relative in these statistics.
+        assert_rel(mean(values), num(want, &["mean"]), 1e-7, &format!("{name} mean"));
+        assert_rel(values[29], num(want, &["at_29"]), 1e-7, &format!("{name} [29]"));
+    }
+}
+
+#[test]
+#[ignore = "FINDING: get_sadf 'quadratic' regresses on const + t^2 without the linear t of AFML's 'ctt'; the sm_* models take the sup of the signed beta/se where AFML 17.4.3 takes |beta|/se; sm_power uses log(0) for the first row and drops that window. Long-running."]
+fn sadf_quadratic_and_martingale_models_match_afml() {
+    let log_prices = log_prices();
+    let lags = SadfLags::Fixed(5);
+    let run = |model: &str| get_sadf(&log_prices, model, true, 20, lags.clone()).unwrap();
+    let (quadratic, sm_power, sm_poly_1, sm_poly_2, sm_exp) =
+        (run("quadratic"), run("sm_power"), run("sm_poly_1"), run("sm_poly_2"), run("sm_exp"));
+    assert_sadf_matches(
+        &reference(),
+        &[
+            ("quadratic", &quadratic),
+            ("sm_power", &sm_power),
+            ("sm_poly_1", &sm_poly_1),
+            ("sm_poly_2", &sm_poly_2),
+            ("sm_exp", &sm_exp),
+        ],
+    );
 }
