@@ -48,6 +48,14 @@ and runs on real data only when you pass your own `source=`.
 <img class="dark:sl-hidden" src="/figures/notebooks/nb06-confusion-light.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb06-confusion-dark.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
 
+### Runbooks
+
+Studies that state a hypothesis up front and end with a promotion decision, each with a page under
+Runbooks:
+
+- [HRP vs IVP and CLA out of sample](/runbooks/hrp-vs-ivp-cla-oos/) —
+  `10_hrp_vs_ivp_cla_oos.ipynb`, AFML §16.6's Monte Carlo on SYNTHETIC data.
+
 ## Worked example: cleaning a messy OHLCV file
 
 The repository ships a deliberately awful CSV at

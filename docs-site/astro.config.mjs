@@ -103,6 +103,10 @@ export default defineConfig({
           autogenerate: { directory: 'workflows' },
         },
         {
+          label: 'Runbooks',
+          autogenerate: { directory: 'runbooks' },
+        },
+        {
           label: 'Modules',
           items: [
             { label: 'All Modules', link: '/modules/' },
