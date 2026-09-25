@@ -30,6 +30,19 @@ def _git_sha(repo_root: Path) -> str:
         return "unknown"
 
 
+def _dataset_frame(dataset) -> pl.DataFrame:
+    """The research dataset as one table, so its content hash covers every input."""
+    columns = {
+        "ts": dataset.timestamps,
+        "close": dataset.close,
+        "model_probability": dataset.model_probabilities,
+        "model_side": dataset.model_sides,
+    }
+    for j, name in enumerate(dataset.asset_names):
+        columns[f"asset:{name}"] = [row[j] for row in dataset.asset_prices]
+    return pl.DataFrame(columns)
+
+
 def _dataset_from_cfg(cfg: dict) -> tuple[object, dict]:
     meta = cfg.get("meta", {})
     data_cfg = cfg.get("data", {})
@@ -41,7 +54,15 @@ def _dataset_from_cfg(cfg: dict) -> tuple[object, dict]:
         seed=seed,
         asset_names=asset_names,
     )
-    return dataset, {"seed": seed, "n_bars": n_bars, "asset_names": asset_names}
+    dataset_meta = {
+        "source": "openquant.research.make_synthetic_futures_dataset",
+        "seed": seed,
+        "n_bars": n_bars,
+        "asset_names": asset_names,
+    }
+    # Every manifest records the content hash of the exact data the run used.
+    dataset_meta["hash"] = openquant.data.dataset_hash(_dataset_frame(dataset))
+    return dataset, dataset_meta
 
 
 def _merged_run_cfg(cfg: dict) -> dict:
@@ -80,9 +101,9 @@ def _write_run_artifacts(
         "git_sha": _git_sha(REPO_ROOT),
         "python": sys.version.split()[0],
         "openquant_package": "openquant (local editable)",
-        "dataset": dataset_meta,
         "config": manifest_cfg,
     }
+    openquant.data.record_dataset_hash(manifest, digest=dataset_meta["hash"], **dataset_meta)
     (run_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     promotion = out["promotion"]
@@ -186,6 +207,7 @@ def run_grid(config_path: Path, grid_config_path: Path, out_root: Path) -> Path:
         "run_count": len(run_cfgs),
         "run_names": run_names,
     }
+    openquant.data.record_dataset_hash(run_manifest, digest=dataset_meta["hash"], **dataset_meta)
     (run_dir / "run_manifest.json").write_text(json.dumps(run_manifest, indent=2), encoding="utf-8")
     print(run_dir)
     return run_dir
