@@ -39,23 +39,29 @@ def test_range_estimators_match_reference():
     assert len(park_vol) == len(close)
 
     _assert_matches(gm_vol, RANGE_REFERENCE["garman_klass"])
-    # `yang_zhang` is the library's form of the estimator, which departs from the paper; see
-    # generate_range.py and test_yang_zhang_matches_paper below.
-    _assert_matches(yz_vol, RANGE_REFERENCE["yang_zhang"])
+    _assert_matches(yz_vol, RANGE_REFERENCE["yang_zhang_paper"])
     _assert_matches(park_vol, RANGE_REFERENCE["parkinson"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="FINDING: get_yang_zhang_vol uses ln(C_t/O_{t-1}) for the close term instead of "
-    "Yang & Zhang's open-to-close ln(C_t/O_t), and undemeaned moments; see "
-    "tests/fixtures/volatility/generate_range.py",
-)
 def test_yang_zhang_matches_paper():
     # Mirrors crates/openquant/tests/volatility_features.rs::test_yang_zhang_matches_paper
+    # (issue #165): open-to-close ln(C_t/O_t) and demeaned moments, as in Yang & Zhang (2000).
     open_, high, low, close = _load_ohlc()
     yz_vol = volatility.get_yang_zhang_vol(open_, high, low, close, 20)
     _assert_matches(yz_vol, RANGE_REFERENCE["yang_zhang_paper"])
+
+
+def test_yang_zhang_is_zero_for_pure_drift():
+    # Mirrors volatility_features.rs::test_yang_zhang_is_zero_for_pure_drift: constant
+    # overnight and open-to-close returns have zero variance once demeaned, and with the high
+    # at the close and the low at the open the Rogers-Satchell term is zero.
+    open_, close = [100.0], [101.0]
+    for i in range(1, 40):
+        open_.append(close[i - 1] * 1.002)
+        close.append(open_[i] * 1.01)
+    yz_vol = volatility.get_yang_zhang_vol(open_, close, open_, close, 10)
+    assert all(math.isnan(v) for v in yz_vol[:10])
+    assert max(abs(v) for v in yz_vol[10:]) < 1e-12
 
 
 def test_daily_vol_is_zero_for_constant_daily_return():

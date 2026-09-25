@@ -54,32 +54,6 @@
       }
     ]
   },
-  "yang_zhang": {
-    "n_nan": 20,
-    "mean_excluding_nan": 0.0016200017042037986,
-    "samples": [
-      {
-        "position": 19,
-        "value": null
-      },
-      {
-        "position": 20,
-        "value": 0.0017525165929879781
-      },
-      {
-        "position": 100,
-        "value": 0.0014536891050196592
-      },
-      {
-        "position": 500,
-        "value": 0.0017612779032739397
-      },
-      {
-        "position": 999,
-        "value": 0.001664101338618053
-      }
-    ]
-  },
   "yang_zhang_paper": {
     "n_nan": 20,
     "mean_excluding_nan": 0.0014841229821895205,
@@ -103,32 +77,6 @@
       {
         "position": 999,
         "value": 0.0015529770657313304
-      }
-    ]
-  },
-  "yang_zhang_paper_zero_mean": {
-    "n_nan": 20,
-    "mean_excluding_nan": 0.0015225060534080842,
-    "samples": [
-      {
-        "position": 19,
-        "value": null
-      },
-      {
-        "position": 20,
-        "value": 0.0016144981309410898
-      },
-      {
-        "position": 100,
-        "value": 0.0014218892880247373
-      },
-      {
-        "position": 500,
-        "value": 0.0016646016458139565
-      },
-      {
-        "position": 999,
-        "value": 0.0015909856101379372
       }
     ]
   }
