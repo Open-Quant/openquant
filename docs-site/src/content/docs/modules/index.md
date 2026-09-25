@@ -23,7 +23,7 @@ For the AFML chapter each module implements, see
 ### Data Ingestion and Quality
 
 - [`adapters`](/modules/adapters/) — Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers.
-- [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
+- [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
 
 ### Event-Driven Data and Labeling
 
@@ -95,7 +95,7 @@ For the AFML chapter each module implements, see
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
-- [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
+- [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
@@ -132,7 +132,7 @@ For the AFML chapter each module implements, see
 - [`bet_sizing`](/modules/bet-sizing/) — `get_signal`, `discrete_signal`, `bet_size`, `bet_size_sigmoid`, `bet_size_power`, `inv_price`, `inv_price_sigmoid`, `inv_price_power`, `get_w`, `get_w_sigmoid`, `get_w_power`, `get_target_pos`, `get_target_pos_sigmoid`, `get_target_pos_power`, `limit_price`, `limit_price_sigmoid`, `limit_price_power`, `avg_active_signals`, `bet_size_dynamic`, `cdf_mixture`, `single_bet_size_mixed`, `get_concurrent_sides`, `bet_size_budget`, `bet_size_probability`, `mp_avg_active_signals`, `bet_size_reserve`, `bet_size_reserve_with_fit`, `bet_size_reserve_full`
 - [`cla`](/modules/cla/) — `allocate_cla`
 - [`codependence`](/modules/codependence/) — `angular_distance`, `absolute_angular_distance`, `squared_angular_distance`, `distance_correlation`, `get_optimal_number_of_bins`, `get_mutual_info`, `variation_of_information_score`
-- [`data`](/modules/data/) — `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
+- [`data`](/modules/data/) — `fetch`, `dataset_hash`, `record_dataset_hash`, `quality_failures`, `default_cache_dir`, `DataSource`, `LocalSampleSource`, `LocalFileSource`, `CallableSource`, `CacheMissError`, `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
 - [`ef3m`](/modules/ef3m/) — `centered_moment`, `raw_moment`, `most_likely_parameters`, `fit_m2n`
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
 - [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
