@@ -2,7 +2,7 @@
 title: "hrp"
 description: "Hierarchical Risk Parity: portfolio weights from a clustering of the correlation matrix, with no matrix inversion."
 status: authored
-last_authored: '2026-09-21'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -16,6 +16,7 @@ citation:
 rust_api:
   - "HierarchicalRiskParity"
   - "HrpDendrogram"
+  - "HrpDistance"
   - "HrpError"
 python_api:
   - "hrp.allocate_hrp"
@@ -39,8 +40,18 @@ out-of-sample variance than the minimum-variance portfolio that is.
 ## Three steps
 
 **Tree clustering** (§16.4.1). Turn correlations into distances,
-$d_{ij}=\sqrt{\tfrac12(1-\rho_{ij})}$, and build a single-linkage tree: repeatedly merge the
-two closest clusters, where the distance between clusters is that of their closest members.
+$d_{ij}=\sqrt{\tfrac12(1-\rho_{ij})}$. Then, as the book's second step, measure how far apart
+two assets' whole *rows of distances* are,
+
+$$
+\tilde d_{ij} \;=\; \sqrt{\textstyle\sum_{n}\,(d_{ni}-d_{nj})^2},
+$$
+
+so two assets are close when they sit at similar distances from every other asset, not just
+from each other. Build a single-linkage tree on $\tilde d$: repeatedly merge the two closest
+clusters, where the distance between clusters is that of their closest members. This is the
+default, `distance="distance_of_distances"` (see [Which distance is
+clustered](#which-distance-is-clustered)).
 
 **Quasi-diagonalisation** (§16.4.2). Read the leaves of the tree from left to right. Reordering
 the covariance matrix that way puts similar assets next to each other, so the large
@@ -96,22 +107,24 @@ for g in sizes:
 ```
 
 ```text
-leaf order: commodity_0 bond_0 bond_1 equity_1 equity_5 equity_4 equity_0 equity_2 equity_3
+leaf order: equity_1 equity_5 equity_4 equity_0 equity_2 equity_3 commodity_0 bond_0 bond_1
 group        inverse-variance      HRP
-equity                  0.679    0.478
-bond                    0.214    0.341
-commodity               0.107    0.181
+equity                  0.679    0.552
+bond                    0.214    0.235
+commodity               0.107    0.213
 ```
 
 Inverse-variance weighting sees nine equally risky assets and gives each a ninth, which puts
 68% of the portfolio on one factor because that factor happens to have six tickers. HRP sees
-that the six are one bet and cuts it to 48%. A minimum-variance optimiser would go further,
+that the six are one bet and cuts it to 55%. A minimum-variance optimiser would go further,
 and would do so by inverting a matrix in which six columns are nearly collinear.
 
 The leaf order also shows the method's known weakness. Bisection cuts the *list* in half, not
-the *tree*: nine leaves split four and five, which puts `equity_1` in the first half with the
-bonds and the commodity, away from its own cluster. That is why equities end up at 48% rather
-than the third that three equal clusters would suggest. [`hcaa`](/modules/hcaa/) and
+the *tree*: nine leaves split four and five, which puts `equity_2` and `equity_3` in the second
+half with the commodity and the bonds, away from their own cluster. That is why equities end up
+at 55% rather than the third that three equal clusters would suggest. (With
+`distance="correlation"` the leaves come out in another order, the split falls elsewhere, and
+equities get 48%: the tree matters to the weights through where the halves are cut.) [`hcaa`](/modules/hcaa/) and
 López de Prado's later nested clustered optimisation exist to address this.
 
 ## From Rust
@@ -148,14 +161,49 @@ assert_eq!(model.allocate(&names, None, None, None, None, false), Err(HrpError::
 given, prices are ignored; a supplied covariance matrix is always used as is. After it
 returns, `weights`, `ordered_indices`, `clusters` (the merge list, scipy-style: ids below $n$
 are assets, $n+k$ is the cluster made by merge $k$), and the seriated correlation and
-distance matrices are public fields.
+distance matrices are public fields. `HierarchicalRiskParity::new()` clusters on the default
+distance; `HierarchicalRiskParity::with_distance(HrpDistance::Correlation)` (Python:
+`allocate_hrp(..., distance="correlation")`) picks the other.
+
+## Which distance is clustered
+
+AFML's Snippet 16.4 calls `sch.linkage(dist, 'single')` with the *square* matrix $d$. scipy reads
+a square array as one observation per row, so the book's tree is built on the Euclidean distance
+between rows of $d$, which is $\tilde d$ above and the second step §16.4.1 describes. mlfinlab,
+and this library before [#167](https://github.com/Open-Quant/openquant/issues/167), pass $d$ as
+pairwise distances instead. The two trees usually differ: they do on all four cases of the 23-ETF
+test fixture, and in the book's 10-asset simulation the leaf order differs at 97% of rebalances.
+
+| `distance=` (Python) | `HrpDistance::` (Rust) | Tree built on |
+| --- | --- | --- |
+| `"distance_of_distances"` (default) | `DistanceOfDistances` (default) | $\tilde d_{ij}$, as Snippet 16.4 |
+| `"correlation"` | `Correlation` | $d_{ij}$, as mlfinlab |
+
+The default was chosen by measurement. On the book's own Monte Carlo (§16.5, Snippets 16.4 and
+16.5: 10 assets, 260-day window, monthly rebalance, 10,000 runs, seeds `[51, k]`; the
+[HRP runbook](/runbooks/hrp-vs-ivp-cla-oos/) is the code), SYNTHETIC data:
+
+| | $\tilde d$ (default) | $d$ (`"correlation"`) |
+| --- | --- | --- |
+| HRP mean OOS variance ×1e4 | 3.59 | 3.81 |
+| IVP / HRP, mean OOS variance | **1.380** | 1.300 |
+| CLA / HRP, mean OOS variance | **1.419** | 1.337 |
+| runs where HRP beats IVP | 82.9% | 76.8% |
+| runs where HRP beats CLA | 65.4% | 62.2% |
+| HRP turnover per rebalance | **0.122** | 0.216 |
+| HRP effective number of assets | 7.27 | 7.26 |
+
+Clustering as the book does lowers HRP's variance (paired log-ratio $t=4.4$ against the pairwise
+tree), brings the IVP ratio to the book's figure (about 1.38, quoted from memory), and nearly
+halves turnover. A plausible reason for the lower turnover, not tested separately: $\tilde d$
+compares whole rows of distances, so one noisy correlation moves it less, and the leaf order is
+steadier from one window to the next. Pass
+`distance="correlation"` to reproduce mlfinlab or pre-#167 results.
 
 ## What to watch for
 
-- **The tree is built on correlation distance directly.** AFML's Snippet 16.1 hands scipy the
-  square distance matrix, which scipy treats as coordinates, so the book clusters on the
-  Euclidean distance *between columns* of the distance matrix. This implementation, like
-  mlfinlab, passes pairwise distances. The two usually give the same tree and need not.
+- **The default tree changed in #167.** Weights from earlier versions were built on pairwise
+  distances; pass `distance="correlation"` (`HrpDistance::Correlation`) to get them back.
 - **`use_shrinkage` is a fixed 10% shrink of the off-diagonal terms**, not a Ledoit–Wolf or
   OAS estimator. For a real shrinkage estimate, compute the covariance yourself and pass it
   in.
@@ -176,7 +224,7 @@ distance matrices are public fields.
 
 ## Related modules
 
-- [`hcaa`](/modules/hcaa/) — the same tree with other allocation metrics.
+- [`hcaa`](/modules/hcaa/) — a single-linkage tree (on the pairwise distances) with other allocation metrics.
 - [`onc`](/modules/onc/) — choose the number of clusters instead of bisecting blindly.
 - [`codependence`](/modules/codependence/) — distances other than correlation.
 - [`cla`](/modules/cla/), [`portfolio-optimization`](/modules/portfolio-optimization/) — the
