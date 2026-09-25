@@ -802,10 +802,8 @@ pub fn solve_trading_trajectory_exact(
 ///   `impact_coefficients` does not have one entry per trade.
 /// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the result is NaN or infinite.
 ///
-/// # Panics
-///
-/// In builds with overflow checks (debug), panics if `final inventory -
-/// terminal_inventory_target` overflows `i64`; release builds wrap instead.
+/// `final inventory - terminal_inventory_target` is formed in `i128`, so it cannot overflow
+/// for any pair of `i64` values.
 ///
 /// ```
 /// use openquant::combinatorial_optimization::{
@@ -873,7 +871,9 @@ pub fn evaluate_trading_path(
         objective += directional_pnl - risk_penalty - impact_cost - fixed_cost;
     }
 
-    let terminal_diff = path.inventory_path[path.horizon()] - cfg.terminal_inventory_target;
+    // Widened: the difference of two i64 values can need 65 bits.
+    let terminal_diff =
+        i128::from(path.inventory_path[path.horizon()]) - i128::from(cfg.terminal_inventory_target);
     objective -= cfg.terminal_inventory_penalty * (terminal_diff as f64).powi(2);
 
     if !objective.is_finite() {
