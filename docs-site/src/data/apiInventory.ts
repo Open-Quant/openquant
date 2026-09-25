@@ -378,7 +378,8 @@ export const apiInventory = {
     "openquant::sb_bagging": [
       "fit",
       "new",
-      "predict"
+      "predict",
+      "predict_proba"
     ],
     "openquant::strategy_risk": [
       "estimate_strategy_failure_probability",

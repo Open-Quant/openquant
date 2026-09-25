@@ -334,6 +334,31 @@ impl SequentiallyBootstrappedBaggingClassifier {
         }
         Ok(out)
     }
+
+    /// Probability of class 1 for each row of `x`: the fraction of estimators that vote 1.
+    ///
+    /// The stumps have no probability of their own, so this is the vote share, as in
+    /// scikit-learn's `BaggingClassifier` over estimators without `predict_proba`. It is
+    /// consistent with [`predict`](Self::predict): a row is predicted 1 exactly when its
+    /// probability is at least 0.5. The probability of class 0 is one minus this value.
+    ///
+    /// # Errors
+    ///
+    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    ///
+    /// # Panics
+    ///
+    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
+    /// example, fewer columns than the training matrix); `x` is not validated.
+    pub fn predict_proba(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
+        if self.estimators.is_empty() {
+            return Err(SbBaggingError::EmptyInput);
+        }
+        let n = self.estimators.len() as f64;
+        Ok((0..x.nrows())
+            .map(|r| self.estimators.iter().filter(|est| est.predicts_one(x, r)).count() as f64 / n)
+            .collect())
+    }
 }
 
 #[derive(Debug, Clone)]

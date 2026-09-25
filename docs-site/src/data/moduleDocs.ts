@@ -338,7 +338,7 @@ export const moduleDocs: ModuleDoc[] = [
     summary: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.",
     handwritten: true,
     apiSurface: "both",
-    pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor"],
+    pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor", "sb_bagging.SequentiallyBootstrappedBaggingClassifier"],
   },
   {
     slug: "synthetic-backtesting",
