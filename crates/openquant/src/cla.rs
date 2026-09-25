@@ -83,6 +83,10 @@ pub enum ClaError {
     /// (`4 n^2 + 100` steps).
     #[error("the critical line did not terminate")]
     NoTermination,
+    /// Every turning point was removed as numerically invalid, so there is no portfolio to
+    /// choose from.
+    #[error("no valid turning points remain")]
+    NoTurningPoints,
     /// The expected-returns method is not `"mean"` or `"exponential"`.
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
@@ -299,6 +303,8 @@ impl CLA {
     /// - [`ClaError::SingularCovariance`] if the covariance of the free assets cannot be
     ///   inverted at some step of the walk.
     /// - [`ClaError::NoTermination`] if the walk does not reach `lambda = 0`.
+    /// - [`ClaError::NoTurningPoints`] if every turning point is removed as numerically
+    ///   invalid (not seen with valid inputs; reported rather than panicking).
     /// - [`ClaError::UnknownSolution`] for any other `solution` name.
     pub fn allocate(
         &mut self,
@@ -364,6 +370,9 @@ impl CLA {
         self.free_weights = points.iter().map(|p| p.free.clone()).collect();
         self._purge_num_err(1e-9)?;
         self._purge_excess()?;
+        if self.weights.is_empty() {
+            return Err(ClaError::NoTurningPoints);
+        }
         self.efficient_frontier_means.clear();
         self.efficient_frontier_sigma.clear();
 
@@ -378,12 +387,12 @@ impl CLA {
                     .min_by(|a, b| {
                         quad_risk(&self.cov_matrix, a).total_cmp(&quad_risk(&self.cov_matrix, b))
                     })
-                    .ok_or(ClaError::NoData)?;
+                    .ok_or(ClaError::NoTurningPoints)?;
                 self.weights = vec![best.clone()];
             }
             "max_sharpe" => {
                 self.weights =
-                    vec![max_sharpe_on_frontier(&turning_points, &mean, &self.cov_matrix)];
+                    vec![max_sharpe_on_frontier(&turning_points, &mean, &self.cov_matrix)?];
             }
             "efficient_frontier" => {
                 self.weights = frontier_points(&turning_points, 100);
@@ -845,7 +854,14 @@ fn critical_line(
 
 /// The frontier is piecewise linear in the weights between turning points, and the Sharpe ratio
 /// is quasi-concave along each piece, so a golden-section search per segment finds the maximum.
-fn max_sharpe_on_frontier(points: &[Vec<f64>], mean: &[f64], cov: &DMatrix<f64>) -> Vec<f64> {
+///
+/// [`ClaError::NoTurningPoints`] if `points` is empty. `allocate` checks that first, so this is
+/// a second guard; it replaced a `points[0]` that would have panicked.
+fn max_sharpe_on_frontier(
+    points: &[Vec<f64>],
+    mean: &[f64],
+    cov: &DMatrix<f64>,
+) -> Result<Vec<f64>, ClaError> {
     let sharpe = |w: &[f64]| {
         let sigma = quad_risk(cov, w).sqrt();
         if sigma > 0.0 {
@@ -858,7 +874,7 @@ fn max_sharpe_on_frontier(points: &[Vec<f64>], mean: &[f64], cov: &DMatrix<f64>)
         w0.iter().zip(w1).map(|(x, y)| a * x + (1.0 - a) * y).collect()
     };
 
-    let mut best = points[0].clone();
+    let mut best = points.first().ok_or(ClaError::NoTurningPoints)?.clone();
     for pair in points.windows(2) {
         let ratio = (5.0f64.sqrt() - 1.0) / 2.0;
         let (mut lo, mut hi) = (0.0f64, 1.0f64);
@@ -875,7 +891,7 @@ fn max_sharpe_on_frontier(points: &[Vec<f64>], mean: &[f64], cov: &DMatrix<f64>)
             best = candidate;
         }
     }
-    best
+    Ok(best)
 }
 
 /// About `points` portfolios spread evenly along each segment between turning points, from
@@ -907,4 +923,20 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 fn quad_risk(cov: &DMatrix<f64>, w: &[f64]) -> f64 {
     let wv = DVector::from_vec(w.to_vec());
     (wv.transpose() * cov * wv)[(0, 0)]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #168: `max_sharpe_on_frontier` indexed `points[0]` and panicked on an empty frontier.
+    /// `allocate` now returns `NoTurningPoints` before it gets here, so the guard is tested
+    /// directly.
+    #[test]
+    fn max_sharpe_on_an_empty_frontier_is_an_error() {
+        let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, 0.01]);
+        assert_eq!(max_sharpe_on_frontier(&[], &[0.1, 0.05], &cov), Err(ClaError::NoTurningPoints));
+        let one = vec![vec![0.5, 0.5]];
+        assert_eq!(max_sharpe_on_frontier(&one, &[0.1, 0.05], &cov), Ok(vec![0.5, 0.5]));
+    }
 }
