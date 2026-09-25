@@ -79,6 +79,10 @@ def _as_returns(returns: Iterable[float], name: str = "returns") -> list[float]:
     return out
 
 
+class _ConstantReturns(ValueError):
+    """Raised by `return_moments` for a series with zero variance."""
+
+
 def _finite(value: float, name: str) -> float:
     value = float(value)
     if not math.isfinite(value):
@@ -108,7 +112,7 @@ def return_moments(returns: Iterable[float]) -> ReturnMoments:
     dev = [x - mean for x in r]
     m2 = sum(d * d for d in dev) / n
     if m2 <= 0.0:
-        raise ValueError("returns are constant; the Sharpe ratio is undefined")
+        raise _ConstantReturns("returns are constant; the Sharpe ratio is undefined")
     m3 = sum(d**3 for d in dev) / n
     m4 = sum(d**4 for d in dev) / n
     return ReturnMoments(
@@ -367,8 +371,22 @@ class TrialRegistry:
         self._trials = self._load()
 
     def record(self, config: Any, returns: Iterable[float]) -> Trial:
-        """Register one configuration's backtest returns and persist the registry."""
-        m = return_moments(returns)
+        """Register one configuration's backtest returns and persist the registry.
+
+        Constant returns (for example all zeros from a configuration that took no bet) have
+        no Sharpe ratio, but the configuration was still tried, so it is recorded rather than
+        rejected: with Sharpe 0, skewness 0 and kurtosis 3 (the normal values). Sharpe 0 is
+        what a strategy with no excess return earns. The trial counts towards `n_trials` and
+        its 0 enters `sharpe_std()`, so `deflated_sharpe_ratio` deflates by it like any other
+        trial. Dropping it instead would undercount the trials and deflate too weakly.
+        """
+        r = _as_returns(returns)
+        try:
+            m = return_moments(r)
+        except _ConstantReturns:
+            m = ReturnMoments(
+                n_obs=len(r), mean=r[0], std=0.0, sharpe=0.0, skewness=0.0, kurtosis=3.0
+            )
         trial = Trial(
             config_hash=config_hash(config),
             timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
