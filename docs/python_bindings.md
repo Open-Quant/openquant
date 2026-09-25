@@ -36,7 +36,7 @@ uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquan
 ### `openquant.risk`
 - `calculate_value_at_risk(returns, confidence_level)`
 - `calculate_expected_shortfall(returns, confidence_level)`
-- `calculate_conditional_drawdown_risk(returns, confidence_level)`
+- `calculate_conditional_drawdown_risk(returns, confidence_level)` — `returns` must be a cumulative (equity) series; `confidence_level` is the upper-tail level (0.95 = worst 5%)
 
 Input conventions:
 - `returns`: list of floats
