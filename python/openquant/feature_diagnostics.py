@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil, exp, isfinite, log, sqrt
+from math import ceil, exp, isfinite, log, log1p, sqrt
 from typing import Any, Sequence
 
 import polars as pl
@@ -178,31 +178,83 @@ def _solve_linear_system(a: list[list[float]], b: list[float]) -> list[float]:
     return [aug[i][n] for i in range(n)]
 
 
+def _penalized_log_loss(
+    design: Sequence[Sequence[float]],
+    y: Sequence[float],
+    sw: Sequence[float],
+    beta: Sequence[float],
+    ridge: float,
+) -> float:
+    loss = 0.0
+    for row, yy, w in zip(design, y, sw):
+        z = _dot(row, beta)
+        # log(1 + e^z) - y z, written to stay finite for large |z|.
+        softplus = z + log1p(exp(-z)) if z > 0 else log1p(exp(z))
+        loss += w * (softplus - yy * z)
+    return loss + 0.5 * ridge * _dot(beta, beta)
+
+
 def _fit_linear_probability_model(
     x: Sequence[Sequence[float]],
     y: Sequence[float],
     sample_weight: Sequence[float] | None,
     ridge: float = 1e-3,
+    max_iter: int = 50,
+    tol: float = 1e-8,
 ) -> _LinearModel:
+    """Fit a weighted logistic regression of the 0/1 label by Newton's method (IRLS).
+
+    Despite the historical name this is *not* a linear probability model: least squares
+    on a 0/1 label is already on the probability scale, so pairing it with the sigmoid in
+    ``_predict_proba`` squeezed every prediction towards 0.5 (#99). The coefficients here
+    are on the log-odds scale, which is what the sigmoid expects.
+
+    ``ridge`` is an L2 penalty on all coefficients, intercept included. It keeps the
+    Newton system non-singular and the coefficients finite when a fold is perfectly
+    separable. Each Newton step is halved until the penalised log loss decreases, so the
+    iteration cannot diverge.
+    """
     n = len(x)
     p = len(x[0])
     sw = [1.0] * n if sample_weight is None else [float(v) for v in sample_weight]
 
     dim = p + 1
-    xtwx = [[0.0 for _ in range(dim)] for _ in range(dim)]
-    xtwy = [0.0 for _ in range(dim)]
+    design = [[1.0] + list(row) for row in x]
+    beta = [0.0] * dim
+    objective = _penalized_log_loss(design, y, sw, beta, ridge)
 
-    for row, yy, w in zip(x, y, sw):
-        design = [1.0] + list(row)
+    for _ in range(max_iter):
+        hessian = [[0.0 for _ in range(dim)] for _ in range(dim)]
+        gradient = [ridge * b for b in beta]
+        for row, yy, w in zip(design, y, sw):
+            prob = _sigmoid(_dot(row, beta))
+            resid = w * (prob - yy)
+            curv = w * prob * (1.0 - prob)
+            for i in range(dim):
+                gradient[i] += resid * row[i]
+                ci = curv * row[i]
+                for j in range(i, dim):
+                    hessian[i][j] += ci * row[j]
         for i in range(dim):
-            xtwy[i] += w * design[i] * yy
-            for j in range(dim):
-                xtwx[i][j] += w * design[i] * design[j]
+            hessian[i][i] += ridge
+            for j in range(i):
+                hessian[i][j] = hessian[j][i]
 
-    for i in range(dim):
-        xtwx[i][i] += ridge
+        step = _solve_linear_system(hessian, gradient)
+        scale = 1.0
+        while True:
+            candidate = [b - scale * s for b, s in zip(beta, step)]
+            cand_obj = _penalized_log_loss(design, y, sw, candidate, ridge)
+            if cand_obj <= objective or scale < 1e-10:
+                break
+            scale *= 0.5
+        if cand_obj > objective:
+            break
+        converged = max(abs(scale * s) for s in step) < tol * (1.0 + max(abs(b) for b in beta))
+        beta, objective = candidate, cand_obj
+        if converged:
+            break
 
-    beta = _solve_linear_system(xtwx, xtwy)
     return _LinearModel(coeffs=beta[1:], intercept=beta[0])
 
 

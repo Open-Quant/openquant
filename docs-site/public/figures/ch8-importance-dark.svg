@@ -4,41 +4,41 @@
 <line x1="84" y1="44" x2="84" y2="224" stroke="#4c4536" stroke-width="1.0"/>
 <text x="24" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">a</text>
 <rect x="84" y="52" width="130.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="220.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.524</text>
+<text x="220.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.538</text>
 <text x="24" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">a_copy</text>
-<rect x="84" y="88" width="25.6" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="115.6" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.103</text>
+<rect x="84" y="88" width="22.5" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="112.5" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.093</text>
 <text x="24" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">b</text>
-<rect x="84" y="124" width="83.5" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="173.5" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.336</text>
+<rect x="84" y="124" width="81.4" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="171.4" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.337</text>
 <text x="24" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">noise_1</text>
-<rect x="84" y="160" width="5.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="95.0" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.020</text>
+<rect x="84" y="160" width="4.4" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="94.4" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.018</text>
 <text x="24" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">noise_2</text>
-<rect x="84" y="196" width="4.2" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="94.2" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.017</text>
+<rect x="84" y="196" width="3.6" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="93.6" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.015</text>
 <text x="256" y="28" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">MDA · LOSS OF SCORE</text>
-<line x1="316" y1="44" x2="316" y2="224" stroke="#4c4536" stroke-width="1.0"/>
-<rect x="316" y="52" width="130.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="452.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.108</text>
-<rect x="316" y="88" width="12.9" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="334.9" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.011</text>
-<rect x="316" y="124" width="50.9" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="372.9" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.042</text>
-<rect x="315.8" y="160" width="1.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="322" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.000</text>
-<rect x="316" y="196" width="1" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="322.1" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.000</text>
+<line x1="348.5" y1="44" x2="348.5" y2="224" stroke="#4c4536" stroke-width="1.0"/>
+<rect x="348.5" y="52" width="97.5" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="452.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.608</text>
+<rect x="348.5" y="88" width="2.3" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="356.8" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.014</text>
+<rect x="348.5" y="124" width="61.5" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="416.0" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">0.383</text>
+<rect x="348.1" y="160" width="1.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="354.5" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.002</text>
+<rect x="348.4" y="196" width="1.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="354.5" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.001</text>
 <text x="488" y="28" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">SFI · GAIN OVER A COIN FLIP</text>
 <line x1="580.5" y1="44" x2="580.5" y2="224" stroke="#4c4536" stroke-width="1.0"/>
 <rect x="580.5" y="52" width="97.5" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="684.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">+0.049</text>
-<rect x="580.5" y="88" width="92.7" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="679.2" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">+0.046</text>
-<rect x="571.7" y="124" width="8.8" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="586.5" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.004</text>
-<rect x="518.9" y="160" width="61.6" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="586.5" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.031</text>
-<rect x="519.2" y="196" width="61.3" height="20" fill="#f29ad6" fill-opacity="1.0"/>
-<text x="586.5" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.031</text>
+<text x="684.0" y="66" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">+0.219</text>
+<rect x="580.5" y="88" width="93.7" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="680.2" y="102" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">+0.211</text>
+<rect x="580.5" y="124" width="26.9" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="613.4" y="138" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">+0.061</text>
+<rect x="579.3" y="160" width="1.2" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="586.5" y="174" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.003</text>
+<rect x="579.7" y="196" width="1.0" height="20" fill="#f29ad6" fill-opacity="1.0"/>
+<text x="586.5" y="210" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="11" font-weight="400" text-anchor="start">-0.002</text>
 </svg>
