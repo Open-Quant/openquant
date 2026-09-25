@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Mapping
+from datetime import date, datetime
+import hashlib
+import json
+import os
 from pathlib import Path
-from typing import Any
+import tempfile
+from typing import Any, Protocol, runtime_checkable
+from urllib.parse import quote
 
 import polars as pl
 
@@ -303,3 +310,424 @@ def align_calendar(
         .collect()
     )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Content hash
+# ---------------------------------------------------------------------------
+
+DATASET_HASH_VERSION = "oq-dataset-sha256-v1"
+
+
+def _hash_kind(name: str, dtype: pl.DataType) -> tuple[str, pl.Expr]:
+    """Map a column to (kind label, expression yielding hashable Python values)."""
+    col = pl.col(name)
+    if dtype == pl.Boolean:
+        return "bool", col
+    if dtype.is_integer():
+        return "int", col
+    if dtype.is_float():
+        return "float", col.cast(pl.Float64)
+    if dtype == pl.Utf8 or isinstance(dtype, (pl.Categorical, pl.Enum)):
+        return "str", col.cast(pl.Utf8)
+    if isinstance(dtype, pl.Datetime):
+        tz = dtype.time_zone or "naive"
+        return f"datetime[us,{tz}]", col.dt.epoch("us")
+    if dtype == pl.Date:
+        return "date", col.cast(pl.Int32)
+    raise TypeError(f"dataset_hash does not support column {name!r} of type {dtype}")
+
+
+def _hash_field(value: Any) -> str:
+    if value is None:
+        return "\\N"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def dataset_hash(df: pl.DataFrame) -> str:
+    """Deterministic content hash of a table, as ``"sha256:<64 hex>"``.
+
+    The hash describes the data, not its layout. Definition
+    (``oq-dataset-sha256-v1``):
+
+    1. Columns are taken in sorted name order.
+    2. Each column is mapped to a kind: ``int``, ``float``, ``str``, ``bool``,
+       ``date`` (days since the Unix epoch) or ``datetime[us,<tz>]``
+       (microseconds since the Unix epoch). Other types raise ``TypeError``.
+    3. Rows are sorted by every column in that order (nulls last), so input row
+       order does not matter; duplicate rows count.
+    4. The SHA-256 input is the line ``oq-dataset-sha256-v1``, one line
+       ``"<name>":<kind>`` per column, then one line per row of tab-separated
+       fields: floats as Python ``repr`` (exact round-trip), strings as JSON,
+       integers in decimal, booleans as ``true``/``false`` and nulls as ``\\N``.
+
+    It does not depend on Parquet/Arrow byte layout or the Polars version. Any
+    change to a value, a column name, a column type or the set of rows changes it.
+    """
+    if not isinstance(df, pl.DataFrame):
+        raise TypeError("dataset_hash expects a polars DataFrame")
+    cols = sorted(df.columns)
+    kinds: list[str] = []
+    exprs: list[pl.Expr] = []
+    for name in cols:
+        kind, expr = _hash_kind(name, df.schema[name])
+        kinds.append(kind)
+        exprs.append(expr.alias(name))
+    canonical = df.select(exprs)
+    if cols and canonical.height:
+        canonical = canonical.sort(cols, nulls_last=True, maintain_order=True)
+
+    h = hashlib.sha256()
+    h.update((DATASET_HASH_VERSION + "\n").encode("utf-8"))
+    for name, kind in zip(cols, kinds):
+        h.update(f"{json.dumps(name, ensure_ascii=False)}:{kind}\n".encode("utf-8"))
+    for row in canonical.iter_rows():
+        h.update(("\t".join(_hash_field(v) for v in row) + "\n").encode("utf-8"))
+    return "sha256:" + h.hexdigest()
+
+
+def record_dataset_hash(
+    manifest: dict[str, Any],
+    frame: pl.DataFrame | None = None,
+    *,
+    digest: str | None = None,
+    **provenance: Any,
+) -> dict[str, Any]:
+    """Record a dataset's content hash, and its provenance, in a run manifest.
+
+    Sets ``manifest["dataset_hash"]`` and merges ``hash``, ``hash_version``,
+    ``rows`` and any ``provenance`` keywords (for example the metadata returned
+    by ``fetch(..., return_meta=True)``) into ``manifest["dataset"]``. Pass the
+    ``frame``, or a ``digest`` already computed by :func:`dataset_hash`.
+    Returns ``manifest``, modified in place.
+    """
+    if frame is None and digest is None:
+        raise ValueError("pass a frame or a digest")
+    value = dataset_hash(frame) if frame is not None else digest
+    if digest is not None and value != digest:
+        raise ValueError("digest does not match frame")
+    dataset = dict(manifest.get("dataset") or {})
+    dataset.update({k: v for k, v in provenance.items() if k != "dataset_hash"})
+    dataset["hash"] = value
+    dataset["hash_version"] = DATASET_HASH_VERSION
+    if frame is not None:
+        dataset["rows"] = frame.height
+    manifest["dataset"] = dataset
+    manifest["dataset_hash"] = value
+    return manifest
+
+
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
+
+SAMPLE_DATA_PATH = Path(__file__).resolve().parent / "_sample_data" / "synthetic_daily_ohlcv.csv"
+SAMPLE_TERMS = (
+    "SYNTHETIC data generated by scripts/data/make_synthetic_sample.py; not market data; "
+    "MIT (repository license). See DATA_SOURCES.md."
+)
+
+
+@runtime_checkable
+class DataSource(Protocol):
+    """What ``fetch`` needs from a market data source.
+
+    ``name`` identifies the source in the cache path and the run manifest; keep
+    it stable. ``fetch_symbol`` returns daily bars for one symbol with dates in
+    ``[start, end]`` (inclusive), as a Polars DataFrame or anything
+    ``polars.DataFrame(...)`` accepts, with any column names ``clean_ohlcv``
+    recognizes (``date``/``ts``, ``open``, ``high``, ``low``, ``close``,
+    ``volume``, optional ``adj_close`` and ``symbol``).
+
+    Optional attributes: ``version`` (a string; changing it starts a new cache
+    namespace for the source) and ``terms`` (a URL or statement of the data's
+    terms, copied into ``fetch``'s metadata so it lands in the run manifest).
+    """
+
+    name: str
+
+    def fetch_symbol(self, symbol: str, start: date, end: date) -> Any: ...
+
+
+class LocalFileSource:
+    """A source backed by one local CSV/Parquet OHLCV file with a ``symbol`` column.
+
+    ``version`` is derived from the file's bytes, so editing the file starts a
+    new cache namespace instead of serving stale bars.
+    """
+
+    def __init__(self, path: str | Path, *, name: str = "local-file", terms: str | None = None) -> None:
+        self.path = Path(path)
+        if not self.path.exists():
+            raise FileNotFoundError(f"file not found: {self.path}")
+        self.name = name
+        self.terms = terms if terms is not None else f"local file {self.path.name}; terms are the file owner's"
+        self.version = hashlib.sha256(self.path.read_bytes()).hexdigest()[:16]
+        self._frame: pl.DataFrame | None = None
+
+    def _data(self) -> pl.DataFrame:
+        if self._frame is None:
+            frame = load_ohlcv(self.path)
+            assert isinstance(frame, pl.DataFrame)
+            self._frame = frame
+        return self._frame
+
+    @property
+    def symbols(self) -> list[str]:
+        return sorted(self._data()["symbol"].unique().to_list())
+
+    def fetch_symbol(self, symbol: str, start: date, end: date) -> pl.DataFrame:
+        if symbol not in self.symbols:
+            raise LookupError(
+                f"symbol {symbol!r} is not in {self.path.name}; available: {', '.join(self.symbols)}"
+            )
+        return self._data().filter(pl.col("symbol") == symbol)
+
+
+class LocalSampleSource(LocalFileSource):
+    """The SYNTHETIC daily OHLCV sample shipped with openquant.
+
+    Symbols ``SYN_A`` ... ``SYN_E`` (not real tickers), Monday-Friday from
+    2022-01-03 to 2023-12-29, generated by ``scripts/data/make_synthetic_sample.py``
+    from a fixed seed. It is not market data; it exists so tests, docs and
+    runbooks run offline.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(SAMPLE_DATA_PATH, name="openquant-synthetic-sample", terms=SAMPLE_TERMS)
+
+
+class CallableSource:
+    """Adapt a function ``fn(symbol, start, end) -> frame`` into a ``DataSource``.
+
+    This is the pattern for user-supplied, fetch-only adapters: ``fn`` calls the
+    user's own vendor account, reading the user's own key from an environment
+    variable inside ``fn`` (never pass or store the key here). Fetched data is
+    cached on the user's machine and is never part of the repository.
+    """
+
+    def __init__(
+        self,
+        fn: Callable[[str, date, date], Any],
+        *,
+        name: str,
+        version: str = "",
+        terms: str | None = None,
+    ) -> None:
+        if not callable(fn):
+            raise TypeError("fn must be callable")
+        self.fn = fn
+        self.name = name
+        self.version = version
+        self.terms = terms
+
+    def fetch_symbol(self, symbol: str, start: date, end: date) -> Any:
+        return self.fn(symbol, start, end)
+
+
+# ---------------------------------------------------------------------------
+# fetch + on-disk cache
+# ---------------------------------------------------------------------------
+
+CACHE_FORMAT = "openquant-ohlcv-cache-v1"
+
+
+class CacheMissError(LookupError):
+    """Raised by ``fetch(..., offline=True)`` when a request is not in the cache."""
+
+
+def default_cache_dir() -> Path:
+    """``$OPENQUANT_DATA_CACHE``, else ``$XDG_CACHE_HOME/openquant/data``, else ``~/.cache/openquant/data``."""
+    env = os.environ.get("OPENQUANT_DATA_CACHE")
+    if env:
+        return Path(env).expanduser()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
+    return base / "openquant" / "data"
+
+
+def _as_date(value: date | datetime | str, what: str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError as exc:
+            raise ValueError(f"{what} must be an ISO date (YYYY-MM-DD), got {value!r}") from exc
+    raise TypeError(f"{what} must be a date, datetime or ISO date string")
+
+
+def _as_symbols(symbols: str | Iterable[str]) -> list[str]:
+    items = [symbols] if isinstance(symbols, str) else list(symbols)
+    out: list[str] = []
+    for s in items:
+        if not isinstance(s, str) or not s.strip():
+            raise ValueError(f"symbols must be non-empty strings, got {s!r}")
+        if s not in out:
+            out.append(s)
+    if not out:
+        raise ValueError("symbols must not be empty")
+    return out
+
+
+def _source_dir(source: Any) -> str:
+    name = getattr(source, "name", None)
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("source.name must be a non-empty string")
+    version = str(getattr(source, "version", "") or "")
+    key = quote(name, safe="")
+    return f"{key}@{quote(version, safe='')}" if version else key
+
+
+def _cache_paths(root: Path, source: Any, symbol: str, start: date, end: date) -> tuple[Path, Path]:
+    base = root / _source_dir(source) / quote(symbol, safe="")
+    stem = f"{start.isoformat()}_{end.isoformat()}"
+    return base / f"{stem}.parquet", base / f"{stem}.json"
+
+
+def _atomic_write(path: Path, write: Callable[[Path], None]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=path.suffix)
+    os.close(fd)
+    try:
+        write(Path(tmp))
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def _normalize_source_frame(raw: Any, source_name: str, symbol: str, start: date, end: date) -> pl.DataFrame:
+    frame = raw if isinstance(raw, pl.DataFrame) else pl.DataFrame(raw)
+    frame = _canonicalize_columns(frame)
+    if "symbol" in frame.columns:
+        if frame.filter(pl.col("symbol").cast(pl.Utf8) != symbol).height:
+            raise ValueError(f"source {source_name!r} returned rows for other symbols when asked for {symbol!r}")
+    else:
+        frame = frame.with_columns(pl.lit(symbol).alias("symbol"))
+    cleaned = clean_ohlcv(frame)
+    assert isinstance(cleaned, pl.DataFrame)
+    cleaned = cleaned.filter(pl.col("ts").dt.date().is_between(start, end, closed="both"))
+    if cleaned.height == 0:
+        raise ValueError(f"source {source_name!r} returned no usable rows for {symbol!r} between {start} and {end}")
+    return cleaned
+
+
+def quality_failures(report: Mapping[str, Any]) -> list[str]:
+    """Reasons a :func:`data_quality_report` fails ``fetch``'s bar; empty when it passes.
+
+    The bar: at least one row, no duplicate (symbol, ts) keys, no nulls. Gaps are
+    reported but not failed, since daily data has weekends and holidays.
+    """
+    failures = []
+    if report["row_count"] == 0:
+        failures.append("no rows")
+    if report["duplicate_key_count"]:
+        failures.append(f"{report['duplicate_key_count']} duplicate (symbol, ts) keys")
+    nulls = {k: v for k, v in report["null_counts"].items() if v}
+    if nulls:
+        failures.append(f"nulls in {nulls}")
+    return failures
+
+
+def fetch(
+    symbols: str | Iterable[str],
+    start: date | datetime | str,
+    end: date | datetime | str,
+    *,
+    source: DataSource | None = None,
+    cache_dir: str | Path | None = None,
+    refresh: bool = False,
+    offline: bool = False,
+    return_meta: bool = False,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
+    """Fetch daily OHLCV bars for ``symbols`` over ``[start, end]`` through a local cache.
+
+    Each (source, symbol, start, end) request is cached as one Parquet file (plus
+    a JSON sidecar) under ``cache_dir``, default :func:`default_cache_dir`. A
+    repeated request is read from disk without calling the source, so it works
+    offline. ``source`` defaults to :class:`LocalSampleSource`, which is
+    SYNTHETIC data. ``refresh=True`` refetches; ``offline=True`` raises
+    :class:`CacheMissError` instead of calling the source.
+
+    Returns the canonical frame of :func:`clean_ohlcv` (``ts, symbol, open,
+    high, low, close, volume, adj_close``, sorted by symbol then ts), which has
+    passed :func:`data_quality_report` (see :func:`quality_failures`). With
+    ``return_meta=True`` it also returns provenance for a run manifest: the
+    source's name, version and terms, the request, each symbol's cache status
+    and the frame's :func:`dataset_hash`.
+    """
+    syms = _as_symbols(symbols)
+    start_d = _as_date(start, "start")
+    end_d = _as_date(end, "end")
+    if start_d > end_d:
+        raise ValueError(f"start {start_d} is after end {end_d}")
+    src: Any = LocalSampleSource() if source is None else source
+    if not isinstance(src, DataSource):
+        raise TypeError("source must have a `name` string and a `fetch_symbol(symbol, start, end)` method")
+    root = Path(cache_dir).expanduser() if cache_dir is not None else default_cache_dir()
+
+    frames: list[pl.DataFrame] = []
+    cache_status: dict[str, str] = {}
+    for sym in syms:
+        data_path, meta_path = _cache_paths(root, src, sym, start_d, end_d)
+        frame: pl.DataFrame | None = None
+        if not refresh and data_path.exists() and meta_path.exists():
+            cached = pl.read_parquet(data_path)
+            recorded = json.loads(meta_path.read_text(encoding="utf-8")).get("dataset_hash")
+            if recorded == dataset_hash(cached):
+                frame = cached
+                cache_status[sym] = "hit"
+            elif offline:
+                raise CacheMissError(f"cache entry {data_path} does not match its recorded hash")
+        if frame is None:
+            if offline:
+                raise CacheMissError(f"{sym!r} {start_d}..{end_d} from {src.name!r} is not cached in {root}")
+            frame = _normalize_source_frame(src.fetch_symbol(sym, start_d, end_d), src.name, sym, start_d, end_d)
+            entry = {
+                "format": CACHE_FORMAT,
+                "source": src.name,
+                "source_version": str(getattr(src, "version", "") or ""),
+                "terms": getattr(src, "terms", None),
+                "symbol": sym,
+                "start": start_d.isoformat(),
+                "end": end_d.isoformat(),
+                "rows": frame.height,
+                "dataset_hash": dataset_hash(frame),
+                "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            }
+            _atomic_write(data_path, frame.write_parquet)
+            _atomic_write(
+                meta_path,
+                lambda p, e=entry: p.write_text(json.dumps(e, indent=2, sort_keys=True) + "\n", encoding="utf-8"),
+            )
+            cache_status[sym] = "refresh" if refresh else "miss"
+        frames.append(frame)
+
+    out = pl.concat(frames, how="vertical").sort(["symbol", "ts"]).select(CANONICAL_OHLCV_COLUMNS)
+    failures = quality_failures(data_quality_report(out))
+    if failures:
+        raise ValueError(f"fetched data failed data_quality_report: {'; '.join(failures)}")
+    if not return_meta:
+        return out
+    meta = {
+        "source": src.name,
+        "source_version": str(getattr(src, "version", "") or ""),
+        "terms": getattr(src, "terms", None),
+        "symbols": syms,
+        "start": start_d.isoformat(),
+        "end": end_d.isoformat(),
+        "rows": out.height,
+        "cache_dir": str(root),
+        "cache": cache_status,
+        "dataset_hash": dataset_hash(out),
+    }
+    return out, meta
