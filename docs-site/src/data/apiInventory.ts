@@ -14,6 +14,11 @@ export const apiInventory = {
       "to_polars_signal_frame",
       "to_polars_weights_frame"
     ],
+    "backtesting_engine": [
+      "assemble_cpcv_paths",
+      "cpcv_path_count",
+      "run_cpcv"
+    ],
     "bars": [
       "bar_diagnostics",
       "build_dollar_bars",
@@ -21,11 +26,42 @@ export const apiInventory = {
       "build_time_bars",
       "build_volume_bars"
     ],
+    "cross_validation": [
+      "count_train_test_overlaps",
+      "cpcv_paths",
+      "cpcv_splits",
+      "naive_kfold_splits",
+      "purged_kfold_splits",
+      "split_with_diagnostics"
+    ],
     "data": [
       "align_calendar",
       "clean_ohlcv",
       "data_quality_report",
-      "load_ohlcv"
+      "dataset_hash",
+      "default_cache_dir",
+      "fetch",
+      "fetch_symbol",
+      "load_ohlcv",
+      "quality_failures",
+      "record_dataset_hash",
+      "symbols"
+    ],
+    "evaluation": [
+      "config_hash",
+      "deflated_sharpe_ratio",
+      "expected_max_sharpe",
+      "meta_label_metrics",
+      "minimum_track_record_length",
+      "n_trials",
+      "path",
+      "probabilistic_sharpe_ratio",
+      "record",
+      "reload",
+      "return_moments",
+      "sharpe_std",
+      "strategy_failure_probability",
+      "trials"
     ],
     "feature_diagnostics": [
       "feature_screen_report",
@@ -34,6 +70,19 @@ export const apiInventory = {
       "orthogonalize_features_pca",
       "sfi_importance",
       "substitution_effect_report"
+    ],
+    "feature_importance": [
+      "mda_from_probabilities",
+      "mean_decrease_accuracy",
+      "mean_decrease_impurity",
+      "sfi_from_probabilities",
+      "single_feature_importance"
+    ],
+    "hyperparameter_tuning": [
+      "classification_score",
+      "expand_param_grid",
+      "purged_search",
+      "sample_param_sets"
     ],
     "pipeline": [
       "run_mid_frequency_pipeline",
@@ -135,9 +184,14 @@ export const apiInventory = {
       "validate"
     ],
     "openquant::cross_validation": [
+      "count_train_test_overlaps",
+      "cpcv_paths",
+      "cpcv_splits",
       "ml_get_train_times",
+      "naive_kfold_splits",
       "new",
-      "split"
+      "split",
+      "split_with_diagnostics"
     ],
     "openquant::data_processing": [
       "align_calendar_columns",
@@ -155,6 +209,16 @@ export const apiInventory = {
       "run_bars",
       "standard_bars",
       "time_bars"
+    ],
+    "openquant::dynamic_allocation": [
+      "all_weights",
+      "dynamic_optimal_portfolio",
+      "new",
+      "partition_count",
+      "pigeonhole_partitions",
+      "trajectory_sharpe_ratio",
+      "transaction_costs",
+      "weight_count"
     ],
     "openquant::ef3m": [
       "centered_moment",
@@ -231,7 +295,8 @@ export const apiInventory = {
       "as_f64",
       "as_i64",
       "classification_score",
-      "expand_param_grid"
+      "expand_param_grid",
+      "sample_param_sets"
     ],
     "openquant::labeling": [
       "add_vertical_barrier",
@@ -327,6 +392,7 @@ export const apiInventory = {
     "openquant::streaming_hpc": [
       "completed_buckets",
       "current",
+      "current_cdf",
       "generate_synthetic_flash_crash_stream",
       "new",
       "on_event",
@@ -363,6 +429,9 @@ export const apiInventory = {
     "pyopenquant::backtest_stats": [
       "register"
     ],
+    "pyopenquant::backtesting_engine": [
+      "register"
+    ],
     "pyopenquant::bars": [
       "register"
     ],
@@ -375,7 +444,13 @@ export const apiInventory = {
     "pyopenquant::codependence": [
       "register"
     ],
+    "pyopenquant::cross_validation": [
+      "register"
+    ],
     "pyopenquant::data": [
+      "register"
+    ],
+    "pyopenquant::dynamic_allocation": [
       "register"
     ],
     "pyopenquant::ef3m": [
@@ -385,6 +460,9 @@ export const apiInventory = {
       "register"
     ],
     "pyopenquant::fast_ewma": [
+      "register"
+    ],
+    "pyopenquant::feature_importance": [
       "register"
     ],
     "pyopenquant::filters": [
@@ -401,15 +479,21 @@ export const apiInventory = {
       "build_labeling_events",
       "build_ohlcv_columns",
       "build_trades",
+      "format_naive_datetime",
       "format_naive_datetimes",
       "matrix_from_rows",
       "pair_timestamps_values",
+      "parse_datetime_str",
+      "parse_naive_datetime",
       "parse_naive_datetimes",
       "parse_one_naive_datetime",
       "parse_vertical_barriers",
       "report_to_pydict"
     ],
     "pyopenquant::hrp": [
+      "register"
+    ],
+    "pyopenquant::hyperparameter_tuning": [
       "register"
     ],
     "pyopenquant::labeling": [

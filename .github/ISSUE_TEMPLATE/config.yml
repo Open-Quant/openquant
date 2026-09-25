@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Open-Quant/openquant/security/advisories/new
+    about: Report security problems privately, not in a public issue. See SECURITY.md.
+  - name: Documentation
+    url: https://open-quant.github.io/openquant/
+    about: Module pages, quickstart and setup guides.
+  - name: Contributing guide
+    url: https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md
+    about: Setup, test and docs gates, fixtures, and pull request conventions.

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import random
+from collections.abc import Sequence
 from dataclasses import dataclass
-from math import ceil, exp, isfinite, log, sqrt
-from typing import Any, Sequence
+from math import ceil, exp, isfinite, log, log1p, sqrt
+from typing import Any
 
 import polars as pl
 
 from . import viz
-
 
 _EPS = 1e-12
 
@@ -42,9 +43,7 @@ def _feature_names(n_features: int, feature_names: Sequence[str] | None) -> list
         return [f"f{i}" for i in range(n_features)]
     out = [str(v) for v in feature_names]
     if len(out) != n_features:
-        raise ValueError(
-            f"feature_names length mismatch: expected {n_features}, got {len(out)}"
-        )
+        raise ValueError(f"feature_names length mismatch: expected {n_features}, got {len(out)}")
     return out
 
 
@@ -53,9 +52,7 @@ def _sample_weight(weights: Sequence[float] | None, n_rows: int) -> list[float] 
         return None
     out = [float(v) for v in weights]
     if len(out) != n_rows:
-        raise ValueError(
-            f"sample_weight/X length mismatch: {len(out)} vs {n_rows}"
-        )
+        raise ValueError(f"sample_weight/X length mismatch: {len(out)} vs {n_rows}")
     return out
 
 
@@ -78,9 +75,7 @@ def _build_intervals(
         return [(i, i) for i in range(n_rows)]
     ends = [int(v) for v in event_end_indices]
     if len(ends) != n_rows:
-        raise ValueError(
-            f"event_end_indices/X length mismatch: {len(ends)} vs {n_rows}"
-        )
+        raise ValueError(f"event_end_indices/X length mismatch: {len(ends)} vs {n_rows}")
     intervals: list[tuple[int, int]] = []
     for i, end in enumerate(ends):
         if end < i:
@@ -178,31 +173,83 @@ def _solve_linear_system(a: list[list[float]], b: list[float]) -> list[float]:
     return [aug[i][n] for i in range(n)]
 
 
+def _penalized_log_loss(
+    design: Sequence[Sequence[float]],
+    y: Sequence[float],
+    sw: Sequence[float],
+    beta: Sequence[float],
+    ridge: float,
+) -> float:
+    loss = 0.0
+    for row, yy, w in zip(design, y, sw):
+        z = _dot(row, beta)
+        # log(1 + e^z) - y z, written to stay finite for large |z|.
+        softplus = z + log1p(exp(-z)) if z > 0 else log1p(exp(z))
+        loss += w * (softplus - yy * z)
+    return loss + 0.5 * ridge * _dot(beta, beta)
+
+
 def _fit_linear_probability_model(
     x: Sequence[Sequence[float]],
     y: Sequence[float],
     sample_weight: Sequence[float] | None,
     ridge: float = 1e-3,
+    max_iter: int = 50,
+    tol: float = 1e-8,
 ) -> _LinearModel:
+    """Fit a weighted logistic regression of the 0/1 label by Newton's method (IRLS).
+
+    Despite the historical name this is *not* a linear probability model: least squares
+    on a 0/1 label is already on the probability scale, so pairing it with the sigmoid in
+    ``_predict_proba`` squeezed every prediction towards 0.5 (#99). The coefficients here
+    are on the log-odds scale, which is what the sigmoid expects.
+
+    ``ridge`` is an L2 penalty on all coefficients, intercept included. It keeps the
+    Newton system non-singular and the coefficients finite when a fold is perfectly
+    separable. Each Newton step is halved until the penalised log loss decreases, so the
+    iteration cannot diverge.
+    """
     n = len(x)
     p = len(x[0])
     sw = [1.0] * n if sample_weight is None else [float(v) for v in sample_weight]
 
     dim = p + 1
-    xtwx = [[0.0 for _ in range(dim)] for _ in range(dim)]
-    xtwy = [0.0 for _ in range(dim)]
+    design = [[1.0] + list(row) for row in x]
+    beta = [0.0] * dim
+    objective = _penalized_log_loss(design, y, sw, beta, ridge)
 
-    for row, yy, w in zip(x, y, sw):
-        design = [1.0] + list(row)
+    for _ in range(max_iter):
+        hessian = [[0.0 for _ in range(dim)] for _ in range(dim)]
+        gradient = [ridge * b for b in beta]
+        for row, yy, w in zip(design, y, sw):
+            prob = _sigmoid(_dot(row, beta))
+            resid = w * (prob - yy)
+            curv = w * prob * (1.0 - prob)
+            for i in range(dim):
+                gradient[i] += resid * row[i]
+                ci = curv * row[i]
+                for j in range(i, dim):
+                    hessian[i][j] += ci * row[j]
         for i in range(dim):
-            xtwy[i] += w * design[i] * yy
-            for j in range(dim):
-                xtwx[i][j] += w * design[i] * design[j]
+            hessian[i][i] += ridge
+            for j in range(i):
+                hessian[i][j] = hessian[j][i]
 
-    for i in range(dim):
-        xtwx[i][i] += ridge
+        step = _solve_linear_system(hessian, gradient)
+        scale = 1.0
+        while True:
+            candidate = [b - scale * s for b, s in zip(beta, step)]
+            cand_obj = _penalized_log_loss(design, y, sw, candidate, ridge)
+            if cand_obj <= objective or scale < 1e-10:
+                break
+            scale *= 0.5
+        if cand_obj > objective:
+            break
+        converged = max(abs(scale * s) for s in step) < tol * (1.0 + max(abs(b) for b in beta))
+        beta, objective = candidate, cand_obj
+        if converged:
+            break
 
-    beta = _solve_linear_system(xtwx, xtwy)
     return _LinearModel(coeffs=beta[1:], intercept=beta[0])
 
 
@@ -257,7 +304,9 @@ def _std(values: Sequence[float]) -> float:
     return sqrt(var)
 
 
-def _importance_table(feature_names: Sequence[str], per_feature_values: Sequence[Sequence[float]]) -> pl.DataFrame:
+def _importance_table(
+    feature_names: Sequence[str], per_feature_values: Sequence[Sequence[float]]
+) -> pl.DataFrame:
     rows = []
     for name, vals in zip(feature_names, per_feature_values):
         rows.append(
@@ -278,7 +327,7 @@ def mdi_importance(
     sample_weight: Sequence[float] | None = None,
     n_estimators: int = 32,
     seed: int = 42,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -286,8 +335,6 @@ def mdi_importance(
 
     if n_estimators < 2:
         raise ValueError("n_estimators must be >= 2")
-
-    import random
 
     rng = random.Random(seed)
     per_feature: list[list[float]] = [[] for _ in names]
@@ -327,21 +374,23 @@ def _score_with_perm_groups(
     scoring: str,
     sample_weight_train: Sequence[float] | None,
     sample_weight_test: Sequence[float] | None,
-    shift: int,
+    rng: random.Random,
 ) -> tuple[float, list[float]]:
     model = _fit_linear_probability_model(x_train, y_train, sample_weight_train)
     base = _score(y_test, _predict_proba(model, x_test), scoring, sample_weight_test)
 
     out: list[float] = []
     n = len(x_test)
-    s = shift % max(n, 1)
     for cols in groups:
-        perm = [row[:] for row in x_test]
+        # Shuffle the rows of the group's columns, as AFML Snippet 8.3 does with
+        # np.random.shuffle. All columns of a group get the same row order, so their
+        # joint distribution is kept and only their link to the label is broken.
+        order = list(range(n))
+        rng.shuffle(order)
+        perm = [list(row) for row in x_test]
         for c in cols:
-            col = [row[c] for row in x_test]
-            shifted = col[-s:] + col[:-s] if s > 0 else col[:]
             for i in range(n):
-                perm[i][c] = shifted[i]
+                perm[i][c] = x_test[order[i]][c]
 
         perm_score = _score(y_test, _predict_proba(model, perm), scoring, sample_weight_test)
         if scoring == "neg_log_loss":
@@ -363,7 +412,8 @@ def mda_importance(
     pct_embargo: float = 0.01,
     scoring: str = "neg_log_loss",
     allow_unpurged: bool = False,
-) -> dict[str, object]:
+    seed: int = 42,
+) -> dict[str, Any]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -373,8 +423,9 @@ def mda_importance(
 
     per_feature: list[list[float]] = [[] for _ in names]
     fold_scores: list[float] = []
+    rng = random.Random(seed)
 
-    for fold_idx, (train_idx, test_idx) in enumerate(splits):
+    for train_idx, test_idx in splits:
         x_train = [x[i] for i in train_idx]
         y_train = [yv[i] for i in train_idx]
         x_test = [x[i] for i in test_idx]
@@ -391,7 +442,7 @@ def mda_importance(
             scoring,
             w_train,
             w_test,
-            shift=fold_idx + 1,
+            rng,
         )
         fold_scores.append(base)
         for j, imp in enumerate(scores):
@@ -413,6 +464,7 @@ def mda_importance(
             "pct_embargo": pct_embargo,
             "fold_count": len(splits),
             "scoring": scoring,
+            "seed": seed,
             "mean_base_score": _mean(fold_scores),
         },
     }
@@ -428,7 +480,7 @@ def sfi_importance(
     pct_embargo: float = 0.01,
     scoring: str = "neg_log_loss",
     allow_unpurged: bool = False,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -472,7 +524,9 @@ def sfi_importance(
     }
 
 
-def _standardize(x: Sequence[Sequence[float]]) -> tuple[list[list[float]], list[float], list[float]]:
+def _standardize(
+    x: Sequence[Sequence[float]],
+) -> tuple[list[list[float]], list[float], list[float]]:
     n = len(x)
     p = len(x[0])
     means = [sum(row[j] for row in x) / n for j in range(p)]
@@ -510,7 +564,7 @@ def _power_iteration(a: list[list[float]], iters: int = 200) -> tuple[float, lis
 def orthogonalize_features_pca(
     X: Sequence[Sequence[float]],
     variance_threshold: float = 0.95,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     if variance_threshold <= 0.0 or variance_threshold > 1.0:
         raise ValueError("variance_threshold must be in (0, 1]")
 
@@ -561,7 +615,7 @@ def orthogonalize_features_pca(
     for row in z:
         transformed.append([_dot(row, comp) for comp in eigvecs])
 
-    columns = {f"pc{i+1}": [row[i] for row in transformed] for i in range(kept)}
+    columns = {f"pc{i + 1}": [row[i] for row in transformed] for i in range(kept)}
     table = pl.DataFrame(columns)
 
     return {
@@ -606,7 +660,8 @@ def substitution_effect_report(
     corr_threshold: float = 0.9,
     orthogonalize: bool = True,
     allow_unpurged: bool = False,
-) -> dict[str, object]:
+    seed: int = 42,
+) -> dict[str, Any]:
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -624,12 +679,14 @@ def substitution_effect_report(
         pct_embargo=pct_embargo,
         scoring=scoring,
         allow_unpurged=allow_unpurged,
+        seed=seed,
     )
     base_table: pl.DataFrame = mda["table"]
     base_map = {row["feature"]: float(row["mean"]) for row in base_table.to_dicts()}
 
     corr = _corr_matrix(x)
     pairs: list[dict[str, Any]] = []
+    rng = random.Random(seed)
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
             corr_ij = corr[i][j]
@@ -637,7 +694,7 @@ def substitution_effect_report(
                 continue
 
             grouped_vals: list[float] = []
-            for fold_idx, (train_idx, test_idx) in enumerate(splits):
+            for train_idx, test_idx in splits:
                 x_train = [x[k] for k in train_idx]
                 y_train = [yv[k] for k in train_idx]
                 x_test = [x[k] for k in test_idx]
@@ -653,7 +710,7 @@ def substitution_effect_report(
                     scoring,
                     w_train,
                     w_test,
-                    shift=fold_idx + 1,
+                    rng,
                 )
                 grouped_vals.append(group_imp[0])
 
@@ -672,19 +729,23 @@ def substitution_effect_report(
                 }
             )
 
-    pairs_df = pl.DataFrame(pairs) if pairs else pl.DataFrame(
-        {
-            "feature_a": [],
-            "feature_b": [],
-            "corr": [],
-            "single_sum": [],
-            "group_importance": [],
-            "dilution_ratio": [],
-            "flag_substitution_risk": [],
-        }
+    pairs_df = (
+        pl.DataFrame(pairs)
+        if pairs
+        else pl.DataFrame(
+            {
+                "feature_a": [],
+                "feature_b": [],
+                "corr": [],
+                "single_sum": [],
+                "group_importance": [],
+                "dilution_ratio": [],
+                "flag_substitution_risk": [],
+            }
+        )
     )
 
-    out: dict[str, object] = {
+    out: dict[str, Any] = {
         "baseline_mda": mda,
         "pairs": pairs_df,
         "pair_records": pairs_df.to_dicts(),
@@ -693,7 +754,7 @@ def substitution_effect_report(
     if orthogonalize:
         ortho = orthogonalize_features_pca(x, variance_threshold=0.95)
         x_ortho = ortho["transformed"]
-        pc_names = [f"pc{i+1}" for i in range(len(x_ortho[0]))]
+        pc_names = [f"pc{i + 1}" for i in range(len(x_ortho[0]))]
         ortho_mda = mda_importance(
             x_ortho,
             yv,
@@ -704,6 +765,7 @@ def substitution_effect_report(
             pct_embargo=pct_embargo,
             scoring=scoring,
             allow_unpurged=allow_unpurged,
+            seed=seed,
         )
         corr_abs_max = _max_abs_offdiag(corr)
         ortho_corr = _corr_matrix(x_ortho)
@@ -734,7 +796,7 @@ def feature_screen_report(
     feature_names: Sequence[str] | None = None,
     min_coverage: float = 0.95,
     max_corr: float = 0.95,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run lightweight feature QA checks for notebook discovery loops."""
     if min_coverage <= 0.0 or min_coverage > 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
@@ -747,7 +809,7 @@ def feature_screen_report(
         names = list(feature_names) if feature_names is not None else [str(c) for c in X.columns]
         if feature_names is not None and len(names) != X.width:
             raise ValueError(f"feature_names length mismatch: expected {X.width}, got {len(names)}")
-        rows = X.select([pl.col(c) for c in X.columns]).rows()
+        rows: Sequence[Sequence[Any]] = X.select([pl.col(c) for c in X.columns]).rows()
     else:
         rows = [list(r) for r in X]
         if not rows:
@@ -844,7 +906,9 @@ def feature_screen_report(
     rejected_features: list[str] = []
     rejection_reasons: dict[str, list[str]] = {}
     for idx, name in enumerate(names):
-        max_abs_corr = max(abs(corr[idx][j]) for j in range(n_features) if j != idx) if n_features > 1 else 0.0
+        max_abs_corr = (
+            max(abs(corr[idx][j]) for j in range(n_features) if j != idx) if n_features > 1 else 0.0
+        )
         rs = reasons[name]
         status = "accepted" if not rs else "rejected"
         rows_out.append(
@@ -863,7 +927,9 @@ def feature_screen_report(
             rejected_features.append(name)
             rejection_reasons[name] = rs
 
-    table = pl.DataFrame(rows_out).sort(["status", "coverage", "std"], descending=[False, True, True])
+    table = pl.DataFrame(rows_out).sort(
+        ["status", "coverage", "std"], descending=[False, True, True]
+    )
     return {
         "table": table,
         "records": table.to_dicts(),

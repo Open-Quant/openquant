@@ -2,9 +2,7 @@ import csv
 import math
 
 import pytest
-
 from _core_fixtures import FIXTURES
-
 from openquant import onc
 
 
