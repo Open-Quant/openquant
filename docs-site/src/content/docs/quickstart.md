@@ -105,7 +105,7 @@ summary:
   realized_sharpe               -0.136778
   value_at_risk                 -0.000209
   expected_shortfall            -0.000312
-  conditional_drawdown_risk      0.000768
+  conditional_drawdown_risk      0.002713
   inputs_aligned                 1.000000
   event_indices_sorted           1.000000
   has_forward_look_bias          0.000000
