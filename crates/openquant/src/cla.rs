@@ -59,18 +59,37 @@ pub enum ClaError {
     /// Neither prices nor both expected returns and a covariance matrix were supplied.
     #[error("supply asset prices, or expected returns and a covariance matrix")]
     MissingInputs,
-    /// The price index does not match the data, the covariance of the free assets is
-    /// singular, or the critical line did not terminate (the message says which).
-    #[error("invalid asset prices: {0}")]
-    InvalidAssetPrices(&'static str),
+    /// An [`AssetPrices`] index is empty or does not have one date per row of prices.
+    #[error(
+        "asset price index has {dates} dates for {rows} rows of prices; it needs one date per row"
+    )]
+    InvalidPriceIndex {
+        /// Rows of the price matrix.
+        rows: usize,
+        /// Entries in the date index.
+        dates: usize,
+    },
+    /// No portfolio satisfies the bounds and the budget: a bound is not finite, an asset's
+    /// lower bound exceeds its upper bound, the lower bounds sum to more than 1, or the
+    /// upper bounds (capped at 1) sum to less than 1.
+    #[error("infeasible weight bounds: {0}")]
+    InfeasibleBounds(&'static str),
+    /// The covariance matrix of the assets free at a step of the walk cannot be inverted,
+    /// e.g. two free assets are perfectly correlated, or there are more assets than
+    /// observations.
+    #[error("covariance of the free assets is singular")]
+    SingularCovariance,
+    /// The walk along the critical line did not reach `lambda = 0` within its step limit
+    /// (`4 n^2 + 100` steps).
+    #[error("the critical line did not terminate")]
+    NoTermination,
     /// The expected-returns method is not `"mean"` or `"exponential"`.
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
     /// The solution name is not one of the four supported.
     #[error("unknown solution: {0}")]
     UnknownSolution(String),
-    /// Inputs disagree on the number of assets, expected returns are not a vector, or the
-    /// bounds cannot sum to one (lower bounds above 1 in total, or upper bounds below 1).
+    /// Inputs disagree on the number of assets, or expected returns are not a vector.
     #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
     /// Internal bookkeeping vectors disagree in length.
@@ -92,7 +111,8 @@ pub struct AssetPrices {
 
 impl AssetPrices {
     /// Wraps a price matrix and its date index. Nothing is validated here; [`CLA::allocate`]
-    /// checks that the index is non-empty and matches the number of rows.
+    /// checks that the index is non-empty and matches the number of rows
+    /// ([`ClaError::InvalidPriceIndex`]).
     pub fn new(data: DMatrix<f64>, index: Vec<NaiveDate>) -> Self {
         AssetPrices { data, index }
     }
@@ -266,15 +286,19 @@ impl CLA {
     ///
     /// - [`ClaError::MissingInputs`] if no prices are given and either expected returns or
     ///   covariance is missing.
-    /// - [`ClaError::InvalidAssetPrices`] if an [`AssetPrices`] index is empty or does not
-    ///   match its rows, if the covariance of the free assets is singular, or if the walk
-    ///   does not terminate.
+    /// - [`ClaError::InvalidPriceIndex`] if an [`AssetPrices`] index is empty or does not
+    ///   have one date per row.
     /// - [`ClaError::NoData`] if a price matrix has fewer than two rows, contains a zero
     ///   price, or there are no assets.
     /// - [`ClaError::UnknownReturns`] if expected returns must be estimated and the method is
     ///   not `"mean"` or `"exponential"`.
-    /// - [`ClaError::DimensionMismatch`] if the inputs disagree on the number of assets,
-    ///   expected returns are not a vector, or the bounds cannot sum to one.
+    /// - [`ClaError::DimensionMismatch`] if the inputs disagree on the number of assets or
+    ///   expected returns are not a vector.
+    /// - [`ClaError::InfeasibleBounds`] if a bound is not finite, a lower bound exceeds its
+    ///   upper bound, or the bounds cannot sum to one.
+    /// - [`ClaError::SingularCovariance`] if the covariance of the free assets cannot be
+    ///   inverted at some step of the walk.
+    /// - [`ClaError::NoTermination`] if the walk does not reach `lambda = 0`.
     /// - [`ClaError::UnknownSolution`] for any other `solution` name.
     pub fn allocate(
         &mut self,
@@ -291,9 +315,10 @@ impl CLA {
         match asset_prices {
             Some(AssetPricesInput::Prices(prices)) => {
                 if prices.index.len() != prices.data.nrows() || prices.index.is_empty() {
-                    return Err(ClaError::InvalidAssetPrices(
-                        "Asset prices index must be datetime",
-                    ));
+                    return Err(ClaError::InvalidPriceIndex {
+                        rows: prices.data.nrows(),
+                        dates: prices.index.len(),
+                    });
                 }
                 self._initialise(
                     &prices.data,
@@ -381,7 +406,8 @@ impl CLA {
     /// # Errors
     ///
     /// [`ClaError::NoData`], [`ClaError::UnknownReturns`] or [`ClaError::DimensionMismatch`]
-    /// under the same conditions as [`CLA::allocate`].
+    /// under the same conditions as [`CLA::allocate`]. Bounds are checked by
+    /// [`CLA::allocate`], not here.
     pub fn _initialise(
         &mut self,
         asset_prices: &DMatrix<f64>,
@@ -604,13 +630,21 @@ fn build_bounds(n: usize, bounds: &WeightBounds) -> Result<Vec<(f64, f64)>, ClaE
 }
 
 fn check_bounds_feasible(bounds: &[(f64, f64)]) -> Result<(), ClaError> {
+    if bounds.iter().any(|(lo, hi)| !lo.is_finite() || !hi.is_finite()) {
+        return Err(ClaError::InfeasibleBounds("every bound must be finite"));
+    }
+    if bounds.iter().any(|(lo, hi)| lo > hi) {
+        return Err(ClaError::InfeasibleBounds("a lower bound exceeds its upper bound"));
+    }
     let lower: f64 = bounds.iter().map(|b| b.0).sum();
     let upper: f64 = bounds.iter().map(|b| b.1.min(1.0)).sum();
-    if lower - 1.0 > 1e-9 || upper + 1e-9 < 1.0 {
-        Err(ClaError::DimensionMismatch)
-    } else {
-        Ok(())
+    if lower - 1.0 > 1e-9 {
+        return Err(ClaError::InfeasibleBounds("the lower bounds sum to more than 1"));
     }
+    if upper + 1e-9 < 1.0 {
+        return Err(ClaError::InfeasibleBounds("the upper bounds sum to less than 1"));
+    }
+    Ok(())
 }
 
 /// One corner of the efficient frontier: the portfolio at which the set of assets strictly
@@ -648,9 +682,7 @@ fn blocks(
     weights: &[f64],
 ) -> Result<Blocks, ClaError> {
     let bounded: Vec<usize> = (0..mean.len()).filter(|i| !free.contains(i)).collect();
-    let covar_f_inv = select(cov, free, free)
-        .try_inverse()
-        .ok_or(ClaError::InvalidAssetPrices("covariance of the free assets is singular"))?;
+    let covar_f_inv = select(cov, free, free).try_inverse().ok_or(ClaError::SingularCovariance)?;
     Ok(Blocks {
         covar_f_inv,
         covar_fb: select(cov, free, &bounded),
@@ -808,7 +840,7 @@ fn critical_line(
             return Ok(points);
         }
     }
-    Err(ClaError::InvalidAssetPrices("the critical line did not terminate"))
+    Err(ClaError::NoTermination)
 }
 
 /// The frontier is piecewise linear in the weights between turning points, and the Sharpe ratio
