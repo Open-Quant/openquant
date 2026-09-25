@@ -80,18 +80,33 @@ fn test_volatility_estimators_match_reference() {
     assert_eq!(close.len(), park_vol.len());
 
     assert_matches(&gm_vol, &reference["garman_klass"]);
-    // `yang_zhang` is the library's form of the estimator, which departs from the paper; see
-    // generate_range.py and `test_yang_zhang_matches_paper` below.
-    assert_matches(&yz_vol, &reference["yang_zhang"]);
+    assert_matches(&yz_vol, &reference["yang_zhang_paper"]);
     assert_matches(&park_vol, &reference["parkinson"]);
 }
 
+/// Issue #165: Yang & Zhang (2000) with the open-to-close term ln(C_t/O_t) and demeaned
+/// overnight and open-to-close variances, from tests/fixtures/volatility/generate_range.py.
 #[test]
-#[ignore = "FINDING: get_yang_zhang_vol uses ln(C_t/O_{t-1}) for the close term instead of \
-            Yang & Zhang's open-to-close ln(C_t/O_t), and undemeaned moments; see \
-            tests/fixtures/volatility/generate_range.py"]
 fn test_yang_zhang_matches_paper() {
     let (open, high, low, close) = load_ohlc();
     let yz_vol = get_yang_zhang_vol(&open, &high, &low, &close, 20).unwrap();
     assert_matches(&yz_vol, &reference()["yang_zhang_paper"]);
+}
+
+/// Yang-Zhang is drift-independent: a series that gaps up 0.2% every night and rises 1% from
+/// open to close every day, with the high at the close and the low at the open, has constant
+/// overnight and open-to-close returns (zero variance once demeaned) and a zero
+/// Rogers-Satchell term, so its volatility is zero.
+#[test]
+fn test_yang_zhang_is_zero_for_pure_drift() {
+    let (mut open, mut close) = (vec![100.0], vec![101.0]);
+    for i in 1..40 {
+        open.push(close[i - 1] * 1.002);
+        close.push(open[i] * 1.01);
+    }
+    let yz_vol = get_yang_zhang_vol(&open, &close, &open, &close, 10).unwrap();
+    assert!(yz_vol[..10].iter().all(|v| v.is_nan()));
+    for (i, v) in yz_vol.iter().enumerate().skip(10) {
+        assert!(v.abs() < 1e-12, "bar {i}: {v}");
+    }
 }
