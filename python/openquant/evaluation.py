@@ -108,6 +108,10 @@ def return_moments(returns: Iterable[float]) -> ReturnMoments:
     """
     r = _as_returns(returns)
     n = len(r)
+    # Compared by value: a rounded mean (Python < 3.12 sums without compensation) leaves
+    # identical values with a tiny non-zero variance and an absurd Sharpe ratio.
+    if min(r) == max(r):
+        raise _ConstantReturns("returns are constant; the Sharpe ratio is undefined")
     mean = sum(r) / n
     dev = [x - mean for x in r]
     m2 = sum(d * d for d in dev) / n
