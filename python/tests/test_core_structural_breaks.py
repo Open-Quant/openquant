@@ -12,10 +12,6 @@ CSW_FINDING = (
     " uses t-1 (one-sided max 5.3797 vs 5.3921); dividing by sigma_t^2 instead of sigma_t was"
     " fixed by #104"
 )
-SADF_FINDING = (
-    "FINDING: 'quadratic' omits the linear trend of AFML's 'ctt'; the sm_* models take the sup of"
-    " the signed beta/se where AFML 17.4.3 takes |beta|/se; sm_power takes log(0) on the first row"
-)
 
 
 def _log_prices():
@@ -88,23 +84,15 @@ def test_chu_stinchcombe_white_statistic_matches_afml():
 
 
 @pytest.mark.parametrize(
-    "model",
-    [
-        "linear",
-        pytest.param("quadratic", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
-        pytest.param("sm_power", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
-        pytest.param("sm_poly_1", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
-        pytest.param("sm_poly_2", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
-        pytest.param("sm_exp", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
-    ],
+    "model", ["linear", "quadratic", "sm_power", "sm_poly_1", "sm_poly_2", "sm_exp"]
 )
 def test_sadf_pointwise_reference_values(model):
-    # Mirrors the `<model>[29]` assertions of
-    # crates/openquant/tests/structural_breaks.rs::test_sadf_test. SADF at bar t only looks
-    # at bars <= t, so element 29 is identical on a 60-bar prefix of the fixture (the
-    # generator checks this). The full series is not run here (the Rust test is #[ignore]d
-    # as long-running; one model takes minutes through a debug build), so the whole-series
-    # means are not ported.
+    # Mirrors crates/openquant/tests/structural_breaks.rs::sadf_*_match_afml_on_prefix and
+    # sadf_quadratic_and_martingale_models_match_afml (fixed in #166). SADF at bar t only
+    # looks at bars <= t, so every value on a 60-bar prefix of the fixture equals the
+    # full-series one (the generator checks this). The full series is not run here (the Rust
+    # test_sadf_test is #[ignore]d as long-running; one model takes minutes through a debug
+    # build), so the whole-series means are not ported.
     min_length, lags = 20, 5
     prefix = REFERENCE["sadf_prefix"]
     log_prices = _log_prices()[: prefix["n_bars"]]
@@ -115,6 +103,20 @@ def test_sadf_pointwise_reference_values(model):
     # 1e-7: the normal-equations inverse (snippet 17.4, as in the library) is off from a QR
     # solve by up to ~2e-9 relative in these statistics.
     assert _close(out[29], want["at_29"], rel=1e-7)
+    for i, (got, ref) in enumerate(zip(out, want["values"], strict=True)):
+        assert _close(got, ref, rel=1e-7), (model, i, got, ref)
+
+
+@pytest.mark.parametrize("model", ["sm_poly_2", "sm_exp", "sm_power"])
+def test_sadf_martingale_statistic_ignores_the_trend_sign(model):
+    # AFML 17.4.3 takes |beta| / se (#166): the reciprocal series negates log y and so beta,
+    # and must give the same, non-negative statistic.
+    (close,) = load_csv_columns("structural_breaks/dollar_bar_sample.csv", ["close"])
+    prices = list(close[:60])
+    up = structural_breaks.get_sadf(prices, model, True, 20, 1)
+    down = structural_breaks.get_sadf([1.0 / p for p in prices], model, True, 20, 1)
+    assert all(math.isfinite(v) and v >= 0.0 for v in up)
+    assert all(_close(a, b) for a, b in zip(up, down, strict=True))
 
 
 def test_sadf_constant_series_is_negative_infinity():

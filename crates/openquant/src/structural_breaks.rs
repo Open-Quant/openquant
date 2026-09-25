@@ -100,6 +100,25 @@ pub fn get_chu_stinchcombe_white_statistics(
     Ok(ChuStinchcombeWhiteResult { critical_value, stat })
 }
 
+/// Supremum ADF and sub/super-martingale statistics (AFML §17.4.2–17.4.3, Snippets 17.1–17.4).
+///
+/// Returns one value per regression row from position `min_length` on: the supremum, over
+/// every window of at least `min_length` rows ending at that row, of the statistic below.
+/// Rows start at bar `max_lag + 1` for every model, and `t` is the 0-based row position over the
+/// whole sample.
+///
+/// | `model` | Regression | Statistic |
+/// | --- | --- | --- |
+/// | `"linear"` | Δy on y₋₁, lagged Δy, const (if `add_const`), t | β(y₋₁) / se |
+/// | `"quadratic"` | Δy on y₋₁, lagged Δy, const (if `add_const`), t, t² (Snippet 17.2 `ctt`) | β(y₋₁) / se |
+/// | `"sm_poly_1"` | y on 1, t, t² | \|β(t²)\| / se |
+/// | `"sm_poly_2"` | log y on 1, t, t² | \|β(t²)\| / se |
+/// | `"sm_exp"` | log y on 1, t | \|β(t)\| / se |
+/// | `"sm_power"` | log y on 1, log(t + 1) (time counted from 1) | \|β\| / se |
+///
+/// The `sm_*` models ignore `add_const`, take the absolute value because a trend of either
+/// sign is of interest (§17.4.3), and need a positive series when they take logs. Windows
+/// whose regression is singular are skipped; a row with no usable window is `-inf`.
 pub fn get_sadf(
     _series: &[f64],
     _model: &str,
@@ -108,6 +127,10 @@ pub fn get_sadf(
     _lags: SadfLags,
 ) -> StructuralBreakResult<Vec<f64>> {
     let (x, y, indices) = get_y_x(_series, _model, _lags, _add_const)?;
+    // AFML 17.4.3: the sub/super-martingale statistic is |beta| / se, since a trend of either
+    // sign is of interest. The ADF-based models keep the signed t-statistic (explosiveness
+    // is beta > 0).
+    let absolute = _model.starts_with("sm_");
     if y.len() <= _min_length {
         return Ok(Vec::new());
     }
@@ -116,7 +139,7 @@ pub fn get_sadf(
     for (pos, _) in indices.iter().enumerate().skip(_min_length) {
         let x_subset = x[..=pos].to_vec();
         let y_subset = y[..=pos].to_vec();
-        let value = get_sadf_at_t(&x_subset, &y_subset, _min_length)?;
+        let value = get_sadf_at_t(&x_subset, &y_subset, _min_length, absolute)?;
         sadf_values.push(value);
     }
 
@@ -239,9 +262,13 @@ fn get_y_x(
                 if add_const {
                     new_row.push(1.0);
                 }
+                // AFML snippet 17.2 (getYX): 'ct' appends the trend; 'ctt' appends the trend
+                // and then its square, so "quadratic" carries both t and t^2.
                 let trend = i as f64;
-                let trend_value = if model == "quadratic" { trend * trend } else { trend };
-                new_row.push(trend_value);
+                new_row.push(trend);
+                if model == "quadratic" {
+                    new_row.push(trend * trend);
+                }
                 updated.push(new_row);
             }
             x = updated;
@@ -280,7 +307,9 @@ fn get_y_x(
             y = indices.iter().map(|&idx| series[idx].ln()).collect();
             let mut updated = Vec::with_capacity(y.len());
             for (i, _) in y.iter().enumerate() {
-                let trend = (i as f64).ln();
+                // AFML 17.4.3 counts time from t = 1 for the power trend, so the first row
+                // has log t = 0 rather than log 0 = -inf.
+                let trend = ((i + 1) as f64).ln();
                 let row = vec![trend, 1.0];
                 updated.push(row);
             }
@@ -294,7 +323,12 @@ fn get_y_x(
     Ok((x, y, indices))
 }
 
-fn get_sadf_at_t(x: &[Vec<f64>], y: &[f64], min_length: usize) -> StructuralBreakResult<f64> {
+fn get_sadf_at_t(
+    x: &[Vec<f64>],
+    y: &[f64],
+    min_length: usize,
+    absolute: bool,
+) -> StructuralBreakResult<f64> {
     let y_len = y.len();
     if y_len < min_length {
         return Ok(f64::NEG_INFINITY);
@@ -313,7 +347,8 @@ fn get_sadf_at_t(x: &[Vec<f64>], y: &[f64], min_length: usize) -> StructuralBrea
 
         let b_estimate = b_mean[0];
         let b_std = b_var[0][0].sqrt();
-        let all_adf = b_estimate / b_std;
+        let ratio = b_estimate / b_std;
+        let all_adf = if absolute { ratio.abs() } else { ratio };
         if all_adf > bsadf {
             bsadf = all_adf;
         }
