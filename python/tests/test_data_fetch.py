@@ -212,7 +212,7 @@ def test_local_file_source_versions_by_content(tmp_path):
     src = data.LocalFileSource(path, name="mine")
     assert src.symbols == ["M"]
     v1 = src.version
-    path.write_text(path.read_text().replace("\n2024-01-02,10.0", "\n2024-01-02,10.5"))
+    path.write_text(path.read_text() + "2024-02-01,20.0,20.5,19.5,20.0,1,M\n")
     assert data.LocalFileSource(path, name="mine").version != v1
     with pytest.raises(FileNotFoundError):
         data.LocalFileSource(tmp_path / "missing.csv")
