@@ -450,3 +450,42 @@ fn test_meta_label_asymmetric_pt_sl() {
     assert_eq!(labels.len(), 1);
     assert_eq!(labels[0].label, 1);
 }
+
+#[test]
+fn test_event_on_last_bar_without_vertical_barrier_is_unresolved() {
+    // #162: an event on the final bar with no vertical barrier has no later bar to touch, so
+    // its outcome is unknown. It used to get t1 = t0, a zero return and a label of 0.
+    let ts = |m: u32| {
+        chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(9, 30 + m, 0).unwrap()
+    };
+    let close = vec![(ts(0), 100.0), (ts(1), 103.0), (ts(2), 101.0), (ts(3), 100.5)];
+    let last = ts(3);
+    // ts(0) touches the profit barrier at ts(1); ts(3) is the last bar.
+    let t_events = vec![ts(0), last];
+    let target = vec![(ts(0), 0.01), (last, 0.01)];
+
+    let events = get_events(&close, &t_events, (1.0, 1.0), &target, 0.0, 1, None, None);
+    assert_eq!(events.len(), 2, "the unresolved event is kept, as the docs describe");
+    assert_eq!(events[0].1.t1, Some(ts(1)));
+    assert_eq!(events[1].0, last);
+    assert_eq!(events[1].1.t1, None);
+
+    let bins = get_bins(&events, &close);
+    assert_eq!(bins.len(), 1, "the unresolved event gets no label");
+    assert_eq!((bins[0].0, bins[0].3), (ts(0), 1));
+    assert!(drop_labels(&bins, 0.05).iter().all(|row| row.0 != last));
+
+    // The same with a side (meta-labeling): no 0 label for the last-bar event.
+    let side = vec![(ts(0), 1.0), (last, -1.0)];
+    let meta_events = get_events(&close, &t_events, (1.0, 1.0), &target, 0.0, 1, None, Some(&side));
+    assert_eq!(meta_events[1].1.t1, None);
+    let meta = meta_labels(&meta_events, &close);
+    assert_eq!(meta.len(), 1);
+    assert_eq!(meta[0].timestamp, ts(0));
+
+    // A vertical barrier on the event bar itself is still honoured (t1 = t0, label 0).
+    let vertical = vec![(last, last)];
+    let pinned = get_events(&close, &[last], (1.0, 1.0), &target, 0.0, 1, Some(&vertical), None);
+    assert_eq!(pinned[0].1.t1, Some(last));
+    assert_eq!(get_bins(&pinned, &close)[0].3, 0);
+}
