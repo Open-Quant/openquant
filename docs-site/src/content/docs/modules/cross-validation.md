@@ -58,7 +58,7 @@ which with variable-length labels need not be the last label's. A training label
 if it starts inside the window, ends inside it, or envelops it.
 
 **Embargo** (§7.4.2) removes a further stretch of training labels just *after* the test
-window. Purging handles overlap in the labels; the embargo handles what leaks through the
+window, and nothing before it. Purging handles overlap in the labels; the embargo handles what leaks through the
 features, which are usually serially correlated — a moving average computed a few bars after
 the test window still contains test-window prices.
 
@@ -67,27 +67,30 @@ per sample, in time order, and `split(n_samples)` returns `(train_indices, test_
 each fold. Folds are contiguous blocks; nothing is shuffled.
 
 <figure>
-<img class="dark:sl-hidden" src="/figures/ch7-purged-fold-light.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. A further three on each side are embargoed. The remaining twenty labels are training data." />
-<img class="light:sl-hidden" src="/figures/ch7-purged-fold-dark.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. A further three on each side are embargoed. The remaining twenty labels are training data." />
+<img class="dark:sl-hidden" src="/figures/ch7-purged-fold-light.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. The six labels after the purged zone, 27 to 32, are embargoed; nothing before the fold is. The remaining twenty labels are training data." />
+<img class="light:sl-hidden" src="/figures/ch7-purged-fold-dark.svg" alt="Forty labels in time order for one fold of five. Labels 16 to 23 are the test fold. Three labels on each side of it are purged because their four-bar spans overlap the test window. The six labels after the purged zone, 27 to 32, are embargoed; nothing before the fold is. The remaining twenty labels are training data." />
 <figcaption>The third fold of the example below at <code>pct_embargo = 0.15</code>. Twenty of the 32 non-test labels survive.</figcaption>
 </figure>
 
-## Two ways this differs from the book
+## Where the embargo starts
 
-Both are visible in the figure, and both make the split more conservative than Snippet 7.3,
-never less.
+The embargo follows Snippet 7.3. It covers $h = \lceil \texttt{pct\_embargo} \cdot n\rceil$
+samples, and it starts where the purge ends: at the first sample after the fold whose label
+starts after the latest end among the fold's labels (the book's `maxT1Idx`). So $h$ counts
+samples *beyond* the purge, and a short embargo still removes something when labels are long.
+Only later features can contain test-window prices, so nothing before the fold is embargoed.
 
-1. **The embargo is applied on both sides of the test fold.** AFML embargoes only what
-   follows a test set, because only later features can contain test-window prices. Here the
-   same number of samples is also removed *before* the fold.
-2. **The embargo is counted from the fold's edges, not from the end of the purged zone.**
-   Snippet 7.3 resumes training `embargo` samples after the last test label's end. Here it is
-   `embargo` samples after the last test *sample*. When labels span at least as many samples
-   as the embargo, the embargo therefore removes nothing that purging had not already
-   removed.
+[`backtesting-engine`](/modules/backtesting-engine/) uses the same code for its embargo, so
+the two modules train on the same samples. Two details differ from the book's code, and
+neither loosens the split. Overlap is tested on closed intervals, so a label that ends
+exactly when the fold starts is purged, where Snippet 7.3 keeps it. And $h$ is rounded up
+rather than truncated, so any positive `pct_embargo` embargoes at least one sample.
 
-The example shows the second point: forty hourly labels, each resolved three hours after it
-starts, five folds, third fold.
+Before [#134](https://github.com/Open-Quant/openquant/issues/134), `PurgedKFold` embargoed
+both sides of the fold and counted from the fold's edges, not from the end of the purge.
+
+The example: forty hourly labels, each resolved three hours after it starts, five folds,
+third fold.
 
 ```rust
 use chrono::{Duration, NaiveDate};
@@ -102,25 +105,21 @@ let train_of = |pct_embargo: f64| -> Result<Vec<usize>, CrossValidationError> {
 };
 
 // Test fold is samples 16-23. Purging alone removes 13-15 and 24-26.
-let purged: Vec<usize> = (0..=12).chain(27..=39).collect();
-assert_eq!(train_of(0.0)?, purged);
-// An embargo of ceil(0.07 * 40) = 3 samples falls entirely inside the purged zone.
-assert_eq!(train_of(0.07)?, purged);
-// Six samples reach past it, on both sides.
-assert_eq!(train_of(0.15)?, (0..=9).chain(30..=39).collect::<Vec<usize>>());
+assert_eq!(train_of(0.0)?, (0..=12).chain(27..=39).collect::<Vec<usize>>());
+// An embargo of ceil(0.07 * 40) = 3 samples starts where the purge ends: 27-29.
+assert_eq!(train_of(0.07)?, (0..=12).chain(30..=39).collect::<Vec<usize>>());
+// Six samples: 27-32. Nothing before the fold is embargoed.
+assert_eq!(train_of(0.15)?, (0..=12).chain(33..=39).collect::<Vec<usize>>());
 ```
 
 ```text
 embargo 0.00: test 16-23  train 0-12, 27-39  (26 of 32 kept)
-embargo 0.07: test 16-23  train 0-12, 27-39  (26 of 32 kept)
-embargo 0.15: test 16-23  train 0-9, 30-39  (20 of 32 kept)
+embargo 0.07: test 16-23  train 0-12, 30-39  (23 of 32 kept)
+embargo 0.15: test 16-23  train 0-12, 33-39  (20 of 32 kept)
 ```
 
 The text block is the output of `cargo run --example docs_cross_validation`, and
-`test_docs_page_example_values` pins the same three index sets. To get an embargo of $e$
-samples *beyond* the purge in the book's sense, set `pct_embargo` to $(e+\ell)/n$, with
-$\ell$ the longest label span in samples. Both points are recorded on
-[#94](https://github.com/Open-Quant/openquant/issues/94).
+`test_docs_page_example_values` pins the same three index sets.
 
 `pct_embargo` is a fraction of the *whole sample count*, rounded up: 0.01 on 5,000 samples
 is 50 samples. AFML suggests a value around 0.01. `new` rejects values outside $[0, 1)$, and
@@ -131,8 +130,9 @@ information sets that end before they start.
 `split_with_diagnostics(n_samples)` returns the same folds as `split`, each as a
 `PurgedSplit` whose `diagnostics` say why each excluded sample was excluded.
 `purged_indices` overlap the test window. `embargo_indices` lie inside an embargo window,
-whether or not they were also purged, so an embargo that adds nothing shows up as
-`embargo_indices` contained in `purged_indices`. `test_ranges` gives the test set as ranges.
+whether or not they were also purged. The window starts after the purge, so in a k-fold split
+no sample is both; in CPCV a window can reach into another test block's purged zone, and those
+samples are listed in both. `test_ranges` gives the test set as ranges.
 Training is every sample in none of the three. `overlap_count_after_purge` counts training
 labels that still intersect a test label. It is always 0, and is there so a pipeline can
 assert it.
@@ -163,9 +163,8 @@ let cv = PurgedKFold::new(5, info_sets.clone(), 0.15)?;
 let fold = &cv.split_with_diagnostics(40)?[2];
 assert_eq!(fold.diagnostics.test_ranges, vec![(16, 24)]);
 assert_eq!(fold.diagnostics.purged_indices, vec![13, 14, 15, 24, 25, 26]);
-// Six samples each side; 13-15 and 24-26 were purged as well.
-let embargoed: Vec<usize> = (10..=15).chain(24..=29).collect();
-assert_eq!(fold.diagnostics.embargo_indices, embargoed);
+// Six samples after the purged zone, none before the fold.
+assert_eq!(fold.diagnostics.embargo_indices, (27..=32).collect::<Vec<usize>>());
 
 // N = 5, k = 2: C(5, 2) = 10 splits and 2/5 * 10 = 4 paths.
 assert_eq!(cv.cpcv_splits(40, 2)?.len(), 10);
@@ -262,7 +261,7 @@ print("naive fold 2 overlaps:", cv.count_train_test_overlaps(t0, t1, naive_train
 ```
 
 ```text
-test 16 - 23 train [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+test 16 - 23 train [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 33, 34, 35, 36, 37, 38, 39]
 purged [13, 14, 15, 24, 25, 26]
 10 CPCV splits; split 1 tests folds (0, 2)
 [[0 0 1 2 3]

@@ -4,6 +4,7 @@
 //! force provenance and bias-control metadata into each run, while Chapter 12
 //! split logic is represented through WF/CV/CPCV mode-specific pathways.
 
+use crate::cross_validation::{embargo_width, embargo_windows};
 use chrono::NaiveDateTime;
 use std::collections::HashMap;
 
@@ -598,34 +599,19 @@ fn apply_purge_and_embargo(
     // Embargo (AFML 7.4.2, Snippet 7.3): only training samples that FOLLOW a test block are
     // embargoed, and the count starts where the purge ends: at the first sample after the block
     // whose label starts after the block's latest label end. Samples before a test block are
-    // never embargoed. A CPCV split has one block per run of adjacent test groups.
-    let embargo_width = (pct_embargo * n_samples as f64).ceil() as usize;
-    let mut embargoed = vec![false; n_samples];
-    if embargo_width > 0 {
-        let mut test_mask = vec![false; n_samples];
-        for idx in test_indices {
-            test_mask[*idx] = true;
-        }
-        let mut idx = 0;
-        while idx < n_samples {
-            if !test_mask[idx] {
-                idx += 1;
-                continue;
-            }
-            let mut block_end = label_spans[idx].1;
-            while idx < n_samples && test_mask[idx] {
-                block_end = block_end.max(label_spans[idx].1);
-                idx += 1;
-            }
-            let mut resume = idx;
-            while resume < n_samples && label_spans[resume].0 <= block_end {
-                resume += 1;
-            }
-            for e in resume..(resume + embargo_width).min(n_samples) {
-                if train_mask[e] {
-                    embargoed[e] = true;
-                    train_mask[e] = false;
-                }
+    // never embargoed. A CPCV split has one block per run of adjacent test groups. The rule is
+    // shared with `cross_validation::PurgedKFold`.
+    let mut test_mask = vec![false; n_samples];
+    for idx in test_indices {
+        test_mask[*idx] = true;
+    }
+    let mut embargo_count = 0;
+    let width = embargo_width(pct_embargo, n_samples);
+    for window in embargo_windows(label_spans, &test_mask, width) {
+        for e in window {
+            if train_mask[e] {
+                train_mask[e] = false;
+                embargo_count += 1;
             }
         }
     }
@@ -635,7 +621,6 @@ fn apply_purge_and_embargo(
         .enumerate()
         .filter_map(|(idx, keep)| if *keep { Some(idx) } else { None })
         .collect();
-    let embargo_count = embargoed.into_iter().filter(|v| *v).count();
 
     (train_indices, purged_count, embargo_count)
 }

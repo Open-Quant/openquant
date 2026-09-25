@@ -218,3 +218,27 @@ def test_run_cpcv_rejects_bad_input():
         bt.run_cpcv(None, t1, good, **kw)
     with pytest.raises(TypeError):
         bt.run_cpcv(t0, t1, good, n_groups=6, test_groups=2, pct_embargo=0.0)
+
+
+def test_engine_trains_on_the_same_samples_as_cross_validation():
+    # Rust: test_purged_kfold_and_backtesting_engine_train_on_the_same_samples (CPCV part).
+    # Both modules apply the AFML Snippet 7.3 embargo (issue #134), so with increasing label
+    # starts the engine's reported training sets equal cpcv_splits'.
+    rng = np.random.default_rng(132)
+    compared = 0
+    for _ in range(40):
+        n = int(rng.integers(20, 80))
+        n_groups = int(rng.integers(3, 7))
+        k = int(rng.integers(1, n_groups))
+        pct = float(rng.choice([0.0, 0.02, 0.05, 0.1]))
+        starts = np.cumsum(rng.integers(1, 10, size=n))
+        t0, t1 = starts, starts + rng.integers(0, 40, size=n)
+        splits = cv.cpcv_splits(t0, t1, n_groups, k, pct)
+        if any(len(s["train_indices"]) == 0 for s in splits):
+            continue  # the engine rejects a split with no training data
+        zeros = [np.zeros(len(s["test_indices"])) for s in splits]
+        res = bt.run_cpcv(t0, t1, zeros, n_groups=n_groups, test_groups=k, pct_embargo=pct, **RUN)
+        for mine, theirs in zip(splits, res["splits"]):
+            assert mine["train_indices"].tolist() == theirs["train_indices"]
+        compared += 1
+    assert compared > 20

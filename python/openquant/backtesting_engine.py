@@ -60,10 +60,11 @@ def run_cpcv(
     ``split_for_group``), ``path_distribution`` (per-path statistics) and ``diagnostics``.
     Each ``sharpe`` is the t-statistic ``mean / std * sqrt(n)``, not annualised.
 
-    The engine purges and embargoes its own copy of the splits, reported in ``splits``: its
-    purge compares each training label with each test label, and its embargo differs from
-    ``cross_validation`` (see the backtesting-engine page). Those training sets are reported,
-    not used: only the test indices, identical in both modules, and your returns are.
+    The engine purges and embargoes its own copy of the splits, reported in ``splits``. Its
+    purge compares each training label with each test label and its embargo is the one
+    ``cross_validation`` uses, so with increasing label starts its training sets equal
+    ``cpcv_splits``'s. Those training sets are reported, not used: only the test indices,
+    identical in both modules, and your returns are.
     """
     s0, s1 = _label_spans(t0, t1)
     returns = [np.asarray(r, dtype=np.float64).tolist() for r in split_returns]

@@ -136,11 +136,11 @@ let grid = BTreeMap::from([(
 
 let by_loss = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::NegLogLoss)?;
 assert_eq!(by_loss.best_params["k"], HyperParamValue::Float(8.0));
-assert!((by_loss.best_score + 0.2238).abs() < 1e-4);
+assert!((by_loss.best_score + 0.2243).abs() < 1e-4);
 
 // Accuracy cannot tell the five apart, and a tie goes to the last one tried.
 let by_accuracy = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::Accuracy)?;
-assert!(by_accuracy.trials.iter().all(|t| (t.mean_score - 0.8933).abs() < 1e-4));
+assert!(by_accuracy.trials.iter().all(|t| (t.mean_score - 0.8950).abs() < 1e-4));
 assert_eq!(by_accuracy.best_params["k"], HyperParamValue::Float(32.0));
 
 // A log-uniform draw covers three orders of magnitude evenly and lands near the same optimum.
@@ -154,21 +154,21 @@ Mean score by `k`, from the two grid searches:
 
 ```text
    k     neg log loss   accuracy
-  0.5       -0.5942       0.8933
-  2.0       -0.3935       0.8933
-  4.0       -0.2746       0.8933
-  8.0       -0.2238       0.8933
- 32.0       -0.4681       0.8933
+  0.5       -0.5941       0.8950
+  2.0       -0.3933       0.8950
+  4.0       -0.2745       0.8950
+  8.0       -0.2243       0.8950
+ 32.0       -0.4711       0.8950
 ```
 
 <figure>
-<img class="dark:sl-hidden" src="/figures/ch9-scoring-light.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.893 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
-<img class="light:sl-hidden" src="/figures/ch9-scoring-dark.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.893 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
+<img class="dark:sl-hidden" src="/figures/ch9-scoring-light.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.895 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
+<img class="light:sl-hidden" src="/figures/ch9-scoring-dark.svg" alt="Cross-validated score against the sharpness parameter k on a logarithmic axis, for two scoring rules. Accuracy is a flat line at 0.895 for every k. Negative log loss rises from minus 0.59 at k = 0.5 to a peak of minus 0.22 at k = 8, then falls to minus 0.47 at k = 32." />
 <figcaption>Accuracy is blind to confidence. Log loss finds the <em>k</em> at which stated probabilities match outcomes, and penalises overconfidence beyond it.</figcaption>
 </figure>
 
 Accuracy returned `k = 32`, the second-worst setting by log loss, and it did so by accident
-of ordering. A model tuned that way states near-certainty on calls it gets right 89% of
+of ordering. A model tuned that way states near-certainty on calls it gets right 90% of
 the time, and a probability-sized book built on it is badly over-levered.
 
 ## Why log-uniform
@@ -270,9 +270,9 @@ search.fit(X, y, sample_weight=w)  # weights reach fit, not the score
 - **The winner's score is not an out-of-sample estimate.** It was selected for being high.
   Hold out a final span that the search never sees, or nest the search inside an outer purged
   loop.
-- **The embargo is measured from the fold's edge**, so a `pct_embargo` shorter than the
-  labels adds nothing to the purge; see
-  [`cross-validation`](/modules/cross-validation/#two-ways-this-differs-from-the-book).
+- **The embargo starts where the purge ends**, after each test fold only (Snippet 7.3), so
+  `pct_embargo` removes that many samples beyond the purge; see
+  [`cross-validation`](/modules/cross-validation/#where-the-embargo-starts).
 - **Labels must be 0 or 1** and probabilities finite and in $[0,1]$; anything else is a
   `TuningError`, as are negative weights and a fold left empty by purging.
 

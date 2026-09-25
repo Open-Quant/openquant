@@ -50,8 +50,9 @@ Use these reports for screening. Measure importance for the model you will trade
 k-fold splits and need `event_end_indices`: for each row, the row index at which its label
 is resolved. Omit it and they raise, with an explanation, rather than quietly running
 unpurged. `allow_unpurged=True` is the explicit opt-out, and the returned `cv` block then
-records `"purged": False`. The splitter embargoes both sides of each test fold, like the
-[Rust one](/modules/cross-validation/#two-ways-this-differs-from-the-book).
+records `"purged": False`. This Python splitter embargoes both sides of each test fold, counted from the fold's edges.
+That is stricter than the Rust `PurgedKFold`, which embargoes only after the fold, starting
+where the purge ends ([Snippet 7.3](/modules/cross-validation/#where-the-embargo-starts)).
 
 ## Three rankings of the same features
 

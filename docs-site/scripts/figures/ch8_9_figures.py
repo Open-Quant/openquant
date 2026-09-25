@@ -14,8 +14,8 @@ from openquant import feature_diagnostics as fd
 # hyperparameter_tuning has no Python binding. These are the grid-search means asserted by
 # crates/openquant/tests/docs_ch8_9_examples.rs; if that test changes, change these.
 K = [0.5, 2.0, 4.0, 8.0, 32.0]
-NEG_LOG_LOSS = [-0.5942, -0.3935, -0.2746, -0.2238, -0.4681]
-ACCURACY = [0.8933] * 5
+NEG_LOG_LOSS = [-0.5941, -0.3933, -0.2745, -0.2243, -0.4711]
+ACCURACY = [0.8950] * 5
 
 
 def importance_figure():
