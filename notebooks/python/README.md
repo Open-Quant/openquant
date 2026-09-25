@@ -14,8 +14,9 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 8. `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
 9. `09_fracdiff_stationarity_memory.ipynb` (runbook #49: FFD d-sweep, ADF vs memory, checked against simulated series of known memory; SYNTHETIC by default, `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 10. `10_hrp_vs_ivp_cla_oos.ipynb` (runbook, #51: HRP vs inverse-variance and CLA out of sample, AFML §16.6 Monte Carlo on SYNTHETIC data; `OPENQUANT_RUNBOOK_RUNS=10000` for the book's run count)
+12. `12_cpcv_deflated_sharpe.ipynb` (runbook, #48: CPCV backtest with PSR and the deflated Sharpe ratio; a no-signal control and a planted signal, SYNTHETIC; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 
-Every notebook runs offline. Notebooks 06, 09 and 10 read market-shaped data through `openquant.data.fetch`, whose default
+Every notebook runs offline. Notebooks 06, 09, 10 and 12 read market-shaped data through `openquant.data.fetch`, whose default
 source is the committed SYNTHETIC sample (`SYN_A` to `SYN_E`, see `DATA_SOURCES.md`); the others generate
 synthetic series in memory. None of the committed outputs describe a real market.
 
