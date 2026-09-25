@@ -27,6 +27,22 @@ export const apiInventory = {
       "data_quality_report",
       "load_ohlcv"
     ],
+    "evaluation": [
+      "config_hash",
+      "deflated_sharpe_ratio",
+      "expected_max_sharpe",
+      "meta_label_metrics",
+      "minimum_track_record_length",
+      "n_trials",
+      "path",
+      "probabilistic_sharpe_ratio",
+      "record",
+      "reload",
+      "return_moments",
+      "sharpe_std",
+      "strategy_failure_probability",
+      "trials"
+    ],
     "feature_diagnostics": [
       "feature_screen_report",
       "mda_importance",

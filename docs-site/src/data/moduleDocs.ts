@@ -625,6 +625,16 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
     pythonApis: ["data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report", "data.clean_ohlcv_df", "data.quality_report_df", "data.align_calendar_df"],
   },
   {
+    slug: "evaluation",
+    module: "evaluation",
+    subject: "Research Workflows",
+    summary: "PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.",
+    handwritten: true,
+    afmlChapters: [3, 14, 15],
+    apiSurface: "python-only",
+    pythonApis: ["evaluation.return_moments", "evaluation.probabilistic_sharpe_ratio", "evaluation.deflated_sharpe_ratio", "evaluation.expected_max_sharpe", "evaluation.minimum_track_record_length", "evaluation.meta_label_metrics", "evaluation.strategy_failure_probability", "evaluation.config_hash", "evaluation.TrialRegistry"],
+  },
+  {
     slug: "feature-diagnostics",
     module: "feature_diagnostics",
     subject: "Sampling, Validation and ML Diagnostics",

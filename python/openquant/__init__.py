@@ -4,6 +4,7 @@ from . import _core
 from . import adapters
 from . import bars
 from . import data
+from . import evaluation
 from . import feature_diagnostics
 from . import pipeline
 from . import research
@@ -74,6 +75,7 @@ __all__ = [
     *_CORE_REEXPORTS,
     "bars",
     "data",
+    "evaluation",
     "feature_diagnostics",
     "pipeline",
     "research",
