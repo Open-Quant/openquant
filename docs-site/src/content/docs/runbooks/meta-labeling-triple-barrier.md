@@ -67,10 +67,10 @@ Each is tested one-sided at 5%, paired over 30 simulated paths at $\kappa = 0.25
 
 | | Claim | Result |
 |---|---|---|
-| H1 | Meta's precision is higher than primary's | **supported**: 0.543 → 0.565, $t$ = 4.2 (walk-forward: +0.018, $t$ = 3.9) |
-| H2 | Meta's F1 is higher than primary's (AFML §3.6) | **rejected**: 0.704 → 0.620, $t$ = −11 |
-| H3 | Meta's net Sharpe ratio is higher than primary's | **supported**: 0.18 → 0.31 annualised, $t$ = 2.8 |
-| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.905 |
+| H1 | Meta's precision is higher than primary's | **supported**: 0.543 → 0.565, $t$ = 4.2 (walk-forward: +0.018, $t$ = 4.3) |
+| H2 | Meta's F1 is higher than primary's (AFML §3.6) | **rejected**: 0.704 → 0.621, $t$ = −11 |
+| H3 | Meta's net Sharpe ratio is higher than primary's | **supported**: 0.18 → 0.32 annualised, $t$ = 2.7 |
+| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.924 |
 
 ## Method
 
@@ -112,8 +112,8 @@ The Monte Carlo paths describe the method and are not trials.
 
 | Strategy | Bets | Precision | Recall | F1 | Net Sharpe (ann.) | PSR | DSR |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Primary (crossover, every bet) | 708 | 0.572 | 1.000 | 0.728 | 0.35 | 0.939 | 0.340 |
-| Primary + meta (pre-registered) | 512 | 0.609 | 0.770 | 0.680 | 0.74 | 0.999 | 0.905 |
+| Primary (crossover, every bet) | 708 | 0.572 | 1.000 | 0.728 | 0.35 | 0.939 | 0.323 |
+| Primary + meta (pre-registered) | 508 | 0.614 | 0.770 | 0.683 | 0.78 | 1.000 | 0.924 |
 | Oracle filter (not tradable) | 369 | 0.650 | 0.593 | 0.620 | 1.27 | 1.000 | — |
 
 <figure>
@@ -126,9 +126,9 @@ The Monte Carlo paths describe the method and are not trials.
 
 | $\kappa_{\text{trend}}$ | Precision: meta | Precision: oracle | Net Sharpe: meta | Net Sharpe: oracle |
 |---:|---:|---:|---:|---:|
-| 0 (no signal) | −0.014 ($t$ = −3.5) | −0.003 | −0.02 ($t$ = −0.6) | −0.04 |
-| 0.12 | −0.002 ($t$ = −0.4) | +0.043 | +0.02 ($t$ = 0.6) | +0.38 |
-| 0.25 | +0.022 ($t$ = 4.2) | +0.091 | +0.14 ($t$ = 2.8) | +0.82 |
+| 0 (no signal) | −0.014 ($t$ = −3.7) | −0.003 | −0.03 ($t$ = −0.7) | −0.04 |
+| 0.12 | −0.003 ($t$ = −0.5) | +0.043 | +0.03 ($t$ = 0.7) | +0.38 |
+| 0.25 | +0.022 ($t$ = 4.2) | +0.091 | +0.14 ($t$ = 2.7) | +0.82 |
 
 <figure>
 <img class="dark:sl-hidden" src="/figures/notebooks/nb11-monte-carlo-light.svg" alt="Box plots over simulated paths of the precision gain and the net Sharpe ratio gain of the meta-labeled strategy over the primary model, at signal strengths 0, 0.12 and 0.25, with the oracle filter's mean gain marked." />
@@ -139,8 +139,8 @@ The Monte Carlo paths describe the method and are not trials.
 **Control on the `SYN_*` sample:**
 
 - The crossover has no edge: precision 0.449, net Sharpe ratio −0.60.
-- The meta-model rejects 91% of its bets.
-- Meta's DSR is 0.002 over the same 10-configuration grid. There is no false discovery.
+- The meta-model rejects 88% of its bets.
+- Meta's DSR is 0.001 over the same 10-configuration grid. There is no false discovery.
 
 ## What it means
 
@@ -151,16 +151,16 @@ The Monte Carlo paths describe the method and are not trials.
 - **F1 is the wrong yardstick here.** The primary model takes every bet, so its recall is 1 and
   its F1 is $2b/(1+b)$ at base rate $b$. A filter that gives up 30% of recall for 2 points of
   precision lowers F1 even while it raises the Sharpe ratio.
-- **One path is not enough.** On the headline path, 19 years of a 0.74 Sharpe ratio still has a
-  DSR of 0.905 once 10 tried configurations are counted.
+- **One path is not enough.** On the headline path, 19 years of a 0.78 Sharpe ratio still has a
+  DSR of 0.924 once 10 tried configurations are counted.
 - **Precision comparisons are biased against meta when there is nothing to find.** On the
-  zero-signal generator, meta's precision is *lower* than primary's ($t$ = −3.5). This is not a
+  zero-signal generator, meta's precision is *lower* than primary's ($t$ = −3.7). This is not a
   leak: a test that replaces the test fold with noise leaves every fitted model bit-identical. It
   is how leave-fold-out CV behaves. A fold with a high win rate leaves a training set with a low
-  one, so the model takes fewer of that fold's bets; the correlation is −0.78. So read a precision
+  one, so the model takes fewer of that fold's bets; the correlation is −0.76. So read a precision
   gain against a null run, not against zero.
 - **Post hoc: probability sizing did best.** Snippet 10.1 sizing had the best Sharpe ratio on the
-  headline path (1.27, DSR 1.000) and in the Monte Carlo (+0.35, $t$ = 6.0). It also lost more
+  headline path (1.28, DSR 1.000) and in the Monte Carlo (+0.36, $t$ = 6.1). It also lost more
   under the null. It was not pre-registered, so it is the candidate for the next study.
 
 ## Decision
