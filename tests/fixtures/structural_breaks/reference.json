@@ -375,28 +375,8 @@
       }
     }
   },
-  "library_convention": {
-    "chu_stinchcombe_white": {
-      "one_sided": {
-        "stat": {
-          "len": 998,
-          "max": 3729.001403841245,
-          "mean": 836.5099765300039,
-          "at_20": 380.1379109861498
-        }
-      },
-      "two_sided": {
-        "stat": {
-          "len": 998,
-          "max": 5518.519585690808,
-          "mean": 1264.5828050317637,
-          "at_20": 921.297990714175
-        }
-      }
-    }
-  },
   "notes": {
-    "chu_stinchcombe_white": "AFML divides y_t - y_n by sigma_t (a standard deviation) with sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divides by the variance and uses t-2 as the divisor. Critical values do not depend on either.",
+    "chu_stinchcombe_white": "AFML divides y_t - y_n by sigma_t (a standard deviation) with sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divided by the variance until #104 and used t-2 as the divisor until #173; it now matches. Critical values do not depend on either.",
     "sadf": "Until #166 the library's 'quadratic' omitted the linear t of AFML's 'ctt', its sm_* models took the sup of the signed beta / se rather than |beta| / se, and sm_power used log(0) on the first row. It now matches the values here."
   }
 }

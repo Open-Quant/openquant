@@ -1,43 +1,169 @@
+//! Mean-variance portfolio allocation with weight bounds: inverse variance, minimum
+//! volatility, maximum Sharpe ratio, and minimum risk for a target return.
+//!
+//! References: Markowitz (1952), *Portfolio selection*; AFML Chapter 16, §16.2 (the problem
+//! with convex portfolio optimisation) and §16.3 (Markowitz's curse) for why these portfolios
+//! are fragile; Stellato et al. (2020), OSQP, for the solver formulation; Michaud (1989) on
+//! error maximisation.
+//!
+//! | `solution` | Problem |
+//! | --- | --- |
+//! | `"inverse_variance"` | `w_i ∝ 1 / Sigma_ii` (correlation ignored), then projected onto the bounds |
+//! | `"min_volatility"` | `min w'Σw` s.t. `1'w = 1`, `l <= w <= u` |
+//! | `"max_sharpe"` | maximise `(mu'w - rf) / sqrt(w'Σw)` s.t. `1'w = 1`, `l <= w <= u` |
+//! | `"efficient_risk"` | `min w'Σw` s.t. `mu'w >= target_return`, `1'w = 1`, `l <= w <= u` |
+//!
+//! The three optimisations are solved as quadratic programmes by an internal dense ADMM
+//! solver followed by an exact solve on the active set; **bounds are part of the problem**,
+//! not applied afterwards. Maximum Sharpe uses the substitution `y = kappa w`: minimise `y'Σy`
+//! subject to `(mu - rf)'y = 1` and `l_i 1'y <= y_i <= u_i 1'y`, then `w = y / 1'y`.
+//!
+//! Conventions:
+//! - Weights are fully invested (`sum w = 1`) and long-only by default (`0 <= w_i <= 1`).
+//!   [`AllocationOptions::tuple_bounds`] sets `(lo, hi)` for every asset and
+//!   [`AllocationOptions::bounds`] overrides it per asset index. Upper bounds above 1 are
+//!   treated as 1.
+//! - Price matrices are `T x N`: rows are dates in ascending order, columns are assets. From
+//!   prices, returns are **simple** returns `p_t / p_{t-1} - 1`, and the expected returns
+//!   **and** the covariance are annualised by `252 / step` (`step` = 1, 5 or 21 with
+//!   `resample_by`), so `risk_free_rate` and `target_return` are annual figures and
+//!   `portfolio_sharpe` is an annual Sharpe ratio.
+//! - With [`allocate_from_inputs`] the units are the caller's: `mu`, `Σ` and
+//!   `risk_free_rate` must agree (an annual `mu` with a daily `Σ` overstates the Sharpe ratio
+//!   by `sqrt(252)`). Weights do not depend on the scale of `Σ`.
+//! - Everything is in-sample: a maximum-Sharpe portfolio's `portfolio_sharpe` is the best ratio
+//!   on the history it was fitted to. The covariance is the plain sample covariance; shrink or
+//!   denoise it for many assets. The solver is dense and meant for tens of assets.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::portfolio_optimization::{allocate_from_inputs, AllocError, AllocationOptions};
+//!
+//! # fn main() -> Result<(), AllocError> {
+//! let mu = [0.03, 0.07, 0.09, 0.04];
+//! let vol = [0.05, 0.16, 0.22, 0.15];
+//! let rho = [[1.0, 0.1, 0.1, 0.1], [0.1, 1.0, 0.8, 0.0], [0.1, 0.8, 1.0, 0.0], [0.1, 0.0, 0.0, 1.0]];
+//! let cov = DMatrix::from_fn(4, 4, |i, j| rho[i][j] * vol[i] * vol[j]);
+//!
+//! let min_vol = allocate_from_inputs(&mu, &cov, "min_volatility", &AllocationOptions::default())?;
+//! assert!((min_vol.weights.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+//! assert!(min_vol.weights.iter().all(|w| *w > -1e-9));
+//! assert!((min_vol.portfolio_risk - 0.0476).abs() < 1e-4);
+//!
+//! // A return target above the minimum-variance return binds exactly, and costs risk.
+//! let target = AllocationOptions { target_return: 0.065, ..AllocationOptions::default() };
+//! let efficient = allocate_from_inputs(&mu, &cov, "efficient_risk", &target)?;
+//! assert!((efficient.portfolio_return - 0.065).abs() < 1e-7);
+//! assert!(efficient.portfolio_risk > min_vol.portfolio_risk);
+//!
+//! // With a 35% cap the most any portfolio can return is 6.8%, so 7% is infeasible...
+//! let capped = AllocationOptions {
+//!     target_return: 0.07,
+//!     tuple_bounds: Some((0.0, 0.35)),
+//!     ..AllocationOptions::default()
+//! };
+//! assert!(matches!(
+//!     allocate_from_inputs(&mu, &cov, "efficient_risk", &capped),
+//!     Err(AllocError::OptimizationFailed(_))
+//! ));
+//! // ...and bounds that cannot sum to one are rejected before solving.
+//! let impossible = AllocationOptions { tuple_bounds: Some((0.3, 0.4)), ..AllocationOptions::default() };
+//! assert!(matches!(
+//!     allocate_from_inputs(&mu, &cov, "min_volatility", &impossible),
+//!     Err(AllocError::InfeasibleBounds { .. })
+//! ));
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use nalgebra::{DMatrix, DVector};
 
 use crate::util::qp::{solve_qp, QpError};
 use crate::util::resample::{freq_step, resample_prices};
 use std::collections::HashMap;
 
+/// Errors returned by the allocation functions.
 #[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AllocError {
+    /// The price matrix has fewer than two rows (after resampling), so no return can be formed.
     #[error("no data: supply asset prices, or expected returns and a covariance matrix")]
     NoData,
+    /// `solution` is not one of `"inverse_variance"`, `"min_volatility"`, `"max_sharpe"`,
+    /// `"efficient_risk"`.
     #[error("unknown solution: {0}")]
     UnknownSolution(String),
+    /// [`returns_method_from_str`] was given an unknown name (the lower-cased name is carried).
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
+    /// The lower bounds sum above 1 or the (capped) upper bounds sum below 1, so no fully
+    /// invested portfolio satisfies them. Also returned for an empty asset set, or when the
+    /// inverse-variance projection cannot place the weight.
     #[error("weight bounds cannot sum to 1: lower bounds sum to {lower_sum}, upper bounds to {upper_sum}")]
-    InfeasibleBounds { lower_sum: f64, upper_sum: f64 },
+    InfeasibleBounds {
+        /// Sum of the lower bounds.
+        lower_sum: f64,
+        /// Sum of the upper bounds, each capped at 1.
+        upper_sum: f64,
+    },
+    /// The solver or a solution-specific precondition failed; the message says which:
+    /// `"no portfolio satisfies the constraints"` (infeasible constraints such as an
+    /// unreachable `target_return`, or no convergence), `"covariance is not positive
+    /// definite"` (malformed problem, which also covers a lower bound above its upper bound),
+    /// `"no asset has a return above the risk-free rate"` (`"max_sharpe"`), or a zero
+    /// covariance diagonal (`"inverse_variance"`).
     #[error("optimization failed: {0}")]
     OptimizationFailed(&'static str),
+    /// `expected_returns` and `covariance` disagree on the number of assets, or the covariance
+    /// is not square.
     #[error("inputs disagree on the number of assets")]
     DimensionMismatch,
+    /// A non-finite result: a zero price in a return denominator, a non-finite portfolio risk,
+    /// or a degenerate maximum-Sharpe solution (`1'y` not positive).
     #[error("result is NaN: {0}")]
     NaNResult(&'static str),
 }
 
+/// How expected returns are estimated from a price history.
 #[derive(Clone, Copy, Default)]
 pub enum ReturnsMethod {
+    /// Arithmetic mean of the per-period simple returns, annualised.
     #[default]
     Mean,
+    /// Exponentially weighted mean of the per-period simple returns, newest weighted most, with
+    /// decay `alpha = 2 / (span + 1)`, annualised.
     Exponential {
+        /// Span of the exponential weighting, in periods (after resampling). Not validated:
+        /// `span = 0` gives `alpha = 2` and alternating-sign weights.
         span: usize,
     },
 }
 
+/// Options shared by the allocation functions.
+///
+/// [`Default`] gives a zero risk-free rate, a 1% target return, long-only `[0, 1]` bounds, no
+/// resampling and [`ReturnsMethod::Mean`].
 #[derive(Clone)]
 pub struct AllocationOptions<'a> {
+    /// Risk-free rate for the Sharpe ratio and for `"max_sharpe"`; annual when allocating from
+    /// prices, otherwise in the units of the expected returns.
     pub risk_free_rate: f64,
+    /// Minimum expected return for `"efficient_risk"` (a floor, not an equality); annual when
+    /// allocating from prices. Ignored by the other solutions.
     pub target_return: f64,
+    /// Per-asset `(lower, upper)` weight bounds keyed by column index; takes precedence over
+    /// `tuple_bounds`. Indices not present fall back to `tuple_bounds`; out-of-range keys are
+    /// ignored.
     pub bounds: Option<HashMap<usize, (f64, f64)>>,
+    /// `(lower, upper)` weight bounds for every asset not in `bounds`; `None` means `(0, 1)`.
+    /// Upper bounds above 1 are treated as 1; negative lower bounds allow shorting.
     pub tuple_bounds: Option<(f64, f64)>,
+    /// Resampling of prices before returns are formed: `"W"`/`"week"`/`"weekly"` keeps every
+    /// 5th row, `"M"`/`"month"`/`"monthly"` every 21st (the last row of each block;
+    /// case-insensitive). Anything else, or `None`, keeps every row. Ignored by
+    /// [`allocate_from_inputs`].
     pub resample_by: Option<&'a str>,
+    /// Expected-return estimator used when allocating from prices.
     pub returns_method: ReturnsMethod,
 }
 
@@ -64,12 +190,37 @@ impl Default for AllocationOptions<'_> {
 /// every solution, and is 0 only when the risk is 0.
 #[derive(Debug, Clone)]
 pub struct MeanVariance {
+    /// Portfolio weights, one per asset in column order, summing to 1.
     pub weights: Vec<f64>,
+    /// Portfolio volatility `sqrt(w' Sigma w)`.
     pub portfolio_risk: f64,
+    /// Portfolio expected return `mu' w`.
     pub portfolio_return: f64,
+    /// `(portfolio_return - risk_free_rate) / portfolio_risk`, or 0 when the risk is 0.
     pub portfolio_sharpe: f64,
 }
 
+/// Parse an expected-returns method name (case-insensitive): `"mean"` or `"mean_historical"`
+/// give [`ReturnsMethod::Mean`]; `"exponential"` or `"exponential_historical"` give
+/// [`ReturnsMethod::Exponential`] with `span = 500`.
+///
+/// # Errors
+///
+/// [`AllocError::UnknownReturns`] for any other name.
+///
+/// ```
+/// use openquant::portfolio_optimization::{returns_method_from_str, AllocError, ReturnsMethod};
+///
+/// assert!(matches!(returns_method_from_str("Mean"), Ok(ReturnsMethod::Mean)));
+/// assert!(matches!(
+///     returns_method_from_str("exponential_historical"),
+///     Ok(ReturnsMethod::Exponential { span: 500 })
+/// ));
+/// assert!(matches!(
+///     returns_method_from_str("median"),
+///     Err(AllocError::UnknownReturns(name)) if name == "median"
+/// ));
+/// ```
 pub fn returns_method_from_str(name: &str) -> Result<ReturnsMethod, AllocError> {
     match name.to_lowercase().as_str() {
         "mean" | "mean_historical" => Ok(ReturnsMethod::Mean),
@@ -102,7 +253,30 @@ fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, AllocError
 
 /// Annualised expected simple returns and their annualised sample covariance: the inputs the
 /// price-based allocators solve with. Both are scaled by `252 / step`, so passing the pair to
-/// `allocate_from_inputs` gives the same result as `allocate_with_solution` on the prices.
+/// [`allocate_from_inputs`] gives the same result as [`allocate_with_solution`] on the prices.
+///
+/// `prices` is `T x N` (rows ascending in time). Returns `(mu, Sigma)`: `mu` has `N` entries
+/// from `returns_method`, `Sigma` is the `N x N` sample covariance (denominator `T' - 1` for
+/// `T'` returns; all zeros when there is only one return).
+///
+/// # Errors
+///
+/// - [`AllocError::NoData`] if fewer than two price rows remain after resampling.
+/// - [`AllocError::NaNResult`] if a price used as a return denominator is zero.
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::portfolio_optimization::{compute_expected_and_covariance, ReturnsMethod};
+///
+/// // Asset 0 returns +10%, +10%; asset 1 returns +20%, -10%.
+/// let prices = DMatrix::from_row_slice(3, 2, &[100.0, 100.0, 110.0, 120.0, 121.0, 108.0]);
+/// let (mu, cov) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+/// assert!((mu[0] - 0.10 * 252.0).abs() < 1e-9);
+/// assert!((mu[1] - 0.05 * 252.0).abs() < 1e-9);
+/// // Sample variance of (0.2, -0.1) is 0.045, annualised.
+/// assert!((cov[(1, 1)] - 0.045 * 252.0).abs() < 1e-9);
+/// assert!(cov[(0, 0)].abs() < 1e-12);
+/// ```
 pub fn compute_expected_and_covariance(
     prices: &DMatrix<f64>,
     returns_method: ReturnsMethod,
@@ -411,10 +585,50 @@ fn summarise(
     })
 }
 
+/// Inverse-variance portfolio from prices with default options (long-only, no resampling):
+/// `w_i ∝ 1 / Sigma_ii`, ignoring correlation.
+///
+/// See [`allocate_with_solution`] for the price conventions.
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"inverse_variance"`; in particular
+/// [`AllocError::OptimizationFailed`] if an asset's return variance is zero.
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::portfolio_optimization::allocate_inverse_variance;
+///
+/// // Asset 1's returns are twice asset 0's, so its variance is four times as large.
+/// let r = [0.01, -0.01, 0.01, -0.01];
+/// let mut p = [100.0, 100.0];
+/// let mut data = vec![p[0], p[1]];
+/// for x in r {
+///     p = [p[0] * (1.0 + x), p[1] * (1.0 + 2.0 * x)];
+///     data.extend(p);
+/// }
+/// let prices = DMatrix::from_row_slice(5, 2, &data);
+/// let result = allocate_inverse_variance(&prices).unwrap();
+/// assert!((result.weights[0] - 0.8).abs() < 1e-9);
+/// assert!((result.weights[1] - 0.2).abs() < 1e-9);
+/// ```
 pub fn allocate_inverse_variance(prices: &DMatrix<f64>) -> Result<MeanVariance, AllocError> {
     allocate_inverse_variance_with(prices, &AllocationOptions::default())
 }
 
+/// Inverse-variance portfolio from prices with explicit [`AllocationOptions`] (bounds,
+/// resampling); the weights are projected onto the bounds after normalising.
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"inverse_variance"`.
+///
+/// # Panics
+///
+/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
+/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
+/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
+/// [`f64::clamp`] with an invalid range.
 pub fn allocate_inverse_variance_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
@@ -422,6 +636,14 @@ pub fn allocate_inverse_variance_with(
     allocate_with_solution(prices, "inverse_variance", opts)
 }
 
+/// Minimum-volatility portfolio from prices, `min w'Σw` subject to the budget and bounds.
+///
+/// `bounds` / `tuple_bounds` are as in [`AllocationOptions`]; other options take their
+/// defaults. See [`allocate_with_solution`] for the price conventions.
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"min_volatility"`.
 pub fn allocate_min_vol(
     prices: &DMatrix<f64>,
     bounds: Option<HashMap<usize, (f64, f64)>>,
@@ -431,6 +653,11 @@ pub fn allocate_min_vol(
     allocate_min_vol_with(prices, &opts)
 }
 
+/// Minimum-volatility portfolio from prices with explicit [`AllocationOptions`].
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"min_volatility"`.
 pub fn allocate_min_vol_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
@@ -438,6 +665,16 @@ pub fn allocate_min_vol_with(
     allocate_with_solution(prices, "min_volatility", opts)
 }
 
+/// Maximum-Sharpe portfolio from prices, with `risk_free` an **annual** rate.
+///
+/// `bounds` / `tuple_bounds` are as in [`AllocationOptions`]; other options take their
+/// defaults. See [`allocate_with_solution`] for the price conventions.
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"max_sharpe"`; in particular
+/// [`AllocError::OptimizationFailed`] if no asset's annualised expected return exceeds
+/// `risk_free`.
 pub fn allocate_max_sharpe(
     prices: &DMatrix<f64>,
     risk_free: f64,
@@ -449,6 +686,11 @@ pub fn allocate_max_sharpe(
     allocate_max_sharpe_with(prices, &opts)
 }
 
+/// Maximum-Sharpe portfolio from prices with explicit [`AllocationOptions`].
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"max_sharpe"`.
 pub fn allocate_max_sharpe_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
@@ -456,6 +698,17 @@ pub fn allocate_max_sharpe_with(
     allocate_with_solution(prices, "max_sharpe", opts)
 }
 
+/// Least-risk portfolio from prices whose expected return is at least `target_return` (an
+/// **annual** figure). A target below the minimum-variance portfolio's return yields the
+/// minimum-variance portfolio.
+///
+/// `bounds` / `tuple_bounds` are as in [`AllocationOptions`]; other options take their
+/// defaults. See [`allocate_with_solution`] for the price conventions.
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"efficient_risk"`; an unreachable target is reported
+/// as [`AllocError::OptimizationFailed`].
 pub fn allocate_efficient_risk(
     prices: &DMatrix<f64>,
     target_return: f64,
@@ -466,6 +719,12 @@ pub fn allocate_efficient_risk(
     allocate_efficient_risk_with(prices, &opts)
 }
 
+/// Least-risk portfolio for `opts.target_return` from prices with explicit
+/// [`AllocationOptions`].
+///
+/// # Errors
+///
+/// As [`allocate_with_solution`] with `"efficient_risk"`.
 pub fn allocate_efficient_risk_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
@@ -473,6 +732,57 @@ pub fn allocate_efficient_risk_with(
     allocate_with_solution(prices, "efficient_risk", opts)
 }
 
+/// Allocate from given expected returns and covariance with the named `solution` (see the
+/// [module table](self)).
+///
+/// `expected_returns` has `N` entries and `covariance` is `N x N` in the same asset order; the
+/// units are the caller's and must agree with `opts.risk_free_rate` and `opts.target_return`.
+/// `opts.resample_by` and `opts.returns_method` are ignored.
+///
+/// # Errors
+///
+/// - [`AllocError::DimensionMismatch`] if `covariance` is not square or its size differs from
+///   `expected_returns.len()`.
+/// - [`AllocError::UnknownSolution`] for an unsupported `solution`.
+/// - [`AllocError::InfeasibleBounds`] if the bounds cannot sum to 1 (including an empty asset
+///   set), or the inverse-variance projection cannot place the weight.
+/// - [`AllocError::OptimizationFailed`] if the solver finds no feasible portfolio (e.g. an
+///   unreachable `target_return`) or does not converge, the problem is malformed (reported as
+///   "covariance is not positive definite", which also covers a lower bound above its upper
+///   bound), no asset beats `risk_free_rate` (`"max_sharpe"`), or a covariance diagonal entry
+///   is zero (`"inverse_variance"`).
+/// - [`AllocError::NaNResult`] if the portfolio risk is not finite or the maximum-Sharpe
+///   solution is degenerate.
+///
+/// # Panics
+///
+/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
+/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
+/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
+/// [`f64::clamp`] with an invalid range.
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::portfolio_optimization::{allocate_from_inputs, AllocationOptions};
+///
+/// let opts = AllocationOptions::default();
+///
+/// // Two assets: min-vol weight on asset 0 is (s2^2 - s12) / (s1^2 + s2^2 - 2 s12).
+/// let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.006, 0.006, 0.09]);
+/// let mv = allocate_from_inputs(&[0.05, 0.10], &cov, "min_volatility", &opts).unwrap();
+/// assert!((mv.weights[0] - 0.084 / 0.118).abs() < 1e-6);
+///
+/// // Uncorrelated assets: max-Sharpe weights are proportional to mu_i / s_i^2 = (2.5, 1.25).
+/// let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, 0.16]);
+/// let ms = allocate_from_inputs(&[0.10, 0.20], &cov, "max_sharpe", &opts).unwrap();
+/// assert!((ms.weights[0] - 2.0 / 3.0).abs() < 1e-6);
+///
+/// // A binding target: 0.05 w + 0.15 (1 - w) = 0.12 gives w = 0.3.
+/// let target = AllocationOptions { target_return: 0.12, ..AllocationOptions::default() };
+/// let er = allocate_from_inputs(&[0.05, 0.15], &cov, "efficient_risk", &target).unwrap();
+/// assert!((er.weights[0] - 0.3).abs() < 1e-6);
+/// assert!((er.portfolio_return - 0.12).abs() < 1e-6);
+/// ```
 pub fn allocate_from_inputs(
     expected_returns: &[f64],
     covariance: &DMatrix<f64>,
@@ -501,6 +811,48 @@ pub fn allocate_from_inputs(
     summarise(weights, expected_returns, covariance, opts.risk_free_rate)
 }
 
+/// Allocate from a price matrix with the named `solution`: estimate annualised `mu` and `Σ`
+/// with [`compute_expected_and_covariance`], then call [`allocate_from_inputs`].
+///
+/// `prices` is `T x N`, rows ascending in time, columns in asset order. Returns are simple
+/// returns after optional resampling; `mu` and `Σ` are both annualised by `252 / step`, so
+/// `opts.risk_free_rate` and `opts.target_return` are annual and the reported risk and Sharpe
+/// ratio are annual.
+///
+/// # Errors
+///
+/// - [`AllocError::NoData`] if fewer than two price rows remain after resampling.
+/// - [`AllocError::NaNResult`] if a price used as a return denominator is zero.
+/// - Otherwise as [`allocate_from_inputs`].
+///
+/// # Panics
+///
+/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
+/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
+/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
+/// [`f64::clamp`] with an invalid range.
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::portfolio_optimization::{
+///     allocate_from_inputs, allocate_with_solution, compute_expected_and_covariance,
+///     AllocationOptions, ReturnsMethod,
+/// };
+///
+/// let prices = DMatrix::from_fn(40, 3, |t, j| {
+///     100.0 * (1.0 + 0.002 * (j as f64 + 1.0)).powi(t as i32)
+///         * (1.0 + 0.01 * ((t * (j + 2)) as f64).sin())
+/// });
+/// let opts = AllocationOptions::default();
+/// let from_prices = allocate_with_solution(&prices, "min_volatility", &opts).unwrap();
+/// assert!((from_prices.weights.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+///
+/// // Same answer from the annualised inputs.
+/// let (mu, cov) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+/// let from_inputs = allocate_from_inputs(&mu, &cov, "min_volatility", &opts).unwrap();
+/// assert_eq!(from_prices.weights, from_inputs.weights);
+/// assert_eq!(from_prices.portfolio_risk, from_inputs.portfolio_risk);
+/// ```
 pub fn allocate_with_solution(
     prices: &DMatrix<f64>,
     solution: &str,

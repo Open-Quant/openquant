@@ -50,13 +50,20 @@ of one-way turnover.
 
 | Method | Mean OOS variance ×10⁴ | Ratio to HRP | Runs where HRP is lower | Effective N (of 10) | Turnover per rebalance |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| HRP | 3.90 | 1.00 | — | 7.25 | 0.22 |
-| IVP | 5.01 | 1.28 | 76% | 8.26 | 0.07 |
-| CLA (min. variance) | 5.16 | 1.32 | 62% | 5.36 | 0.19 |
-| Equal weight | 8.42 | 2.16 | 87% | 10.00 | 0.00 |
+| HRP | 3.69 | 1.00 | — | 7.26 | 0.12 |
+| HRP on the pairwise tree (`distance="correlation"`) | 3.90 | 1.06 | 53% | 7.25 | 0.22 |
+| IVP | 5.01 | 1.36 | 83% | 8.26 | 0.07 |
+| CLA (min. variance) | 5.16 | 1.40 | 64% | 5.36 | 0.19 |
+| Equal weight | 8.42 | 2.28 | 89% | 10.00 | 0.00 |
 
-Both hypotheses are supported ($t$ = 10.6 against CLA, 31.5 against IVP). A 10,000-run local run gives
-ratios of 1.34 (CLA) and 1.30 (IVP).
+Both hypotheses are supported ($t$ = 12.2 against CLA, 40.6 against IVP). A 10,000-run local run gives
+ratios of 1.42 (CLA) and 1.38 (IVP), with HRP lower in 65% and 83% of runs.
+
+HRP here clusters as the book's Snippet 16.4 does, on the distance between columns of the
+correlation-distance matrix, which is `openquant.hrp`'s default since
+[#167](https://github.com/Open-Quant/openquant/issues/167). The second row is the tree it used before
+(mlfinlab's): about 6% more variance and nearly twice the turnover. At 10,000 runs its ratios are 1.30
+(IVP) and 1.34 (CLA). See [which distance is clustered](/modules/hrp/#which-distance-is-clustered).
 
 <figure>
 <img class="dark:sl-hidden" src="/figures/notebooks/nb10-oos-variance-light.svg" alt="Left: histograms of per-run out-of-sample variance for HRP, IVP and CLA on a log scale, with equal weight's median as a vertical line; HRP's distribution sits furthest left. Right: histograms of the per-run log2 ratio of IVP and CLA variance to HRP variance, both centred above zero." />
@@ -73,15 +80,15 @@ ratios of 1.34 (CLA) and 1.30 (IVP).
 ## Against the book
 
 Quoting AFML §16.6 from memory (check the book before citing): CLA's out-of-sample variance is about
-72% higher than HRP's and IVP's about 38% higher. The direction replicates; the size does not. Here the
-ratios are 1.32 and 1.28 on mean per-run variance. On the statistic Snippet 16.5 appears to print (the
-variance across runs of each run's standard deviation), CLA is 1.36× HRP but IVP is 0.90×. The notebook
-lists untested candidate reasons, chiefly that Snippet 16.1 clusters on distances between rows of the
-distance matrix while `openquant.hrp` clusters on the pairwise distances.
+72% higher than HRP's and IVP's about 38% higher. The direction replicates. With the book's tree the
+IVP ratio matches too (1.38 at 10,000 runs, 1.36 at 2,000); the CLA ratio (1.42) is still smaller. On
+the statistic Snippet 16.5 appears to print (the variance across runs of each run's standard
+deviation), CLA is 1.53× HRP and IVP 1.01×. Before #167, on the pairwise tree, the ratios were 1.30 and
+1.34, and the tree was the largest candidate cause of the gap; the notebook lists what remains.
 
-Two findings beyond the book's claim: HRP turns over more than CLA here (0.22 vs 0.19 per rebalance),
-because single linkage on near-duplicate pairs can reorder the leaves between windows; and HCAA with
-`"minimum_variance"` is left out because it returns HRP's weights exactly
+HRP turns over less than CLA (0.12 vs 0.19 per rebalance). On the pairwise tree it turned over more
+(0.22): single linkage on near-duplicate pairs reordered the leaves between windows. HCAA is left out;
+when this runbook was written it returned HRP's weights exactly
 ([#108](https://github.com/Open-Quant/openquant/issues/108)).
 
 ## Decision

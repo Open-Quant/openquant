@@ -1,3 +1,76 @@
+//! Bagging ensembles whose bootstrap samples are drawn with the sequential bootstrap (AFML
+//! §4.5, §4.5.1; bagging per §6.3 and Breiman, 1996).
+//!
+//! With overlapping financial labels a uniform bootstrap draws samples full of
+//! near-duplicates, so the estimators are too alike for averaging to remove much variance,
+//! and out-of-bag rows resemble in-bag rows, inflating out-of-bag scores (AFML §4.5). The
+//! types here draw each estimator's sample with [`seq_bootstrap_with_rng`] instead. They port
+//! mlfinlab's `SequentiallyBootstrappedBaggingClassifier` and
+//! `SequentiallyBootstrappedBaggingRegressor`.
+//!
+//! **The sampling is real; the base learner is a sketch.** For each estimator, `fit`
+//! draws `max_features` column indices and **keeps only the first**, draws `max_samples`
+//! label indices with the sequential bootstrap, and fits a fixed one-feature learner on
+//! those rows: for [`SequentiallyBootstrappedBaggingClassifier`], a stump whose threshold is
+//! the (weighted) *mean* of the feature over the sample, predicting whichever side had the
+//! higher rate of `y == 1`; for [`SequentiallyBootstrappedBaggingRegressor`], a weighted
+//! least-squares line. A result from this module is a result about sequentially bootstrapped
+//! bagging of one-feature stumps or lines, not of a real model; for production, pass
+//! sequential-bootstrap indices to your own learners.
+//!
+//! Conventions:
+//!
+//! - `x` is observations × features, one row per label.
+//! - `ind_mat` is the bars × labels indicator matrix from
+//!   [`get_ind_matrix`](crate::sampling::get_ind_matrix): its **columns** correspond
+//!   one-to-one with the rows of `x`.
+//! - Classifier labels are `u8` with 1 as the positive class; anything else counts as
+//!   negative, so a −1/+1 encoding must be mapped to 0/1 first.
+//! - Configuration is by public field after `new(random_state)`; settings are validated when
+//!   `fit` is called. The same `random_state` and inputs reproduce a fit.
+//! - `max_features` above one column changes nothing except the random stream, because only
+//!   the first sampled feature is used.
+//! - Out-of-bag scores remain optimistic when labels overlap, because a held-out label still
+//!   overlaps drawn labels in time (AFML §4.5); treat them as a sanity check and score the
+//!   model under purged cross-validation ([`crate::cross_validation`]).
+//! - Each sequential draw rescans the whole indicator matrix, so one estimator costs on the
+//!   order of bars × labels × `max_samples` operations.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::sampling::get_ind_matrix;
+//! use openquant::sb_bagging::{
+//!     MaxSamples, SbBaggingError, SequentiallyBootstrappedBaggingClassifier,
+//! };
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let n = 40;
+//! let spans: Vec<(usize, usize)> = (0..n).map(|i| (2 * i, 2 * i + 5)).collect();
+//! let bars: Vec<usize> = (0..2 * n + 6).collect();
+//! let ind_mat = get_ind_matrix(&spans, &bars)?;
+//!
+//! // One feature; the class is its sign.
+//! let x = DMatrix::from_fn(n, 1, |r, _| r as f64 - 19.5);
+//! let y: Vec<u8> = (0..n).map(|r| u8::from(r >= 20)).collect();
+//!
+//! let mut model = SequentiallyBootstrappedBaggingClassifier::new(7);
+//! model.n_estimators = 25;
+//! model.max_samples = MaxSamples::Float(0.5);
+//! model.fit(&x, &y, &ind_mat, None)?;
+//!
+//! assert_eq!(model.estimators_samples.len(), 25);
+//! assert_eq!(model.estimators_samples[0].len(), 20);
+//! let fresh = DMatrix::from_row_slice(2, 1, &[-15.0, 15.0]);
+//! assert_eq!(model.predict(&fresh)?, vec![0, 1]);
+//!
+//! // Settings are validated at fit time.
+//! model.max_samples = MaxSamples::Float(1.5);
+//! assert_eq!(model.fit(&x, &y, &ind_mat, None), Err(SbBaggingError::MaxSamplesOutOfRange));
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -5,37 +78,60 @@ use rand::{Rng, SeedableRng};
 
 use crate::sampling::seq_bootstrap_with_rng;
 
+/// Errors returned by the sequentially bootstrapped bagging estimators.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SbBaggingError {
+    /// `x` has no rows or no columns at fit time, or `predict` was called before a
+    /// successful `fit`.
     #[error("input must not be empty")]
     EmptyInput,
+    /// `y`, `sample_weight` or the rows of `ind_mat` do not match `x.nrows()`, or `ind_mat`
+    /// is empty.
     #[error("inputs disagree on the number of samples")]
     DimensionMismatch,
+    /// `max_samples` resolves to zero or to more than `x.nrows()`, or is a non-positive
+    /// fraction.
     #[error("max_samples is out of range")]
     MaxSamplesOutOfRange,
+    /// `max_features` resolves to zero or to more than `x.ncols()`, or is a non-positive
+    /// fraction.
     #[error("max_features is out of range")]
     MaxFeaturesOutOfRange,
+    /// `warm_start` and `oob_score` were both set.
     #[error("out-of-bag scoring is not supported with warm_start")]
     WarmStartWithOob,
+    /// With `warm_start`, `n_estimators` is lower than the number already fitted.
     #[error("n_estimators must not decrease when warm_start is set")]
     DecreasingEstimators,
+    /// `n_estimators` is zero.
     #[error("n_estimators must be positive")]
     InvalidEstimators,
+    /// A `sample_weight` was passed while `supports_sample_weight` is `false`.
     #[error("the base estimator does not support sample weights")]
     SampleWeightNotSupported,
+    /// A sample weight is negative or non-finite, or all weights are zero.
     #[error("sample weights must be finite, non-negative and not all zero")]
     InvalidSampleWeight,
 }
 
+/// Number of label draws per estimator.
 #[derive(Debug, Clone, Copy)]
 pub enum MaxSamples {
+    /// An absolute count; must be in `1..=x.nrows()`.
     Int(usize),
+    /// A fraction of `x.nrows()`, rounded down; must be positive and resolve to a count in
+    /// `1..=x.nrows()` (so at most `1.0`).
     Float(f64),
 }
 
+/// Number of feature indices drawn per estimator. Only the first drawn index is used by the
+/// base learner, so values above one change only the random stream.
 #[derive(Debug, Clone, Copy)]
 pub enum MaxFeatures {
+    /// An absolute count; must be in `1..=x.ncols()`.
     Int(usize),
+    /// A fraction of `x.ncols()`, rounded down; must be positive and resolve to a count in
+    /// `1..=x.ncols()` (so at most `1.0`).
     Float(f64),
 }
 
@@ -185,23 +281,48 @@ fn in_bag_masks(estimators_samples: &[Vec<usize>], n_rows: usize) -> Vec<Vec<boo
         .collect()
 }
 
+/// Bagging classifier over one-feature decision stumps, each fitted on a sequential bootstrap
+/// sample of the labels (AFML §4.5).
+///
+/// Each stump's threshold is the weighted *mean* of its feature over the sample (not a
+/// fitted split), and it predicts 1 on whichever side had the higher weighted rate of
+/// `y == 1` (ties favour the `>=` side). [`predict`](Self::predict) takes a majority vote,
+/// ties going to 1. See the module example.
 #[derive(Debug, Clone)]
 pub struct SequentiallyBootstrappedBaggingClassifier {
+    /// Number of estimators to fit (default 10). With `warm_start`, the total after `fit`.
     pub n_estimators: usize,
+    /// Label draws per estimator (default `Float(1.0)`, i.e. as many as rows of `x`).
     pub max_samples: MaxSamples,
+    /// Feature indices drawn per estimator (default `Float(1.0)`); only the first is used.
     pub max_features: MaxFeatures,
+    /// Draw feature indices with replacement instead of as a random permutation (default
+    /// `false`).
     pub bootstrap_features: bool,
+    /// Compute [`oob_score_value`](Self::oob_score_value) during `fit` (default `false`).
     pub oob_score: bool,
+    /// Keep already fitted estimators and add up to `n_estimators` on the next `fit`
+    /// (default `false`). Cannot be combined with `oob_score`.
     pub warm_start: bool,
+    /// Present for parity with mlfinlab's parameters; currently unused.
     pub verbose: usize,
+    /// Seed of the random stream; a `fit` seeds its stream with `random_state` plus the
+    /// number of estimators already fitted.
     pub random_state: u64,
+    /// Whether `fit` accepts a `sample_weight` (default `true`).
     pub supports_sample_weight: bool,
+    /// Row indices of `x` (label indices) drawn for each fitted estimator, in fit order; a
+    /// row drawn twice appears twice.
     pub estimators_samples: Vec<Vec<usize>>,
+    /// Out-of-bag accuracy set by `fit` when `oob_score` is on: over the rows that at least
+    /// one estimator did not draw, each predicted by majority vote of only those estimators.
+    /// `None` if `oob_score` is off or every row was drawn by every estimator.
     pub oob_score_value: Option<f64>,
     estimators: Vec<ClassifierEstimator>,
 }
 
 impl SequentiallyBootstrappedBaggingClassifier {
+    /// Creates an unfitted classifier with default settings and the given seed.
     pub fn new(random_state: u64) -> Self {
         Self {
             n_estimators: 10,
@@ -221,6 +342,34 @@ impl SequentiallyBootstrappedBaggingClassifier {
 
     /// Fits `n_estimators` stumps, each on a sequential bootstrap sample of the labels in
     /// `ind_mat` (bars x labels, one label per row of `x`).
+    ///
+    /// `y` holds one `u8` label per row of `x` (1 is positive, anything else negative).
+    /// `sample_weight`, if given, holds one weight per row; each draw is weighted by its
+    /// row's weight (a row drawn twice counts twice), and a bag whose drawn rows all have
+    /// zero weight falls back to equal weights. Without `warm_start`, previously fitted
+    /// estimators are discarded.
+    ///
+    /// # Errors
+    ///
+    /// - [`SbBaggingError::EmptyInput`] if `x` has no rows or no columns.
+    /// - [`SbBaggingError::DimensionMismatch`] if `y.len()` or `sample_weight.len()` differs
+    ///   from `x.nrows()`, if `ind_mat` is empty, or if any row of `ind_mat` does not have
+    ///   `x.nrows()` entries.
+    /// - [`SbBaggingError::SampleWeightNotSupported`] if a weight vector is passed while
+    ///   `supports_sample_weight` is `false`.
+    /// - [`SbBaggingError::InvalidSampleWeight`] for a negative or non-finite weight, or all
+    ///   zero weights.
+    /// - [`SbBaggingError::InvalidEstimators`] if `n_estimators == 0`.
+    /// - [`SbBaggingError::WarmStartWithOob`] if both `warm_start` and `oob_score` are set.
+    /// - [`SbBaggingError::MaxSamplesOutOfRange`] or [`SbBaggingError::MaxFeaturesOutOfRange`]
+    ///   if `max_samples` or `max_features` does not resolve to a valid count.
+    /// - [`SbBaggingError::DecreasingEstimators`] if, with `warm_start`, `n_estimators` is
+    ///   below the number already fitted.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, on integer overflow when `warm_start` adds estimators to a model
+    /// whose `random_state` plus the number of fitted estimators exceeds `u64::MAX`.
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -323,6 +472,17 @@ impl SequentiallyBootstrappedBaggingClassifier {
         (scored > 0).then(|| correct as f64 / scored as f64)
     }
 
+    /// Predicts a 0/1 label per row of `x` by majority vote of all estimators, ties going
+    /// to 1.
+    ///
+    /// # Errors
+    ///
+    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    ///
+    /// # Panics
+    ///
+    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
+    /// example, fewer columns than the training matrix); `x` is not validated.
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<u8>, SbBaggingError> {
         if self.estimators.is_empty() {
             return Err(SbBaggingError::EmptyInput);
@@ -361,22 +521,72 @@ impl SequentiallyBootstrappedBaggingClassifier {
     }
 }
 
+/// Bagging regressor over one-feature weighted least-squares lines, each fitted on a
+/// sequential bootstrap sample of the labels (AFML §4.5).
+///
+/// A line whose sample has (near-)zero feature variance is flat at the weighted mean of
+/// `y`. [`predict`](Self::predict) returns the mean of the lines.
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::sampling::get_ind_matrix;
+/// use openquant::sb_bagging::{MaxSamples, SequentiallyBootstrappedBaggingRegressor};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let n = 30;
+/// let spans: Vec<(usize, usize)> = (0..n).map(|i| (i, i + 3)).collect();
+/// let bars: Vec<usize> = (0..n + 4).collect();
+/// let ind_mat = get_ind_matrix(&spans, &bars)?;
+///
+/// // y = 2x + 1 exactly, so every line recovers it.
+/// let x = DMatrix::from_fn(n, 1, |r, _| r as f64);
+/// let y: Vec<f64> = (0..n).map(|r| 2.0 * r as f64 + 1.0).collect();
+///
+/// let mut model = SequentiallyBootstrappedBaggingRegressor::new(11);
+/// model.max_samples = MaxSamples::Float(0.5);
+/// model.oob_score = true;
+/// model.fit(&x, &y, &ind_mat, None)?;
+///
+/// let pred = model.predict(&DMatrix::from_row_slice(1, 1, &[100.0]))?;
+/// assert!((pred[0] - 201.0).abs() < 1e-9);
+/// assert!((model.oob_score_value.unwrap() - 1.0).abs() < 1e-12);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct SequentiallyBootstrappedBaggingRegressor {
+    /// Number of estimators to fit (default 10). With `warm_start`, the total after `fit`.
     pub n_estimators: usize,
+    /// Label draws per estimator (default `Float(1.0)`, i.e. as many as rows of `x`).
     pub max_samples: MaxSamples,
+    /// Feature indices drawn per estimator (default `Float(1.0)`); only the first is used.
     pub max_features: MaxFeatures,
+    /// Draw feature indices with replacement instead of as a random permutation (default
+    /// `false`).
     pub bootstrap_features: bool,
+    /// Compute [`oob_score_value`](Self::oob_score_value) during `fit` (default `false`).
     pub oob_score: bool,
+    /// Keep already fitted estimators and add up to `n_estimators` on the next `fit`
+    /// (default `false`). Cannot be combined with `oob_score`.
     pub warm_start: bool,
+    /// Seed of the random stream; a `fit` seeds its stream with `random_state` plus the
+    /// number of estimators already fitted.
     pub random_state: u64,
+    /// Whether `fit` accepts a `sample_weight` (default `true`).
     pub supports_sample_weight: bool,
+    /// Row indices of `x` (label indices) drawn for each fitted estimator, in fit order; a
+    /// row drawn twice appears twice.
     pub estimators_samples: Vec<Vec<usize>>,
+    /// Out-of-bag R² set by `fit` when `oob_score` is on: over the rows that at least one
+    /// estimator did not draw, each predicted by the mean of only those estimators (0 when
+    /// the scored targets are constant). `None` if `oob_score` is off or every row was drawn
+    /// by every estimator.
     pub oob_score_value: Option<f64>,
     estimators: Vec<RegressorEstimator>,
 }
 
 impl SequentiallyBootstrappedBaggingRegressor {
+    /// Creates an unfitted regressor with default settings and the given seed.
     pub fn new(random_state: u64) -> Self {
         Self {
             n_estimators: 10,
@@ -395,6 +605,18 @@ impl SequentiallyBootstrappedBaggingRegressor {
 
     /// Fits `n_estimators` least-squares lines, each on a sequential bootstrap sample of the
     /// labels in `ind_mat` (bars x labels, one label per row of `x`).
+    ///
+    /// `y` holds one target per row of `x` and is not checked for `NaN`. `sample_weight`
+    /// behaves as in [`SequentiallyBootstrappedBaggingClassifier::fit`].
+    ///
+    /// # Errors
+    ///
+    /// The same as [`SequentiallyBootstrappedBaggingClassifier::fit`].
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, on integer overflow when `warm_start` adds estimators to a model
+    /// whose `random_state` plus the number of fitted estimators exceeds `u64::MAX`.
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -487,6 +709,16 @@ impl SequentiallyBootstrappedBaggingRegressor {
         Some(if ss_tot <= 1e-12 { 0.0 } else { 1.0 - ss_res / ss_tot })
     }
 
+    /// Predicts one value per row of `x` as the mean of all estimators' lines.
+    ///
+    /// # Errors
+    ///
+    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    ///
+    /// # Panics
+    ///
+    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
+    /// example, fewer columns than the training matrix); `x` is not validated.
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
         if self.estimators.is_empty() {
             return Err(SbBaggingError::EmptyInput);

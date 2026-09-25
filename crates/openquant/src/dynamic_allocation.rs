@@ -33,6 +33,35 @@
 //!
 //! This is a different problem from [`crate::combinatorial_optimization`], whose trajectory
 //! tools model a single instrument's inventory path with linear impact and a fixed ticket cost.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::dynamic_allocation::{
+//!     all_weights, dynamic_optimal_portfolio, pigeonhole_partitions, weight_count,
+//!     DynamicAllocationConfig, HorizonForecast,
+//! };
+//!
+//! assert_eq!(pigeonhole_partitions(2, 2), vec![vec![2, 0], vec![1, 1], vec![0, 2]]);
+//! assert_eq!(
+//!     all_weights(1, 2).unwrap(),
+//!     vec![vec![-1.0, 0.0], vec![1.0, 0.0], vec![0.0, -1.0], vec![0.0, 1.0]]
+//! );
+//! assert_eq!(weight_count(3, 3), Some(38));
+//!
+//! // One horizon, two uncorrelated assets with 20% volatility, K = 1 unit of capital.
+//! let horizon = HorizonForecast {
+//!     mean: vec![0.10, -0.05],
+//!     covariance: DMatrix::from_diagonal_element(2, 2, 0.04),
+//!     cost: vec![0.01, 0.01],
+//! };
+//! let best = dynamic_optimal_portfolio(&[horizon], &DynamicAllocationConfig::new(1)).unwrap();
+//! // Long asset 0 beats short asset 1: (0.10 - 0.01 * sqrt(1)) / 0.2 = 0.45 against 0.20.
+//! assert_eq!(best.weights, vec![vec![1.0, 0.0]]);
+//! assert!((best.sharpe_ratio - 0.45).abs() < 1e-12);
+//! assert!((best.transaction_costs[0] - 0.01).abs() < 1e-12);
+//! assert_eq!(best.trajectories_evaluated, 4);
+//! ```
+#![deny(missing_docs)]
 
 use nalgebra::DMatrix;
 
@@ -188,7 +217,11 @@ pub fn partition_count(k: usize, n: usize) -> Option<u128> {
 /// trajectory search picks the same trajectory; it just evaluates fewer duplicates.
 ///
 /// There are `Σ_j C(n, j) · C(k−1, j−1) · 2^j` vectors ([`weight_count`]), `j` counting the
-/// non-zero entries. Errors if `k` or `n` is zero.
+/// non-zero entries.
+///
+/// # Errors
+///
+/// [`DynamicAllocationError::ZeroCount`] if `k` or `n` is zero.
 pub fn all_weights(k: usize, n: usize) -> Result<Vec<Vec<f64>>, DynamicAllocationError> {
     if k == 0 {
         return Err(DynamicAllocationError::ZeroCount("the number of units k"));
@@ -240,7 +273,19 @@ pub fn weight_count(k: usize, n: usize) -> Option<u128> {
 ///
 /// `τ_h = Σ_n c_{n,h} · sqrt(|ω_{n,h} − ω_{n,h−1}|)`, where `ω_{·,0}` is `initial_weights` (all
 /// zeros in the book). `trajectory` holds one weight vector per horizon, in the same order as
-/// `horizons`. Errors on mismatched lengths, non-finite values or invalid forecasts.
+/// `horizons`.
+///
+/// # Errors
+///
+/// - [`DynamicAllocationError::ZeroCount`] if `horizons` is empty or its first mean vector is
+///   empty.
+/// - [`DynamicAllocationError::DimensionMismatch`] if a forecast's mean, cost or covariance,
+///   `initial_weights`, the number of weight vectors in `trajectory`, or one of them, does not
+///   match `N` (the length of the first horizon's mean) or `H`.
+/// - [`DynamicAllocationError::NonFinite`] if any of those inputs holds a NaN or infinity.
+/// - [`DynamicAllocationError::NegativeCost`] if a cost coefficient is negative.
+/// - [`DynamicAllocationError::CovarianceNotPositiveDefinite`] if a covariance is not
+///   symmetric positive definite.
 pub fn transaction_costs(
     trajectory: &[Vec<f64>],
     horizons: &[HorizonForecast],
@@ -266,6 +311,12 @@ pub fn transaction_costs(
 ///
 /// with `τ_h` from [`transaction_costs`]. Costs are subtracted from the mean only; the variance
 /// is that of the gross returns, as in the book.
+///
+/// # Errors
+///
+/// Every error of [`transaction_costs`], and
+/// [`DynamicAllocationError::NonPositiveVariance`] if the trajectory's total variance is not
+/// positive and finite (an all-zero trajectory, for example).
 pub fn trajectory_sharpe_ratio(
     trajectory: &[Vec<f64>],
     horizons: &[HorizonForecast],
@@ -292,6 +343,15 @@ pub fn trajectory_sharpe_ratio(
 /// 54,872 trajectories over three horizons, but 23 million over five. When `|Ω|^H` exceeds
 /// `config.max_trajectories` this returns [`DynamicAllocationError::TooManyTrajectories`]
 /// without evaluating anything. Use [`weight_count`] to size a problem in advance.
+///
+/// # Errors
+///
+/// - The forecast-validation errors of [`transaction_costs`] (for `horizons` and
+///   `config.initial_weights`).
+/// - [`DynamicAllocationError::ZeroCount`] if `config.units` is zero.
+/// - [`DynamicAllocationError::TooManyTrajectories`] if `|Ω|^H > config.max_trajectories`.
+/// - [`DynamicAllocationError::NonPositiveVariance`] if a trajectory's variance is not
+///   positive, which positive definite covariances only allow through round-off.
 pub fn dynamic_optimal_portfolio(
     horizons: &[HorizonForecast],
     config: &DynamicAllocationConfig,

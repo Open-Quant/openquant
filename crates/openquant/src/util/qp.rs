@@ -6,9 +6,11 @@
 //! problems here has one, which also makes the minimiser invariant to the scale of `P`.
 //!
 //! It is meant for tens of assets, not thousands: every iteration is a dense back-substitution.
+#![deny(missing_docs)]
 
 use nalgebra::{DMatrix, DVector};
 
+/// Why [`solve_qp`] returned no solution.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum QpError {
     /// Shapes of `P`, `A`, `l`, `u` do not agree, or a lower bound exceeds its upper bound.
@@ -27,6 +29,17 @@ const TOLERANCE: f64 = 1e-9;
 /// A constraint counts as active in the polish step when it is this close to a bound.
 const ACTIVE_TOLERANCE: f64 = 1e-6;
 
+/// Minimises `1/2 x' p x` subject to `lower <= a x <= upper` and returns `x`.
+///
+/// `p` is `n × n` and positive semidefinite, `a` is `m × n`, and `lower`/`upper` have `m`
+/// entries; an equality constraint is a row with `lower == upper`.
+///
+/// # Errors
+///
+/// - [`QpError::Malformed`] if the shapes disagree, `n == 0`, a bound is `NaN`, a lower bound
+///   exceeds its upper bound, or the regularised KKT matrix is not positive definite.
+/// - [`QpError::NotConverged`] if ADMM does not reach the tolerance within the iteration cap,
+///   which in practice means the constraints are infeasible.
 pub(crate) fn solve_qp(
     p: &DMatrix<f64>,
     a: &DMatrix<f64>,
