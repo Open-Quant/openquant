@@ -1,23 +1,92 @@
+//! Optimal Number of Clusters (ONC): partition a correlation matrix with k-means, choosing the
+//! number of clusters by silhouette quality.
+//!
+//! Not from AFML. References: López de Prado, *Machine Learning for Asset Managers* (2020),
+//! Chapter 4, §4.4 (Snippet 4.1, base clustering; Snippet 4.2, higher-level clustering);
+//! López de Prado and Lewis (2019), *Detection of false investment strategies using
+//! unsupervised learning methods*; Rousseeuw (1987) for the silhouette.
+//!
+//! The algorithm:
+//! 1. Convert correlations to distances `d_ij = sqrt((1 - rho_ij) / 2)` (inputs clamped to
+//!    `[-1, 1]`) and represent each item by its row of that distance matrix.
+//! 2. Run k-means for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each, and keep the
+//!    partition with the highest t-statistic of the silhouettes, `mean(S) / std(S)`.
+//! 3. Compute that t-statistic per cluster. If more than two clusters score below the average,
+//!    pool their members, re-run the whole procedure on them, and keep the result only if its
+//!    mean cluster t-statistic beats that of the clusters it replaced
+//!    ([`check_improve_clusters`]).
+//!
+//! Conventions:
+//! - The input is an `N x N` correlation matrix, `N >= 2`; rows and columns are items in the
+//!   same order. Symmetry and a unit diagonal are not checked.
+//! - Negative correlation is distance, not similarity: `rho = -1` is maximally far apart. Take
+//!   absolute correlations first if a series and its mirror image should cluster together.
+//! - Member indices in [`OncResult::clusters`] and the order of
+//!   [`OncResult::silhouette_scores`] refer to the original row order.
+//! - k-means is seeded from a fixed value, the repetition number and `k`, so results are
+//!   deterministic; there is no seed parameter. Cost grows at least as `N^3` (every `k`,
+//!   `repeat` times, quadratic silhouettes), plus the recursion.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::onc::{get_onc_clusters, OncError};
+//!
+//! # fn main() -> Result<(), OncError> {
+//! // Two blocks of three: 0.8 within a block, 0.1 across.
+//! let block = |i: usize| i / 3;
+//! let corr = DMatrix::from_fn(6, 6, |i, j| {
+//!     if i == j {
+//!         1.0
+//!     } else if block(i) == block(j) {
+//!         0.8
+//!     } else {
+//!         0.1
+//!     }
+//! });
+//!
+//! let result = get_onc_clusters(&corr, 3)?;
+//! let mut found: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+//! found.sort();
+//! assert_eq!(found, vec![vec![0, 1, 2], vec![3, 4, 5]]);
+//! assert_eq!(result.silhouette_scores.len(), 6);
+//! assert!(result.silhouette_scores.iter().all(|s| *s > 0.5));
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use std::collections::BTreeMap;
 
+/// Errors returned by [`get_onc_clusters`].
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum OncError {
+    /// The correlation matrix is not square or has fewer than two rows.
     #[error("the correlation matrix must be square with at least two rows")]
     InvalidCorrelationMatrix,
+    /// `repeat` is zero.
     #[error("repeat must be positive")]
     InvalidRepeat,
+    /// No candidate partition could be selected. Not expected on a finite correlation matrix;
+    /// it can occur when `NaN` entries make every candidate's quality score `NaN`.
     #[error("clustering failed to produce a partition")]
     ClusteringFailed,
 }
 
+/// Partition found by [`get_onc_clusters`].
 #[derive(Debug, Clone)]
 pub struct OncResult {
+    /// The input correlation matrix with rows and columns permuted so that the members of each
+    /// cluster are contiguous, clusters in label order.
     pub ordered_correlation: DMatrix<f64>,
+    /// Cluster label (`0..number of clusters`) to the indices of its members, in the original
+    /// row order of the input.
     pub clusters: BTreeMap<usize, Vec<usize>>,
+    /// Silhouette score of every item, indexed by the original row order; a singleton
+    /// cluster's member scores 0.
     pub silhouette_scores: Vec<f64>,
 }
 
@@ -30,6 +99,17 @@ struct ClusterState {
 
 /// Keep the re-clustered partition only if its mean cluster t-stat beats the mean t-stat of the
 /// clusters that were re-clustered (MLAM Snippet 4.2); otherwise keep the old partition.
+///
+/// Returns `new_cluster` when `new_tstat_mean > mean_redo_tstat` and `old_cluster` otherwise
+/// (ties and `NaN` keep the old one). Exposed for parity with mlfinlab; [`get_onc_clusters`]
+/// calls it internally.
+///
+/// ```
+/// use openquant::onc::check_improve_clusters;
+///
+/// assert_eq!(check_improve_clusters(2.0, 1.5, "old", "new"), "new");
+/// assert_eq!(check_improve_clusters(1.5, 1.5, "old", "new"), "old");
+/// ```
 pub fn check_improve_clusters<T: Clone>(
     new_tstat_mean: f64,
     mean_redo_tstat: f64,
@@ -43,6 +123,52 @@ pub fn check_improve_clusters<T: Clone>(
     }
 }
 
+/// Partition the items of a correlation matrix with ONC (MLAM §4.4, Snippets 4.1–4.2).
+///
+/// `corr_mat` is an `N x N` correlation matrix (`N >= 2`; entries clamped to `[-1, 1]`,
+/// symmetry and unit diagonal not checked). `repeat` is the number of k-means initialisations
+/// per candidate `k`. The number of clusters is chosen by the silhouette t-statistic; see the
+/// [module documentation](self) for the full procedure. The search starts at `k = 2`, so a
+/// matrix with no structure still comes back partitioned: a low mean silhouette is the sign
+/// that the clusters are not real. (Degenerate inputs whose rows are identical, such as an
+/// all-ones matrix, can come back as a single cluster.)
+///
+/// # Errors
+///
+/// - [`OncError::InvalidRepeat`] if `repeat == 0`.
+/// - [`OncError::InvalidCorrelationMatrix`] if `corr_mat` is not square or has fewer than two
+///   rows.
+/// - [`OncError::ClusteringFailed`] if no candidate partition can be selected (only with
+///   `NaN` entries).
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::onc::{get_onc_clusters, OncError};
+///
+/// // Items 0, 2 and 4 move together, as do 1, 3 and 5.
+/// let corr = DMatrix::from_fn(6, 6, |i, j| {
+///     if i == j {
+///         1.0
+///     } else if i % 2 == j % 2 {
+///         0.9
+///     } else {
+///         0.0
+///     }
+/// });
+/// let result = get_onc_clusters(&corr, 2).unwrap();
+/// let mut found: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+/// found.sort();
+/// assert_eq!(found, vec![vec![0, 2, 4], vec![1, 3, 5]]);
+/// // The ordered matrix puts each block on the diagonal.
+/// let first = &result.clusters[&0];
+/// assert_eq!(result.ordered_correlation[(0, 1)], corr[(first[0], first[1])]);
+///
+/// assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
+/// assert_eq!(
+///     get_onc_clusters(&DMatrix::from_element(1, 1, 1.0), 1).unwrap_err(),
+///     OncError::InvalidCorrelationMatrix
+/// );
+/// ```
 pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncResult, OncError> {
     if repeat == 0 {
         return Err(OncError::InvalidRepeat);

@@ -3,22 +3,102 @@
 //! This module provides integer decision schemas, exact finite-set solvers,
 //! adapter traits for heuristic/external solvers, and trading-trajectory
 //! state-space utilities with path-dependent objective evaluation.
+//!
+//! AFML Chapter 21 (§21.2 Combinatorial Optimization, §21.3 The Objective Function,
+//! §21.5 An Integer Optimization Approach) argues that when the choices are discrete and
+//! finite, listing and scoring every one gives the global optimum of any objective, smooth
+//! or not. The chapter's own multi-asset problem (pigeonhole partitions and the Sharpe-ratio
+//! trajectory search of Snippets 21.1–21.3) lives in [`crate::dynamic_allocation`]; this
+//! module is the generic exact-enumeration baseline underneath it:
+//!
+//! - [`solve_exact`] visits every point of a box of integer grids ([`DecisionSchema`]) and
+//!   scores it with an [`IntegerObjective`] you write, without storing the candidates.
+//! - [`enumerate_trading_paths`] and [`solve_trading_trajectory_exact`] list and score every
+//!   inventory path of a **single** instrument ([`TradingTrajectorySchema`]).
+//!   [`evaluate_trading_path`] is a ready-made, non-convex objective (linear impact plus a
+//!   fixed ticket cost per trade), in the spirit of Garleanu and Pedersen (2013) and
+//!   Rosenberg et al. (2016); it is not the chapter's square-root cost.
+//! - [`SolverAdapter`], [`solve_with_adapter`] and [`compare_exact_and_adapter`] let a
+//!   heuristic or external solver be scored against the exact answer on instances small
+//!   enough to enumerate.
+//!
+//! Conventions: decisions, trades and inventories are integers (units or lots). Candidates
+//! are visited in lexicographic order starting from the lower bounds, and ties go to the
+//! first candidate found (comparisons are strict). An objective cannot mark a candidate
+//! infeasible: an error, or a non-finite score
+//! ([`CombinatorialOptimizationError::ObjectiveNotFinite`]), aborts the whole search, so
+//! constraints the schema cannot express must be large finite penalties. The search space is
+//! exponential; hitting `max_enumeration` or `max_paths` is the cue for a heuristic, not for a
+//! higher cap. Nothing here runs in parallel.
+//!
+//! ```
+//! use openquant::combinatorial_optimization::{
+//!     solve_exact, CombinatorialOptimizationError, DecisionSchema, IntegerObjective,
+//!     IntegerVariable, ObjectiveSense,
+//! };
+//!
+//! // Maximise -(x - 3)^2 - (y + 1)^2 with x on the even grid 0..=10 and y in -2..=2.
+//! struct Bowl;
+//! impl IntegerObjective for Bowl {
+//!     fn sense(&self) -> ObjectiveSense {
+//!         ObjectiveSense::Maximize
+//!     }
+//!     fn evaluate(&self, d: &[i64]) -> Result<f64, CombinatorialOptimizationError> {
+//!         Ok(-((d[0] - 3).pow(2) + (d[1] + 1).pow(2)) as f64)
+//!     }
+//! }
+//!
+//! # fn main() -> Result<(), CombinatorialOptimizationError> {
+//! let schema = DecisionSchema {
+//!     variables: vec![
+//!         IntegerVariable { lower: 0, upper: 10, step: 2 },
+//!         IntegerVariable { lower: -2, upper: 2, step: 1 },
+//!     ],
+//!     max_enumeration: 100,
+//! };
+//! let best = solve_exact(&schema, &Bowl)?;
+//! // x = 2 and x = 4 tie at -1; the first one visited wins.
+//! assert_eq!(best.best_decision, [2, -1]);
+//! assert_eq!(best.best_objective, -1.0);
+//! assert_eq!(best.evaluated_candidates, 30); // 6 x 5 grid points
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
 
 use std::fmt::{Display, Formatter};
 
+/// Whether an objective is to be minimised or maximised.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectiveSense {
+    /// Smaller objective values are better.
     Minimize,
+    /// Larger objective values are better.
     Maximize,
 }
 
+/// Errors returned by the combinatorial-optimization functions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CombinatorialOptimizationError {
+    /// An input is out of its domain; the message names the violated condition.
     InvalidInput(&'static str),
-    DecisionLengthMismatch { expected: usize, found: usize },
+    /// A per-step input of [`evaluate_trading_path`] does not match the path's horizon.
+    DecisionLengthMismatch {
+        /// The required length (the path's horizon).
+        expected: usize,
+        /// The length supplied.
+        found: usize,
+    },
+    /// The objective returned a NaN or infinite value; the search is aborted.
     ObjectiveNotFinite,
+    /// The schema has no variables, or no trading steps.
     EmptyDomain,
-    EnumerationLimitExceeded { limit: usize },
+    /// The search space holds more candidates than the configured cap.
+    EnumerationLimitExceeded {
+        /// The cap that was exceeded (`max_enumeration` or `max_paths`).
+        limit: usize,
+    },
+    /// No candidate satisfies the constraints (for example an unreachable terminal inventory).
     NoFeasibleSolution,
 }
 
@@ -41,10 +121,18 @@ impl Display for CombinatorialOptimizationError {
 
 impl std::error::Error for CombinatorialOptimizationError {}
 
+/// One integer decision variable: the arithmetic grid `lower, lower + step, ...` up to and
+/// including the last point `<= upper`.
+///
+/// `upper` itself is a candidate only when `upper - lower` is a multiple of `step`.
+/// [`DecisionSchema::validate`] rejects `step <= 0` and `lower > upper`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IntegerVariable {
+    /// Smallest value, the first grid point.
     pub lower: i64,
+    /// Inclusive upper bound on the grid.
     pub upper: i64,
+    /// Grid spacing; must be `> 0`.
     pub step: i64,
 }
 
@@ -89,14 +177,28 @@ impl IntegerVariable {
     }
 }
 
+/// A box of integer decisions: the Cartesian product of the variables' grids (AFML §21.5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecisionSchema {
+    /// The decision variables, in the order the objective receives them.
     pub variables: Vec<IntegerVariable>,
     /// Hard cap for exact finite-set enumeration.
+    ///
+    /// Counts every point in the box, feasible or not. It is also enforced by
+    /// [`solve_with_adapter`], which validates the schema before calling the adapter.
     pub max_enumeration: usize,
 }
 
 impl DecisionSchema {
+    /// Checks the schema and that its box has at most `max_enumeration` points.
+    ///
+    /// # Errors
+    ///
+    /// - [`CombinatorialOptimizationError::EmptyDomain`] if `variables` is empty.
+    /// - [`CombinatorialOptimizationError::InvalidInput`] if `max_enumeration == 0`, a
+    ///   variable has `step <= 0` or `lower > upper`, or the box size overflows `usize`.
+    /// - [`CombinatorialOptimizationError::EnumerationLimitExceeded`] if the box has more
+    ///   than `max_enumeration` points.
     pub fn validate(&self) -> Result<(), CombinatorialOptimizationError> {
         if self.variables.is_empty() {
             return Err(CombinatorialOptimizationError::EmptyDomain);
@@ -118,6 +220,29 @@ impl DecisionSchema {
         Ok(())
     }
 
+    /// Number of points in the box: the product of each variable's grid size.
+    ///
+    /// Does not check `max_enumeration`.
+    ///
+    /// # Errors
+    ///
+    /// - [`CombinatorialOptimizationError::EmptyDomain`] if `variables` is empty.
+    /// - [`CombinatorialOptimizationError::InvalidInput`] if a variable has `step <= 0` or
+    ///   `lower > upper`, or a grid size or the product overflows `usize`.
+    ///
+    /// ```
+    /// use openquant::combinatorial_optimization::{DecisionSchema, IntegerVariable};
+    ///
+    /// let schema = DecisionSchema {
+    ///     variables: vec![
+    ///         IntegerVariable { lower: 0, upper: 10, step: 3 }, // 0, 3, 6, 9
+    ///         IntegerVariable { lower: -1, upper: 1, step: 1 }, // -1, 0, 1
+    ///     ],
+    ///     max_enumeration: 5,
+    /// };
+    /// assert_eq!(schema.decision_space_size(), Ok(12));
+    /// assert!(schema.validate().is_err()); // 12 > max_enumeration
+    /// ```
     pub fn decision_space_size(&self) -> Result<usize, CombinatorialOptimizationError> {
         if self.variables.is_empty() {
             return Err(CombinatorialOptimizationError::EmptyDomain);
@@ -131,19 +256,46 @@ impl DecisionSchema {
     }
 }
 
+/// The best decision a solver found over a [`DecisionSchema`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct OptimizationResult {
+    /// The best decision, one value per schema variable in schema order.
     pub best_decision: Vec<i64>,
+    /// The objective value of `best_decision`.
     pub best_objective: f64,
+    /// How many candidates the solver evaluated (the whole box for [`solve_exact`]).
     pub evaluated_candidates: usize,
 }
 
+/// An objective over integer decisions, scored by [`solve_exact`] or a [`SolverAdapter`].
 pub trait IntegerObjective {
+    /// Whether larger or smaller values of [`IntegerObjective::evaluate`] are better.
     fn sense(&self) -> ObjectiveSense;
+
+    /// Scores one decision, given as one value per schema variable in schema order.
+    ///
+    /// Returning an error aborts the whole search; it does not mark the candidate
+    /// infeasible. A non-finite value also aborts [`solve_exact`] with
+    /// [`CombinatorialOptimizationError::ObjectiveNotFinite`].
+    ///
+    /// # Errors
+    ///
+    /// Implementation-defined.
     fn evaluate(&self, decision: &[i64]) -> Result<f64, CombinatorialOptimizationError>;
 }
 
+/// A heuristic or external solver to be run through [`solve_with_adapter`] and scored
+/// against [`solve_exact`] with [`compare_exact_and_adapter`].
 pub trait SolverAdapter {
+    /// Searches `schema` for a good decision under `objective`.
+    ///
+    /// The result is returned as is: neither [`solve_with_adapter`] nor
+    /// [`compare_exact_and_adapter`] checks that `best_decision` lies in the box, has the
+    /// right length, or that `best_objective` is finite or matches the decision.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-defined.
     fn solve(
         &self,
         schema: &DecisionSchema,
@@ -151,14 +303,39 @@ pub trait SolverAdapter {
     ) -> Result<OptimizationResult, CombinatorialOptimizationError>;
 }
 
+/// The exact optimum and an adapter's answer on the same problem, from
+/// [`compare_exact_and_adapter`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct AdapterComparison {
+    /// The global optimum from [`solve_exact`].
     pub exact: OptimizationResult,
+    /// The adapter's result, unchanged.
     pub adapter: OptimizationResult,
     /// Non-negative gap in objective space relative to the exact optimum.
+    ///
+    /// `exact - adapter` when maximising and `adapter - exact` when minimising, floored at 0,
+    /// so an adapter reporting a better-than-optimal value also shows a gap of 0.
     pub objective_gap_vs_exact: f64,
 }
 
+/// Finds the global optimum of `objective` by visiting every point of the schema's box
+/// (AFML §21.5).
+///
+/// Candidates are visited in lexicographic order from the lower bounds without being stored;
+/// the comparison is strict, so among tied values the first decision visited wins.
+///
+/// # Errors
+///
+/// - Any error of [`DecisionSchema::validate`], including
+///   [`CombinatorialOptimizationError::EnumerationLimitExceeded`] when the box has more than
+///   `max_enumeration` points.
+/// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the objective returns NaN or
+///   an infinity for any candidate.
+/// - Any error returned by [`IntegerObjective::evaluate`], unchanged.
+///
+/// # Examples
+///
+/// See the [module documentation](self).
 pub fn solve_exact(
     schema: &DecisionSchema,
     objective: &dyn IntegerObjective,
@@ -196,6 +373,16 @@ pub fn solve_exact(
     Ok(OptimizationResult { best_decision, best_objective, evaluated_candidates: evaluated })
 }
 
+/// Validates `schema` and runs `adapter` on it.
+///
+/// The schema is checked with [`DecisionSchema::validate`] first, so the box must also fit
+/// within `max_enumeration` even though the adapter does not enumerate it.
+///
+/// # Errors
+///
+/// - Any error of [`DecisionSchema::validate`], including
+///   [`CombinatorialOptimizationError::EnumerationLimitExceeded`].
+/// - Any error returned by [`SolverAdapter::solve`], unchanged.
 pub fn solve_with_adapter(
     schema: &DecisionSchema,
     objective: &dyn IntegerObjective,
@@ -205,6 +392,56 @@ pub fn solve_with_adapter(
     adapter.solve(schema, objective)
 }
 
+/// Runs [`solve_exact`] and `adapter` on the same problem and reports how far short of the
+/// exact optimum the adapter fell.
+///
+/// # Errors
+///
+/// Any error of [`solve_exact`] (checked first) or of [`solve_with_adapter`].
+///
+/// ```
+/// use openquant::combinatorial_optimization::{
+///     compare_exact_and_adapter, CombinatorialOptimizationError, DecisionSchema,
+///     IntegerObjective, IntegerVariable, ObjectiveSense, OptimizationResult, SolverAdapter,
+/// };
+///
+/// // Minimise |x - 7| over 0..=9.
+/// struct Distance;
+/// impl IntegerObjective for Distance {
+///     fn sense(&self) -> ObjectiveSense {
+///         ObjectiveSense::Minimize
+///     }
+///     fn evaluate(&self, d: &[i64]) -> Result<f64, CombinatorialOptimizationError> {
+///         Ok((d[0] - 7).abs() as f64)
+///     }
+/// }
+///
+/// // A "solver" that always answers with the lower corner of the box.
+/// struct LowerCorner;
+/// impl SolverAdapter for LowerCorner {
+///     fn solve(
+///         &self,
+///         schema: &DecisionSchema,
+///         objective: &dyn IntegerObjective,
+///     ) -> Result<OptimizationResult, CombinatorialOptimizationError> {
+///         let x: Vec<i64> = schema.variables.iter().map(|v| v.lower).collect();
+///         let value = objective.evaluate(&x)?;
+///         Ok(OptimizationResult { best_decision: x, best_objective: value, evaluated_candidates: 1 })
+///     }
+/// }
+///
+/// # fn main() -> Result<(), CombinatorialOptimizationError> {
+/// let schema = DecisionSchema {
+///     variables: vec![IntegerVariable { lower: 0, upper: 9, step: 1 }],
+///     max_enumeration: 10,
+/// };
+/// let report = compare_exact_and_adapter(&schema, &Distance, &LowerCorner)?;
+/// assert_eq!(report.exact.best_decision, [7]);
+/// assert_eq!(report.adapter.best_decision, [0]);
+/// assert_eq!(report.objective_gap_vs_exact, 7.0);
+/// # Ok(())
+/// # }
+/// ```
 pub fn compare_exact_and_adapter(
     schema: &DecisionSchema,
     objective: &dyn IntegerObjective,
@@ -219,9 +456,15 @@ pub fn compare_exact_and_adapter(
     Ok(AdapterComparison { exact, adapter: adapter_result, objective_gap_vs_exact: gap })
 }
 
+/// The inclusive range of integer trades allowed at one step of a trading trajectory.
+///
+/// Every integer in `min_trade..=max_trade` is tried, so the range width drives the search
+/// cost directly, even when the inventory bounds rule most trades out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TradeBounds {
+    /// Smallest allowed trade (negative sells).
     pub min_trade: i64,
+    /// Largest allowed trade; must be `>= min_trade`.
     pub max_trade: i64,
 }
 
@@ -236,17 +479,40 @@ impl TradeBounds {
     }
 }
 
+/// The state space of a single instrument's inventory traded over a fixed number of steps.
+///
+/// A path is one integer trade per step; the inventory after every trade must stay within
+/// `[inventory_min, inventory_max]`, and `terminal_inventory`, if set, is a hard constraint
+/// on the final inventory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TradingTrajectorySchema {
+    /// Inventory before the first trade.
     pub initial_inventory: i64,
+    /// Lowest inventory allowed after any trade (inclusive).
     pub inventory_min: i64,
+    /// Highest inventory allowed after any trade (inclusive).
     pub inventory_max: i64,
+    /// Allowed trades at each step; its length is the horizon.
     pub step_trade_bounds: Vec<TradeBounds>,
+    /// Required final inventory, or `None` to leave it free. Paths ending elsewhere are
+    /// discarded, not penalised.
     pub terminal_inventory: Option<i64>,
+    /// Cap on the number of **feasible** paths; a schema with exactly this many is accepted.
+    ///
+    /// Infeasible partial paths explored by the search do not count towards it.
     pub max_paths: usize,
 }
 
 impl TradingTrajectorySchema {
+    /// Checks the bounds and constraints of the schema. Does not count paths.
+    ///
+    /// # Errors
+    ///
+    /// - [`CombinatorialOptimizationError::InvalidInput`] if `inventory_min > inventory_max`,
+    ///   `initial_inventory` or `terminal_inventory` lies outside
+    ///   `[inventory_min, inventory_max]`, `max_paths == 0`, or a step has
+    ///   `min_trade > max_trade`.
+    /// - [`CombinatorialOptimizationError::EmptyDomain`] if `step_trade_bounds` is empty.
     pub fn validate(&self) -> Result<(), CombinatorialOptimizationError> {
         if self.inventory_min > self.inventory_max {
             return Err(CombinatorialOptimizationError::InvalidInput(
@@ -279,50 +545,133 @@ impl TradingTrajectorySchema {
         Ok(())
     }
 
+    /// Number of trading steps, `step_trade_bounds.len()`.
     pub fn horizon(&self) -> usize {
         self.step_trade_bounds.len()
     }
 }
 
+/// One feasible trading path: the trades and the inventory they produce.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TradingTrajectoryPath {
+    /// Trade at each step, in time order.
     pub trades: Vec<i64>,
     /// Inventory path includes initial inventory at index 0.
+    ///
+    /// Entry `t + 1` is the inventory after `trades[t]`, so the length is
+    /// `trades.len() + 1`.
     pub inventory_path: Vec<i64>,
 }
 
 impl TradingTrajectoryPath {
+    /// Number of trading steps, `trades.len()`.
     pub fn horizon(&self) -> usize {
         self.trades.len()
     }
 }
 
+/// An objective over whole trading paths, scored by [`solve_trading_trajectory_exact`].
+///
+/// Path dependence is allowed: the objective sees every trade and inventory. Wrap
+/// [`evaluate_trading_path`] for the built-in cost model.
 pub trait TradingTrajectoryObjective {
+    /// Whether larger or smaller values of [`TradingTrajectoryObjective::evaluate`] are
+    /// better.
     fn sense(&self) -> ObjectiveSense;
+
+    /// Scores one path.
+    ///
+    /// Returning an error, or a non-finite value, aborts the whole search.
+    ///
+    /// # Errors
+    ///
+    /// Implementation-defined.
     fn evaluate(&self, path: &TradingTrajectoryPath)
         -> Result<f64, CombinatorialOptimizationError>;
 }
 
+/// The best path found by [`solve_trading_trajectory_exact`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrajectoryOptimizationResult {
+    /// The optimal path; among ties, the first enumerated.
     pub best_path: TradingTrajectoryPath,
+    /// The objective value of `best_path`.
     pub best_objective: f64,
+    /// Number of feasible paths scored.
     pub evaluated_paths: usize,
 }
 
+/// Coefficients of the built-in objective [`evaluate_trading_path`].
+///
+/// Per-step vectors are indexed by step and must have one entry per trade.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TradingTrajectoryObjectiveConfig {
+    /// Expected return per unit of inventory at each step, earned on the inventory held
+    /// *after* that step's trade.
     pub expected_returns: Vec<f64>,
     /// Penalty on held inventory each step (path-dependent risk proxy).
+    ///
+    /// Charged as `risk_aversion * q_t^2` on the post-trade inventory `q_t`; must be finite
+    /// and `>= 0`.
     pub risk_aversion: f64,
     /// Per-step linear impact coefficient applied to |trade|.
+    ///
+    /// Not checked for sign or finiteness (a non-finite result is caught at the end).
     pub impact_coefficients: Vec<f64>,
     /// Fixed per-step ticket cost whenever trade != 0 (non-convex).
+    ///
+    /// Must be finite and `>= 0`.
     pub fixed_ticket_cost: f64,
+    /// Final inventory the terminal penalty pulls towards.
     pub terminal_inventory_target: i64,
+    /// Coefficient of the quadratic penalty on `final inventory - terminal_inventory_target`;
+    /// must be finite and `>= 0`. A soft counterpart of
+    /// [`TradingTrajectorySchema::terminal_inventory`], which is a hard constraint.
     pub terminal_inventory_penalty: f64,
 }
 
+/// Lists every feasible path of `schema` by depth-first search.
+///
+/// Trades at each step are tried from `min_trade` upwards, so paths come out in
+/// lexicographic order of their trades. Every path is held in memory.
+///
+/// # Errors
+///
+/// - Any error of [`TradingTrajectorySchema::validate`].
+/// - [`CombinatorialOptimizationError::EnumerationLimitExceeded`] if there are more than
+///   `max_paths` feasible paths.
+/// - [`CombinatorialOptimizationError::NoFeasibleSolution`] if no path satisfies the
+///   inventory bounds and the terminal constraint.
+///
+/// ```
+/// use openquant::combinatorial_optimization::{
+///     enumerate_trading_paths, CombinatorialOptimizationError, TradeBounds,
+///     TradingTrajectorySchema,
+/// };
+///
+/// # fn main() -> Result<(), CombinatorialOptimizationError> {
+/// // Two steps, one unit either way, long-only up to 2, flat at both ends.
+/// let mut schema = TradingTrajectorySchema {
+///     initial_inventory: 0,
+///     inventory_min: 0,
+///     inventory_max: 2,
+///     step_trade_bounds: vec![TradeBounds { min_trade: -1, max_trade: 1 }; 2],
+///     terminal_inventory: Some(0),
+///     max_paths: 2,
+/// };
+/// let paths = enumerate_trading_paths(&schema)?;
+/// let trades: Vec<_> = paths.iter().map(|p| p.trades.clone()).collect();
+/// assert_eq!(trades, [vec![0, 0], vec![1, -1]]);
+/// assert_eq!(paths[1].inventory_path, [0, 1, 0]);
+///
+/// schema.max_paths = 1;
+/// assert_eq!(
+///     enumerate_trading_paths(&schema),
+///     Err(CombinatorialOptimizationError::EnumerationLimitExceeded { limit: 1 })
+/// );
+/// # Ok(())
+/// # }
+/// ```
 pub fn enumerate_trading_paths(
     schema: &TradingTrajectorySchema,
 ) -> Result<Vec<TradingTrajectoryPath>, CombinatorialOptimizationError> {
@@ -338,6 +687,69 @@ pub fn enumerate_trading_paths(
     Ok(all_paths)
 }
 
+/// Finds the optimal trading path by scoring every feasible path of `schema`.
+///
+/// Calls [`enumerate_trading_paths`], so memory grows with the number of feasible paths.
+/// The comparison is strict: among tied scores the first path enumerated (the one that
+/// trades lowest first) wins.
+///
+/// # Errors
+///
+/// - Any error of [`enumerate_trading_paths`].
+/// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the objective returns NaN or
+///   an infinity for any path.
+/// - Any error returned by [`TradingTrajectoryObjective::evaluate`], unchanged.
+///
+/// ```
+/// use openquant::combinatorial_optimization::{
+///     evaluate_trading_path, solve_trading_trajectory_exact, CombinatorialOptimizationError,
+///     ObjectiveSense, TradeBounds, TradingTrajectoryObjective,
+///     TradingTrajectoryObjectiveConfig, TradingTrajectoryPath, TradingTrajectorySchema,
+/// };
+///
+/// struct NetPnl(TradingTrajectoryObjectiveConfig);
+/// impl TradingTrajectoryObjective for NetPnl {
+///     fn sense(&self) -> ObjectiveSense {
+///         ObjectiveSense::Maximize
+///     }
+///     fn evaluate(
+///         &self,
+///         path: &TradingTrajectoryPath,
+///     ) -> Result<f64, CombinatorialOptimizationError> {
+///         evaluate_trading_path(path, &self.0)
+///     }
+/// }
+///
+/// # fn main() -> Result<(), CombinatorialOptimizationError> {
+/// let schema = TradingTrajectorySchema {
+///     initial_inventory: 0,
+///     inventory_min: 0,
+///     inventory_max: 3,
+///     step_trade_bounds: vec![TradeBounds { min_trade: -3, max_trade: 3 }; 5],
+///     terminal_inventory: Some(0),
+///     max_paths: 10_000,
+/// };
+/// let solve = |fixed_ticket_cost| {
+///     let objective = NetPnl(TradingTrajectoryObjectiveConfig {
+///         expected_returns: vec![0.02, 0.02, -0.01, 0.02, 0.0],
+///         risk_aversion: 0.001,
+///         impact_coefficients: vec![0.002; 5],
+///         fixed_ticket_cost,
+///         terminal_inventory_target: 0,
+///         terminal_inventory_penalty: 0.0,
+///     });
+///     solve_trading_trajectory_exact(&schema, &objective)
+/// };
+///
+/// // Free to trade: sell out ahead of the dip and buy back after it.
+/// let free = solve(0.0)?;
+/// assert_eq!(free.best_path.trades, [3, 0, -3, 3, -3]);
+/// assert_eq!(free.evaluated_paths, 256);
+/// // A fixed ticket cost of 0.03 makes dodging the dip not worth two more tickets.
+/// assert_eq!(solve(0.03)?.best_path.trades, [3, 0, 0, 0, -3]);
+/// # Ok(())
+/// # }
+/// ```
 pub fn solve_trading_trajectory_exact(
     schema: &TradingTrajectorySchema,
     objective: &dyn TradingTrajectoryObjective,
@@ -363,6 +775,59 @@ pub fn solve_trading_trajectory_exact(
     })
 }
 
+/// The built-in path objective: expected P&L net of inventory risk, linear impact and a
+/// fixed ticket cost, minus a quadratic terminal penalty.
+///
+/// ```text
+/// J = sum_t ( q_t r_t - lambda q_t^2 - c_t |dq_t| - kappa 1[dq_t != 0] ) - eta (q_T - q*)^2
+/// ```
+///
+/// where `q_t` is the inventory *after* trade `dq_t` at step `t`, `r_t` is
+/// `expected_returns[t]`, `lambda` is `risk_aversion`, `c_t` is `impact_coefficients[t]`,
+/// `kappa` is `fixed_ticket_cost` and `eta` is `terminal_inventory_penalty` around
+/// `q* = terminal_inventory_target`. Larger is better, so wrap it in a
+/// [`TradingTrajectoryObjective`] with [`ObjectiveSense::Maximize`]. The ticket cost `kappa`
+/// is what makes the problem non-convex. Impact is linear in `|dq_t|`, not the square-root
+/// cost of AFML §21.3.
+///
+/// Only the lengths of `path` are checked: `inventory_path` is taken as given and is not
+/// checked to be the running sum of `trades`.
+///
+/// # Errors
+///
+/// - [`CombinatorialOptimizationError::InvalidInput`] if `inventory_path.len() !=
+///   trades.len() + 1`, or `risk_aversion`, `fixed_ticket_cost` or
+///   `terminal_inventory_penalty` is negative or non-finite.
+/// - [`CombinatorialOptimizationError::DecisionLengthMismatch`] if `expected_returns` or
+///   `impact_coefficients` does not have one entry per trade.
+/// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the result is NaN or infinite.
+///
+/// # Panics
+///
+/// In builds with overflow checks (debug), panics if `final inventory -
+/// terminal_inventory_target` overflows `i64`; release builds wrap instead.
+///
+/// ```
+/// use openquant::combinatorial_optimization::{
+///     evaluate_trading_path, TradingTrajectoryObjectiveConfig, TradingTrajectoryPath,
+/// };
+///
+/// // Buy 2, sell 1: inventory 0 -> 2 -> 1.
+/// let path = TradingTrajectoryPath { trades: vec![2, -1], inventory_path: vec![0, 2, 1] };
+/// let cfg = TradingTrajectoryObjectiveConfig {
+///     expected_returns: vec![0.01, 0.02],
+///     risk_aversion: 0.001,
+///     impact_coefficients: vec![0.001, 0.002],
+///     fixed_ticket_cost: 0.005,
+///     terminal_inventory_target: 0,
+///     terminal_inventory_penalty: 0.01,
+/// };
+/// // Step 1: 2 * 0.01 - 0.001 * 4 - 0.001 * 2 - 0.005 = 0.009
+/// // Step 2: 1 * 0.02 - 0.001 * 1 - 0.002 * 1 - 0.005 = 0.012
+/// // Terminal: -0.01 * (1 - 0)^2 = -0.01
+/// let value = evaluate_trading_path(&path, &cfg).unwrap();
+/// assert!((value - 0.011).abs() < 1e-12);
+/// ```
 pub fn evaluate_trading_path(
     path: &TradingTrajectoryPath,
     cfg: &TradingTrajectoryObjectiveConfig,
