@@ -43,17 +43,18 @@ def test_chu_stinchcombe_white_statistics():
     assert abs(_mean(one_critical) - 2.7809) < 0.001
     assert abs(one_critical[20] - 2.4466) < 0.001
 
-    assert abs(max(one_stat) - 3729.001) < 0.001
-    assert abs(_mean(one_stat) - 836.509) < 0.001
-    assert abs(one_stat[20] - 380.137) < 0.001
+    # Deliberately differs from mlfinlab, which divides by the variance (#104).
+    assert abs(max(one_stat) - 5.3797) < 0.001
+    assert abs(_mean(one_stat) - 1.2582) < 0.001
+    assert abs(one_stat[20] - 0.6098) < 0.001
 
     assert abs(max(two_critical) - 3.235) < 0.001
     assert abs(_mean(two_critical) - 2.769) < 0.001
     assert abs(two_critical[20] - 2.715) < 0.001
 
-    assert abs(max(two_stat) - 5518.519) < 0.001
-    assert abs(_mean(two_stat) - 1264.582) < 0.001
-    assert abs(two_stat[20] - 921.2979) < 0.001
+    assert abs(max(two_stat) - 8.5793) < 0.001
+    assert abs(_mean(two_stat) - 1.8875) < 0.001
+    assert abs(two_stat[20] - 1.4779) < 0.001
 
 
 @pytest.mark.parametrize(

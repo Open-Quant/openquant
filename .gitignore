@@ -7,6 +7,7 @@ docs-site/dist/
 .serena/
 **/*.rs.bk
 .venv/
+.venv_x86/
 **/__pycache__/
 python/openquant/_core*.so
 experiments/artifacts/
@@ -25,6 +26,8 @@ afml/
 .crawl4ai-home/
 .pytest_cache/
 .claude/worktrees/
+.claude/.cc-writes
+.claude/settings.local.json
 .playwright-mcp/
 
 # Coverage output (pytest-cov, cargo-llvm-cov)

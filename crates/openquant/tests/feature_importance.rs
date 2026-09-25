@@ -125,11 +125,11 @@ fn test_feature_importance_mdi_mda_sfi() {
     assert!(mdi["f1"].mean > mdi["f2"].mean);
 
     let mut clf = LinearProbClassifier::new(names.len());
-    let mda =
-        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::Accuracy).unwrap();
+    let mda = mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::Accuracy, 7)
+        .unwrap();
     assert!(mda["f0"].mean > mda["f2"].mean);
     let mda_f1 =
-        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::F1).unwrap();
+        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::F1, 7).unwrap();
     assert!(mda_f1["f0"].mean > mda_f1["f2"].mean);
 
     let mut clf2 = LinearProbClassifier::new(names.len());
@@ -153,4 +153,74 @@ fn test_plot_feature_importance_output_file() {
     plot_feature_importance(&mdi, 0.5, 0.4, Some(out)).unwrap();
     assert!(path.exists());
     std::fs::remove_file(out).unwrap();
+}
+
+/// One informative AR(1) feature with autocorrelation `phi` (unit variance) and one i.i.d.
+/// noise feature; the label is the sign of the informative feature plus noise. Five
+/// contiguous folds. Returns the negative-log-loss MDA of the informative feature.
+fn mda_of_ar1_feature(phi: f64, data_seed: u64, seed: u64) -> f64 {
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    use rand_distr::{Distribution, StandardNormal};
+
+    let n = 2000;
+    let mut rng = StdRng::seed_from_u64(data_seed);
+    let innovation_scale = (1.0 - phi * phi).sqrt();
+    let mut f: f64 = StandardNormal.sample(&mut rng);
+    let mut x = Vec::with_capacity(n);
+    let mut y = Vec::with_capacity(n);
+    for _ in 0..n {
+        let e: f64 = StandardNormal.sample(&mut rng);
+        f = phi * f + innovation_scale * e;
+        let noise: f64 = StandardNormal.sample(&mut rng);
+        let label_noise: f64 = StandardNormal.sample(&mut rng);
+        x.push(vec![f, noise]);
+        y.push(if f + 0.5 * label_noise > 0.0 { 1.0 } else { 0.0 });
+    }
+    let names = vec!["signal".to_string(), "noise".to_string()];
+    let fold = n / 5;
+    let splits: Vec<_> = (0..5)
+        .map(|k| {
+            let test: Vec<usize> = (k * fold..(k + 1) * fold).collect();
+            let train: Vec<usize> = (0..n).filter(|i| !test.contains(i)).collect();
+            (train, test)
+        })
+        .collect();
+    let mut clf = LinearProbClassifier::new(2);
+    let mda =
+        mean_decrease_accuracy(&mut clf, &x, &y, &names, &splits, None, Scoring::NegLogLoss, seed)
+            .unwrap();
+    mda["signal"].mean
+}
+
+/// Regression for #98. MDA used to "permute" by rotating the column one row, which leaves a
+/// persistent feature almost unchanged, so its importance collapsed towards zero (0.12 of the
+/// i.i.d. value at phi = 0.9, 0.02 at phi = 0.99). AFML Snippet 8.3 shuffles the column; a
+/// shuffle breaks the feature-label link however persistent the feature is, so an equally
+/// informative persistent feature must score about the same.
+#[test]
+fn mda_of_persistent_feature_matches_iid_case() {
+    let iid = mda_of_ar1_feature(0.0, 11, 42);
+    assert!(iid > 0.4, "iid MDA {iid}");
+    for phi in [0.5, 0.9, 0.95] {
+        let persistent = mda_of_ar1_feature(phi, 11, 42);
+        assert!(
+            (persistent - iid).abs() < 0.15 * iid,
+            "phi {phi}: persistent MDA {persistent} vs iid MDA {iid}"
+        );
+    }
+    // At phi = 0.99 a 400-row fold spans only a few decorrelation times, so a within-fold
+    // shuffle draws from a narrower distribution than the whole sample and some understatement
+    // is inherent to Snippet 8.3 itself. It must still be nowhere near the shift's collapse.
+    let very_persistent = mda_of_ar1_feature(0.99, 11, 42);
+    assert!(very_persistent > 0.4 * iid, "phi 0.99: MDA {very_persistent} vs iid MDA {iid}");
+}
+
+#[test]
+fn mda_is_reproducible_for_a_seed() {
+    let a = mda_of_ar1_feature(0.9, 11, 3);
+    let b = mda_of_ar1_feature(0.9, 11, 3);
+    let c = mda_of_ar1_feature(0.9, 11, 4);
+    assert_eq!(a.to_bits(), b.to_bits());
+    assert_ne!(a.to_bits(), c.to_bits());
 }

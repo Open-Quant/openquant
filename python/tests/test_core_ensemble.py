@@ -1,3 +1,7 @@
+import math
+import random
+import statistics
+
 import pytest
 from openquant import ensemble
 
@@ -10,13 +14,58 @@ def test_bias_variance_noise_decomposition():
 
     bias_sq, variance, noise, mse = ensemble.bias_variance_noise(y_true, predictions)
 
-    assert abs((bias_sq + variance + noise) - mse) < 1e-10
+    # Without the noiseless target, noise is not reported and bias_sq absorbs it.
+    assert noise is None
+    assert abs((bias_sq + variance) - mse) < 1e-12
     # Worked by hand: the mean prediction is [0.9, 0.1, 0.8, 0.2], so the squared bias is
     # mean([0.01, 0.01, 0.04, 0.04]); each point's predictions spread by +-0.1 around the
     # mean, a population variance of 0.02 / 3.
     assert bias_sq == pytest.approx(0.025, abs=1e-12)
     assert variance == pytest.approx(0.02 / 3.0, abs=1e-12)
-    assert noise == pytest.approx(0.0, abs=1e-12)
+
+    # With the target, bias is measured against it and noise = mean((y_true - target)^2).
+    target = [0.9, 0.1, 0.9, 0.1]
+    bias_sq, variance, noise, mse = ensemble.bias_variance_noise(
+        y_true, predictions, y_expected=target
+    )
+    assert bias_sq == pytest.approx(0.005, abs=1e-12)
+    assert variance == pytest.approx(0.02 / 3.0, abs=1e-12)
+    assert noise == pytest.approx(0.01, abs=1e-12)
+    assert mse == pytest.approx(0.025 + 0.02 / 3.0, abs=1e-12)
+
+
+def test_bias_variance_noise_recovers_known_label_noise():
+    # Mirrors crates/openquant/tests/ensemble_methods.rs::
+    # test_bias_variance_noise_recovers_known_label_noise, with Python's RNG: lines fitted to
+    # noisy samples of a sine, scored on fresh labels with known noise variance sigma^2.
+    rng = random.Random(128)
+    sigma = 0.5
+    f = lambda x: math.sin(2 * math.pi * x)  # noqa: E731
+    x_test = [(i + 0.5) / 400 for i in range(400)]
+    y_expected = [f(x) for x in x_test]
+    predictions = []
+    for _ in range(50):
+        x = [rng.random() for _ in range(30)]
+        y = [f(v) + rng.gauss(0.0, sigma) for v in x]
+        slope, intercept = statistics.linear_regression(x, y)
+        predictions.append([intercept + slope * v for v in x_test])
+
+    noises, gaps = [], []
+    for _ in range(200):
+        y_true = [m + rng.gauss(0.0, sigma) for m in y_expected]
+        bias_sq, variance, noise, mse = ensemble.bias_variance_noise(
+            y_true, predictions, y_expected=y_expected
+        )
+        noises.append(noise)
+        gaps.append(mse - (bias_sq + variance + noise))
+
+    assert statistics.fmean(noises) == pytest.approx(sigma**2, abs=0.006)
+    assert abs(statistics.fmean(gaps)) < 0.01
+
+
+def test_bias_variance_noise_rejects_mismatched_target():
+    with pytest.raises(ValueError, match="y_expected"):
+        ensemble.bias_variance_noise([1.0, 0.0], [[0.9, 0.1]], y_expected=[1.0])
 
 
 def test_bootstrap_and_sequential_bootstrap_indices():
@@ -31,6 +80,7 @@ def test_bootstrap_and_sequential_bootstrap_indices():
     sequential = ensemble.sequential_bootstrap_sample_indices(ind_mat, 8, 11)
     assert len(sequential) == 8
     assert all(0 <= i < len(ind_mat[0]) for i in sequential)
+    assert sequential == ensemble.sequential_bootstrap_sample_indices(ind_mat, 8, 11)
 
 
 def test_aggregation_helpers():

@@ -6,6 +6,8 @@ from typing import Any
 
 import polars as pl
 
+from .data import _parse_ts
+
 
 def _validate_equal_length(
     name_a: str, a: Sequence[object], name_b: str, b: Sequence[object]
@@ -27,7 +29,7 @@ def to_polars_signal_frame(
         data["side"] = list(side)
     if symbol is not None:
         data["symbol"] = [symbol] * len(timestamps)
-    return pl.DataFrame(data).with_columns(pl.col("ts").str.strptime(pl.Datetime, strict=False))
+    return pl.DataFrame(data).with_columns(_parse_ts(pl.col("ts")))
 
 
 def to_polars_event_frame(
@@ -47,8 +49,8 @@ def to_polars_event_frame(
         _validate_equal_length("starts", starts, "labels", labels)
         data["label"] = list(labels)
     return pl.DataFrame(data).with_columns(
-        pl.col("start_ts").str.strptime(pl.Datetime, strict=False),
-        pl.col("end_ts").str.strptime(pl.Datetime, strict=False),
+        _parse_ts(pl.col("start_ts")),
+        _parse_ts(pl.col("end_ts")),
     )
 
 
@@ -87,7 +89,7 @@ def to_polars_weights_frame(
         data["as_of"] = [as_of] * len(asset_names)
     df = pl.DataFrame(data)
     if as_of is not None:
-        df = df.with_columns(pl.col("as_of").str.strptime(pl.Datetime, strict=False))
+        df = df.with_columns(_parse_ts(pl.col("as_of")))
     return df
 
 
@@ -125,7 +127,7 @@ def to_polars_backtest_frame(
     if positions is not None:
         _validate_equal_length("timestamps", timestamps, "positions", positions)
         data["position"] = list(positions)
-    return pl.DataFrame(data).with_columns(pl.col("ts").str.strptime(pl.Datetime, strict=False))
+    return pl.DataFrame(data).with_columns(_parse_ts(pl.col("ts")))
 
 
 @dataclass

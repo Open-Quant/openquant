@@ -2,7 +2,7 @@
 title: "cross_validation"
 description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -10,8 +10,9 @@ module: "cross_validation"
 api_surface: "rust-only"
 afml_chapter:
   - "7"
+  - "12"
 citation:
-  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4)."
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4). Chapter 12: §12.4 The Combinatorial Purged Cross-Validation Method."
 rust_api:
   - "PurgedKFold"
   - "ml_get_train_times"
@@ -19,6 +20,12 @@ rust_api:
   - "SimpleClassifier"
   - "Scoring"
   - "TrainTestSplit"
+  - "PurgedSplit"
+  - "PurgedSplitDiagnostics"
+  - "CpcvSplit"
+  - "CpcvPath"
+  - "naive_kfold_splits"
+  - "count_train_test_overlaps"
   - "CrossValidationError"
 sidebar:
   badge: Module
@@ -109,7 +116,58 @@ $\ell$ the longest label span in samples. Both points are recorded on
 [#94](https://github.com/Open-Quant/openquant/issues/94).
 
 `pct_embargo` is a fraction of the *whole sample count*, rounded up: 0.01 on 5,000 samples
-is 50 samples. AFML suggests a value around 0.01.
+is 50 samples. AFML suggests a value around 0.01. `new` rejects values outside $[0, 1)$, and
+information sets that end before they start.
+
+## Diagnostics and combinatorial splits
+
+`split_with_diagnostics(n_samples)` returns the same folds as `split`, each as a
+`PurgedSplit` whose `diagnostics` say why each excluded sample was excluded.
+`purged_indices` overlap the test window. `embargo_indices` lie inside an embargo window,
+whether or not they were also purged, so an embargo that adds nothing shows up as
+`embargo_indices` contained in `purged_indices`. `test_ranges` gives the test set as ranges.
+Training is every sample in none of the three. `overlap_count_after_purge` counts training
+labels that still intersect a test label. It is always 0, and is there so a pipeline can
+assert it.
+
+`cpcv_splits(n_samples, k)` is combinatorial purged CV (AFML §12.4). It returns one
+`CpcvSplit` for each of the $\binom{N}{k}$ ways to test $k$ of the $N$ folds at once, in
+lexicographic order of `test_fold_ids`. Adjacent test folds form one block, and each block is
+purged and embargoed like a `split` fold, so `k = 1` gives back `split_with_diagnostics`.
+`cpcv_paths(k)` returns the $\varphi[N,k] = \frac{k}{N}\binom{N}{k}$ backtest paths those splits
+make. Path $j$ takes, for each fold, the $j$-th split that tests it: `split_for_fold[g]` is that
+split's `split_id`. The numbering matches [`backtesting-engine`](/modules/backtesting-engine/)'s
+`run_cpcv`, which also scores returns along the paths.
+
+`naive_kfold_splits` is the unpurged baseline §7.3 warns against, and
+`count_train_test_overlaps(info_sets, train, test)` counts training samples whose span
+intersects some test sample's. Together they measure the leak that purging removes.
+
+```rust
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::{count_train_test_overlaps, naive_kfold_splits, PurgedKFold};
+
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info_sets: Vec<_> =
+    (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+let cv = PurgedKFold::new(5, info_sets.clone(), 0.15)?;
+
+// The third fold of the example above, with the reason for each exclusion.
+let fold = &cv.split_with_diagnostics(40)?[2];
+assert_eq!(fold.diagnostics.test_ranges, vec![(16, 24)]);
+assert_eq!(fold.diagnostics.purged_indices, vec![13, 14, 15, 24, 25, 26]);
+// Six samples each side; 13-15 and 24-26 were purged as well.
+let embargoed: Vec<usize> = (10..=15).chain(24..=29).collect();
+assert_eq!(fold.diagnostics.embargo_indices, embargoed);
+
+// N = 5, k = 2: C(5, 2) = 10 splits and 2/5 * 10 = 4 paths.
+assert_eq!(cv.cpcv_splits(40, 2)?.len(), 10);
+assert_eq!(cv.cpcv_paths(2)?.len(), 4);
+
+// Unpurged, the same fold trains on 6 labels that overlap the test window.
+let (train, test) = &naive_kfold_splits(40, 5)?[2];
+assert_eq!(count_train_test_overlaps(&info_sets, train, test)?, 6);
+```
 
 ## Scoring
 
@@ -178,8 +236,10 @@ assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
   (Snippet 7.1). It applies no embargo and nothing else in the crate calls it; use it when
   you build your own splits, for instance several disjoint test blocks at once.
 - **One path is not a backtest.** Purged k-fold gives one out-of-sample prediction per
-  sample, hence one performance path. Combinatorial purged CV, in
-  [`backtesting-engine`](/modules/backtesting-engine/), gives a distribution of them.
+  sample, hence one performance path. `cpcv_splits` and `cpcv_paths` give $\varphi[N,k]$ of
+  them, and [`backtesting-engine`](/modules/backtesting-engine/)'s `run_cpcv` scores each.
+- **CPCV grows fast.** $\binom{N}{k}$ splits each hold their own index vectors: $N = 10$,
+  $k = 5$ is 252 splits. Only an overflowing count is an error (`TooManySplits`).
 
 ## Related modules
 

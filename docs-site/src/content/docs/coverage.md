@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-09-24**.
+Numbers below were regenerated on **2026-09-25**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,12 +41,12 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 12 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
+| `generated` | 8 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 32 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
-| `reviewed` | 8 | A human read the page end to end. |
+| `authored` | 39 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `reviewed` | 6 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **57** | |
+| **Total** | **58** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
@@ -68,10 +68,10 @@ split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
-| Modules with a documentation page | 39 |
-| …written by hand, with a citation and executed examples | 28 |
+| Modules with a documentation page | 40 |
+| …written by hand, with a citation and executed examples | 33 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 8 |
+| …generated, carrying the base template only | 4 |
 <!-- coverage:end:module-depth -->
 
 A base-template page is not a stub — it has a concept overview, mathematical
@@ -93,6 +93,7 @@ it.
 | Surface | Undocumented | Exempt until | Why |
 |---|---|---|---|
 | Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | Internal preprocessing helpers; no stable public surface to document yet. |
+| Rust (`crates/openquant/src/lib.rs`) | `dynamic_allocation` | 2026-12-31 | AFML Ch 21's partition/trajectory search (#112), new. It needs a page (or a section of the Ch 21 combinatorial-optimization page, rewritten in #114, claiming it) once #114 lands. |
 | Python (`python/openquant/`) | `bars` | 2026-12-31 | Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted. |
 <!-- coverage:end:gaps -->
 

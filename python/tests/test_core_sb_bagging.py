@@ -29,7 +29,8 @@ def _synthetic_dataset():
                 ((i * 7) % 13) / 13.0,
             ]
         )
-    t1 = [(start, start + 6) for start in range(0, N_SAMPLES - 6, 3)]
+    # One label per row of x, each spanning the next 6 bars.
+    t1 = [(start, min(start + 6, N_SAMPLES - 1)) for start in range(N_SAMPLES)]
     ind_mat = sampling.get_ind_matrix(t1, list(range(N_SAMPLES)))
     return x, y_clf, y_reg, ind_mat
 
@@ -46,8 +47,7 @@ def _errors(predictions, y):
 
 
 # The bindings fit and predict on the same rows, so unlike the Rust tests these are
-# in-sample scores; the thresholds are the Rust ones. A single feature column is used for
-# the passing tests because multi-column matrices are scrambled (see the xfails below).
+# in-sample scores; the thresholds are the Rust ones.
 
 
 def test_sb_classifier_single_feature():
@@ -95,6 +95,30 @@ def test_sb_bagging_rejects_invalid_inputs():
         sb_bagging.fit_predict_sb_classifier(x, y[:-1], ind_mat)
     with pytest.raises(ValueError, match="rectangular"):
         sb_bagging.fit_predict_sb_regressor([[1.0, 2.0], [1.0]], [0.0, 1.0], ind_mat)
+    # ind_mat must have one label column per row of x.
+    with pytest.raises(ValueError, match="disagree on the number of samples"):
+        sb_bagging.fit_predict_sb_classifier(x[:-5], y[:-5], ind_mat)
+    with pytest.raises(ValueError, match="disagree on the number of samples"):
+        sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, sample_weight=[1.0])
+    with pytest.raises(ValueError, match="sample weights must be finite"):
+        sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, sample_weight=[-1.0] * N_SAMPLES)
+
+
+def test_sb_bagging_uses_sample_weight():
+    # Rows 0..30 follow y = x and rows 30..60 follow y = -x; zero weight on the second half
+    # leaves the first half's line (y = x) at every row.
+    n = 60
+    x = [[(r % 30) - 14.5] for r in range(n)]
+    y = [row[0] if r < 30 else -row[0] for r, row in enumerate(x)]
+    ind_mat = sampling.get_ind_matrix(
+        [(2 * i, 2 * i + 7) for i in range(n)], list(range(2 * n + 8))
+    )
+    weights = [1.0 if r < 30 else 0.0 for r in range(n)]
+
+    weighted = sb_bagging.fit_predict_sb_regressor(x, y, ind_mat, sample_weight=weights)
+    unweighted = sb_bagging.fit_predict_sb_regressor(x, y, ind_mat)
+    assert weighted["predictions"] == pytest.approx([row[0] for row in x])
+    assert weighted["predictions"] != pytest.approx(unweighted["predictions"])
 
 
 def test_sb_classifier_all_features():

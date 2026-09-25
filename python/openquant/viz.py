@@ -5,6 +5,8 @@ from typing import Any
 
 import polars as pl
 
+from .data import _parse_ts
+
 
 def prepare_feature_importance_payload(
     feature_names: Sequence[str],
@@ -60,7 +62,7 @@ def prepare_drawdown_payload(
     if len(timestamps) != len(equity_curve):
         raise ValueError("timestamps/equity_curve length mismatch")
     df = pl.DataFrame({"ts": list(timestamps), "equity": list(equity_curve)}).with_columns(
-        pl.col("ts").str.strptime(pl.Datetime, strict=False)
+        _parse_ts(pl.col("ts"))
     )
     df = df.with_columns((pl.col("equity") / pl.col("equity").cum_max() - 1.0).alias("drawdown"))
     return {

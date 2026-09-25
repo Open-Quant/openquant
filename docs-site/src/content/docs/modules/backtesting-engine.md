@@ -2,7 +2,7 @@
 title: "backtesting_engine"
 description: "Walk-forward, purged cross-validation and combinatorial purged cross-validation splits, with the out-of-sample paths CPCV produces."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -77,6 +77,15 @@ it down, and returns it with the results in `BacktestDiagnostics`, where
 In every mode a training sample is **purged** if its label span overlaps the span of *any*
 test sample, compared pair by pair. That matters for CPCV, where the test set is several
 disjoint blocks and a single covering window would purge everything in between.
+
+A non-zero `pct_embargo` then **embargoes** $h$ more training samples after each test block,
+where $h$ is `pct_embargo` times the sample count, rounded up (§7.4.2, Snippet 7.3). The count
+starts where the purge ends, at the first sample whose label starts after the block's last
+label has ended, so the embargo removes samples the purge kept (fewer than $h$ only at the
+end of the data or where the next test block begins). Samples before a test block are never
+embargoed: their features cannot contain prices from the test window. In CPCV, adjacent test
+groups form one block. `SplitDefinition::purged_count` and `embargo_count` count the two
+removals separately.
 
 ## Combinatorial purged cross-validation
 
@@ -206,11 +215,13 @@ has only two states; with a real learner they differ.
 - **CPCV paths are not independent.** They are rearrangements of the same 15 sets of
   predictions and share most of their returns. The spread across paths understates the true
   uncertainty; it is a lower bound on how fragile the result is, not a confidence interval.
-- **The embargo is applied on both sides of every test sample.** AFML embargoes only after a
-  test set. In walk-forward mode, where training data lies entirely *before* the test block,
-  a non-zero `pct_embargo` therefore only ever removes the most recent training samples and
-  buys nothing. Leave it at zero for walk-forward
-  ([#94](https://github.com/Open-Quant/openquant/issues/94)).
+- **In walk-forward mode the embargo removes nothing.** Training data lies entirely *before*
+  the test block, and only samples after a block are embargoed, so `pct_embargo` has no
+  effect there. If you want a gap between training and test in walk-forward, leave it out of
+  `train_indices` in your evaluator. Before
+  [#94](https://github.com/Open-Quant/openquant/issues/94) the embargo was applied on both
+  sides of every test sample, counted from the block's edge rather than from the end of the
+  purge.
 - **Your evaluator must return one value per test index, in order.** A different length is an
   error in CPCV and goes unnoticed in the other two modes, where returns are only summarised.
 - **Walk-forward windows can overlap or leave gaps.** `step_size` below `test_size` tests

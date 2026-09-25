@@ -94,14 +94,32 @@ def test_time_decay_weights_on_fixture():
     assert pos_decay[-2] >= pos_decay[-1]
 
 
+def test_time_decay_keeps_one_weight_per_event_when_starts_coincide():
+    # Mirrors crates/openquant/tests/sample_weights.rs, issue #91. Average uniqueness is
+    # [4/9, 11/24, 11/18]; the tie at 09:30 is broken by input order, so the cumulative
+    # uniqueness is [32/72, 65/72, 109/72] and decay 0.5 gives 0.5 + 36/109 * x.
+    ts = [f"2024-01-02 09:3{i}:00" for i in range(6)]
+    events = [(ts[0], ts[2], 1.0), (ts[0], ts[3], 1.0), (ts[2], ts[4], 1.0)]
+    out = sample_weights.get_weights_by_time_decay(
+        events, ts, [100, 101, 102, 101, 100, 103.0], 0.5
+    )
+
+    assert [t for t, _ in out] == [ts[0], ts[0], ts[2]]
+    expected = [0.5 + 36 / 109 * x for x in (32 / 72, 65 / 72)] + [1.0]
+    assert [w for _, w in out] == pytest.approx(expected, abs=1e-12)
+
+
 def test_sample_weights_reject_invalid_events():
     # Mirrors crates/openquant/tests/sample_weights.rs::test_value_error_raise
-    events, timestamps, close = _setup_events()
-    events[0] = ("1970-01-01 00:00:00", events[0][1], events[0][2])
+    events = [EVENTS[0], (EVENTS[1][1], EVENTS[1][0], EVENTS[1][2])]
 
-    with pytest.raises(ValueError, match="NaN values"):
-        sample_weights.get_weights_by_return(events, timestamps, close)
-    with pytest.raises(ValueError, match="NaN values"):
-        sample_weights.get_weights_by_time_decay(events, timestamps, close, 0.5)
+    with pytest.raises(ValueError, match="event 1 ends before it starts"):
+        sample_weights.get_weights_by_return(events, DATES, PRICES)
+    with pytest.raises(ValueError, match="event 1 ends before it starts"):
+        sample_weights.get_weights_by_time_decay(events, DATES, PRICES, 0.5)
+    # 1970-01-01 is an ordinary bar, not a missing value.
+    epoch = ["1970-01-01 00:00:00", "1970-01-02 00:00:00"]
+    out = sample_weights.get_weights_by_time_decay([(*epoch, 1.0)], epoch, [100.0, 101.0], 0.5)
+    assert out == [(epoch[0], 1.0)]
     with pytest.raises(ValueError, match="length mismatch"):
         sample_weights.get_weights_by_return(EVENTS, DATES, [1.0])
