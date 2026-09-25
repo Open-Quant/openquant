@@ -78,13 +78,23 @@ fn test_futures_roll() {
     assert_eq!(unique_count(&gaps_diff_no_backward), 3);
     assert_eq!(unique_count(&gaps_rel_no_backward), 3);
 
-    assert_eq!(gaps_diff_no_backward[0], 0.0);
+    // AFML snippet 2.2 in pandas: tests/fixtures/etf_trick/generate.py.
+    let path = fixture_dir().join("reference.json");
+    let reference: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    for (got, key) in [
+        (&gaps_diff_no_backward, "absolute_forward"),
+        (&gaps_rel_no_backward, "relative_forward"),
+        (&gaps_diff_with_backward, "absolute_backward"),
+        (&gaps_rel_with_backward, "relative_backward"),
+    ] {
+        let want = reference["futures_roll"][key].as_array().unwrap();
+        assert_eq!(got.len(), want.len(), "{key}");
+        for (i, (g, w)) in got.iter().zip(want).enumerate() {
+            let w = w.as_f64().unwrap();
+            assert!((g - w).abs() < 1e-12, "{key} row {i}: got {g}, reference {w}");
+        }
+    }
+    // The gap at the last roll is -1.75 points, or a ratio of 0.999294.
     assert_eq!(*gaps_diff_no_backward.last().unwrap(), -1.75);
-    assert_eq!(gaps_diff_with_backward[0], 1.75);
-    assert_eq!(*gaps_diff_with_backward.last().unwrap(), 0.0);
-
-    assert_eq!(gaps_rel_no_backward[0], 1.0);
-    assert!((gaps_rel_no_backward.last().unwrap() - 0.999294).abs() < 1e-6);
-    assert!((gaps_rel_with_backward[0] - (1.0 / 0.999294)).abs() < 1e-6);
-    assert_eq!(*gaps_rel_with_backward.last().unwrap(), 1.0);
 }

@@ -35,6 +35,39 @@ fn load_close() -> Vec<(NaiveDateTime, f64)> {
     out
 }
 
+fn load_reference() -> serde_json::Value {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/labeling/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+fn parse_reference_ts(value: &serde_json::Value) -> Option<NaiveDateTime> {
+    value.as_str().map(|s| NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f").unwrap())
+}
+
+fn assert_events_match(events: &[(NaiveDateTime, Event)], reference: &serde_json::Value) {
+    let t0 = reference["t0"].as_array().unwrap();
+    assert_eq!(events.len(), t0.len());
+    for (i, (ts, ev)) in events.iter().enumerate() {
+        assert_eq!(Some(*ts), parse_reference_ts(&t0[i]), "event {i} start");
+        assert_eq!(ev.t1, parse_reference_ts(&reference["t1"][i]), "event {i} t1");
+        let want = reference["trgt"][i].as_f64().unwrap();
+        assert!((ev.trgt - want).abs() < 1e-12, "event {i} trgt {} vs {want}", ev.trgt);
+    }
+}
+
+fn assert_labels_match(
+    labels: &[(NaiveDateTime, f64, f64, i8, Option<f64>)],
+    reference: &serde_json::Value,
+) {
+    assert_eq!(labels.len(), reference["bin"].as_array().unwrap().len());
+    for (i, (_, ret, _, bin, _)) in labels.iter().enumerate() {
+        let want = reference["ret"][i].as_f64().unwrap();
+        assert!((ret - want).abs() < 1e-12, "label {i} ret {ret} vs {want}");
+        assert_eq!(i64::from(*bin), reference["bin"][i].as_i64().unwrap(), "label {i} bin");
+    }
+}
+
 fn events_to_map(
     events: Vec<(NaiveDateTime, Event)>,
 ) -> std::collections::HashMap<NaiveDateTime, Event> {
@@ -118,9 +151,10 @@ fn test_triple_barrier_events() {
         None,
     );
 
+    // AFML snippets 2.4 and 3.1-3.4 in pandas: tests/fixtures/labeling/generate.py.
+    let reference = load_reference();
     assert_eq!(events.len(), 8);
-    assert!((events[0].1.trgt - 0.010166261175903357).abs() < 1e-3);
-    assert!((events.last().unwrap().1.trgt - 0.006455887663302871).abs() < 1e-4);
+    assert_events_match(&events, &reference["events"]);
     let expected_index: Vec<NaiveDateTime> = cusum_events.iter().skip(1).copied().collect();
     let event_index: Vec<NaiveDateTime> = events.iter().map(|(ts, _)| *ts).collect();
     assert_eq!(event_index, expected_index);
@@ -144,11 +178,13 @@ fn test_triple_barrier_events() {
         assert!((m.trgt - ev.trgt).abs() < 1e-12);
     }
     assert_eq!(meta_events.len(), 8);
+    assert_events_match(&meta_events, &reference["meta_events"]);
 
     // No vertical barriers
     let no_vertical_events =
         get_events(&close, &cusum_events, (1.0, 1.0), &daily_vol, 0.005, 3, None, None);
     assert_eq!(no_vertical_events.len(), 8);
+    assert_events_match(&no_vertical_events, &reference["events_no_vertical"]);
     let diff_count = no_vertical_events
         .iter()
         .filter(|(ts, ev)| {
@@ -183,6 +219,8 @@ fn test_triple_barrier_labeling() {
     let labels = get_bins(&events, &close);
     assert_eq!(labels.len(), 8);
     assert!(labels.iter().all(|(_, _, _, bin, _)| matches!(bin, -1..=1)));
+    let reference = load_reference();
+    assert_labels_match(&labels, &reference["events"]);
 
     // meta labeling with side=1
     let side: Vec<(NaiveDateTime, f64)> = close.iter().map(|(ts, _)| (*ts, 1.0)).collect();
@@ -198,6 +236,7 @@ fn test_triple_barrier_labeling() {
     );
     let meta_labels = get_bins(&meta_events, &close);
     assert_eq!(meta_labels.len(), 8);
+    assert_labels_match(&meta_labels, &reference["meta_events"]);
     assert!(meta_labels.iter().all(|(_, _, _, bin, _)| matches!(bin, 0 | 1)));
     assert!(meta_labels.iter().any(|(_, _, _, bin, _)| *bin == 1));
 }

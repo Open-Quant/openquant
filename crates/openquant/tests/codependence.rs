@@ -11,6 +11,41 @@ struct CodependenceRow {
     y_2: f64,
 }
 
+/// Values computed from the published definitions by
+/// tests/fixtures/codependence/generate.py (MLAM ch. 3 snippets 3.1-3.3; Szekely, Rizzo &
+/// Bakirov 2007), independently of this crate.
+#[derive(Debug, Deserialize)]
+struct Reference {
+    angular_distance_x_y1: f64,
+    absolute_angular_distance_x_y1: f64,
+    squared_angular_distance_x_y1: f64,
+    distance_correlation_x_y1: f64,
+    distance_correlation_x_y2: f64,
+    optimal_bins_univariate: usize,
+    optimal_bins_bivariate_x_y1: usize,
+    mutual_info_x_y1: f64,
+    mutual_info_normalised_x_y1: f64,
+    mutual_info_x_y1_10_bins: f64,
+    variation_of_information_x_y1: f64,
+    variation_of_information_normalised_x_y1: f64,
+    variation_of_information_x_y1_10_bins: f64,
+}
+
+fn load_reference() -> Reference {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/codependence/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("reference json"))
+        .expect("valid reference json")
+}
+
+/// The reference performs the same operations up to summation order (and the same histogram
+/// bin assignment), so only rounding differences remain.
+const TOL: f64 = 1e-12;
+
+fn assert_close(actual: f64, expected: f64, what: &str) {
+    assert!((actual - expected).abs() < TOL, "{what}: got {actual}, expected {expected}");
+}
+
 fn load_series() -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/codependence/random_state_42.csv");
@@ -52,54 +87,84 @@ fn corrcoef(x: &[f64], y: &[f64]) -> f64 {
 #[test]
 fn test_correlations() {
     let (x, y_1, y_2) = load_series();
+    let r = load_reference();
 
-    let angular_dist = angular_distance(&x, &y_1).expect("angular distance");
-    let sq_angular_dist = squared_angular_distance(&x, &y_1).expect("sq angular distance");
-    let abs_angular_dist = absolute_angular_distance(&x, &y_1).expect("abs angular distance");
-    let dist_corr = distance_correlation(&x, &y_1).expect("distance correlation");
-
-    assert!((angular_dist - 0.6703650607372927).abs() < 1e-6);
-    assert!((abs_angular_dist - 0.6703650607372927).abs() < 1e-6);
-    assert!((sq_angular_dist - 0.7034750294490113).abs() < 1e-6);
-    assert!((dist_corr - 0.529291364408913).abs() < 1e-6);
-
-    let dist_corr_y_2 = distance_correlation(&x, &y_2).expect("distance correlation y2");
-    assert!((dist_corr_y_2 - 0.5216239463593741).abs() < 1e-6);
+    assert_close(
+        angular_distance(&x, &y_1).expect("angular distance"),
+        r.angular_distance_x_y1,
+        "angular distance",
+    );
+    assert_close(
+        absolute_angular_distance(&x, &y_1).expect("abs angular distance"),
+        r.absolute_angular_distance_x_y1,
+        "absolute angular distance",
+    );
+    assert_close(
+        squared_angular_distance(&x, &y_1).expect("sq angular distance"),
+        r.squared_angular_distance_x_y1,
+        "squared angular distance",
+    );
+    assert_close(
+        distance_correlation(&x, &y_1).expect("distance correlation"),
+        r.distance_correlation_x_y1,
+        "distance correlation x-y1",
+    );
+    assert_close(
+        distance_correlation(&x, &y_2).expect("distance correlation y2"),
+        r.distance_correlation_x_y2,
+        "distance correlation x-y2",
+    );
 }
 
 #[test]
 fn test_information_metrics() {
     let (x, y_1, _) = load_series();
+    let r = load_reference();
 
-    let mut_info = get_mutual_info(&x, &y_1, None, false).expect("mutual info");
-    let mut_info_norm = get_mutual_info(&x, &y_1, None, true).expect("mutual info norm");
-    let mut_info_bins = get_mutual_info(&x, &y_1, Some(10), false).expect("mutual info bins");
+    assert_close(
+        get_mutual_info(&x, &y_1, None, false).expect("mutual info"),
+        r.mutual_info_x_y1,
+        "mutual info",
+    );
+    assert_close(
+        get_mutual_info(&x, &y_1, None, true).expect("mutual info norm"),
+        r.mutual_info_normalised_x_y1,
+        "normalised mutual info",
+    );
+    assert_close(
+        get_mutual_info(&x, &y_1, Some(10), false).expect("mutual info bins"),
+        r.mutual_info_x_y1_10_bins,
+        "mutual info, 10 bins",
+    );
 
-    assert!((mut_info - 0.5228688725834145).abs() < 1e-6);
-    assert!((mut_info_norm - 0.6409642333987833).abs() < 1e-6);
-    assert!((mut_info_bins - 0.6264238716396385).abs() < 1e-6);
-
-    let info_var =
-        variation_of_information_score(&x, &y_1, None, false).expect("information variation");
-    let info_var_norm =
-        variation_of_information_score(&x, &y_1, None, true).expect("information variation norm");
-    let info_var_bins = variation_of_information_score(&x, &y_1, Some(10), false)
-        .expect("information variation bins");
-
-    assert!((info_var - 1.425767548566149).abs() < 1e-6);
-    assert!((info_var_norm - 0.7316744843171117).abs() < 1e-6);
-    assert!((info_var_bins - 1.4184909443978817).abs() < 1e-6);
+    assert_close(
+        variation_of_information_score(&x, &y_1, None, false).expect("information variation"),
+        r.variation_of_information_x_y1,
+        "variation of information",
+    );
+    assert_close(
+        variation_of_information_score(&x, &y_1, None, true).expect("information variation norm"),
+        r.variation_of_information_normalised_x_y1,
+        "normalised variation of information",
+    );
+    assert_close(
+        variation_of_information_score(&x, &y_1, Some(10), false)
+            .expect("information variation bins"),
+        r.variation_of_information_x_y1_10_bins,
+        "variation of information, 10 bins",
+    );
 }
 
 #[test]
 fn test_number_of_bins() {
     let (x, y_1, _) = load_series();
+    let r = load_reference();
     let n_bins_x = get_optimal_number_of_bins(x.len(), None).expect("n bins x");
     let corr = corrcoef(&x, &y_1);
     let n_bins_x_y = get_optimal_number_of_bins(x.len(), Some(corr)).expect("n bins x y");
 
-    assert_eq!(n_bins_x, 15);
-    assert_eq!(n_bins_x_y, 9);
+    assert_eq!(n_bins_x, r.optimal_bins_univariate);
+    assert_eq!(n_bins_x_y, r.optimal_bins_bivariate_x_y1);
 }
 
 /// A correlation of -1 used to reach the bivariate bin formula, divide by zero, and ask for

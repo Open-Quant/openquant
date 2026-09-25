@@ -2,17 +2,36 @@ import math
 
 import pytest
 
-from _core_fixtures import load_csv_columns, nanmean
+from _core_fixtures import load_csv_columns, load_json, nanmean
 
 from openquant import volatility
 
+# Expected values from tests/fixtures/volatility/generate_range.py (Parkinson 1980,
+# Garman & Klass 1980, Yang & Zhang 2000, computed in pandas independently of this library).
+RANGE_REFERENCE = load_json("volatility/range_reference.json")
 
-def test_range_estimators_match_mlfinlab_baseline():
-    # Mirrors crates/openquant/tests/volatility_features.rs::
-    # test_volatility_estimators_match_mlfinlab_baseline
-    open_, high, low, close = load_csv_columns(
+
+def _assert_matches(actual, expected):
+    assert sum(math.isnan(v) for v in actual) == expected["n_nan"]
+    assert abs(nanmean(actual) - expected["mean_excluding_nan"]) < 1e-12
+    for sample in expected["samples"]:
+        value = actual[sample["position"]]
+        if sample["value"] is None:
+            assert math.isnan(value)
+        else:
+            assert abs(value - sample["value"]) < 1e-12
+
+
+def _load_ohlc():
+    return load_csv_columns(
         "backtest_statistics/dollar_bar_sample.csv", ["open", "high", "low", "close"]
     )
+
+
+def test_range_estimators_match_reference():
+    # Mirrors crates/openquant/tests/volatility_features.rs::
+    # test_volatility_estimators_match_reference
+    open_, high, low, close = _load_ohlc()
     gm_vol = volatility.get_garman_class_vol(open_, high, low, close, 20)
     yz_vol = volatility.get_yang_zhang_vol(open_, high, low, close, 20)
     park_vol = volatility.get_parkinson_vol(high, low, 20)
@@ -21,9 +40,24 @@ def test_range_estimators_match_mlfinlab_baseline():
     assert len(yz_vol) == len(close)
     assert len(park_vol) == len(close)
 
-    assert abs(nanmean(gm_vol) - 0.001482) < 1e-6
-    assert abs(nanmean(yz_vol) - 0.00162001) < 1e-6
-    assert abs(nanmean(park_vol) - 0.00149997) < 1e-6
+    _assert_matches(gm_vol, RANGE_REFERENCE["garman_klass"])
+    # `yang_zhang` is the library's form of the estimator, which departs from the paper; see
+    # generate_range.py and test_yang_zhang_matches_paper below.
+    _assert_matches(yz_vol, RANGE_REFERENCE["yang_zhang"])
+    _assert_matches(park_vol, RANGE_REFERENCE["parkinson"])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="FINDING: get_yang_zhang_vol uses ln(C_t/O_{t-1}) for the close term instead of "
+    "Yang & Zhang's open-to-close ln(C_t/O_t), and undemeaned moments; see "
+    "tests/fixtures/volatility/generate_range.py",
+)
+def test_yang_zhang_matches_paper():
+    # Mirrors crates/openquant/tests/volatility_features.rs::test_yang_zhang_matches_paper
+    open_, high, low, close = _load_ohlc()
+    yz_vol = volatility.get_yang_zhang_vol(open_, high, low, close, 20)
+    _assert_matches(yz_vol, RANGE_REFERENCE["yang_zhang_paper"])
 
 
 def test_daily_vol_is_zero_for_constant_daily_return():

@@ -6,6 +6,7 @@ set of reference data.
 """
 
 import csv
+import json
 import math
 from pathlib import Path
 
@@ -20,6 +21,12 @@ def load_csv_columns(relative_path, columns, convert=float):
             for name in columns:
                 out[name].append(convert(row[name]))
     return [out[name] for name in columns]
+
+
+def load_json(relative_path):
+    """Parse `tests/fixtures/<relative_path>` as JSON."""
+    with (FIXTURES / relative_path).open("r") as f:
+        return json.load(f)
 
 
 def load_timestamps(relative_path, column="date_time"):

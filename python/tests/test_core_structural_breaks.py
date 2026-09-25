@@ -2,9 +2,21 @@ import math
 
 import pytest
 
-from _core_fixtures import load_csv_columns
+from _core_fixtures import load_csv_columns, load_json
 
 from openquant import structural_breaks
+
+# AFML chapter 17 recomputed in numpy by tests/fixtures/structural_breaks/generate.py.
+REFERENCE = load_json("structural_breaks/reference.json")
+
+CSW_FINDING = (
+    "FINDING: the Chu-Stinchcombe-White statistic divides by sigma_t^2 (and averages over t-2)"
+    " where AFML 17.3.2 divides by sigma_t (averaging over t-1)"
+)
+SADF_FINDING = (
+    "FINDING: 'quadratic' omits the linear trend of AFML's 'ctt'; the sm_* models take the sup of"
+    " the signed beta/se where AFML 17.4.3 takes |beta|/se; sm_power takes log(0) on the first row"
+)
 
 
 def _log_prices():
@@ -16,16 +28,21 @@ def _mean(values):
     return sum(values) / len(values)
 
 
+def _close(got, want, rel=1e-8):
+    return abs(got - want) <= rel * max(abs(want), 1.0)
+
+
 def test_chow_type_stat():
     # Mirrors crates/openquant/tests/structural_breaks.rs::test_chow_test
     min_length = 10
     log_prices = _log_prices()
     stats = structural_breaks.get_chow_type_stat(log_prices, min_length)
 
-    assert len(stats) == len(log_prices) - min_length * 2
-    assert abs(max(stats) - 0.179) < 0.001
-    assert abs(_mean(stats) + 0.653) < 0.001
-    assert abs(stats[3] + 0.6649) < 0.001
+    want = REFERENCE["chow"]
+    assert len(stats) == len(log_prices) - min_length * 2 == want["len"]
+    assert _close(max(stats), want["max"])
+    assert _close(_mean(stats), want["mean"])
+    assert _close(stats[3], want["at_3"])
 
 
 def test_chu_stinchcombe_white_statistics():
@@ -41,46 +58,55 @@ def test_chu_stinchcombe_white_statistics():
     assert len(one_critical) == len(log_prices) - 2
     assert len(two_critical) == len(log_prices) - 2
 
-    assert abs(max(one_critical) - 3.265) < 0.001
-    assert abs(_mean(one_critical) - 2.7809) < 0.001
-    assert abs(one_critical[20] - 2.4466) < 0.001
+    # The critical values do not depend on how the statistic is scaled; the statistic is
+    # checked in test_chu_stinchcombe_white_statistic_matches_afml.
+    _assert_csw(one_critical, two_critical, "critical_value")
 
-    assert abs(max(one_stat) - 3729.001) < 0.001
-    assert abs(_mean(one_stat) - 836.509) < 0.001
-    assert abs(one_stat[20] - 380.137) < 0.001
 
-    assert abs(max(two_critical) - 3.235) < 0.001
-    assert abs(_mean(two_critical) - 2.769) < 0.001
-    assert abs(two_critical[20] - 2.715) < 0.001
+def _assert_csw(one, two, field):
+    for name, values in [("one_sided", one), ("two_sided", two)]:
+        want = REFERENCE["chu_stinchcombe_white"][name][field]
+        assert _close(max(values), want["max"]), (name, field, "max")
+        assert _close(_mean(values), want["mean"]), (name, field, "mean")
+        assert _close(values[20], want["at_20"]), (name, field, "[20]")
 
-    assert abs(max(two_stat) - 5518.519) < 0.001
-    assert abs(_mean(two_stat) - 1264.582) < 0.001
-    assert abs(two_stat[20] - 921.2979) < 0.001
+
+@pytest.mark.xfail(strict=True, reason=CSW_FINDING)
+def test_chu_stinchcombe_white_statistic_matches_afml():
+    log_prices = _log_prices()
+    _, one_stat = structural_breaks.get_chu_stinchcombe_white_statistics(log_prices, "one_sided")
+    _, two_stat = structural_breaks.get_chu_stinchcombe_white_statistics(log_prices, "two_sided")
+    _assert_csw(one_stat, two_stat, "stat")
 
 
 @pytest.mark.parametrize(
-    "model, expected",
+    "model",
     [
-        ("sm_power", -4.281),
-        ("linear", -0.717),
-        ("quadratic", -1.065),
-        ("sm_poly_1", 0.8268),
-        ("sm_poly_2", 0.822),
-        ("sm_exp", -5.821),
+        "linear",
+        pytest.param("quadratic", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
+        pytest.param("sm_power", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
+        pytest.param("sm_poly_1", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
+        pytest.param("sm_poly_2", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
+        pytest.param("sm_exp", marks=pytest.mark.xfail(strict=True, reason=SADF_FINDING)),
     ],
 )
-def test_sadf_pointwise_reference_values(model, expected):
+def test_sadf_pointwise_reference_values(model):
     # Mirrors the `<model>[29]` assertions of
     # crates/openquant/tests/structural_breaks.rs::test_sadf_test. SADF at bar t only looks
-    # at bars <= t, so element 29 is identical on a 60-bar prefix of the fixture. The full
-    # series is not run here (the Rust test is #[ignore]d as long-running; one model takes
-    # minutes through a debug build), so the whole-series means are not ported.
+    # at bars <= t, so element 29 is identical on a 60-bar prefix of the fixture (the
+    # generator checks this). The full series is not run here (the Rust test is #[ignore]d
+    # as long-running; one model takes minutes through a debug build), so the whole-series
+    # means are not ported.
     min_length, lags = 20, 5
-    log_prices = _log_prices()[:60]
+    prefix = REFERENCE["sadf_prefix"]
+    log_prices = _log_prices()[: prefix["n_bars"]]
     out = structural_breaks.get_sadf(log_prices, model, True, min_length, lags)
 
-    assert len(out) == len(log_prices) - min_length - lags - 1
-    assert abs(out[29] - expected) < 0.001
+    want = prefix["models"][model]
+    assert len(out) == len(log_prices) - min_length - lags - 1 == want["len"]
+    # 1e-7: the normal-equations inverse (snippet 17.4, as in the library) is off from a QR
+    # solve by up to ~2e-9 relative in these statistics.
+    assert _close(out[29], want["at_29"], rel=1e-7)
 
 
 def test_sadf_constant_series_is_negative_infinity():

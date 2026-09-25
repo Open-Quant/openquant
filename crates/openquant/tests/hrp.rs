@@ -90,10 +90,7 @@ fn test_quasi_diagonalization() {
     let (prices, names) = load_prices_and_names();
     let mut hrp = HierarchicalRiskParity::new();
     hrp.allocate(&names, Some(&prices), None, None, None, false).unwrap();
-    assert_eq!(
-        hrp.ordered_indices,
-        vec![13, 9, 10, 8, 14, 7, 1, 6, 4, 16, 3, 17, 12, 18, 22, 0, 15, 21, 11, 2, 20, 5, 19]
-    );
+    assert_eq!(hrp.ordered_indices, reference_leaf_order());
 }
 
 #[test]
@@ -138,4 +135,19 @@ fn test_value_error_for_incorrect_dimensions() {
     let bad_names = names[0..(names.len() - 1)].to_vec();
     let err = hrp.allocate(&bad_names, Some(&prices), None, None, None, false).unwrap_err();
     assert!(matches!(err, HrpError::DimensionMismatch(_)));
+}
+
+/// Leaf order of scipy's single-linkage dendrogram on the same prices
+/// (tests/fixtures/hrp/generate.py).
+fn reference_leaf_order() -> Vec<usize> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/hrp/reference.json");
+    let reference: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    reference["stock_prices"]["order"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_u64().unwrap() as usize)
+        .collect()
 }

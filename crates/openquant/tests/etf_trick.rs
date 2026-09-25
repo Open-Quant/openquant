@@ -43,7 +43,9 @@ fn test_etf_trick_costs_defined() {
     assert_eq!(in_memory.len(), csv_100.len());
     assert_eq!(in_memory.len(), csv_all.len());
 
-    assert!((in_memory[20].1 - 0.9933502).abs() < 1e-6);
+    // Regression pin of the library's own output, not a reference: it is one bar off AFML 2.4.1,
+    // see etf_series_matches_afml_reference below.
+    assert!((in_memory[20].1 - 0.9933502667307338).abs() < 1e-12);
     assert_eq!(in_memory[0].1, 1.0);
     assert_eq!(csv_4[0].1, 1.0);
     assert_eq!(csv_100[0].1, 1.0);
@@ -89,7 +91,8 @@ fn test_etf_trick_rates_not_defined() {
     assert_eq!(in_memory.len(), csv_100.len());
     assert_eq!(in_memory.len(), csv_all.len());
 
-    assert!((in_memory[20].1 - 0.9933372).abs() < 1e-6);
+    // Regression pin of the library's own output; see etf_series_matches_afml_reference.
+    assert!((in_memory[20].1 - 0.9933372583080832).abs() < 1e-12);
     assert_eq!(in_memory[0].1, 1.0);
     assert_eq!(csv_4[0].1, 1.0);
     assert_eq!(csv_100[0].1, 1.0);
@@ -183,5 +186,41 @@ fn test_docs_page_example_values() {
     let gaps = get_futures_roll_series(&chain, "absolute", true).unwrap();
     for (got, want) in gaps.iter().zip([-0.9, -0.9, -0.9, 0.0, 0.0]) {
         assert!((got - want).abs() < 1e-9, "got {got}, page says {want}");
+    }
+}
+
+fn reference() -> serde_json::Value {
+    let path = fixture_dir().join("reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+/// The ETF trick as AFML 2.4.1 writes it, computed in pandas by tests/fixtures/etf_trick/generate.py.
+#[test]
+#[ignore = "FINDING: etf_trick sizes the holdings that earn bar t's p_t - o_t from bar t's allocation and the NEXT bar's open o_{t+1}; AFML 2.4.1 uses h_{t-1} = w_{t-1} K_{t-1} / (o_t phi_{t-1} sum|w|), so K is one bar off (row 20: 0.99335 vs 0.99110)"]
+fn etf_series_matches_afml_reference() {
+    let reference = reference();
+    let dates: Vec<&str> = reference["etf_trick"]["dates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    for (rates, key) in [(Some(table("rates_df.csv")), "with_rates"), (None, "without_rates")] {
+        let etf = EtfTrick::from_tables(
+            table("open_df.csv"),
+            table("close_df.csv"),
+            table("alloc_df.csv"),
+            table("costs_df.csv"),
+            rates,
+        )
+        .unwrap();
+        let got = etf.get_etf_series(100_000).unwrap();
+        let want = reference["etf_trick"][key].as_array().unwrap();
+        assert_eq!(got.len(), want.len(), "{key}");
+        for (i, ((date, k), w)) in got.iter().zip(want).enumerate() {
+            assert_eq!(date, dates[i], "{key} row {i}");
+            let w = w.as_f64().unwrap();
+            assert!((k - w).abs() < 1e-12, "{key} row {i} ({date}): got {k}, AFML {w}");
+        }
     }
 }
