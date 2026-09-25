@@ -156,6 +156,16 @@ export const apiInventory = {
       "standard_bars",
       "time_bars"
     ],
+    "openquant::dynamic_allocation": [
+      "all_weights",
+      "dynamic_optimal_portfolio",
+      "new",
+      "partition_count",
+      "pigeonhole_partitions",
+      "trajectory_sharpe_ratio",
+      "transaction_costs",
+      "weight_count"
+    ],
     "openquant::ef3m": [
       "centered_moment",
       "fit",
@@ -377,6 +387,9 @@ export const apiInventory = {
       "register"
     ],
     "pyopenquant::data": [
+      "register"
+    ],
+    "pyopenquant::dynamic_allocation": [
       "register"
     ],
     "pyopenquant::ef3m": [

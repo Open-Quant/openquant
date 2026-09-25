@@ -93,6 +93,7 @@ it.
 | Surface | Undocumented | Exempt until | Why |
 |---|---|---|---|
 | Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | Internal preprocessing helpers; no stable public surface to document yet. |
+| Rust (`crates/openquant/src/lib.rs`) | `dynamic_allocation` | 2026-12-31 | AFML Ch 21's partition/trajectory search (#112), new. It needs a page (or a section of the Ch 21 combinatorial-optimization page, rewritten in #114, claiming it) once #114 lands. |
 | Python (`python/openquant/`) | `bars` | 2026-12-31 | Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted. |
 <!-- coverage:end:gaps -->
 
