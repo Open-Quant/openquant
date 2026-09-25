@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-24'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -59,6 +59,7 @@ For the AFML chapter each module implements, see
 
 ### Research Workflows
 
+- [`evaluation`](/modules/evaluation/) — PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
 - [`research`](/modules/research/) — Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates.
 - [`viz`](/modules/viz/) — Visualization payload builders for feature importance, drawdown, regime, frontier, and cluster charts.
@@ -134,6 +135,7 @@ For the AFML chapter each module implements, see
 - [`data`](/modules/data/) — `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
 - [`ef3m`](/modules/ef3m/) — `centered_moment`, `raw_moment`, `most_likely_parameters`, `fit_m2n`
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
+- [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
 - [`fast_ewma`](/modules/util-fast-ewma/) — `ewma`
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — `mdi_importance`, `mda_importance`, `sfi_importance`, `orthogonalize_features_pca`, `substitution_effect_report`
 - [`filters`](/modules/filters/) — `cusum_filter_indices`, `cusum_filter_timestamps`, `z_score_filter_indices`, `z_score_filter_timestamps`
