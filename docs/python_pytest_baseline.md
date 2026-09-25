@@ -4,7 +4,7 @@
 - Command: `arch -x86_64 .venv_x86/bin/python -m pytest mlfinlab/tests --durations=20`
 - Runtime: 759.86s (12m39s)
 - Summary: 259 collected, **259 passed**, 3209 warnings
-- Working dir: `/Users/seankoval/repos/mlfinlab`
+- Working dir: root of a local mlfinlab v1.0 checkout (not this repository)
 - Venv: `.venv_x86` (CPython 3.8.20, x86_64 under Rosetta)
 - OS: Darwin 24.3.0 (arm64 host)
 - Notes: Used binary-compatible wheels for Apple Silicon. Matplotlib forced to Agg backend for headless tests. Durations captured for top 20.

@@ -36,7 +36,7 @@ uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquan
 ### `openquant.risk`
 - `calculate_value_at_risk(returns, confidence_level)`
 - `calculate_expected_shortfall(returns, confidence_level)`
-- `calculate_conditional_drawdown_risk(returns, confidence_level)`
+- `calculate_conditional_drawdown_risk(returns, confidence_level)` — `returns` must be a cumulative (equity) series; `confidence_level` is the upper-tail level (0.95 = worst 5%)
 
 Input conventions:
 - `returns`: list of floats
@@ -115,6 +115,9 @@ Input conventions:
 
 Return conventions:
 - tuple `(weights, portfolio_risk, portfolio_return, portfolio_sharpe)`
+- from prices: simple returns; return, risk (volatility) and Sharpe ratio are all annualised
+  with 252 periods a year, and `risk_free_rate` is an annual rate. `portfolio_sharpe` is
+  reported for every solution.
 
 Input conventions:
 - `prices`: rectangular nested list of floats (`rows=time`, `cols=assets`)
