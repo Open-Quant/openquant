@@ -1,7 +1,6 @@
+import openquant
 import polars as pl
 import pytest
-
-import openquant
 
 
 def _toy_pipeline_input():
@@ -45,7 +44,14 @@ def test_pipeline_run_contract():
         cusum_threshold=0.0005,
     )
 
-    assert set(out.keys()) == {"events", "signals", "portfolio", "risk", "backtest", "leakage_checks"}
+    assert set(out.keys()) == {
+        "events",
+        "signals",
+        "portfolio",
+        "risk",
+        "backtest",
+        "leakage_checks",
+    }
     assert len(out["signals"]["values"]) == len(timestamps)
     assert len(out["backtest"]["equity_curve"]) == len(timestamps)
     assert len(out["backtest"]["strategy_returns"]) == len(timestamps) - 1

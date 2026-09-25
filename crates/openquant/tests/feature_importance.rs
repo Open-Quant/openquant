@@ -146,10 +146,12 @@ fn test_feature_importance_mdi_mda_sfi() {
 fn test_plot_feature_importance_output_file() {
     let names = vec!["a".to_string(), "b".to_string()];
     let mdi = mean_decrease_impurity(&[vec![0.7, 0.3], vec![0.6, 0.4]], &names).unwrap();
-    let out = "/tmp/openquant_feature_importance_test.csv";
+    // temp_dir(), not a hard-coded /tmp: this test also runs on Windows nightly.
+    let path = std::env::temp_dir().join("openquant_feature_importance_test.csv");
+    let out = path.to_str().unwrap();
     let _ = std::fs::remove_file(out);
     plot_feature_importance(&mdi, 0.5, 0.4, Some(out)).unwrap();
-    assert!(std::path::Path::new(out).exists());
+    assert!(path.exists());
     std::fs::remove_file(out).unwrap();
 }
 

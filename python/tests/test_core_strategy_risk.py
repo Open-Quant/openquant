@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import strategy_risk
 
 

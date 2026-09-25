@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import datetime as dt
 
+import openquant
 import polars as pl
 import pytest
-
-import openquant
 from openquant import _core
 
 # Ticks around one second at microsecond and nanosecond resolution, in the form
@@ -47,7 +46,10 @@ def _tick_frame(ts: list) -> pl.DataFrame:
 
 def _us_datetimes() -> list[dt.datetime]:
     base = dt.datetime(2024, 1, 2, 9, 30, 1)
-    return [base + dt.timedelta(microseconds=u) for u in (0, 120_000, 250_500, 500_000, 760_917, 999_999)]
+    return [
+        base + dt.timedelta(microseconds=u)
+        for u in (0, 120_000, 250_500, 500_000, 760_917, 999_999)
+    ]
 
 
 # --- openquant.bars (the issue's reproduction) -------------------------------------------
@@ -160,7 +162,9 @@ def test_output_is_written_as_str_of_the_datetime():
     assert out == [str(dt.datetime(2024, 1, 2, 9, 30, 1, 600_000))]
 
 
-@pytest.mark.parametrize("bad", ["2024-01-02 09:30", "2024-01-02T09:30:01", "2024-01-02 09:30:01.x"])
+@pytest.mark.parametrize(
+    "bad", ["2024-01-02 09:30", "2024-01-02T09:30:01", "2024-01-02 09:30:01.x"]
+)
 def test_malformed_timestamps_still_raise(bad):
     with pytest.raises(ValueError, match="invalid datetime"):
         _core.filters.cusum_filter_timestamps([1.0, 2.0], ["2024-01-02 09:30:00", bad], 0.1)

@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_timestamps
-
 from openquant import filters, labeling, sample_weights, volatility
 
 DATES = [f"2000-01-{day:02d} 00:00:00" for day in range(1, 11)]
@@ -76,7 +74,9 @@ def test_time_decay_weights_on_fixture():
     events, timestamps, close = _setup_events()
 
     def decay(value):
-        return [w for _, w in sample_weights.get_weights_by_time_decay(events, timestamps, close, value)]
+        return [
+            w for _, w in sample_weights.get_weights_by_time_decay(events, timestamps, close, value)
+        ]
 
     standard = decay(0.5)
     no_decay = decay(1.0)
@@ -100,7 +100,9 @@ def test_time_decay_keeps_one_weight_per_event_when_starts_coincide():
     # uniqueness is [32/72, 65/72, 109/72] and decay 0.5 gives 0.5 + 36/109 * x.
     ts = [f"2024-01-02 09:3{i}:00" for i in range(6)]
     events = [(ts[0], ts[2], 1.0), (ts[0], ts[3], 1.0), (ts[2], ts[4], 1.0)]
-    out = sample_weights.get_weights_by_time_decay(events, ts, [100, 101, 102, 101, 100, 103.0], 0.5)
+    out = sample_weights.get_weights_by_time_decay(
+        events, ts, [100, 101, 102, 101, 100, 103.0], 0.5
+    )
 
     assert [t for t, _ in out] == [ts[0], ts[0], ts[2]]
     expected = [0.5 + 36 / 109 * x for x in (32 / 72, 65 / 72)] + [1.0]

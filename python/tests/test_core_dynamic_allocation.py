@@ -5,9 +5,7 @@ import math
 import random
 
 import pytest
-
 from openquant import dynamic_allocation as da
-
 
 # --- AFML Snippets 21.1-21.3, transcribed in pure Python (numpy replaced by lists) ---------
 

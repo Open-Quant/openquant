@@ -9,9 +9,8 @@ data, and an informative feature scored worse than a coin flip under SFI.
 import math
 import random
 
-import pytest
-
 import openquant
+import pytest
 from openquant.feature_diagnostics import _fit_linear_probability_model, _predict_proba
 
 COIN_FLIP_LOG_LOSS = -math.log(2.0)
@@ -66,7 +65,9 @@ def test_separable_data_gives_confident_finite_predictions():
 
     assert all(math.isfinite(c) for c in [model.intercept, *model.coeffs])
     clipped = [min(max(p, 1e-15), 1 - 1e-15) for p in prob]
-    log_loss = -sum(t * math.log(p) + (1 - t) * math.log(1 - p) for t, p in zip(y, clipped)) / len(y)
+    log_loss = -sum(t * math.log(p) + (1 - t) * math.log(1 - p) for t, p in zip(y, clipped)) / len(
+        y
+    )
     assert log_loss < 0.05  # was 0.56 on the old model
     assert all((p >= 0.5) == (t > 0.5) for p, t in zip(prob, y))
 

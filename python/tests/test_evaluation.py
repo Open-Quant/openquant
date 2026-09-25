@@ -16,7 +16,6 @@ from pathlib import Path
 from statistics import NormalDist
 
 import pytest
-
 from openquant import evaluation as ev
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "evaluation_returns.csv"
@@ -45,7 +44,9 @@ def _hand_moments(r):
 
 def _hand_psr(r, benchmark):
     n, sr, g3, g4 = _hand_moments(r)
-    return Z.cdf((sr - benchmark) * math.sqrt(n - 1) / math.sqrt(1 - g3 * sr + (g4 - 1) / 4 * sr**2))
+    return Z.cdf(
+        (sr - benchmark) * math.sqrt(n - 1) / math.sqrt(1 - g3 * sr + (g4 - 1) / 4 * sr**2)
+    )
 
 
 def _hand_sr0(sd, n_trials):
@@ -118,8 +119,12 @@ def test_probabilistic_sharpe_ratio(benchmark, key):
 
 
 def test_expected_max_sharpe():
-    assert ev.expected_max_sharpe(8, HAND["trial_sd"]) == pytest.approx(HAND["sr0_8_trials"], abs=1e-9)
-    assert ev.expected_max_sharpe(100, 0.05) == pytest.approx(HAND["sr0_100_trials_sd_005"], abs=1e-9)
+    assert ev.expected_max_sharpe(8, HAND["trial_sd"]) == pytest.approx(
+        HAND["sr0_8_trials"], abs=1e-9
+    )
+    assert ev.expected_max_sharpe(100, 0.05) == pytest.approx(
+        HAND["sr0_100_trials_sd_005"], abs=1e-9
+    )
     # No dispersion across trials: luck cannot pick a winner.
     assert ev.expected_max_sharpe(10, 0.0) == 0.0
 
@@ -141,7 +146,9 @@ def test_deflated_sharpe_ratio_from_count_and_std():
     [(0.0, 0.05, "mintrl_0_005"), (0.05, 0.05, "mintrl_005_005"), (0.0, 0.10, "mintrl_0_010")],
 )
 def test_minimum_track_record_length(benchmark, alpha, key):
-    assert ev.minimum_track_record_length(RETURNS, benchmark, alpha) == pytest.approx(HAND[key], rel=1e-9)
+    assert ev.minimum_track_record_length(RETURNS, benchmark, alpha) == pytest.approx(
+        HAND[key], rel=1e-9
+    )
 
 
 def test_minimum_track_record_length_is_infinite_at_or_below_the_benchmark():
@@ -202,7 +209,13 @@ def test_registry_entry_fields(tmp_path):
     on_disk = json.loads((tmp_path / "trials.json").read_text())
     assert on_disk["schema"] == ev.REGISTRY_SCHEMA
     assert set(on_disk["trials"][0]) == {
-        "config_hash", "timestamp", "sharpe", "n_obs", "skewness", "kurtosis", "config"
+        "config_hash",
+        "timestamp",
+        "sharpe",
+        "n_obs",
+        "skewness",
+        "kurtosis",
+        "config",
     }
 
 

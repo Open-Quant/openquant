@@ -3,6 +3,7 @@
 `helpers::matrix_from_rows` once handed row-flattened data to a column-major constructor,
 which interleaves observations and assets for any non-square input. Symmetric inputs hid it.
 """
+
 import math
 import random
 

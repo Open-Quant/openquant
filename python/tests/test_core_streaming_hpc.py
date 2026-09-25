@@ -1,5 +1,4 @@
 import pytest
-
 from openquant import streaming_hpc
 
 # pipeline_cfg() in crates/openquant/tests/streaming_hpc.rs
@@ -154,9 +153,7 @@ def test_streaming_hpc_rejects_invalid_config():
     # The threshold is a probability, and must be reachable with the given history:
     # with 20 values the CDF is at most 1 - 0.5 / 20 = 0.975.
     with pytest.raises(ValueError, match="vpin_cdf"):
-        streaming_hpc.run_streaming_pipeline(
-            events, **{**PIPELINE_CFG, "vpin_cdf_threshold": 1.0}
-        )
+        streaming_hpc.run_streaming_pipeline(events, **{**PIPELINE_CFG, "vpin_cdf_threshold": 1.0})
     with pytest.raises(ValueError, match="unreachable"):
         streaming_hpc.run_streaming_pipeline(events, **{**PIPELINE_CFG, "cdf_lookback": 20})
     with pytest.raises(ValueError, match="cdf_lookback"):

@@ -3,7 +3,6 @@ import random
 import statistics
 
 import pytest
-
 from openquant import ensemble
 
 

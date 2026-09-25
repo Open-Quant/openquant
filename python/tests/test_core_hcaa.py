@@ -1,9 +1,7 @@
 import csv
 
 import pytest
-
 from _core_fixtures import FIXTURES
-
 from openquant import hcaa
 
 COV_2 = [[0.04, 0.006], [0.006, 0.09]]

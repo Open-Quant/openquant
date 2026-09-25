@@ -1,14 +1,6 @@
 import sys as _sys
 
-from . import _core
-from . import adapters
-from . import bars
-from . import data
-from . import evaluation
-from . import feature_diagnostics
-from . import pipeline
-from . import research
-from . import viz
+from . import _core, adapters, bars, data, evaluation, feature_diagnostics, pipeline, research, viz
 
 # Compiled submodules re-exported as-is. `bars`, `data` and `pipeline` are
 # deliberately absent: the pure-Python modules imported above wrap the compiled

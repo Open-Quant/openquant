@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import sampling, sb_bagging
 
 N_SAMPLES = 240
@@ -111,7 +110,9 @@ def test_sb_bagging_uses_sample_weight():
     n = 60
     x = [[(r % 30) - 14.5] for r in range(n)]
     y = [row[0] if r < 30 else -row[0] for r, row in enumerate(x)]
-    ind_mat = sampling.get_ind_matrix([(2 * i, 2 * i + 7) for i in range(n)], list(range(2 * n + 8)))
+    ind_mat = sampling.get_ind_matrix(
+        [(2 * i, 2 * i + 7) for i in range(n)], list(range(2 * n + 8))
+    )
     weights = [1.0 if r < 30 else 0.0 for r in range(n)]
 
     weighted = sb_bagging.fit_predict_sb_regressor(x, y, ind_mat, sample_weight=weights)
@@ -125,4 +126,3 @@ def test_sb_classifier_all_features():
     x, y, _, ind_mat = _synthetic_dataset()
     out = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=10, random_state=1)
     assert _accuracy(out["predictions"], y) >= 0.55
-

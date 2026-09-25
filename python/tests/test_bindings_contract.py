@@ -1,9 +1,8 @@
 import csv
 from pathlib import Path
 
-import pytest
-
 import openquant
+import pytest
 
 
 def _load_fixture_prices(max_rows: int = 64, symbols=("EEM", "EWG", "TIP")):

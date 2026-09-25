@@ -4,10 +4,8 @@ import importlib.util
 import tempfile
 from pathlib import Path
 
-import polars as pl
-
 import openquant
-
+import polars as pl
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,7 +34,10 @@ def test_notebook_script_parity_pipeline_key_metrics():
     )
 
     assert script_out["frames"]["events"].height == notebook_like["frames"]["events"].height
-    assert script_out["portfolio"]["portfolio_sharpe"] == notebook_like["portfolio"]["portfolio_sharpe"]
+    assert (
+        script_out["portfolio"]["portfolio_sharpe"]
+        == notebook_like["portfolio"]["portfolio_sharpe"]
+    )
     assert script_out["risk"]["realized_sharpe"] == notebook_like["risk"]["realized_sharpe"]
 
 

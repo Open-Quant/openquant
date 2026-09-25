@@ -29,3 +29,8 @@ afml/
 .claude/.cc-writes
 .claude/settings.local.json
 .playwright-mcp/
+
+# Coverage output (pytest-cov, cargo-llvm-cov)
+.coverage
+coverage-python.xml
+lcov.info

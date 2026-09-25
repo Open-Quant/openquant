@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import math
-from typing import Callable
+from collections.abc import Callable
 
 import polars as pl
 
-from . import _core
-from . import data
+from . import _core, data
 
 
 def _interval_to_seconds(interval: str) -> int:
@@ -22,7 +21,9 @@ def _interval_to_seconds(interval: str) -> int:
     raise ValueError(f"unsupported interval format: {interval}")
 
 
-def _rows_to_frame(symbol: str, rows: list[tuple[str, str, float, float, float, float, float, float, int]]) -> pl.DataFrame:
+def _rows_to_frame(
+    symbol: str, rows: list[tuple[str, str, float, float, float, float, float, float, int]]
+) -> pl.DataFrame:
     if not rows:
         return pl.DataFrame(
             {
@@ -39,43 +40,50 @@ def _rows_to_frame(symbol: str, rows: list[tuple[str, str, float, float, float, 
                 "dollar_value": [],
             }
         )
-    return pl.DataFrame(
-        {
-            "start_ts": [r[0] for r in rows],
-            "ts": [r[1] for r in rows],
-            "open": [r[2] for r in rows],
-            "high": [r[3] for r in rows],
-            "low": [r[4] for r in rows],
-            "close": [r[5] for r in rows],
-            "volume": [r[6] for r in rows],
-            "dollar_value": [r[7] for r in rows],
-            "n_obs": [r[8] for r in rows],
-        }
-    ).with_columns(
-        pl.lit(symbol).alias("symbol"),
-        data._parse_ts(pl.col("start_ts")),
-        data._parse_ts(pl.col("ts")),
-        pl.col("close").alias("adj_close"),
-    ).select(
-        [
-            "ts",
-            "symbol",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "adj_close",
-            "start_ts",
-            "n_obs",
-            "dollar_value",
-        ]
+    return (
+        pl.DataFrame(
+            {
+                "start_ts": [r[0] for r in rows],
+                "ts": [r[1] for r in rows],
+                "open": [r[2] for r in rows],
+                "high": [r[3] for r in rows],
+                "low": [r[4] for r in rows],
+                "close": [r[5] for r in rows],
+                "volume": [r[6] for r in rows],
+                "dollar_value": [r[7] for r in rows],
+                "n_obs": [r[8] for r in rows],
+            }
+        )
+        .with_columns(
+            pl.lit(symbol).alias("symbol"),
+            data._parse_ts(pl.col("start_ts")),
+            data._parse_ts(pl.col("ts")),
+            pl.col("close").alias("adj_close"),
+        )
+        .select(
+            [
+                "ts",
+                "symbol",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "adj_close",
+                "start_ts",
+                "n_obs",
+                "dollar_value",
+            ]
+        )
     )
 
 
 def _build_by_symbol(
     df: pl.DataFrame,
-    rust_builder: Callable[[list[str], list[float], list[float], float | int], list[tuple[str, str, float, float, float, float, float, float, int]]],
+    rust_builder: Callable[
+        [list[str], list[float], list[float], float | int],
+        list[tuple[str, str, float, float, float, float, float, float, int]],
+    ],
     param: float | int,
 ) -> pl.DataFrame:
     clean = data.clean_ohlcv(df).sort(["symbol", "ts"])

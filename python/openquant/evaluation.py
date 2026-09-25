@@ -23,10 +23,11 @@ import json
 import math
 import os
 import tempfile
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from . import _core
 
@@ -370,7 +371,7 @@ class TrialRegistry:
         m = return_moments(returns)
         trial = Trial(
             config_hash=config_hash(config),
-            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            timestamp=datetime.now(UTC).isoformat(timespec="seconds"),
             sharpe=m.sharpe,
             n_obs=m.n_obs,
             skewness=m.skewness,
@@ -416,9 +417,7 @@ class TrialRegistry:
         except json.JSONDecodeError as exc:
             raise ValueError(f"{self._path} is not a trial registry: {exc}") from exc
         if not isinstance(payload, Mapping) or payload.get("schema") != REGISTRY_SCHEMA:
-            raise ValueError(
-                f"{self._path} is not a schema-{REGISTRY_SCHEMA} trial registry"
-            )
+            raise ValueError(f"{self._path} is not a schema-{REGISTRY_SCHEMA} trial registry")
         try:
             return [Trial(**entry) for entry in payload["trials"]]
         except (KeyError, TypeError) as exc:
