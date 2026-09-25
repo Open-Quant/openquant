@@ -1,8 +1,8 @@
 ---
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
-status: reviewed
-last_validated: '2026-09-19'
+status: authored
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -63,7 +63,8 @@ The same flow is wrapped in the `justfile`, if you have
 
 ```bash
 just py-setup          # uv venv --python 3.13 .venv && uv sync --group dev
-just py-develop        # maturin develop
+just py-develop        # maturin develop (debug build)
+just py-develop-release  # maturin develop --release
 just py-import-smoke   # import openquant; print('openquant bindings OK')
 just py-test           # pytest python/tests -q
 ```
@@ -76,6 +77,16 @@ output and reports only `returned non-zero exit status 1` — see
 [Troubleshooting](/setup/troubleshooting/#uv-sync-fails-with-an-opaque-pep517-build-wheel-error).
 Prefer the four explicit commands above when something is going wrong.
 :::
+
+### Debug or release
+
+`maturin develop` compiles a **debug** extension by default: quick to build, and
+correct, but unoptimised. That is fine for tests and most of the API. Numerically
+heavy calls are a different matter — a full-series
+[SADF](/modules/structural-breaks/) run can take minutes per model in a debug build.
+Before timing anything or running a long research job, rebuild with
+`maturin develop --release` (or `just py-develop-release`). `maturin build`, used for
+wheels below, already builds in release mode.
 
 ## Building a wheel
 
@@ -118,9 +129,12 @@ print(result["promotion"])
 
 | Attribute | Kind | Comes from |
 |---|---|---|
-| `risk`, `filters`, `sampling`, `labeling`, `bet_sizing`, `portfolio` | compiled | `openquant._core`, i.e. the Rust crate |
+| `risk`, `filters`, `sampling`, `labeling`, `bet_sizing`, `portfolio`, `fracdiff`, `fast_ewma`, `volatility`, `codependence`, `backtest_stats`, `sample_weights`, `microstructural`, `strategy_risk`, `ensemble`, `structural_breaks`, `synthetic_bt`, `ef3m`, `streaming_hpc`, `hrp`, `hcaa`, `onc`, `cla`, `sb_bagging` | compiled | `openquant._core`, i.e. the Rust crate |
 | `bars`, `data`, `feature_diagnostics`, `pipeline`, `research`, `adapters`, `viz` | Python | `python/openquant/*.py` |
 
+The extension registers 27 submodules: the 24 in the first row, re-exported
+unchanged, plus `bars`, `data` and `pipeline`, which the Python modules of the
+same name wrap (the compiled ones stay reachable as `openquant._core.<name>`).
 Only the first row requires the compile step. That is why editing a file
 under `python/openquant/` takes effect immediately, while editing
 anything under `crates/` needs `maturin develop` re-run.

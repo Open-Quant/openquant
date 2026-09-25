@@ -6,8 +6,11 @@ use crate::helpers::to_py_err;
 fn sampling_get_ind_matrix(
     label_endtime: Vec<(usize, usize)>,
     bar_index: Vec<usize>,
-) -> PyResult<Vec<Vec<u8>>> {
-    openquant::sampling::get_ind_matrix(&label_endtime, &bar_index).map_err(to_py_err)
+) -> PyResult<Vec<Vec<u32>>> {
+    // Widened so each row reaches Python as a list of ints; PyO3 turns a Vec<u8> into `bytes`.
+    let ind_mat =
+        openquant::sampling::get_ind_matrix(&label_endtime, &bar_index).map_err(to_py_err)?;
+    Ok(ind_mat.into_iter().map(|row| row.into_iter().map(u32::from).collect()).collect())
 }
 
 #[pyfunction(name = "get_ind_mat_average_uniqueness")]

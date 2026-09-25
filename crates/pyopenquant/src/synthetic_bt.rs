@@ -177,10 +177,10 @@ fn sbt_detect_no_stable_optimum(
     stop_loss_grid=None,
     max_holding_steps=252,
     annualization_factor=252.0,
-    random_walk_phi_threshold=0.99,
-    min_peak_margin=0.1,
-    min_surface_std=0.05,
-    min_best_sharpe=0.0
+    random_walk_phi_threshold=None,
+    min_peak_margin=None,
+    min_surface_std=None,
+    min_best_sharpe=None
 ))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -195,11 +195,13 @@ fn sbt_run_synthetic_otr_workflow(
     stop_loss_grid: Option<Vec<f64>>,
     max_holding_steps: usize,
     annualization_factor: f64,
-    random_walk_phi_threshold: f64,
-    min_peak_margin: f64,
-    min_surface_std: f64,
-    min_best_sharpe: f64,
+    random_walk_phi_threshold: Option<f64>,
+    min_peak_margin: Option<f64>,
+    min_surface_std: Option<f64>,
+    min_best_sharpe: Option<f64>,
 ) -> PyResult<PyObject> {
+    // Omitted thresholds fall back to the Rust defaults, so the two surfaces cannot drift.
+    let defaults = openquant::synthetic_backtesting::StabilityCriteria::default();
     let config = openquant::synthetic_backtesting::SyntheticBacktestConfig {
         initial_price,
         n_paths,
@@ -212,10 +214,11 @@ fn sbt_run_synthetic_otr_workflow(
         max_holding_steps,
         annualization_factor,
         stability_criteria: openquant::synthetic_backtesting::StabilityCriteria {
-            random_walk_phi_threshold,
-            min_peak_margin,
-            min_surface_std,
-            min_best_sharpe,
+            random_walk_phi_threshold: random_walk_phi_threshold
+                .unwrap_or(defaults.random_walk_phi_threshold),
+            min_peak_margin: min_peak_margin.unwrap_or(defaults.min_peak_margin),
+            min_surface_std: min_surface_std.unwrap_or(defaults.min_surface_std),
+            min_best_sharpe: min_best_sharpe.unwrap_or(defaults.min_best_sharpe),
         },
     };
     let result =

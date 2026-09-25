@@ -18,6 +18,10 @@ uv run --python .venv/bin/python python -c "import openquant; print('openquant i
 uv run --python .venv/bin/python pytest python/tests -q
 ```
 
+`maturin develop` builds an unoptimised debug extension. Add `--release` (or run
+`just py-develop-release`) before timing anything or running heavy calls such as
+`structural_breaks.get_sadf`, which can take minutes per model in a debug build.
+
 Quick performance showcase:
 
 ```bash
@@ -77,6 +81,8 @@ Notes:
 - `triple_barrier_events(...)`
 - `triple_barrier_labels(...)`
 - `meta_labels(...)`
+- `add_vertical_barrier(t_events, close_timestamps, close_prices, num_days=0, num_hours=0, num_minutes=0, num_seconds=0)`
+  (at least one offset must be non-zero)
 
 Input conventions:
 - `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings
