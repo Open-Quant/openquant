@@ -2,7 +2,7 @@
 title: "structural_breaks"
 description: "Tests for a change of regime in a price series: the supremum ADF test for explosive behaviour, a Chow-type Dickey-Fuller test, and the Chu-Stinchcombe-White CUSUM test."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -179,13 +179,14 @@ assert!(matches!(
 
 ## What to watch for
 
-- **Do not use `get_chu_stinchcombe_white_statistics` on real prices yet.** The CUSUM
-  statistic of §17.3.2 divides a price change by $\hat\sigma_t\sqrt{t-n}$; the implementation
-  divides by $\hat\sigma_t^{2}\sqrt{t-n}$ instead, so the result depends on the units of the
-  series. On simulated random walks with a 1% step it exceeds its critical value on 94% of
-  bars; with a step of 1, where $\sigma=\sigma^2$, on 5.6%
-  ([#104](https://github.com/Open-Quant/openquant/issues/104)). From Python it returns the
-  tuple `(critical_values, statistics)`, in that order.
+- **`get_chu_stinchcombe_white_statistics` departs from mlfinlab.** The CUSUM statistic of
+  §17.3.2 divides a price change by $\hat\sigma_t\sqrt{t-n}$. mlfinlab, and this library
+  before [#104](https://github.com/Open-Quant/openquant/issues/104), divided by
+  $\hat\sigma_t^{2}\sqrt{t-n}$, so the result depended on the units of the series: on random
+  walks with a 1% step it exceeded its critical value on 94% of bars. It now follows the book
+  and is unchanged by rescaling the series; on the same walks it exceeds the critical value on
+  about 4% of bars at any step size. From Python it returns the tuple
+  `(critical_values, statistics)`, in that order.
 - **SADF is cubic in the sample length.** Every bar refits a regression for every admissible
   start: $O(n^2)$ regressions of up to $n$ rows. A few hundred bars are quick, a few thousand
   are slow, and AFML's §17.4.2.3 puts a full tick history at supercomputer scale. Compute it
