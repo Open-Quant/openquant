@@ -60,6 +60,32 @@ def test_experiment_runner_outputs_expected_artifacts():
         assert metrics.height == 1
         assert "net_sharpe" in metrics.columns
 
+        equity_svg = (run_dir / "equity_curve.svg").read_text(encoding="utf-8")
+        drawdown_svg = (run_dir / "drawdown.svg").read_text(encoding="utf-8")
+        assert equity_svg.startswith("<svg")
+        assert "Equity Curve" in equity_svg
+        assert drawdown_svg.startswith("<svg")
+        assert "Drawdown" in drawdown_svg
+
+        # One point per backtest row, and the same run writes the same bytes.
+        n_rows = pl.read_parquet(run_dir / "backtest.parquet").height
+        assert f"n={n_rows}<" in equity_svg
+        second = runner.run(cfg, out_dir / "again")
+        assert (second / "equity_curve.svg").read_text(encoding="utf-8") == equity_svg
+        assert (second / "drawdown.svg").read_text(encoding="utf-8") == drawdown_svg
+
+
+def test_drawdown_from_equity():
+    runner = _load_runner_module()
+    assert runner._drawdown_from_equity([1.0, 1.2, 0.9, 1.2, 1.5]) == [
+        0.0,
+        0.0,
+        0.9 / 1.2 - 1.0,
+        0.0,
+        0.0,
+    ]
+    assert runner._drawdown_from_equity([]) == []
+
 
 def test_experiment_runner_grid_outputs_leaderboard_and_subruns():
     runner = _load_runner_module()
@@ -83,3 +109,5 @@ def test_experiment_runner_grid_outputs_leaderboard_and_subruns():
         for p in per_run_dirs:
             assert (p / "metrics.parquet").exists()
             assert (p / "run_manifest.json").exists()
+            assert (p / "equity_curve.svg").exists()
+            assert (p / "drawdown.svg").exists()
