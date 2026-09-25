@@ -389,7 +389,7 @@ pub fn get_trades_based_hasbrouck_lambda(
     same_length("aggressor_flags", aggressor_flags, log_ret.len())?;
     let signed: Vec<f64> =
         dollar_volume.iter().zip(aggressor_flags.iter()).map(|(v, a)| v.sqrt() * a).collect();
-    let num: f64 = signed.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
+    let num: f64 = signed.iter().zip(log_ret.iter()).map(|(x, y)| x * y).sum();
     let den: f64 = signed.iter().map(|x| x * x).sum();
     Ok(if den == 0.0 { f64::NAN } else { num / den })
 }
