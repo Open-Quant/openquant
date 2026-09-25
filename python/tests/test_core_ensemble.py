@@ -32,6 +32,7 @@ def test_bootstrap_and_sequential_bootstrap_indices():
     sequential = ensemble.sequential_bootstrap_sample_indices(ind_mat, 8, 11)
     assert len(sequential) == 8
     assert all(0 <= i < len(ind_mat[0]) for i in sequential)
+    assert sequential == ensemble.sequential_bootstrap_sample_indices(ind_mat, 8, 11)
 
 
 def test_aggregation_helpers():

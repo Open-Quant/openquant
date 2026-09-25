@@ -29,13 +29,26 @@ fn sampling_bootstrap_loop_run(
 }
 
 #[pyfunction(name = "seq_bootstrap")]
-#[pyo3(signature = (ind_mat, sample_length=None, warmup_samples=None))]
+#[pyo3(signature = (ind_mat, sample_length=None, warmup_samples=None, random_state=None))]
 fn sampling_seq_bootstrap(
     ind_mat: Vec<Vec<u8>>,
     sample_length: Option<usize>,
     warmup_samples: Option<Vec<usize>>,
+    random_state: Option<u64>,
 ) -> PyResult<Vec<usize>> {
-    openquant::sampling::seq_bootstrap(&ind_mat, sample_length, warmup_samples).map_err(to_py_err)
+    match random_state {
+        Some(seed) => {
+            let mut rng = <rand::rngs::StdRng as rand::SeedableRng>::seed_from_u64(seed);
+            openquant::sampling::seq_bootstrap_with_rng(
+                &ind_mat,
+                sample_length,
+                warmup_samples,
+                &mut rng,
+            )
+        }
+        None => openquant::sampling::seq_bootstrap(&ind_mat, sample_length, warmup_samples),
+    }
+    .map_err(to_py_err)
 }
 
 #[pyfunction(name = "get_av_uniqueness_from_triple_barrier")]

@@ -71,6 +71,10 @@ def test_sampling_contracts():
     assert len(samples) == 4
     assert all(0 <= i < len(label_endtime) for i in samples)
 
+    seeded = openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=3)
+    assert seeded == openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=3)
+    assert seeded != openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=4)
+
 
 def test_labeling_contracts():
     close_timestamps = [

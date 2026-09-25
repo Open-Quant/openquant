@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-21'
+last_generated: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -74,7 +74,7 @@ For the AFML chapter each module implements, see
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
-- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 
 ### Scaling, HPC and Infrastructure
@@ -115,7 +115,7 @@ For the AFML chapter each module implements, see
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
-- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
+- [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
 - [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
 - [`structural_breaks`](/modules/structural-breaks/) — SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.
