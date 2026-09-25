@@ -2,7 +2,7 @@
 title: "etf_trick"
 description: "Turn a rebalanced basket of futures, or a single rolled contract, into one continuous series whose changes are achievable PnL."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -58,6 +58,11 @@ Holdings are sized at the *next* open, $o_{i,t+1}$, because a rebalance decided 
 cannot trade before then. And the bar after a rebalance earns only open-to-close, since the
 new position did not exist overnight.
 
+Note the indices in the last line: bar $t$'s move is earned by $h_{i,t-1}$, which was set from
+bar $t-1$'s allocation $\omega_{i,t-1}$, value $K_{t-1}$ and exchange rate, and bought at bar
+$t$'s open $o_{i,t}$. Nothing from bar $t$ other than its open enters the size of the position
+that earns bar $t$.
+
 `EtfTrick` takes five tables with identical row index and columns — `open`, `close`, `alloc`,
 `costs` and optionally `rates` — and `get_etf_series` returns `(index, K)` pairs starting
 from $K=1$.
@@ -96,19 +101,24 @@ for (day, value) in etf.get_etf_series(100)? {
 
 ```text
 2024-01-03  K = 1.000000
-2024-01-04  K = 1.007332
-2024-01-05  K = 1.023143
-2024-01-08  K = 1.019626
+2024-01-04  K = 1.007939
+2024-01-05  K = 1.028298
+2024-01-08  K = 1.024786
 ```
 
 The second value can be checked by hand. On 01-03 the dollar is split 50/50 and sized at the
-next opens, so $h = (0.5/71.4,\; 0.5/2.49)$. On 01-04 crude closed 0.10 lower and gas 0.04
-higher than the day before: $K = 1 + \tfrac{0.5}{71.4}(-0.10) + \tfrac{0.5}{2.49}(0.04) =
-1.007332$.
+next opens, so $h = (0.5/71.4,\; 0.5/2.49)$. The position is bought at the 01-04 opens, so
+01-04 earns open-to-close: crude closed 0.30 below its open and gas 0.05 above:
+$K = 1 + \tfrac{0.5}{71.4}(-0.30) + \tfrac{0.5}{2.49}(0.05) = 1.007939$. No rebalance on
+01-04, so 01-05 earns close-to-close on the same holdings; the 80/20 allocation of 01-05 is
+bought at the 01-08 opens and first earns on 01-08.
 
-Six input rows give four values. The first row only seeds the previous close, and the last
-row is dropped because sizing a position there would need an open that has not happened.
-This matches mlfinlab's output, which this implementation mirrors.
+Six input rows give four values. The series starts on the second row with $K=1$, which
+counts as a rebalance (the first row is not used), and the last row is dropped because
+sizing a position there would need an open that has not happened. The row index matches
+mlfinlab's output. The values do not: mlfinlab, and earlier versions of this crate, sized
+the holdings that earn bar $t$ from bar $t$'s allocation and bar $t+1$'s open, one bar
+later than §2.4.1.
 
 ## Rolling one contract
 

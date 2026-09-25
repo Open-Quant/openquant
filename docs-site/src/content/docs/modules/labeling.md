@@ -75,7 +75,8 @@ and the label is $\operatorname{sign}(r_{t_1})$. The details that decide edge ca
   out. A label of 0 appears only when the return is exactly zero.
 - **Events are dropped, not defaulted.** An event whose target is NaN or not above `min_ret`
   is discarded. An event with no vertical barrier that never touches a horizontal one has no
-  outcome yet; it is kept in the events with an empty end time and produces no label.
+  outcome yet; it is kept in the events with an empty end time and produces no label. That
+  includes an event on the last bar, which has no later bar to touch.
 - **Only closes are checked.** A bar whose high pierced the target and whose close did not
   does not count as a touch. On coarse bars this understates how often stops are hit.
 

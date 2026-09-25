@@ -71,7 +71,7 @@ fn test_purged_kfold_embargo() {
     let splits = pkf.split(info_sets.len()).unwrap();
     assert_eq!(splits.len(), 3);
     for (train, test) in splits {
-        // embargo should remove neighbors around test
+        // Purging and the embargo leave no training sample inside the test fold's range.
         let min_test = *test.first().unwrap();
         let max_test = *test.last().unwrap();
         assert!(train.iter().all(|i| *i < min_test || *i > max_test));
@@ -235,11 +235,10 @@ fn test_docs_page_example_values() {
     let train_of =
         |pct: f64| PurgedKFold::new(5, info.clone(), pct).unwrap().split(40).unwrap()[2].0.clone();
 
-    let purged_only: Vec<usize> = (0..=12).chain(27..=39).collect();
-    assert_eq!(train_of(0.0), purged_only);
-    // A 3-sample embargo is counted from the fold's edges, inside the purged zone: no effect.
-    assert_eq!(train_of(0.07), purged_only);
-    assert_eq!(train_of(0.15), (0..=9).chain(30..=39).collect::<Vec<usize>>());
+    assert_eq!(train_of(0.0), (0..=12).chain(27..=39).collect::<Vec<usize>>());
+    // The embargo starts after the purge (at 27) and only after the fold (issue #134).
+    assert_eq!(train_of(0.07), (0..=12).chain(30..=39).collect::<Vec<usize>>());
+    assert_eq!(train_of(0.15), (0..=12).chain(33..=39).collect::<Vec<usize>>());
 }
 
 // ---------------------------------------------------------------------------------------
@@ -276,14 +275,20 @@ fn random_spans(rng: &mut rand::rngs::StdRng, n: usize) -> Vec<(NaiveDateTime, N
         .collect()
 }
 
-/// `PurgedKFold::split` as it was on main before the diagnostics were added (a31fbb4),
-/// kept to prove the refactor changed no fold.
-fn reference_split(
+/// A direct port of AFML Snippet 7.3 (`PurgedKFold.split`), for increasing label starts.
+///
+/// Two deliberate differences from the book, both shared by `PurgedKFold`: overlaps are
+/// closed intervals, so a label ending exactly when the test fold starts is purged
+/// (`t1 < t0` rather than `t1 <= t0`) and the right side resumes at the first label that
+/// starts strictly after the fold's latest end (`searchsorted(side="right")`); and the
+/// embargo width is ⌈pct · n⌉ rather than `int(pct · n)`.
+fn snippet_7_3_split(
     info: &[(NaiveDateTime, NaiveDateTime)],
     n_splits: usize,
     pct_embargo: f64,
 ) -> Vec<(Vec<usize>, Vec<usize>)> {
     let n = info.len();
+    let mbrg = (pct_embargo * n as f64).ceil() as usize;
     let mut fold_sizes = vec![n / n_splits; n_splits];
     for fold_size in fold_sizes.iter_mut().take(n % n_splits) {
         *fold_size += 1;
@@ -291,28 +296,18 @@ fn reference_split(
     let mut current = 0;
     let mut splits = Vec::new();
     for fold_size in fold_sizes {
-        let (start, stop) = (current, current + fold_size);
-        let mut keep = vec![true; n];
-        keep[start..stop].fill(false);
-        let test_start = info[start].0;
-        let test_end = info[start..stop].iter().map(|(_, e)| *e).max().unwrap();
-        for (i, (s, e)) in info.iter().enumerate() {
-            let start_in = *s >= test_start && *s <= test_end;
-            let end_in = *e >= test_start && *e <= test_end;
-            let envelop = *s <= test_start && *e >= test_end;
-            if start_in || end_in || envelop {
-                keep[i] = false;
-            }
+        let (i, j) = (current, current + fold_size);
+        let t0 = info[i].0; // start of test set
+        let max_t1 = info[i..j].iter().map(|(_, e)| *e).max().unwrap();
+        let max_t1_idx = info.partition_point(|(s, _)| *s <= max_t1);
+        // Left train: labels that end before the test set starts.
+        let mut train: Vec<usize> = (0..n).filter(|&k| info[k].1 < t0).collect();
+        // Right train, with the embargo counted from `max_t1_idx`.
+        if max_t1_idx < n {
+            train.extend((max_t1_idx + mbrg).min(n)..n);
         }
-        let embargo = (pct_embargo * n as f64).ceil() as isize;
-        if embargo > 0 {
-            let after = (stop as isize + embargo).min(n as isize) as usize;
-            let before = (start as isize - embargo).max(0) as usize;
-            keep[before..after].fill(false);
-        }
-        let train = (0..n).filter(|i| keep[*i]).collect();
-        splits.push((train, (start..stop).collect()));
-        current = stop;
+        splits.push((train, (i..j).collect()));
+        current = j;
     }
     splits
 }
@@ -430,7 +425,7 @@ fn test_cpcv_splits_and_diagnostics() {
 }
 
 #[test]
-fn test_split_matches_pre_diagnostics_implementation() {
+fn test_split_matches_snippet_7_3() {
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
@@ -442,7 +437,7 @@ fn test_split_matches_pre_diagnostics_implementation() {
         let info = random_spans(&mut rng, n);
 
         let pkf = PurgedKFold::new(n_splits, info.clone(), pct_embargo).unwrap();
-        let expected = reference_split(&info, n_splits, pct_embargo);
+        let expected = snippet_7_3_split(&info, n_splits, pct_embargo);
         assert_eq!(pkf.split(n).unwrap(), expected, "n={n} splits={n_splits} emb={pct_embargo}");
 
         let diagnosed = pkf.split_with_diagnostics(n).unwrap();
@@ -478,17 +473,17 @@ fn test_split_with_diagnostics_docs_example() {
     assert_eq!(no_embargo.diagnostics.purged_indices, purged);
     assert!(no_embargo.diagnostics.embargo_indices.is_empty());
 
-    // ceil(0.07 * 40) = 3 samples from the fold's edges: all of them already purged.
+    // ceil(0.07 * 40) = 3 samples, after the fold only, starting where the purge ends.
     let narrow = fold(0.07);
-    assert_eq!(narrow.diagnostics.embargo_indices, purged);
-    assert_eq!(narrow.train_indices, no_embargo.train_indices);
+    assert_eq!(narrow.diagnostics.purged_indices, purged);
+    assert_eq!(narrow.diagnostics.embargo_indices, vec![27, 28, 29]);
+    assert_eq!(narrow.train_indices, (0..=12).chain(30..=39).collect::<Vec<usize>>());
 
-    // ceil(0.15 * 40) = 6 samples: three beyond the purge on each side.
+    // ceil(0.15 * 40) = 6 samples.
     let wide = fold(0.15);
     assert_eq!(wide.diagnostics.purged_indices, purged);
-    let embargoed: Vec<usize> = (10..=15).chain(24..=29).collect();
-    assert_eq!(wide.diagnostics.embargo_indices, embargoed);
-    assert_eq!(wide.train_indices, (0..=9).chain(30..=39).collect::<Vec<usize>>());
+    assert_eq!(wide.diagnostics.embargo_indices, (27..=32).collect::<Vec<usize>>());
+    assert_eq!(wide.train_indices, (0..=12).chain(33..=39).collect::<Vec<usize>>());
 
     // The rest of the page's diagnostics example.
     let cv = PurgedKFold::new(5, info.clone(), 0.15).unwrap();
@@ -663,4 +658,177 @@ fn test_new_split_apis_reject_invalid_input() {
             CrossValidationError::InvalidSplits { n_splits: splits, n_samples: n }
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------
+// The embargo follows AFML Snippet 7.3 (issue #134).
+// ---------------------------------------------------------------------------------------
+
+/// Daily samples: sample i starts on day i and its label lasts `lengths[i]` days.
+fn daily_labels(lengths: &[i64]) -> Vec<(NaiveDateTime, NaiveDateTime)> {
+    let start = NaiveDateTime::parse_from_str("2019-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    lengths
+        .iter()
+        .enumerate()
+        .map(|(i, len)| {
+            let s = start + chrono::Duration::days(i as i64);
+            (s, s + chrono::Duration::days(*len))
+        })
+        .collect()
+}
+
+#[test]
+fn test_embargo_follows_snippet_7_3_with_variable_length_labels() {
+    // Sample i covers days [i, i + len]:
+    //   i    0  1  2  3 | 4  5  6  7 |  8  9 10 11
+    //   end  1  5  3  5 | 5 10  8  8 | 11 10 11 12
+    // 12 samples, 3 folds, h = ceil(0.15 * 12) = 2.
+    let info = daily_labels(&[1, 4, 1, 2, 1, 5, 2, 1, 3, 1, 1, 1]);
+    let splits = PurgedKFold::new(3, info, 0.15).unwrap().split_with_diagnostics(12).unwrap();
+
+    // Fold 0 (0-3) ends on day 5: 4 and 5 start by then and are purged; the embargo is 6, 7.
+    // Fold 1 (4-7) ends on day 10, set by sample 5, not by the last sample 7 (day 8). Purged:
+    // 1 and 3 (end on day 5) and 8, 9, 10 (start by day 10). The embargo is 11 (clipped).
+    // Nothing before a fold is embargoed, so 0 and 2 train.
+    // Fold 2 (8-11) is last, so there is no embargo; 5, 6, 7 end on or after day 8.
+    let expected: [(&[usize], &[usize], &[usize]); 3] = [
+        (&[8, 9, 10, 11], &[4, 5], &[6, 7]),
+        (&[0, 2], &[1, 3, 8, 9, 10], &[11]),
+        (&[0, 1, 2, 3, 4], &[5, 6, 7], &[]),
+    ];
+    for (fold, (split, (train, purged, embargoed))) in splits.iter().zip(expected).enumerate() {
+        assert_eq!(split.train_indices, train, "fold {fold} train");
+        assert_eq!(split.diagnostics.purged_indices, purged, "fold {fold} purged");
+        assert_eq!(split.diagnostics.embargo_indices, embargoed, "fold {fold} embargoed");
+    }
+    // The two-sided, edge-counted rule before #134 gave [6..=11], [0, 11] and [0..=4].
+}
+
+#[test]
+fn test_embargo_never_removes_samples_before_the_test_fold() {
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    let mut rng = StdRng::seed_from_u64(134);
+    for _ in 0..300 {
+        let n = rng.gen_range(4..80);
+        let n_splits = rng.gen_range(2..=n.min(8));
+        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.gen_range(0..4)];
+        let info = random_spans(&mut rng, n);
+
+        let with = PurgedKFold::new(n_splits, info.clone(), pct_embargo)
+            .unwrap()
+            .split_with_diagnostics(n)
+            .unwrap();
+        let without =
+            PurgedKFold::new(n_splits, info, 0.0).unwrap().split_with_diagnostics(n).unwrap();
+        for (a, b) in with.iter().zip(&without) {
+            let start = a.test_indices[0];
+            assert!(a.diagnostics.embargo_indices.iter().all(|&i| i > start), "n={n}");
+            let before = |train: &[usize]| -> Vec<usize> {
+                train.iter().copied().filter(|&i| i < start).collect()
+            };
+            assert_eq!(before(&a.train_indices), before(&b.train_indices), "n={n}");
+        }
+    }
+}
+
+#[test]
+fn test_embargo_starts_where_the_purge_ends() {
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    let mut rng = StdRng::seed_from_u64(73);
+    for _ in 0..300 {
+        let n = rng.gen_range(4..80);
+        let n_splits = rng.gen_range(2..=n.min(8));
+        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.gen_range(0..4)];
+        let h = (pct_embargo * n as f64).ceil() as usize;
+        let info = random_spans(&mut rng, n);
+
+        let pkf = PurgedKFold::new(n_splits, info.clone(), pct_embargo).unwrap();
+        for split in pkf.split_with_diagnostics(n).unwrap() {
+            let d = &split.diagnostics;
+            let (_, stop) = d.test_ranges[0];
+            let test_end = split.test_indices.iter().map(|&i| info[i].1).max().unwrap();
+            // The first sample after the fold whose label starts after the fold's latest end.
+            let resume = (stop..n).find(|&i| info[i].0 > test_end).unwrap_or(n);
+            // Everything between the fold and `resume` is purged; the embargo is exactly the
+            // next h samples, none of which the purge removed.
+            assert!((stop..resume).all(|i| d.purged_indices.contains(&i)), "n={n}");
+            let expected: Vec<usize> = (resume..(resume + h).min(n)).collect();
+            assert_eq!(d.embargo_indices, expected, "n={n} h={h}");
+            assert!(expected.iter().all(|i| !d.purged_indices.contains(i)), "n={n}");
+        }
+    }
+}
+
+#[test]
+fn test_purged_kfold_and_backtesting_engine_train_on_the_same_samples() {
+    use openquant::backtesting_engine::{
+        run_cpcv, run_cross_validation, BacktestData, BacktestError, BacktestMode,
+        BacktestRunConfig, BacktestSafeguards, CpcvConfig, CrossValidationConfig, SplitDefinition,
+    };
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    let run = |mode: BacktestMode| BacktestRunConfig {
+        mode_provenance: format!("issue_134_{mode:?}"),
+        trials_count: 1,
+        safeguards: BacktestSafeguards {
+            survivorship_bias_control: "n/a".to_string(),
+            look_ahead_control: "n/a".to_string(),
+            data_mining_control: "n/a".to_string(),
+            cost_assumption: "n/a".to_string(),
+            multiple_testing_control: "n/a".to_string(),
+        },
+    };
+    let zeros = |s: &SplitDefinition| -> Result<Vec<f64>, BacktestError> {
+        Ok(vec![0.0; s.test_indices.len()])
+    };
+
+    let mut rng = StdRng::seed_from_u64(132);
+    let mut compared = (0, 0);
+    for _ in 0..200 {
+        let n = rng.gen_range(12..80);
+        let n_splits = rng.gen_range(3..=6);
+        let k = rng.gen_range(1..n_splits);
+        let pct_embargo = [0.0, 0.02, 0.05, 0.1][rng.gen_range(0..4)];
+        let info = random_spans(&mut rng, n);
+        let data = BacktestData { returns: vec![0.001; n], label_spans: info.clone() };
+        let pkf = PurgedKFold::new(n_splits, info, pct_embargo).unwrap();
+        let case = format!("n={n} N={n_splits} k={k} pct={pct_embargo}");
+
+        // The engine errors when a split has no training data; PurgedKFold returns it empty.
+        let kfold = pkf.split(n).unwrap();
+        let cfg = CrossValidationConfig { n_splits, pct_embargo };
+        match run_cross_validation(&data, &run(BacktestMode::CrossValidation), &cfg, zeros) {
+            Ok(cv) => {
+                assert_eq!(cv.splits.len(), kfold.len());
+                for (engine, (train, test)) in cv.splits.iter().zip(&kfold) {
+                    assert_eq!(&engine.test_indices, test, "{case}");
+                    assert_eq!(&engine.train_indices, train, "{case}");
+                }
+                compared.0 += 1;
+            }
+            Err(_) => assert!(kfold.iter().any(|(train, _)| train.is_empty()), "{case}"),
+        }
+
+        let cpcv = pkf.cpcv_splits(n, k).unwrap();
+        let cfg = CpcvConfig { n_groups: n_splits, test_groups: k, pct_embargo };
+        let mode = BacktestMode::CombinatorialPurgedCrossValidation;
+        match run_cpcv(&data, &run(mode), &cfg, zeros) {
+            Ok(result) => {
+                assert_eq!(result.splits.len(), cpcv.len());
+                for (engine, ours) in result.splits.iter().zip(&cpcv) {
+                    assert_eq!(engine.test_groups, ours.test_fold_ids, "{case}");
+                    assert_eq!(engine.test_indices, ours.split.test_indices, "{case}");
+                    assert_eq!(engine.train_indices, ours.split.train_indices, "{case}");
+                }
+                compared.1 += 1;
+            }
+            Err(_) => assert!(cpcv.iter().any(|c| c.split.train_indices.is_empty()), "{case}"),
+        }
+    }
+    assert!(compared.0 > 100 && compared.1 > 100, "{compared:?}");
 }

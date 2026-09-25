@@ -183,11 +183,11 @@ fn hyperparameter_tuning_page() -> Result<(), Box<dyn std::error::Error>> {
 
     let by_loss = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::NegLogLoss)?;
     assert_eq!(by_loss.best_params["k"], HyperParamValue::Float(8.0));
-    assert!((by_loss.best_score + 0.2238).abs() < 1e-4);
+    assert!((by_loss.best_score + 0.2243).abs() < 1e-4);
 
     // Accuracy cannot tell the five apart, and a tie goes to the last one tried.
     let by_accuracy = grid_search(build, &grid, data(), 5, 0.01, SearchScoring::Accuracy)?;
-    assert!(by_accuracy.trials.iter().all(|t| (t.mean_score - 0.8933).abs() < 1e-4));
+    assert!(by_accuracy.trials.iter().all(|t| (t.mean_score - 0.8950).abs() < 1e-4));
     assert_eq!(by_accuracy.best_params["k"], HyperParamValue::Float(32.0));
 
     // A log-uniform draw covers three orders of magnitude evenly and lands near the same optimum.

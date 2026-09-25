@@ -18,15 +18,11 @@ its square root; the tests compare the mean of the non-NaN values plus a few sam
   V_RS = 1/n sum [ln(H/C) ln(H/O) + ln(L/C) ln(L/O)] (Rogers & Satchell 1991).
   Recorded as `yang_zhang_paper`.
 
-  The library departs from the paper in three ways, and `yang_zhang` reproduces the
-  library's form so that its regression test can be exact:
-    1. its "close" term is ln(C_i / O_{i-1}) (close over the PREVIOUS bar's open), not
-       the paper's open-to-close ln(C_i / O_i);
-    2. V_O and V_C are raw second moments sum(x^2)/(n-1), not demeaned variances;
-    3. V_RS is divided by n - 1, not n.
-  (2) and (3) are common zero-drift simplifications; (1) changes what is measured.
-  `yang_zhang_paper_zero_mean` applies only (2) and (3) to the paper's c_i, to show
-  which of the three drives the gap.
+  Until #165 the library departed from the paper in three ways, and this script also
+  recorded that form (`yang_zhang`) and a zero-mean variant: its "close" term was
+  ln(C_i / O_{i-1}) rather than ln(C_i / O_i); V_O and V_C were raw second moments
+  sum(x^2)/(n-1) rather than demeaned variances; and V_RS was divided by n - 1. The
+  library now implements the paper, and only the paper's form is recorded.
 """
 import json
 from pathlib import Path
@@ -51,11 +47,6 @@ rs = np.log(h / c) * np.log(h / o) + np.log(l / c) * np.log(l / o)
 yz_paper = np.sqrt(overnight.rolling(n).var(ddof=1) + k * open_close.rolling(n).var(ddof=1)
                    + (1 - k) * rs.rolling(n).mean())
 
-yz_zero_mean = np.sqrt(((overnight ** 2) + k * (open_close ** 2) + (1 - k) * rs).rolling(n).sum() / (n - 1))
-
-close_prev_open = np.log(c / o.shift(1))
-yz_library = np.sqrt(((overnight ** 2) + k * (close_prev_open ** 2) + (1 - k) * rs).rolling(n).sum() / (n - 1))
-
 
 def summary(series):
     picks = [n - 1, n, 100, len(series) // 2, len(series) - 1]
@@ -74,9 +65,7 @@ out = {
     "n_bars": int(len(bars)),
     "parkinson": summary(parkinson),
     "garman_klass": summary(garman_klass),
-    "yang_zhang": summary(yz_library),
     "yang_zhang_paper": summary(yz_paper),
-    "yang_zhang_paper_zero_mean": summary(yz_zero_mean),
 }
 (HERE / "range_reference.json").write_text(json.dumps(out, indent=2) + "\n")
 print(json.dumps(out, indent=2))

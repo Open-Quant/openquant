@@ -98,8 +98,28 @@ pub fn get_garman_class_vol(
     Ok(rolling_sqrt_mean(&estimator, window))
 }
 
-/// Yang-Zhang volatility estimator.
-/// Mirrors mlfinlab.util.volatility.get_yang_zhang_vol.
+/// Yang-Zhang volatility estimator (Yang & Zhang 2000) over a rolling window of `window` bars.
+///
+/// For the `n = window` bars ending at bar `t`:
+///
+/// ```text
+/// sigma^2    = sigma_o^2 + k sigma_c^2 + (1 - k) sigma_rs^2,  k = 0.34 / (1.34 + (n+1)/(n-1))
+/// sigma_o^2  = 1/(n-1) sum (o_i - mean(o))^2,  o_i = ln(O_i / C_{i-1})   (overnight)
+/// sigma_c^2  = 1/(n-1) sum (c_i - mean(c))^2,  c_i = ln(C_i / O_i)       (open to close)
+/// sigma_rs^2 = 1/n sum [ln(H_i/C_i) ln(H_i/O_i) + ln(L_i/C_i) ln(L_i/O_i)]  (Rogers-Satchell)
+/// ```
+///
+/// Returns `sigma` for each bar, per bar (not annualised). The overnight return needs the
+/// previous close, so the first `window` values are NaN; a window containing a NaN input gives
+/// NaN, and `window < 2` gives all NaN.
+///
+/// mlfinlab's `get_yang_zhang_vol`, which this function used to mirror, differs in two ways:
+/// its close term is `ln(C_i / O_{i-1})` rather than `ln(C_i / O_i)`, and it does not demean
+/// `o` and `c` (it also divides the Rogers-Satchell sum by `n - 1`).
+///
+/// # Errors
+///
+/// [`InputError`] if `high`, `low` or `close` differs in length from `open`.
 pub fn get_yang_zhang_vol(
     open: &[f64],
     high: &[f64],
@@ -119,51 +139,39 @@ pub fn get_yang_zhang_vol(
         return Ok(vec![f64::NAN; n]);
     }
 
-    let k = 0.34 / (1.34 + ((window + 1) as f64 / (window - 1) as f64));
+    let w = window as f64;
+    let k = 0.34 / (1.34 + (w + 1.0) / (w - 1.0));
 
-    let mut open_prev_close_ret = vec![f64::NAN; n];
-    let mut close_prev_open_ret = vec![f64::NAN; n];
-    let mut rs_component = vec![f64::NAN; n];
-
+    // o_i = ln(O_i / C_{i-1}) needs the previous close, so it starts at bar 1.
+    let mut overnight = vec![f64::NAN; n];
     for i in 1..n {
-        open_prev_close_ret[i] = (open[i] / close[i - 1]).ln();
-        close_prev_open_ret[i] = (close[i] / open[i - 1]).ln();
+        overnight[i] = (open[i] / close[i - 1]).ln();
     }
-    for i in 0..n {
-        let high_close_ret = (high[i] / close[i]).ln();
-        let high_open_ret = (high[i] / open[i]).ln();
-        let low_close_ret = (low[i] / close[i]).ln();
-        let low_open_ret = (low[i] / open[i]).ln();
-        rs_component[i] = high_close_ret * high_open_ret + low_close_ret * low_open_ret;
-    }
-
-    let sigma_open_sq = rolling_sum_with_min_periods(
-        &open_prev_close_ret.iter().map(|v| v * v).collect::<Vec<_>>(),
-        window,
-        window,
-    );
-    let sigma_close_sq = rolling_sum_with_min_periods(
-        &close_prev_open_ret.iter().map(|v| v * v).collect::<Vec<_>>(),
-        window,
-        window,
-    );
-    let sigma_rs_sq = rolling_sum_with_min_periods(&rs_component, window, window);
-
-    Ok(sigma_open_sq
-        .iter()
-        .zip(sigma_close_sq.iter())
-        .zip(sigma_rs_sq.iter())
-        .map(|((&o_sq, &c_sq), &rs_sq)| {
-            if o_sq.is_nan() || c_sq.is_nan() || rs_sq.is_nan() {
-                f64::NAN
-            } else {
-                (o_sq / (window - 1) as f64
-                    + k * c_sq / (window - 1) as f64
-                    + (1.0 - k) * rs_sq / (window - 1) as f64)
-                    .sqrt()
-            }
+    let open_close: Vec<f64> = open.iter().zip(close).map(|(&o, &c)| (c / o).ln()).collect();
+    let rogers_satchell: Vec<f64> = (0..n)
+        .map(|i| {
+            (high[i] / close[i]).ln() * (high[i] / open[i]).ln()
+                + (low[i] / close[i]).ln() * (low[i] / open[i]).ln()
         })
-        .collect())
+        .collect();
+
+    // Two-pass sample variance of each window: the returns' means are small next to their
+    // spread, and a running sum of squares would lose the digits the estimator needs.
+    let sample_var = |x: &[f64]| {
+        let mean = x.iter().sum::<f64>() / w;
+        x.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (w - 1.0)
+    };
+
+    let mut out = vec![f64::NAN; n];
+    // The first window with `window` overnight returns ends at bar `window`.
+    for (t, out_t) in out.iter_mut().enumerate().skip(window) {
+        let bars = t + 1 - window..t + 1;
+        let var_o = sample_var(&overnight[bars.clone()]);
+        let var_c = sample_var(&open_close[bars.clone()]);
+        let var_rs = rogers_satchell[bars].iter().sum::<f64>() / w;
+        *out_t = (var_o + k * var_c + (1.0 - k) * var_rs).sqrt();
+    }
+    Ok(out)
 }
 
 fn rolling_sqrt_mean(values: &[f64], window: usize) -> Vec<f64> {

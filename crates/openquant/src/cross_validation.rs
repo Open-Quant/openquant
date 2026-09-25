@@ -153,7 +153,8 @@ pub struct PurgedSplitDiagnostics {
     pub test_ranges: Vec<(usize, usize)>,
     /// Non-test samples whose information set overlaps a test block's window (AFML §7.4.1).
     pub purged_indices: Vec<usize>,
-    /// Non-test samples inside an embargo window (§7.4.2), whether or not also purged.
+    /// Non-test samples inside an embargo window (§7.4.2), whether or not also purged. Each
+    /// window follows a test block and starts where that block's purge ends (Snippet 7.3).
     pub embargo_indices: Vec<usize>,
     /// Training samples whose information set still overlaps some test sample's. Purging
     /// guarantees 0; it is reported so callers can assert it.
@@ -368,17 +369,11 @@ impl PurgedKFold {
             }
         }
 
-        // Embargo ceil(pct_embargo * n) samples on both sides of each block, counted from the
-        // block's edges. This differs from Snippet 7.3; see the docs page and issue #134.
+        // Embargo after each block only, starting where its purge ends (AFML Snippet 7.3).
         let mut embargoed = vec![false; n];
-        let embargo = (self.pct_embargo * n as f64).ceil() as usize;
-        if embargo > 0 {
-            for &(start, stop) in test_blocks {
-                let before = start.saturating_sub(embargo)..start;
-                let after = stop..stop.saturating_add(embargo).min(n);
-                for i in before.chain(after) {
-                    embargoed[i] |= !test[i];
-                }
+        for window in embargo_windows(info, &test, embargo_width(self.pct_embargo, n)) {
+            for i in window {
+                embargoed[i] |= !test[i];
             }
         }
 
@@ -450,6 +445,55 @@ pub fn count_train_test_overlaps(
             test_indices.iter().any(|&te| intervals_overlap(info_sets[tr], info_sets[te]))
         })
         .count())
+}
+
+/// The embargo width h = ⌈`pct_embargo` · `n_samples`⌉ (AFML §7.4.2).
+///
+/// Snippet 7.3 truncates (`int(n * pct)`); rounding up guarantees that any positive
+/// `pct_embargo` embargoes at least one sample.
+pub(crate) fn embargo_width(pct_embargo: f64, n_samples: usize) -> usize {
+    (pct_embargo * n_samples as f64).ceil() as usize
+}
+
+/// The embargo windows of a split (AFML §7.4.2, Snippet 7.3), one per test block.
+///
+/// A test block is a maximal run of adjacent `true` entries in `test_mask`. Only samples that
+/// follow a block are embargoed: only later features can contain prices from the test window.
+/// The window starts where the purge ends, at the first sample after the block whose
+/// information set starts after the latest end among the block's information sets (Snippet
+/// 7.3's `maxT1Idx`), and covers the next `width` samples, clipped to the sample count.
+///
+/// The windows may include test samples of a later block or samples another block purged;
+/// callers decide what to do with those. Shared by [`PurgedKFold`] and
+/// [`crate::backtesting_engine`], so both split the same way.
+pub(crate) fn embargo_windows(
+    info_sets: &[(NaiveDateTime, NaiveDateTime)],
+    test_mask: &[bool],
+    width: usize,
+) -> Vec<std::ops::Range<usize>> {
+    let n = test_mask.len();
+    let mut windows = Vec::new();
+    if width == 0 {
+        return windows;
+    }
+    let mut i = 0;
+    while i < n {
+        if !test_mask[i] {
+            i += 1;
+            continue;
+        }
+        let mut block_end = info_sets[i].1;
+        while i < n && test_mask[i] {
+            block_end = block_end.max(info_sets[i].1);
+            i += 1;
+        }
+        let mut resume = i;
+        while resume < n && info_sets[resume].0 <= block_end {
+            resume += 1;
+        }
+        windows.push(resume..resume.saturating_add(width).min(n));
+    }
+    windows
 }
 
 fn intervals_overlap(a: (NaiveDateTime, NaiveDateTime), b: (NaiveDateTime, NaiveDateTime)) -> bool {

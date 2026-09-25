@@ -272,10 +272,11 @@ print(paths.shape, np.round(paths.mean(axis=1), 6).tolist())
 ```
 
 Both modules test the same samples in the same split order, and the engine's
-`path_assignments` equal `cross_validation.cpcv_paths`. The training sets differ:
-`cross_validation` purges each block of adjacent test groups against its whole window, and the
-engine purges pair by pair. The engine's own training sets appear in `result["splits"]` as a
-record only; the model was trained on the ones you used. Walk-forward and purged-CV modes are
+`path_assignments` equal `cross_validation.cpcv_paths`. With increasing label starts the
+training sets match too: the two modules share the embargo code, and purging each block
+against its whole window, as `cross_validation` does, removes the same samples as the engine's
+pair-by-pair purge. The engine's own training sets appear in `result["splits"]` as a record
+only; the model was trained on the ones you used. Walk-forward and purged-CV modes are
 not bound; purged k-fold splits come from `cross_validation.purged_kfold_splits`.
 
 ## What to watch for

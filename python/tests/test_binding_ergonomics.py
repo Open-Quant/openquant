@@ -60,6 +60,25 @@ def test_add_vertical_barrier_requires_a_horizon():
         labeling.add_vertical_barrier(STAMPS[:3], STAMPS, CLOSE, 0, 0, 0, 0)
 
 
+def test_event_on_last_bar_without_vertical_barrier_is_left_unlabelled():
+    # #162: the last bar has no later bar to touch, so with no vertical barrier its t1 stays
+    # None and it gets no label (it used to get t1 = t0 and a label of 0).
+    first, last = STAMPS[0], STAMPS[-1]
+    target = ([first, last], [0.025, 0.025])
+    events = labeling.get_events(STAMPS, CLOSE, [first, last], (1.0, 1.0), *target, 0.0)
+    assert [(row[0], row[1]) for row in events] == [(first, STAMPS[3]), (last, None)]
+
+    bins = labeling.get_bins(events, STAMPS, CLOSE)
+    assert [(row[0], row[3]) for row in bins] == [(first, 1)]
+
+    labels = labeling.triple_barrier_labels(STAMPS, CLOSE, [first, last], *target, pt=1.0, sl=1.0)
+    assert [row[0] for row in labels] == [first]
+    meta = labeling.meta_labels(
+        STAMPS, CLOSE, [first, last], *target, [(first, 1.0), (last, -1.0)], pt=1.0, sl=1.0
+    )
+    assert [row[0] for row in meta] == [first]
+
+
 # `StabilityCriteria::default()` in crates/openquant/src/synthetic_backtesting.rs.
 RUST_DEFAULT_CRITERIA = dict(
     random_walk_phi_threshold=0.97,

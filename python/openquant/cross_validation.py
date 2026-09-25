@@ -106,8 +106,8 @@ def purged_kfold_splits(
 
     Folds are contiguous blocks in sample order. A training label is purged when its span
     intersects the test fold's window, from its first label's start to its latest label end.
-    ``ceil(pct_embargo * n)`` further samples are embargoed on *both* sides of the fold, counted
-    from the fold's edges; the book embargoes only after the fold (issue #134 tracks this).
+    ``ceil(pct_embargo * n)`` further samples are embargoed after the fold only, starting where
+    the purge ends: at the first sample whose label starts after the fold's latest label end.
     """
     s0, s1 = _label_spans(t0, t1)
     return [
