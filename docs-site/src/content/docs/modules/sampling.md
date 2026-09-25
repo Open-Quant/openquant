@@ -2,7 +2,7 @@
 title: "sampling"
 description: "Label concurrency, average uniqueness and the sequential bootstrap, for training sets whose labels overlap in time."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -20,6 +20,7 @@ rust_api:
   - "num_concurrent_events"
   - "bootstrap_loop_run"
   - "seq_bootstrap"
+  - "seq_bootstrap_with_rng"
 python_api:
   - "sampling.get_ind_matrix"
   - "sampling.get_ind_mat_average_uniqueness"
@@ -146,23 +147,22 @@ def sample_uniqueness(drawn):
 
 rng, trials = random.Random(4), 200
 standard = sum(sample_uniqueness([rng.randrange(n) for _ in range(n)]) for _ in range(trials)) / trials
-sequential = sum(sample_uniqueness(sampling.seq_bootstrap(ind)) for _ in range(trials)) / trials
+sequential = sum(sample_uniqueness(sampling.seq_bootstrap(ind, random_state=s)) for s in range(trials)) / trials
 print(f"all {n} labels, each once: {sample_uniqueness(range(n)):.3f}")
 print(f"standard bootstrap:       {standard:.3f}")
-print(f"sequential is higher:     {sequential > standard}")
+print(f"sequential bootstrap:     {sequential:.3f}")
 ```
 
 ```text
 all 40 labels, each once: 0.318
 standard bootstrap:       0.301
-sequential is higher:     True
+sequential bootstrap:     0.312
 ```
 
-The sequential figure is not printed because `seq_bootstrap` cannot be seeded (below); over
-repeated runs of this script it is about 0.312. Read the three numbers together. Sequential
-sampling recovers most of what a uniform bootstrap loses to repeated and adjacent draws, but
-it cannot exceed what the label set allows: with every label overlapping six others, no
-sample of 40 is much more than 30% unique. AFML's Monte Carlo (§4.5.4) reports a larger gap —
+Read the three numbers together. Sequential sampling recovers most of what a uniform
+bootstrap loses to repeated and adjacent draws, but it cannot exceed what the label set
+allows: with every label overlapping six others, no sample of 40 is much more than 30%
+unique. AFML's Monte Carlo (§4.5.4) reports a larger gap —
 median uniqueness of 0.6 against 0.7 — on random label sets with far less structural overlap.
 If average uniqueness is low, the first remedy is upstream: a wider
 [CUSUM threshold](/modules/filters/#choosing-h) or a shorter vertical barrier.
@@ -200,10 +200,10 @@ length and a warm-up index beyond the last label are each an `InputError`.
 
 ## What to watch for
 
-- **`seq_bootstrap` is not reproducible.** It draws from the thread-local generator and takes
-  no seed. `warmup_samples` forces the first draws (it is consumed from the *end* of the
-  list), which is how the tests pin it; it is not a seed. Tracked in
-  [#90](https://github.com/Open-Quant/openquant/issues/90).
+- **`seq_bootstrap` is reproducible only with a seed.** Without `random_state` it draws from
+  the thread-local generator, so repeated calls differ; from Rust, `seq_bootstrap_with_rng`
+  takes any generator. `warmup_samples` forces the first draws and is consumed from the
+  *end* of the list; every later draw is uniqueness-weighted.
 - **The matrix is dense.** `get_ind_matrix` allocates bars × labels bytes and
   `seq_bootstrap` rescans all of it for every draw, so a full-length sample costs on the
   order of bars × labels² operations. Ten thousand labels over a hundred thousand bars is a

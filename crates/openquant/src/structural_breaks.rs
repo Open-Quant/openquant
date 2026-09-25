@@ -85,7 +85,7 @@ pub fn get_chu_stinchcombe_white_statistics(
         for ind in 0..index {
             let values_diff = _get_values_diff(_test_type, _log_prices, index, ind)?;
             let distance = (index - ind) as f64;
-            let s_n_t = (1.0 / (sigma_sq_t * distance.sqrt())) * values_diff;
+            let s_n_t = (1.0 / (sigma_sq_t.sqrt() * distance.sqrt())) * values_diff;
 
             if s_n_t > max_s_n_value {
                 max_s_n_value = s_n_t;
