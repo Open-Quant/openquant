@@ -81,7 +81,69 @@ fn test_get_onc_clusters() {
 
 #[test]
 fn test_check_redo_condition() {
-    assert_eq!((4, 5, 6), check_improve_clusters(2.0, 3.0, (1, 2, 3), (4, 5, 6)));
+    // The re-clustered partition replaces the old one only if it scores higher (MLAM Snippet
+    // 4.2: `if newTstatMean <= redoTstatMean: return old`).
+    assert_eq!((1, 2, 3), check_improve_clusters(2.0, 3.0, (1, 2, 3), (4, 5, 6)));
+    assert_eq!((1, 2, 3), check_improve_clusters(3.0, 3.0, (1, 2, 3), (4, 5, 6)));
+    assert_eq!((4, 5, 6), check_improve_clusters(3.0, 2.0, (1, 2, 3), (4, 5, 6)));
+}
+
+/// Sample correlation of `t` observations of `sizes.len()` groups: each group shares one
+/// factor, plus idiosyncratic noise whose strength differs by group.
+fn noisy_block_correlation(seed: u64, sizes: &[usize], noise: &[f64], t: usize) -> DMatrix<f64> {
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+    let mut rng = StdRng::seed_from_u64(seed);
+    let n: usize = sizes.iter().sum();
+    let mut x = DMatrix::<f64>::zeros(t, n);
+    let mut col = 0;
+    for (group, &size) in sizes.iter().enumerate() {
+        let factor: Vec<f64> = (0..t).map(|_| rng.gen::<f64>() - 0.5).collect();
+        for _ in 0..size {
+            for (r, f) in factor.iter().enumerate() {
+                x[(r, col)] = f + noise[group] * (rng.gen::<f64>() - 0.5);
+            }
+            col += 1;
+        }
+    }
+    let mean: Vec<f64> = (0..n).map(|j| x.column(j).mean()).collect();
+    let sd: Vec<f64> = (0..n)
+        .map(|j| (x.column(j).iter().map(|v| (v - mean[j]).powi(2)).sum::<f64>() / t as f64).sqrt())
+        .collect();
+    DMatrix::from_fn(n, n, |i, j| {
+        (0..t).map(|r| (x[(r, i)] - mean[i]) * (x[(r, j)] - mean[j])).sum::<f64>()
+            / t as f64
+            / (sd[i] * sd[j])
+    })
+}
+
+fn mean_cluster_tstat(clusters: &BTreeMap<usize, Vec<usize>>, silhouette: &[f64]) -> f64 {
+    let tstats: Vec<f64> = clusters
+        .values()
+        .map(|members| {
+            let s: Vec<f64> = members.iter().map(|&i| silhouette[i]).collect();
+            let mean = s.iter().sum::<f64>() / s.len() as f64;
+            let sd = (s.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / s.len() as f64).sqrt();
+            // As in onc.rs: a zero-variance cluster scores +inf if its silhouettes are positive.
+            match (sd <= 1e-12, mean > 0.0) {
+                (true, true) => f64::INFINITY,
+                (true, false) => 0.0,
+                _ => mean / sd,
+            }
+        })
+        .collect();
+    tstats.iter().sum::<f64>() / tstats.len() as f64
+}
+
+#[test]
+fn test_onc_keeps_the_better_partition_after_reclustering() {
+    // Eight groups of four with increasing noise. The first pass finds six clusters, three of
+    // them below average quality, so ONC re-clusters those three. The re-clustered partition
+    // has a mean cluster t-stat of about 534 against the first pass's 2.5. It used to be
+    // discarded in favour of the first pass (#107).
+    let corr = noisy_block_correlation(25, &[4; 8], &[0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5], 200);
+    let result = get_onc_clusters(&corr, 3).unwrap();
+    let quality = mean_cluster_tstat(&result.clusters, &result.silhouette_scores);
+    assert!(quality > 100.0, "mean cluster t-stat {quality}");
 }
 
 /// Correlation matrix with `sizes.len()` planted blocks: `within` inside a block, `between`

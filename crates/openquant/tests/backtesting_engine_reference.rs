@@ -216,7 +216,6 @@ fn embargo_after_test_block_hand_worked() {
 /// embargo only follows the test block. Second fold: test 5..10, embargo removes 10 and 11,
 /// train = {0..5} + {12..20}.
 #[test]
-#[ignore = "FINDING: backtesting_engine embargoes training samples BEFORE the test block as well as after it (AFML 7.4.2 embargoes only after); conservative, discards data, not a leak"]
 fn embargo_does_not_remove_samples_before_the_test_block() {
     let data = point_labels(20);
     let cfg = CrossValidationConfig { n_splits: 4, pct_embargo: 0.1 };
@@ -226,6 +225,66 @@ fn embargo_does_not_remove_samples_before_the_test_block() {
     let want: Vec<usize> = (0..5).chain(12..20).collect();
     assert_eq!(second.train_indices, want);
     assert_eq!(second.embargo_count, 2);
+}
+
+/// Labels that each span three days (start on day i, end on day i + 2), so a label overlaps the
+/// two before and the two after it.
+fn three_day_labels(n: usize) -> BacktestData {
+    BacktestData {
+        returns: (0..n).map(|i| i as f64).collect(),
+        label_spans: (0..n).map(|i| (day(i as i64), day(i as i64 + 2))).collect(),
+    }
+}
+
+/// Snippet 7.3 resumes training `h` samples after the purge, not after the test block. 20
+/// three-day labels, 4 folds, h = 2; second fold tests 5..10 (latest label end: day 11).
+///   purge: 3 and 4 end on days 5 and 6, inside the test window; 10 and 11 start on days 10
+///          and 11, inside it too. 12 starts on day 12, after it.
+///   embargo: the two samples from 12 on, i.e. 12 and 13. Nothing before the block.
+/// So train = {0, 1, 2} + {14..20}, 4 purged and 2 embargoed. (Counting h from the block's edge
+/// would embargo 10 and 11, which the purge already removed, and keep 12 and 13.)
+#[test]
+fn embargo_starts_where_the_purge_ends() {
+    let data = three_day_labels(20);
+    let cfg = CrossValidationConfig { n_splits: 4, pct_embargo: 0.1 };
+    let res = run_cross_validation(&data, &run_cfg(), &cfg, echo_test_indices).unwrap();
+    let second = &res.splits[1];
+    assert_eq!(second.test_indices, (5..10).collect::<Vec<_>>());
+    let want: Vec<usize> = (0..3).chain(14..20).collect();
+    assert_eq!(second.train_indices, want);
+    assert_eq!(second.purged_count, 4);
+    assert_eq!(second.embargo_count, 2);
+}
+
+/// In walk-forward every training sample precedes the test block, so an embargo that only
+/// follows test blocks removes nothing. 20 point labels, first 10 train, h = 2.
+#[test]
+fn walk_forward_embargo_removes_nothing() {
+    let data = point_labels(20);
+    let cfg =
+        WalkForwardConfig { min_train_size: 10, test_size: 5, step_size: 5, pct_embargo: 0.1 };
+    let res = run_walk_forward(&data, &run_cfg(), &cfg, echo_test_indices).unwrap();
+    for s in &res.splits {
+        assert_eq!(s.train_indices, (0..s.test_indices[0]).collect::<Vec<_>>());
+        assert_eq!(s.embargo_count, 0);
+    }
+}
+
+/// CPCV embargoes after each run of adjacent test groups. 12 point labels in 6 groups of 2,
+/// k = 2, h = ceil(0.05 * 12) = 1. Splits are the pairs in lexicographic order.
+///   split 0, groups (0, 1): test 0..4, one block; embargo 4. train = 5..12.
+///   split 1, groups (0, 2): test {0, 1, 4, 5}, two blocks; embargo 2 and 6. train = {3} + 7..12.
+#[test]
+fn cpcv_embargo_follows_each_test_block() {
+    let data = point_labels(12);
+    let cfg = CpcvConfig { n_groups: 6, test_groups: 2, pct_embargo: 0.05 };
+    let res = run_cpcv(&data, &run_cfg(), &cfg, echo_test_indices).unwrap();
+    assert_eq!(res.splits[0].train_indices, (5..12).collect::<Vec<_>>());
+    assert_eq!(res.splits[0].embargo_count, 1);
+    let want: Vec<usize> = std::iter::once(3).chain(7..12).collect();
+    assert_eq!(res.splits[1].test_indices, vec![0, 1, 4, 5]);
+    assert_eq!(res.splits[1].train_indices, want);
+    assert_eq!(res.splits[1].embargo_count, 2);
 }
 
 /// CPCV paths (AFML figure 12.1). N = 6 groups of 2 samples, k = 2: splits are the 15 pairs

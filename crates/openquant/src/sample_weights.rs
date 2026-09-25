@@ -1,11 +1,21 @@
 use chrono::NaiveDateTime;
 use itertools::Itertools;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SampleWeightsError {
-    #[error("NaN values in triple_barrier_events, delete nans")]
-    NanInEvents,
+    #[error("event {index} ends before it starts")]
+    EndBeforeStart { index: usize },
+}
+
+/// Reject events whose end precedes their start; such a span holds no bars to weight.
+fn validate_events(
+    triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
+) -> Result<(), SampleWeightsError> {
+    match triple_barrier_events.iter().position(|(t_in, t1, _)| t1 < t_in) {
+        Some(index) => Err(SampleWeightsError::EndBeforeStart { index }),
+        None => Ok(()),
+    }
 }
 
 /// Compute number of concurrent events for each timestamp.
@@ -60,13 +70,7 @@ pub fn get_weights_by_return(
     if triple_barrier_events.is_empty() {
         return Ok(Vec::new());
     }
-    // Validate none are NaN
-    if triple_barrier_events
-        .iter()
-        .any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
-    {
-        return Err(SampleWeightsError::NanInEvents);
-    }
+    validate_events(triple_barrier_events)?;
 
     let num_conc = num_concurrent_events(
         &close.iter().map(|(ts, _)| *ts).collect_vec(),
@@ -101,17 +105,16 @@ pub fn get_weights_by_return(
 }
 
 /// Sample weights by time decay.
+///
+/// Returns one `(start, weight)` pair per event, in input order. Cumulative uniqueness is
+/// accumulated in start order; events that share a start keep their input order (a stable
+/// sort), so each takes its own cumulative position and the later-listed one counts as newer.
 pub fn get_weights_by_time_decay(
     triple_barrier_events: &[(NaiveDateTime, NaiveDateTime, f64)],
     close: &[(NaiveDateTime, f64)],
     decay: f64,
 ) -> Result<Vec<(NaiveDateTime, f64)>, SampleWeightsError> {
-    if triple_barrier_events
-        .iter()
-        .any(|(t_in, t1, _)| t_in.and_utc().timestamp() == 0 || t1.and_utc().timestamp() == 0)
-    {
-        return Err(SampleWeightsError::NanInEvents);
-    }
+    validate_events(triple_barrier_events)?;
     let close_index: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
 
     // num concurrent events per bar
@@ -136,23 +139,25 @@ pub fn get_weights_by_time_decay(
             .collect();
         let avg =
             if vals.is_empty() { 0.0 } else { vals.iter().sum::<f64>() / (vals.len() as f64) };
-        av_uniqueness.push((*start, avg));
+        av_uniqueness.push(avg);
     }
 
-    // sort by time for decay application
-    av_uniqueness.sort_by_key(|(ts, _)| *ts);
-    let mut decay_w: Vec<(NaiveDateTime, f64)> = Vec::new();
+    // Accumulate in start order. The sort is stable, so events sharing a start keep their input
+    // order; carrying the event index (not the timestamp) keeps each of them.
+    let mut order: Vec<usize> = (0..triple_barrier_events.len()).collect();
+    order.sort_by_key(|&i| triple_barrier_events[i].0);
+    let mut decay_w = vec![0.0; triple_barrier_events.len()];
     let mut cum = 0.0;
-    for (ts, val) in &av_uniqueness {
-        cum += *val;
-        decay_w.push((*ts, cum));
+    for &i in &order {
+        cum += av_uniqueness[i];
+        decay_w[i] = cum;
     }
-    if let Some((_, last)) = decay_w.last().cloned() {
-        let denom = last;
+    if !order.is_empty() {
+        let denom = cum;
         let slope =
             if decay >= 0.0 { (1.0 - decay) / denom } else { 1.0 / ((decay + 1.0) * denom) };
         let constant = 1.0 - slope * denom;
-        for (_, w) in decay_w.iter_mut() {
+        for w in decay_w.iter_mut() {
             *w = constant + slope * *w;
             if *w < 0.0 {
                 *w = 0.0;
@@ -160,13 +165,5 @@ pub fn get_weights_by_time_decay(
         }
     }
 
-    // Return weights aligned to original event order
-    let mut weight_map: HashMap<NaiveDateTime, f64> = decay_w.into_iter().collect();
-    let mut out = Vec::new();
-    for (start, _, _) in triple_barrier_events {
-        if let Some(w) = weight_map.remove(start) {
-            out.push((*start, w));
-        }
-    }
-    Ok(out)
+    Ok(triple_barrier_events.iter().zip(decay_w).map(|((start, _, _), w)| (*start, w)).collect())
 }

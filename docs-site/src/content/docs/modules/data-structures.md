@@ -2,7 +2,7 @@
 title: "data_structures"
 description: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -200,12 +200,11 @@ trades is valid and yields no bars.
 
 ## What to watch for
 
-- **Timestamps cross into Python at one-second resolution.** The bindings reject fractional
-  seconds and format bar times without them
-  ([#87](https://github.com/Open-Quant/openquant/issues/87)). Worse, the Python builders first
-  pass the frame through `data.clean_ohlcv`, which removes rows that repeat a
-  `(symbol, ts)` pair — so two trades stamped in the same second collapse into one. On real
-  tick data, build bars in Rust until that issue is closed.
+- **Identical timestamps collapse in Python.** Sub-second stamps are kept (microseconds
+  through `openquant.bars`, which is the resolution of a Python `datetime`). But the Python
+  builders first pass the frame through `data.clean_ohlcv`, which removes rows that repeat a
+  `(symbol, ts)` pair, so two trades with exactly the same stamp collapse into one. If your
+  feed stamps several trades identically, build bars in Rust.
 - **The Python builders take OHLCV rows, not trades.** They read `close` as the trade price
   and `volume` as the trade size. Feeding them one-minute OHLCV bars works and is sometimes
   what you want, but the result is a bar of bars: its high and low come from minute closes,
