@@ -1,0 +1,74 @@
+name: Bug report
+description: A crash, an error on valid input, or a result that disagrees with AFML or another reference.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A wrong number is a bug even if nothing crashes: say what you
+        expected and where that expectation comes from.
+        Security problems go through a private report instead (see SECURITY.md).
+  - type: input
+    id: module
+    attributes:
+      label: Module and function
+      description: Rust path or Python import, e.g. `openquant::filters::cusum_filter_indices` or `openquant.filters.cusum_filter`.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Rust crate
+        - Python bindings
+        - Documentation site
+        - Notebooks / experiments
+        - Build, CI or packaging
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The actual output, error or traceback. Paste text, not screenshots.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The expected output and why.
+    validations:
+      required: true
+  - type: input
+    id: afml-reference
+    attributes:
+      label: AFML or other reference
+      description: Chapter, section or snippet of *Advances in Financial Machine Learning* (e.g. "Snippet 3.1", "§8.4.2"), a paper, or another library whose result you compared against. Write "none" if there isn't one.
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: The shortest self-contained code that shows the problem, with its input data inline or generated from a fixed seed.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OpenQuant commit (`git rev-parse HEAD`), OS and architecture, `rustc --version`, and Python version if relevant.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: What you already tried, suspected cause, related issues.
