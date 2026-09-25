@@ -45,6 +45,9 @@ dev = [
   "pytest-cov>=5",
   "ruff==0.16.9",
   "mypy==2.3.1",
+  # numpy 2.5 needs Python 3.12 and its stubs use `type` statements, which mypy rejects when
+  # checking for 3.11 ([tool.mypy] python_version). Keeps the lint environment on 2.4.
+  "numpy<2.5",
   "nbclient>=0.10,<1",
   "nbformat>=5.10,<6",
   "ipykernel>=6.29,<8",
