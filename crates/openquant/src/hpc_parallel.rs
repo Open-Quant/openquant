@@ -153,8 +153,10 @@ pub fn partition_atoms(
                 ((atom_count as f64) * (i as f64 / molecules as f64).sqrt()).round() as usize
             }
         };
+        // Leave at least one atom for each molecule still to come. Rounding the nested
+        // boundaries can otherwise reach `atom_count` early.
         let last = *boundaries.last().unwrap_or(&0);
-        boundaries.push(b.clamp(last + 1, atom_count));
+        boundaries.push(b.clamp(last + 1, atom_count - (molecules - i)));
     }
     boundaries.push(atom_count);
 

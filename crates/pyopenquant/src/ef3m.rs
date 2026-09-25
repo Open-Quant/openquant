@@ -58,8 +58,9 @@ fn ef3m_fit_m2n(
     variant: usize,
     max_iter: usize,
 ) -> PyResult<Vec<M2nFitRow>> {
-    let mut m2n = openquant::ef3m::M2N::new(moments, epsilon, factor, n_runs, variant, max_iter, 1);
-    let results = m2n.single_fit_loop(None).map_err(to_py_err)?;
+    // One fit loop per run, each from its own random starting p_1: up to `n_runs` rows.
+    let m2n = openquant::ef3m::M2N::new(moments, epsilon, factor, n_runs, variant, max_iter, 1);
+    let results = m2n.mp_fit().map_err(to_py_err)?;
     Ok(results
         .into_iter()
         .map(|r| (r.mu_1, r.mu_2, r.sigma_1, r.sigma_2, r.p_1, r.error))

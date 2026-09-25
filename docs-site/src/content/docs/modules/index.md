@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-21'
+last_generated: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -67,7 +67,7 @@ For the AFML chapter each module implements, see
 
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
-- [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
+- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — Python importance reports on purged folds, with a substitution-effect report and a feature screen.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
@@ -79,9 +79,9 @@ For the AFML chapter each module implements, see
 
 ### Scaling, HPC and Infrastructure
 
-- [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
-- [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
-- [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
+- [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
+- [`hpc_parallel`](/modules/hpc-parallel/) — AFML's atoms and molecules: equal-work partitions of a job, run in serial or on threads, outputs in order.
+- [`streaming_hpc`](/modules/streaming-hpc/) — VPIN and a venue-concentration HHI updated event by event in constant memory, with a joint alert.
 
 ## By language surface
 
@@ -92,11 +92,11 @@ For the AFML chapter each module implements, see
 - [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
 - [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
-- [`combinatorial_optimization`](/modules/combinatorial-optimization/) — AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.
+- [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`data`](/modules/data/) — OHLCV loading, cleaning, calendar alignment, and data quality reporting.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
-- [`ef3m`](/modules/ef3m/) — Moment-based mixture fitting utilities for two-normal components.
+- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
@@ -104,7 +104,7 @@ For the AFML chapter each module implements, see
 - [`fingerprint`](/modules/fingerprint/) — Linear, non-linear and pairwise-interaction effects of each feature in a fitted model.
 - [`fracdiff`](/modules/fracdiff/) — Fractional differentiation: stationarity with as much memory as possible.
 - [`hcaa`](/modules/hcaa/) — Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.
-- [`hpc_parallel`](/modules/hpc-parallel/) — AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.
+- [`hpc_parallel`](/modules/hpc-parallel/) — AFML's atoms and molecules: equal-work partitions of a job, run in serial or on threads, outputs in order.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — Grid and randomised search on purged k-fold splits, scored with sample weights.
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
@@ -117,7 +117,7 @@ For the AFML chapter each module implements, see
 - [`sampling`](/modules/sampling/) — Label concurrency, average uniqueness and the sequential bootstrap.
 - [`sb_bagging`](/modules/sb-bagging/) — A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.
 - [`strategy_risk`](/modules/strategy-risk/) — The precision and bet frequency a target Sharpe ratio requires, and the probability of falling short.
-- [`streaming_hpc`](/modules/streaming-hpc/) — AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.
+- [`streaming_hpc`](/modules/streaming-hpc/) — VPIN and a venue-concentration HHI updated event by event in constant memory, with a joint alert.
 - [`structural_breaks`](/modules/structural-breaks/) — SADF for explosive behaviour, a Chow-type Dickey-Fuller test, and the CSW CUSUM test.
 - [`synthetic_backtesting`](/modules/synthetic-backtesting/) — Profit-taking and stop-loss levels chosen on simulated paths of a fitted mean-reverting process.
 - [`util::fast_ewma`](/modules/util-fast-ewma/) — Fast EWMA primitive shared across feature and volatility routines.
