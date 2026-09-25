@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{parse_naive_datetimes, to_py_err};
+use crate::helpers::{
+    format_naive_datetime, parse_naive_datetime, parse_naive_datetimes, to_py_err,
+};
 
 #[pyfunction(name = "get_weights_by_return")]
 fn sw_get_weights_by_return(
@@ -11,18 +13,8 @@ fn sw_get_weights_by_return(
     let parsed_events: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime, f64)> = events
         .into_iter()
         .map(|(t_in, t_out, label)| {
-            let t_in_dt = chrono::NaiveDateTime::parse_from_str(&t_in, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "invalid datetime '{t_in}': {e}"
-                    ))
-                })?;
-            let t_out_dt = chrono::NaiveDateTime::parse_from_str(&t_out, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "invalid datetime '{t_out}': {e}"
-                    ))
-                })?;
+            let t_in_dt = parse_naive_datetime(&t_in, "datetime")?;
+            let t_out_dt = parse_naive_datetime(&t_out, "datetime")?;
             Ok((t_in_dt, t_out_dt, label))
         })
         .collect::<PyResult<Vec<_>>>()?;
@@ -37,7 +29,7 @@ fn sw_get_weights_by_return(
 
     let result = openquant::sample_weights::get_weights_by_return(&parsed_events, &close)
         .map_err(to_py_err)?;
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "get_weights_by_time_decay")]
@@ -50,18 +42,8 @@ fn sw_get_weights_by_time_decay(
     let parsed_events: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime, f64)> = events
         .into_iter()
         .map(|(t_in, t_out, label)| {
-            let t_in_dt = chrono::NaiveDateTime::parse_from_str(&t_in, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "invalid datetime '{t_in}': {e}"
-                    ))
-                })?;
-            let t_out_dt = chrono::NaiveDateTime::parse_from_str(&t_out, "%Y-%m-%d %H:%M:%S")
-                .map_err(|e| {
-                    pyo3::exceptions::PyValueError::new_err(format!(
-                        "invalid datetime '{t_out}': {e}"
-                    ))
-                })?;
+            let t_in_dt = parse_naive_datetime(&t_in, "datetime")?;
+            let t_out_dt = parse_naive_datetime(&t_out, "datetime")?;
             Ok((t_in_dt, t_out_dt, label))
         })
         .collect::<PyResult<Vec<_>>>()?;
@@ -77,7 +59,7 @@ fn sw_get_weights_by_time_decay(
     let result =
         openquant::sample_weights::get_weights_by_time_decay(&parsed_events, &close, decay)
             .map_err(to_py_err)?;
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

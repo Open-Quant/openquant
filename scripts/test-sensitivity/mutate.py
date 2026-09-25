@@ -115,7 +115,7 @@ MUTATIONS = [
     ("strategy_risk-2", "src/strategy_risk.rs", "let b = (2.0 * n * payout.pi_minus - theta2 * d) * d;", "let b = (2.0 * n * payout.pi_minus + theta2 * d) * d;", "strategy_risk", ""),
     ("streaming_hpc-1", "src/streaming_hpc.rs", "self.current_bucket_abs_imbalance += (used_buy - used_sell).abs();", "self.current_bucket_abs_imbalance += (used_buy - used_sell);", "streaming_hpc", ""),
     ("streaming_hpc-2", "src/streaming_hpc.rs", "let toxicity = self.current_bucket_abs_imbalance / self.cfg.bucket_volume;", "let toxicity = self.current_bucket_abs_imbalance / self.current_bucket_volume.sqrt();", "streaming_hpc", ""),
-    ("streaming_hpc-3", "src/streaming_hpc.rs", "self.sum_sq_counts += 2 * count_before + 1;", "self.sum_sq_counts += 2 * count_before + 2;", "streaming_hpc", ""),
+    ("streaming_hpc-3", "src/streaming_hpc.rs", "entry.1 += volume;", "entry.1 += 1.0;", "streaming_hpc", ""),
     ("structural_breaks-1", "src/structural_breaks.rs", "max_s_n_critical_value = Some((4.6 + distance.ln()).sqrt());", "max_s_n_critical_value = Some((4.6 + distance).sqrt());", "structural_breaks", ""),
     ("structural_breaks-2", "src/structural_breaks.rs", "let sigma_sq_t = (1.0 / (index as f64 - 1.0)) * squared_diff_sum;", "let sigma_sq_t = (1.0 / (index as f64)) * squared_diff_sum;", "structural_breaks", ""),
     ("structural_breaks-3", "src/structural_breaks.rs", "let denom = rows as f64 - cols as f64;", "let denom = rows as f64;", "structural_breaks", ""),

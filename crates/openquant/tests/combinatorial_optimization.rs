@@ -178,3 +178,23 @@ fn trajectory_path_limit_guard_triggers() {
     let err = enumerate_trading_paths(&schema).expect_err("limit should be exceeded");
     assert!(matches!(err, CombinatorialOptimizationError::EnumerationLimitExceeded { limit: 5 }));
 }
+
+#[test]
+fn trajectory_path_limit_admits_exactly_max_paths() {
+    // Seven round trips of three +/-1 trades end flat. A cap of seven must admit them, as
+    // `DecisionSchema::max_enumeration` admits a space of exactly its size. It used to fail
+    // whenever a leaf pruned by the terminal constraint was visited after the seventh path.
+    let schema = |max_paths| TradingTrajectorySchema {
+        initial_inventory: 0,
+        inventory_min: -2,
+        inventory_max: 2,
+        step_trade_bounds: vec![TradeBounds { min_trade: -1, max_trade: 1 }; 3],
+        terminal_inventory: Some(0),
+        max_paths,
+    };
+    assert_eq!(enumerate_trading_paths(&schema(7)).expect("seven paths fit").len(), 7);
+    assert!(matches!(
+        enumerate_trading_paths(&schema(6)),
+        Err(CombinatorialOptimizationError::EnumerationLimitExceeded { limit: 6 })
+    ));
+}

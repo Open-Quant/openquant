@@ -19,11 +19,11 @@ def _prices(vols, n_obs=400, seed=11):
 
 
 def _inverse_variance(prices):
-    """Closed form from log returns (the library's convention) and the sample variance."""
+    """Closed form from simple returns (the library's convention, #110) and the sample variance."""
     n_assets = len(prices[0])
     inv = []
     for j in range(n_assets):
-        rets = [math.log(prices[i][j] / prices[i - 1][j]) for i in range(1, len(prices))]
+        rets = [prices[i][j] / prices[i - 1][j] - 1.0 for i in range(1, len(prices))]
         mean = sum(rets) / len(rets)
         inv.append(1.0 / (sum((r - mean) ** 2 for r in rets) / (len(rets) - 1)))
     total = sum(inv)

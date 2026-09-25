@@ -245,8 +245,9 @@ impl M2N {
                 self.error = error;
             }
 
+            // Stop at convergence. `self.parameters` already holds the best iterate, the one
+            // `self.error` describes; the last iterate is not necessarily it.
             if (p_1 - parameters[4]).abs() < self.epsilon {
-                self.parameters = parameters;
                 break;
             }
             if num_iter > self.max_iter {
