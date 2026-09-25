@@ -7,12 +7,6 @@ from openquant import structural_breaks
 # AFML chapter 17 recomputed in numpy by tests/fixtures/structural_breaks/generate.py.
 REFERENCE = load_json("structural_breaks/reference.json")
 
-CSW_FINDING = (
-    "FINDING: the Chu-Stinchcombe-White statistic averages sigma_t^2 over t-2 where AFML 17.3.2"
-    " uses t-1 (one-sided max 5.3797 vs 5.3921); dividing by sigma_t^2 instead of sigma_t was"
-    " fixed by #104"
-)
-
 
 def _log_prices():
     (close,) = load_csv_columns("structural_breaks/dollar_bar_sample.csv", ["close"])
@@ -53,34 +47,36 @@ def test_chu_stinchcombe_white_statistics():
     assert len(one_critical) == len(log_prices) - 2
     assert len(two_critical) == len(log_prices) - 2
 
-    # The critical values do not depend on how the statistic is scaled; the statistic is
-    # checked in test_chu_stinchcombe_white_statistic_matches_afml.
+    # AFML 17.3.2 values (#104 fixed sigma_t^2 for sigma_t, #173 the divisor of sigma_t^2).
     _assert_csw(one_critical, two_critical, "critical_value")
-
-    # Pins of the library's own statistic since #104 (divides by sigma_t, not sigma_t^2).
-    # Not AFML values: sigma_t^2 still averages over one difference fewer (see CSW_FINDING).
-    assert abs(max(one_stat) - 5.3797) < 0.001
-    assert abs(_mean(one_stat) - 1.2582) < 0.001
-    assert abs(one_stat[20] - 0.6098) < 0.001
-    assert abs(max(two_stat) - 8.5793) < 0.001
-    assert abs(_mean(two_stat) - 1.8875) < 0.001
-    assert abs(two_stat[20] - 1.4779) < 0.001
+    _assert_csw(one_stat, two_stat, "stat")
 
 
 def _assert_csw(one, two, field):
     for name, values in [("one_sided", one), ("two_sided", two)]:
         want = REFERENCE["chu_stinchcombe_white"][name][field]
-        assert _close(max(values), want["max"]), (name, field, "max")
-        assert _close(_mean(values), want["mean"]), (name, field, "mean")
-        assert _close(values[20], want["at_20"]), (name, field, "[20]")
+        assert _close(max(values), want["max"], rel=1e-10), (name, field, "max")
+        assert _close(_mean(values), want["mean"], rel=1e-10), (name, field, "mean")
+        assert _close(values[20], want["at_20"], rel=1e-10), (name, field, "[20]")
 
 
-@pytest.mark.xfail(strict=True, reason=CSW_FINDING)
 def test_chu_stinchcombe_white_statistic_matches_afml():
+    # #147's FINDING, fixed by #173: sigma_t^2 is the mean of the squared differences up to
+    # bar t (AFML 17.3.2); it used to divide their sum by one fewer than their number.
     log_prices = _log_prices()
     _, one_stat = structural_breaks.get_chu_stinchcombe_white_statistics(log_prices, "one_sided")
     _, two_stat = structural_breaks.get_chu_stinchcombe_white_statistics(log_prices, "two_sided")
     _assert_csw(one_stat, two_stat, "stat")
+
+
+def test_chu_stinchcombe_white_by_hand():
+    # Mirrors structural_breaks.rs::test_chu_stinchcombe_white_by_hand: y = 0, 1, 3 gives
+    # sigma^2 = (1 + 4) / 2 and S = 3 / sqrt 5 (the old divisor gave 3 / sqrt 10).
+    critical, stat = structural_breaks.get_chu_stinchcombe_white_statistics(
+        [0.0, 1.0, 3.0], "one_sided"
+    )
+    assert _close(stat[0], 3 / math.sqrt(5), rel=1e-14)
+    assert _close(critical[0], math.sqrt(4.6 + math.log(2)), rel=1e-14)
 
 
 @pytest.mark.parametrize(

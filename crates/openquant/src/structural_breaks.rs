@@ -77,7 +77,10 @@ pub fn get_chu_stinchcombe_white_statistics(
             let diff = _log_prices[i] - _log_prices[i - 1];
             squared_diff_sum += diff * diff;
         }
-        let sigma_sq_t = (1.0 / (index as f64 - 1.0)) * squared_diff_sum;
+        // AFML 17.3.2: sigma_t^2 = (t - 1)^-1 * sum_{i=2..t} (dy_i)^2 with 1-based t, i.e. the
+        // mean of the squared differences up to bar t. With 0-based `index` there are
+        // `index` of them (#173; the divisor used to be index - 1).
+        let sigma_sq_t = squared_diff_sum / index as f64;
 
         let mut max_s_n_value = f64::NEG_INFINITY;
         let mut max_s_n_critical_value: Option<f64> = None;

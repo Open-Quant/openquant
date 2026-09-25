@@ -33,11 +33,10 @@ addition to the lagged level; the SM models take y (or log y) of the series
 passed in.
 
 The SM-Power time index is t = row position + 1 (AFML's log t needs t >= 1).
-Where the library departs from AFML the AFML value is the reference and the
-library's convention is recomputed under "library_convention" (see "notes").
-The SADF models match AFML since #166, so only the Chu-Stinchcombe-White
-statistic is recomputed there. "sadf_prefix" also records every value on the
-60-bar prefix, so each model is checked value by value.
+The library matches every value here since #166 (SADF) and #173 (CSW), so no
+"library_convention" is recomputed any more; "notes" records what changed.
+"sadf_prefix" also records every value on the 60-bar prefix, so each SADF
+model is checked value by value.
 
 Each regression is computed from a Givens-updated QR factor of [X | y] (one per
 window start, grown one row at a time), so no normal equations are formed.
@@ -69,15 +68,12 @@ def chow_type_stat(y, min_length):
 
 
 # --- 17.3.2 Chu-Stinchcombe-White ----------------------------------------------------
-def chu_stinchcombe_white(y, test_type, afml=True):
+def chu_stinchcombe_white(y, test_type):
     dy2 = np.diff(y) ** 2
     crit, stat = [], []
     for t in range(2, len(y)):  # 0-based t; AFML's 1-based t is t + 1
         ssq = dy2[:t].sum()  # the t differences up to bar t
-        if afml:
-            sigma = np.sqrt(ssq / t)  # (t_afml - 1)^-1 * sum, then sigma (not sigma^2)
-        else:
-            sigma = ssq / (t - 1)  # library: divisor t - 1 and variance in the denominator
+        sigma = np.sqrt(ssq / t)  # (t_afml - 1)^-1 * sum, then sigma (not sigma^2)
         diff = y[t] - y[:t]
         if test_type == "two_sided":
             diff = np.abs(diff)
@@ -167,13 +163,10 @@ started = time.time()
 
 chow = chow_type_stat(LOG_P, 10)
 csw = {}
-csw_lib = {}
 for tt in ("one_sided", "two_sided"):
-    crit, st = chu_stinchcombe_white(LOG_P, tt, afml=True)
-    _, st_lib = chu_stinchcombe_white(LOG_P, tt, afml=False)
+    crit, st = chu_stinchcombe_white(LOG_P, tt)
     csw[tt] = {"critical_value": {**stats(crit), "at_20": float(crit[20])},
                "stat": {**stats(st), "at_20": float(st[20])}}
-    csw_lib[tt] = {"stat": {**stats(st_lib), "at_20": float(st_lib[20])}}
 
 MIN_LENGTH, LAGS = 20, 5
 CASES = {  # name -> (model, lags, add_const)
@@ -204,13 +197,11 @@ out = {
     "chu_stinchcombe_white": csw,
     "sadf": {"min_length": MIN_LENGTH, "lags": LAGS, "lags_array": [1, 2, 5, 7], "models": sadf_out},
     "sadf_prefix": {"n_bars": PREFIX, "models": prefix_out},
-    "library_convention": {
-        "chu_stinchcombe_white": csw_lib,
-    },
     "notes": {
         "chu_stinchcombe_white": "AFML divides y_t - y_n by sigma_t (a standard deviation) with "
-            "sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divides by the "
-            "variance and uses t-2 as the divisor. Critical values do not depend on either.",
+            "sigma_t^2 = sum of the t-1 squared differences / (t-1). The library divided by the "
+            "variance until #104 and used t-2 as the divisor until #173; it now matches. "
+            "Critical values do not depend on either.",
         "sadf": "Until #166 the library's 'quadratic' omitted the linear t of AFML's 'ctt', its "
             "sm_* models took the sup of the signed beta / se rather than |beta| / se, and "
             "sm_power used log(0) on the first row. It now matches the values here.",
