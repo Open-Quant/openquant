@@ -207,10 +207,21 @@ fn test_sadf_test() {
     assert_eq!(expected_len, sm_poly_2.len());
     assert_eq!(expected_len, sm_exp.len());
 
-    // AFML 17.4.2 values. The quadratic and sub/super-martingale models depart from AFML and
-    // are checked in sadf_quadratic_and_martingale_models_match_afml.
+    // AFML 17.4.2-17.4.3 values over the whole series (also checked value by value on a 60-bar
+    // prefix, fast, in sadf_*_match_afml_on_prefix).
     let reference = reference();
-    assert_sadf_matches(&reference, &[("linear", &linear), ("linear_no_const", &linear_no_const)]);
+    assert_sadf_matches(
+        &reference,
+        &[
+            ("linear", &linear),
+            ("linear_no_const", &linear_no_const),
+            ("quadratic", &quadratic),
+            ("sm_power", &sm_power),
+            ("sm_poly_1", &sm_poly_1),
+            ("sm_poly_2", &sm_poly_2),
+            ("sm_exp", &sm_exp),
+        ],
+    );
 
     let ones = vec![1.0; log_prices.len()];
     let trivial =
@@ -234,26 +245,106 @@ fn assert_sadf_matches(reference: &Value, models: &[(&str, &Vec<f64>)]) {
         // 1e-7: the normal-equations inverse (snippet 17.4, as in the library) is off from a
         // QR solve by up to ~2e-9 relative in these statistics.
         assert_rel(mean(values), num(want, &["mean"]), 1e-7, &format!("{name} mean"));
+        assert_rel(max(values), num(want, &["max"]), 1e-7, &format!("{name} max"));
         assert_rel(values[29], num(want, &["at_29"]), 1e-7, &format!("{name} [29]"));
     }
 }
 
-#[test]
-#[ignore = "FINDING: get_sadf 'quadratic' regresses on const + t^2 without the linear t of AFML's 'ctt'; the sm_* models take the sup of the signed beta/se where AFML 17.4.3 takes |beta|/se; sm_power uses log(0) for the first row and drops that window. Long-running."]
-fn sadf_quadratic_and_martingale_models_match_afml() {
+/// SADF at a row only looks at earlier rows, so on the first 60 bars every value equals the
+/// full-series value (the generator checks this); here each one is compared.
+fn assert_sadf_prefix_matches(models: &[(&str, bool, SadfLags)]) {
+    let reference = reference();
+    let prefix = &reference["sadf_prefix"];
+    let n_bars = num(prefix, &["n_bars"]) as usize;
     let log_prices = log_prices();
-    let lags = SadfLags::Fixed(5);
-    let run = |model: &str| get_sadf(&log_prices, model, true, 20, lags.clone()).unwrap();
-    let (quadratic, sm_power, sm_poly_1, sm_poly_2, sm_exp) =
-        (run("quadratic"), run("sm_power"), run("sm_poly_1"), run("sm_poly_2"), run("sm_exp"));
-    assert_sadf_matches(
-        &reference(),
-        &[
-            ("quadratic", &quadratic),
-            ("sm_power", &sm_power),
-            ("sm_poly_1", &sm_poly_1),
-            ("sm_poly_2", &sm_poly_2),
-            ("sm_exp", &sm_exp),
-        ],
-    );
+    for (name, add_const, lags) in models {
+        let model = if name.starts_with("linear") { "linear" } else { name };
+        let got = get_sadf(&log_prices[..n_bars], model, *add_const, 20, lags.clone()).unwrap();
+        let want = prefix["models"][*name]["values"].as_array().unwrap();
+        assert_eq!(want.len(), got.len(), "{name} len");
+        for (i, (g, w)) in got.iter().zip(want).enumerate() {
+            assert_rel(*g, w.as_f64().unwrap(), 1e-7, &format!("{name} prefix [{i}]"));
+        }
+    }
+}
+
+#[test]
+fn sadf_linear_models_match_afml_on_prefix() {
+    assert_sadf_prefix_matches(&[
+        ("linear", true, SadfLags::Fixed(5)),
+        ("linear_no_const", false, SadfLags::Array(vec![1, 2, 5, 7])),
+    ]);
+}
+
+/// #166: 'quadratic' lacked the linear t of Snippet 17.2's 'ctt'; the sm_* models took the
+/// sup of the signed beta/se where AFML 17.4.3 takes |beta|/se; sm_power took log(0) on the
+/// first row. The full-series means are checked in test_sadf_test.
+#[test]
+fn sadf_quadratic_and_martingale_models_match_afml() {
+    assert_sadf_prefix_matches(&[
+        ("quadratic", true, SadfLags::Fixed(5)),
+        ("sm_power", true, SadfLags::Fixed(5)),
+        ("sm_poly_1", true, SadfLags::Fixed(5)),
+        ("sm_poly_2", true, SadfLags::Fixed(5)),
+        ("sm_exp", true, SadfLags::Fixed(5)),
+    ]);
+}
+
+#[test]
+fn sadf_quadratic_is_unchanged_by_a_quadratic_trend_in_levels() {
+    // Adding c t^2 to y adds a quadratic in t to y_{t-1} and a linear one to dy_t. Both lie in
+    // the span of the const, t and t^2 columns, so beta on y_{t-1} (and the statistic) cannot
+    // move. Without the linear t column (before #166) it does.
+    let y = log_prices()[..60].to_vec();
+    let bent = y.iter().enumerate().map(|(t, v)| v + 1e-4 * (t * t) as f64).collect::<Vec<_>>();
+    let base = get_sadf(&y, "quadratic", true, 20, SadfLags::Fixed(2)).unwrap();
+    let moved = get_sadf(&bent, "quadratic", true, 20, SadfLags::Fixed(2)).unwrap();
+    for (a, b) in base.iter().zip(&moved) {
+        assert_rel(*b, *a, 1e-6, "quadratic under a quadratic trend");
+    }
+}
+
+#[test]
+fn sadf_martingale_statistics_ignore_the_sign_of_the_trend() {
+    // AFML 17.4.3 takes |beta| / se: a series and its reciprocal (log y negated) give the same
+    // statistic for the log models, and y and -y for the level model.
+    let prices = load_close_prices()[..60].to_vec();
+    let inverse = prices.iter().map(|p| 1.0 / p).collect::<Vec<_>>();
+    let negated = prices.iter().map(|p| -p).collect::<Vec<_>>();
+    let lags = SadfLags::Fixed(1);
+    for (model, other) in [
+        ("sm_poly_1", &negated),
+        ("sm_poly_2", &inverse),
+        ("sm_exp", &inverse),
+        ("sm_power", &inverse),
+    ] {
+        let a = get_sadf(&prices, model, true, 20, lags.clone()).unwrap();
+        let b = get_sadf(other, model, true, 20, lags.clone()).unwrap();
+        assert!(a.iter().all(|v| v.is_finite() && *v >= 0.0), "{model}: {a:?}");
+        for (x, y) in a.iter().zip(&b) {
+            assert_rel(*y, *x, 1e-8, model);
+        }
+    }
+}
+
+#[test]
+fn sadf_sm_power_uses_the_first_row() {
+    // Time counts from 1, so the first row has log t = 0 and the window starting there is
+    // used. Before #166 it was log 0 = -inf, and the regression starting at row 0 was dropped:
+    // with min_length equal to the number of rows minus one, only that window and one other
+    // exist.
+    let prices = load_close_prices()[..30].to_vec();
+    let rows = prices.len() - 2; // one lag
+    let out = get_sadf(&prices, "sm_power", true, rows - 1, SadfLags::Fixed(1)).unwrap();
+    assert_eq!(out.len(), 1);
+    // The value is the larger |t| of the windows starting at rows 0 and 1, computed here.
+    let y = prices[2..].iter().map(|p| vec![p.ln()]).collect::<Vec<_>>();
+    let x = (0..rows).map(|i| vec![((i + 1) as f64).ln(), 1.0]).collect::<Vec<_>>();
+    let t_stat = |start: usize| {
+        let (b, v) = _get_betas(&x[start..], &y[start..]).unwrap();
+        (b[0] / v[0][0].sqrt()).abs()
+    };
+    let (from_row_0, from_row_1) = (t_stat(0), t_stat(1));
+    assert!(from_row_0.is_finite() && from_row_1.is_finite());
+    assert_rel(out[0], from_row_0.max(from_row_1), 1e-12, "sm_power sup");
 }
