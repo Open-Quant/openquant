@@ -2,7 +2,7 @@
 title: "onc"
 description: "Optimal Number of Clusters: partition a correlation matrix with k-means, choosing the number of clusters by silhouette quality."
 status: authored
-last_authored: '2026-09-21'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -141,12 +141,12 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
 
 ## What to watch for
 
-- **The higher-level step may keep the wrong partition.** By inspection, when re-clustering
-  *improves* quality the function returns the original partition, and when it does not, the
-  re-clustered one — the reverse of Snippet 4.2. The branch runs only when more than two
-  clusters are below average, which clean inputs like the example never reach and no test
-  covers ([#107](https://github.com/Open-Quant/openquant/issues/107)). On messy real
-  correlation matrices it does run. Check the result by looking at `ordered_correlation`.
+- **The higher-level step runs only on messy inputs.** Re-clustering happens when more than
+  two clusters score below the average $t$-statistic, which clean inputs like the example never
+  reach. The re-clustered partition is kept only if its mean cluster $t$-statistic beats that of
+  the clusters it replaced, as in Snippet 4.2. Until
+  [#107](https://github.com/Open-Quant/openquant/issues/107) was fixed the comparison was
+  inverted, so on matrices that reached this step ONC returned the worse of its two partitions.
 - **Results are reproducible, and not tunable.** k-means is seeded from a fixed value, the
   repetition number and $k$, so the same matrix always gives the same answer. `repeat` adds
   initialisations; there is no seed parameter to vary.

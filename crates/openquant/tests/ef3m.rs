@@ -222,3 +222,20 @@ fn test_most_likely_parameters_ignore_columns_list() {
     assert!(out.contains_key("mu_1"));
     assert!(out.contains_key("p_1"));
 }
+
+#[test]
+fn test_fit_row_error_describes_its_parameters() {
+    // The raw moments of 0.7 N(-1, 1) + 0.3 N(2, 0.5^2). The four-moment variant often ends on
+    // a degenerate p_1 ~ 1 solution; `fit` used to return that last iterate beside the error of
+    // an earlier, better one, so a row's `error` did not belong to its parameters.
+    let moments = vec![-0.1, 2.675, 0.05, 13.65625, -2.0375];
+    for _ in 0..60 {
+        let mut m2n = M2N::new(moments.clone(), 1e-3, 5.0, 1, 1, 100_000, 1);
+        for row in m2n.single_fit_loop(None).unwrap() {
+            let params = [row.mu_1, row.mu_2, row.sigma_1, row.sigma_2, row.p_1];
+            let implied = m2n.get_moments(&params, true).unwrap();
+            let error: f64 = moments.iter().zip(&implied).map(|(a, b)| (a - b).powi(2)).sum();
+            assert!((error - row.error).abs() < 1e-9, "reported {}, actual {error}", row.error);
+        }
+    }
+}

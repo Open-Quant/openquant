@@ -5,13 +5,14 @@
 //! `docs/test-sensitivity-audit.md`.
 //!
 //! What the library implements (and what these tests therefore pin): single-linkage clustering
-//! on the correlation distance, leaf order by quasi-diagonalisation, then top-down bisection of
-//! the leaf order at the midpoint, splitting weight between the halves by the chosen metric,
-//! with inverse-variance weights inside each half when a half's risk is measured.
+//! on the correlation distance, leaf order by quasi-diagonalisation, then weight handed down the
+//! dendrogram, each of the top `optimal_num_clusters - 1` merges splitting it between its two
+//! children by the chosen metric, with inverse-variance weights inside a side when its risk is
+//! measured and inside each cluster below the cut (equal weights for `equal_weighting`).
 
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
-use openquant::hcaa::HierarchicalClusteringAssetAllocation;
+use openquant::hcaa::{HcaaError, HierarchicalClusteringAssetAllocation};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::path::Path;
@@ -239,4 +240,104 @@ fn weekly_resampling_equals_allocating_on_every_fifth_row() {
     let direct = run(&weekly, None);
     assert_eq!(resampled.ordered_indices, direct.ordered_indices);
     assert_eq!(resampled.weights, direct.weights);
+}
+
+fn allocate_cov_k(
+    cov: &DMatrix<f64>,
+    metric: &str,
+    optimal_num_clusters: Option<usize>,
+) -> Result<HierarchicalClusteringAssetAllocation, HcaaError> {
+    let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");
+    hcaa.allocate(
+        &names(cov.nrows()),
+        None,
+        None,
+        Some(cov),
+        None,
+        metric,
+        0.05,
+        optimal_num_clusters,
+        None,
+    )?;
+    Ok(hcaa)
+}
+
+/// Five assets: {0,1,2} (corr(0,1) = 0.9, corr(0,2) = corr(1,2) = 0.7) and {3,4} (corr 0.5), no
+/// correlation across. Single linkage merges (0,1), then 2 into it, then (3,4), then the two
+/// groups, so the leaf order is 2,0,1,3,4 and the tree's top split is {2,0,1} | {3,4}. The
+/// midpoint of the leaf list is {2,0} | {1,3,4} instead.
+///   along the tree:   {2,0,1} 1/2 -> 2: 1/4, {0,1}: 1/8 each;  {3,4} 1/2 -> 1/4 each
+///   at the midpoint:  {2,0} 1/2 -> 1/4 each;  {1,3,4} 1/2 -> 1: 1/4, {3,4}: 1/8 each  (#108)
+#[test]
+fn bisection_follows_the_tree_not_the_midpoint_of_the_leaf_list() {
+    let corr = |i: usize, j: usize| match (i.min(j), i.max(j)) {
+        (a, b) if a == b => 1.0,
+        (0, 1) => 0.9,
+        (0, 2) | (1, 2) => 0.7,
+        (3, 4) => 0.5,
+        _ => 0.0,
+    };
+    let cov = DMatrix::from_fn(5, 5, |i, j| 0.04 * corr(i, j));
+    let hcaa = allocate_cov_k(&cov, "equal_weighting", None).unwrap();
+    assert_eq!(hcaa.ordered_indices, vec![2, 0, 1, 3, 4]);
+    assert_close(&hcaa.weights, &[0.125, 0.125, 0.25, 0.25, 0.25], TOL, "tree bisection");
+}
+
+/// The four assets of `four_assets_two_clusters_minimum_variance_hand_worked`, with the
+/// minimum-standard-deviation metric. Cut into two clusters, {0,1} and {2,3}, only the top split
+/// uses the metric; inside each cluster the weights are inverse-variance:
+///   top split:  alpha = 1 - sqrt(V_L) / (sqrt(V_L) + sqrt(V_R))
+///   {0,1}:      u = (9/13, 4/13)     {2,3}: u = (16/17, 1/17)
+/// With no cut, the second level splits {0}|{1} by standard deviation instead:
+///   1 - 0.2 / (0.2 + 0.3) = 0.6 to asset 0, not 9/13. So the cluster count changes the weights.
+#[test]
+fn optimal_num_clusters_cuts_the_tree() {
+    let s = [0.2, 0.3, 0.1, 0.4];
+    let corr = |i: usize, j: usize| match (i.min(j), i.max(j)) {
+        (a, b) if a == b => 1.0,
+        (0, 1) => 0.9,
+        (2, 3) => 0.8,
+        _ => 0.1,
+    };
+    let cov = DMatrix::from_fn(4, 4, |i, j| corr(i, j) * s[i] * s[j]);
+    let (sd_l, sd_r) = ((8.568_f64 / 169.0).sqrt(), (3.744_f64 / 289.0).sqrt());
+    let alpha = 1.0 - sd_l / (sd_l + sd_r);
+
+    let two = allocate_cov_k(&cov, "minimum_standard_deviation", Some(2)).unwrap();
+    let want_two = [
+        alpha * 9.0 / 13.0,
+        alpha * 4.0 / 13.0,
+        (1.0 - alpha) * 16.0 / 17.0,
+        (1.0 - alpha) * 1.0 / 17.0,
+    ];
+    assert_close(&two.weights, &want_two, TOL, "two clusters");
+
+    let (a01, a23) = (1.0 - 0.2 / 0.5, 1.0 - 0.1 / 0.5);
+    let want_four =
+        [alpha * a01, alpha * (1.0 - a01), (1.0 - alpha) * a23, (1.0 - alpha) * (1.0 - a23)];
+    assert_close(
+        &allocate_cov_k(&cov, "minimum_standard_deviation", Some(4)).unwrap().weights,
+        &want_four,
+        TOL,
+        "four clusters",
+    );
+    assert_close(
+        &allocate_cov_k(&cov, "minimum_standard_deviation", None).unwrap().weights,
+        &want_four,
+        TOL,
+        "no cut",
+    );
+
+    // One cluster: no split at all, so equal weighting is 1/4 each.
+    let one = allocate_cov_k(&cov, "equal_weighting", Some(1)).unwrap();
+    assert_close(&one.weights, &[0.25; 4], TOL, "one cluster");
+}
+
+#[test]
+fn optimal_num_clusters_must_be_between_one_and_the_number_of_assets() {
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, 0.01]);
+    for k in [0, 3] {
+        let err = allocate_cov_k(&cov, "equal_weighting", Some(k)).unwrap_err();
+        assert_eq!(err, HcaaError::InvalidNumClusters { requested: k, assets: 2 });
+    }
 }
