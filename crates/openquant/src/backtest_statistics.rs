@@ -1,9 +1,58 @@
+//! Backtest statistics (AFML chapter 14): Sharpe ratios with their uncertainty, plus
+//! drawdown, concentration and holding-period statistics.
+//!
+//! - [`sharpe_ratio`] and [`information_ratio`] annualise a per-period mean over a sample
+//!   standard deviation (§14.7.1).
+//! - [`probabilistic_sharpe_ratio`] (PSR, §14.7.2), [`deflated_sharpe_ratio`] (DSR, §14.7.3)
+//!   and [`minimum_track_record_length`] put the estimation and selection uncertainty back
+//!   (Bailey and López de Prado, 2012 and 2014).
+//! - [`drawdown_and_time_under_water`] (Snippet 14.4), [`bets_concentration`] and
+//!   [`all_bets_concentration`] (Snippet 14.3), [`average_holding_period`] (Snippet 14.2)
+//!   and [`timing_of_flattening_and_flips`] (Snippet 14.1) describe the path.
+//!
+//! Conventions that nothing in the signatures enforces:
+//!
+//! - PSR, DSR and MinTRL take a **per-period** (not annualised) Sharpe ratio and **raw**
+//!   kurtosis (3 for a normal distribution), not excess kurtosis.
+//! - `risk_free_rate` and `benchmark` are per-period values, in the same units as the
+//!   returns.
+//! - Timestamped inputs are assumed sorted in increasing time.
+//!
+//! ```
+//! use openquant::backtest_statistics::{
+//!     deflated_sharpe_ratio, minimum_track_record_length, probabilistic_sharpe_ratio,
+//! };
+//!
+//! # fn main() -> Result<(), openquant::util::InputError> {
+//! // Per-period Sharpe 0.1 over 500 normal returns.
+//! let psr = probabilistic_sharpe_ratio(0.1, 0.0, 500, 0.0, 3.0);
+//! assert!((psr - 0.9871).abs() < 1e-4);
+//!
+//! // Expected maximum Sharpe of 50 skill-less trials whose Sharpe ratios have std 0.05.
+//! let hurdle = deflated_sharpe_ratio(0.1, &[0.05, 50.0], 500, 0.0, 3.0, true, true)?;
+//! assert!((hurdle - 0.1138).abs() < 1e-4);
+//!
+//! let min_trl = minimum_track_record_length(0.1, 0.0, 0.0, 3.0, 0.05)?;
+//! assert!((min_trl - 272.9).abs() < 0.1);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use crate::util::InputError;
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
 
 const EULER_GAMMA: f64 = 0.5772156649015329_f64;
 
+/// Returns the timestamps at which a position was closed or reversed (AFML Snippet 14.1).
+///
+/// A flattening is a bar where the position goes from non-zero to zero; a flip is a bar
+/// where the position changes sign. The result is sorted, deduplicated, and always ends with
+/// the last timestamp of the input (so an open position is treated as closed there). An
+/// empty input gives an empty result.
+///
+/// `target_positions` is `(timestamp, position)` pairs in increasing time.
 pub fn timing_of_flattening_and_flips(
     target_positions: &[(NaiveDateTime, f64)],
 ) -> Vec<NaiveDateTime> {
@@ -32,6 +81,14 @@ pub fn timing_of_flattening_and_flips(
     res
 }
 
+/// Average holding period of a position series, in days (AFML Snippet 14.2).
+///
+/// Tracks a size-weighted average entry time as the position grows, and records a holding
+/// time each time it shrinks or flips, weighted by the size that was exited. Returns the
+/// weighted mean of those holding times in days (86,400 seconds), or `None` if the input is
+/// empty or the position is never reduced.
+///
+/// `target_positions` is `(timestamp, position)` pairs in increasing time.
 pub fn average_holding_period(target_positions: &[(NaiveDateTime, f64)]) -> Option<f64> {
     if target_positions.is_empty() {
         return None;
@@ -74,6 +131,19 @@ pub fn average_holding_period(target_positions: &[(NaiveDateTime, f64)]) -> Opti
     }
 }
 
+/// Normalised Herfindahl-Hirschman concentration of a set of returns (AFML Snippet 14.3).
+///
+/// Each return's share of the total is `r_i / sum(r)`; the index is
+/// `(HHI - 1/n) / (1 - 1/n)`: 0 when every bet contributed equally and 1 when one bet made
+/// everything. Returns `None` for two or fewer returns or when they sum to zero. Mixing signs
+/// makes the shares meaningless; pass one sign at a time, as [`all_bets_concentration`] does.
+///
+/// ```
+/// use openquant::backtest_statistics::bets_concentration;
+///
+/// assert!(bets_concentration(&[1.0, 1.0, 1.0, 1.0]).unwrap().abs() < 1e-12);
+/// assert!(bets_concentration(&[97.0, 1.0, 1.0, 1.0]).unwrap() > 0.9);
+/// ```
 pub fn bets_concentration(returns: &[f64]) -> Option<f64> {
     if returns.len() <= 2 {
         return None;
@@ -89,6 +159,16 @@ pub fn bets_concentration(returns: &[f64]) -> Option<f64> {
     Some(adj)
 }
 
+/// Concentration of positive returns, negative returns, and bets over time (AFML Snippet 14.3).
+///
+/// Returns `(positive, negative, time)`, each from [`bets_concentration`]: over the
+/// non-negative returns, over the negative returns, and over the number of bets per
+/// **calendar day** from the first to the last date (days without bets count as zero).
+/// AFML and mlfinlab group the time component by month, so the time index here is higher on
+/// data with gaps; compare it only with itself.
+///
+/// `returns` is `(timestamp, return)` pairs in increasing time; the first and last entries
+/// define the day range.
 pub fn all_bets_concentration(
     returns: &[(NaiveDateTime, f64)],
 ) -> (Option<f64>, Option<f64>, Option<f64>) {
@@ -119,6 +199,21 @@ pub fn all_bets_concentration(
     (pos, neg, time)
 }
 
+/// Drawdowns and time under water of a cumulative series (AFML Snippet 14.4).
+///
+/// Despite the parameter name, `returns` is a **cumulative** series (equity, NAV or
+/// cumulative PnL) as `(timestamp, value)` pairs in increasing time. For every high-water
+/// mark that was followed by a dip, returns the drawdown and the time under water:
+///
+/// - with `dollars = false` the drawdown is `1 - trough / peak` (needs a positive series);
+///   with `dollars = true` it is `peak - trough`;
+/// - the time under water is in years (365.25 days) from that high-water mark to the next
+///   high-water mark that itself had a drawdown, or to the end of the series. It is not the
+///   time to recovery: new highs without a dip after them extend it. This reproduces
+///   Snippet 14.4 and mlfinlab.
+///
+/// Both vectors have one entry per such high-water mark. An empty input gives two empty
+/// vectors.
 pub fn drawdown_and_time_under_water(
     returns: &[(NaiveDateTime, f64)],
     dollars: bool,
@@ -170,6 +265,12 @@ pub fn drawdown_and_time_under_water(
     (drawdowns, tuw)
 }
 
+/// Annualised Sharpe ratio of per-period returns (AFML §14.7.1).
+///
+/// Computes `(mean - risk_free_rate) / std * sqrt(entries_per_year)` with the sample standard
+/// deviation (ddof = 1). `risk_free_rate` is per period, in the same units as `returns`;
+/// `entries_per_year` is the number of return periods per year (252 for daily). Nothing is
+/// validated: an empty slice or a single return gives `NaN`, constant returns give infinity.
 pub fn sharpe_ratio(returns: &[f64], entries_per_year: f64, risk_free_rate: f64) -> f64 {
     let mean = returns.iter().sum::<f64>() / returns.len() as f64;
     let var =
@@ -178,11 +279,21 @@ pub fn sharpe_ratio(returns: &[f64], entries_per_year: f64, risk_free_rate: f64)
     ((mean - risk_free_rate) / std) * entries_per_year.sqrt()
 }
 
+/// Annualised information ratio against a constant per-period benchmark return.
+///
+/// Equivalent to [`sharpe_ratio`] on `returns - benchmark` with a zero risk-free rate.
 pub fn information_ratio(returns: &[f64], benchmark: f64, entries_per_year: f64) -> f64 {
     let excess: Vec<f64> = returns.iter().map(|r| r - benchmark).collect();
     sharpe_ratio(&excess, entries_per_year, 0.0)
 }
 
+/// Probabilistic Sharpe ratio: the probability that the true Sharpe ratio exceeds
+/// `benchmark_sr` (AFML §14.7.2; Bailey and López de Prado, 2012).
+///
+/// `observed_sr` and `benchmark_sr` are **per-period** Sharpe ratios estimated over
+/// `number_of_returns` observations; `skewness` is the returns' skewness and `kurtosis` their
+/// **raw** kurtosis (3 for normal returns). Passing an annualised Sharpe ratio silently
+/// overstates the confidence. Returns a probability in `[0, 1]`.
 pub fn probabilistic_sharpe_ratio(
     observed_sr: f64,
     benchmark_sr: f64,
@@ -197,6 +308,26 @@ pub fn probabilistic_sharpe_ratio(
     norm.cdf(z)
 }
 
+/// Deflated Sharpe ratio: the PSR measured against the Sharpe ratio expected from the best of
+/// `N` skill-less trials (AFML §14.7.3; Bailey and López de Prado, 2014).
+///
+/// The benchmark is `SR_0 = sigma_SR * [(1 - g) Z^-1(1 - 1/N) + g Z^-1(1 - 1/(N e))]`, with
+/// `g` the Euler–Mascheroni constant. `sr_estimates` supplies the trials in one of two forms:
+///
+/// - `estimates_param = false`: every trial's per-period Sharpe ratio; `sigma_SR` is their
+///   population standard deviation and `N` their count;
+/// - `estimates_param = true`: `[sigma_SR, N]`.
+///
+/// With `benchmark_out = true` returns `SR_0`; otherwise returns
+/// [`probabilistic_sharpe_ratio`]`(observed_sr, SR_0, ...)`. Units follow
+/// [`probabilistic_sharpe_ratio`]: per-period Sharpe ratios, raw kurtosis. The formula
+/// assumes independent trials; correlated variations of one idea overstate `N`.
+///
+/// # Errors
+///
+/// - [`InputError::TooShort`] if `sr_estimates` has fewer than two values.
+/// - [`InputError::OutOfRange`] if `estimates_param` is true and the number of trials
+///   `sr_estimates[1]` is `NaN` or not above 1.
 pub fn deflated_sharpe_ratio(
     observed_sr: f64,
     sr_estimates: &[f64],
@@ -244,6 +375,17 @@ pub fn deflated_sharpe_ratio(
     Ok(probabilistic_sharpe_ratio(observed_sr, benchmark_sr, number_of_returns, skewness, kurtosis))
 }
 
+/// Minimum number of observations for the PSR against `benchmark_sr` to reach `1 - alpha`
+/// (AFML §14.7.2; Bailey and López de Prado, 2012).
+///
+/// Units follow [`probabilistic_sharpe_ratio`]: per-period Sharpe ratios, raw kurtosis. The
+/// result is a number of return periods. It is only meaningful when
+/// `observed_sr > benchmark_sr`: the difference is squared, so an underperforming strategy
+/// gets a finite positive answer and an equal one gets infinity.
+///
+/// # Errors
+///
+/// [`InputError::OutOfRange`] if `alpha` is outside `[0, 1]`.
 pub fn minimum_track_record_length(
     observed_sr: f64,
     benchmark_sr: f64,

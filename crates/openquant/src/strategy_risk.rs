@@ -6,49 +6,115 @@
 //! - probability that a strategy fails to achieve a Sharpe target.
 //!
 //! The focus is strategy viability risk, not holdings/portfolio variance risk.
+//!
+//! A strategy makes `n` independent bets a year; each wins `pi_plus` with probability `p`
+//! (the precision) and otherwise returns `pi_minus`. Its annualised Sharpe ratio is
+//! `(2p - 1) / (2 sqrt(p (1 - p))) * sqrt(n)` for symmetric payouts of `+-pi` (§15.2,
+//! Snippet 15.1) and `((pi_plus - pi_minus) p + pi_minus) / ((pi_plus - pi_minus)
+//! sqrt(p (1 - p))) * sqrt(n)` for asymmetric ones (§15.3, Snippets 15.2–15.3). The
+//! `implied_*` functions invert these for a target Sharpe ratio, and
+//! [`estimate_strategy_failure_probability`] bootstraps the precision of a bet record to
+//! estimate the probability of missing the target (§15.4, Snippets 15.4–15.5).
+//!
+//! Conventions: `precision` is in `[0, 1]`; `annual_bet_frequency` is bets per year;
+//! payouts are per-bet returns in the same units; Sharpe ratios are annualised. Bets are
+//! assumed independent and identically distributed, so overlapping bets overstate `n`.
+//!
+//! ```
+//! use openquant::strategy_risk::{
+//!     implied_frequency_symmetric, implied_precision_asymmetric, sharpe_asymmetric,
+//!     sharpe_symmetric, AsymmetricPayout,
+//! };
+//!
+//! # fn main() -> Result<(), openquant::strategy_risk::StrategyRiskError> {
+//! // 55% precision, daily bets.
+//! assert!((sharpe_symmetric(0.55, 260.0)? - 1.6206).abs() < 1e-4);
+//! // Reaching a Sharpe ratio of 2 at that precision takes 396 bets a year.
+//! assert!((implied_frequency_symmetric(0.55, 2.0)? - 396.0).abs() < 1e-6);
+//!
+//! // Winning 1% and losing 2% needs 72% precision for a Sharpe ratio of 2 at 260 bets a year.
+//! let payout = AsymmetricPayout { pi_plus: 0.01, pi_minus: -0.02 };
+//! let needed = implied_precision_asymmetric(2.0, 260.0, payout)?;
+//! assert!((needed - 0.7222).abs() < 1e-4);
+//! assert!((sharpe_asymmetric(needed, 260.0, payout)? - 2.0).abs() < 1e-6);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use statrs::distribution::{ContinuousCDF, Normal};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
+/// Errors returned by the strategy-risk functions.
 pub enum StrategyRiskError {
+    /// The named input is empty.
     #[error("{0} must not be empty")]
     EmptyInput(&'static str),
+    /// An input is out of its domain; the message names it or the violated condition.
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
+    /// An inversion has no admissible solution for these parameters.
     #[error("no valid root: {0}")]
     NoValidRoot(&'static str),
 }
 
+/// Per-bet payouts of a binary strategy; `pi_plus` must exceed `pi_minus`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AsymmetricPayout {
+    /// Return of a winning bet.
     pub pi_plus: f64,
+    /// Return of a losing bet (typically negative).
     pub pi_minus: f64,
 }
 
+/// Parameters of [`estimate_strategy_failure_probability`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StrategyRiskConfig {
+    /// Length of the bet record in years (sets the annual bet frequency).
     pub years_elapsed: f64,
+    /// Annualised Sharpe ratio the strategy must reach.
     pub target_sharpe: f64,
+    /// Horizon over which the investor judges the strategy, in years (sets the bootstrap
+    /// sample size).
     pub investor_horizon_years: f64,
+    /// Number of bootstrap resamples.
     pub bootstrap_iterations: usize,
+    /// Seed of the bootstrap RNG.
     pub seed: u64,
+    /// KDE bandwidth; `None` uses Silverman's rule.
     pub kde_bandwidth: Option<f64>,
 }
 
+/// Result of [`estimate_strategy_failure_probability`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrategyRiskReport {
+    /// Mean winning and mean losing outcome of the record.
     pub payout: AsymmetricPayout,
+    /// Bets per year: record length over `years_elapsed`.
     pub annual_bet_frequency: f64,
+    /// Precision `p*` needed to reach the target Sharpe ratio.
     pub implied_precision_threshold: f64,
+    /// Mean of the bootstrapped precisions.
     pub bootstrap_precision_mean: f64,
+    /// Sample standard deviation of the bootstrapped precisions.
     pub bootstrap_precision_std: f64,
+    /// Share of bootstrapped precisions at or below `p*`.
     pub empirical_failure_probability: f64,
+    /// Gaussian-KDE estimate of `P[p <= p*]` from the bootstrapped precisions.
     pub kde_failure_probability: f64,
+    /// Every bootstrapped precision.
     pub bootstrap_precision_samples: Vec<f64>,
 }
 
+/// Annualised Sharpe ratio of a strategy with symmetric payouts (AFML §15.2, Snippet 15.1):
+/// `(2p - 1) / (2 sqrt(p (1 - p))) * sqrt(n)`. The payout size cancels.
+///
+/// # Errors
+///
+/// [`StrategyRiskError::InvalidInput`] if `precision` is not strictly inside `(0, 1)` or
+/// `annual_bet_frequency` is not finite and positive.
 pub fn sharpe_symmetric(
     precision: f64,
     annual_bet_frequency: f64,
@@ -63,6 +129,14 @@ pub fn sharpe_symmetric(
     Ok((2.0 * precision - 1.0) / denom * annual_bet_frequency.sqrt())
 }
 
+/// Precision needed for a symmetric-payout strategy with `annual_bet_frequency` bets a year to
+/// reach `target_sharpe`: `(1 + theta / sqrt(theta^2 + n)) / 2` (AFML §15.2).
+///
+/// # Errors
+///
+/// - [`StrategyRiskError::InvalidInput`] if `annual_bet_frequency` is not finite and
+///   positive, or `target_sharpe` is not finite and positive.
+/// - [`StrategyRiskError::NoValidRoot`] if the result falls outside `[0, 1]`.
 pub fn implied_precision_symmetric(
     target_sharpe: f64,
     annual_bet_frequency: f64,
@@ -82,6 +156,14 @@ pub fn implied_precision_symmetric(
     Ok(p)
 }
 
+/// Bets per year needed for a symmetric-payout strategy with `precision` to reach
+/// `target_sharpe`: `4 theta^2 p (1 - p) / (2p - 1)^2` (AFML §15.2).
+///
+/// # Errors
+///
+/// [`StrategyRiskError::InvalidInput`] if `precision` is outside `[0, 1]` or within `1e-12`
+/// of 0.5, `target_sharpe` is not finite and positive, or the implied frequency is not
+/// positive (precision 0 or 1).
 pub fn implied_frequency_symmetric(
     precision: f64,
     target_sharpe: f64,
@@ -101,6 +183,15 @@ pub fn implied_frequency_symmetric(
     Ok(n)
 }
 
+/// Annualised Sharpe ratio of a strategy with asymmetric payouts (AFML §15.3,
+/// Snippet 15.2): `(d p + pi_minus) / (|d| sqrt(p (1 - p))) * sqrt(n)` with
+/// `d = pi_plus - pi_minus`.
+///
+/// # Errors
+///
+/// [`StrategyRiskError::InvalidInput`] if `precision` is not strictly inside `(0, 1)`,
+/// `annual_bet_frequency` is not finite and positive, or the payouts are not finite with
+/// `pi_plus > pi_minus`.
 pub fn sharpe_asymmetric(
     precision: f64,
     annual_bet_frequency: f64,
@@ -119,6 +210,15 @@ pub fn sharpe_asymmetric(
     Ok(mu / sigma * annual_bet_frequency.sqrt())
 }
 
+/// Smallest precision in `[0, 1]` at which an asymmetric-payout strategy reaches
+/// `target_sharpe` (AFML §15.3, Snippet 15.3), found as a root of the quadratic in `p`.
+///
+/// # Errors
+///
+/// - [`StrategyRiskError::InvalidInput`] if `annual_bet_frequency` or `target_sharpe` is not
+///   finite and positive, or the payouts are not finite with `pi_plus > pi_minus`.
+/// - [`StrategyRiskError::NoValidRoot`] if the quadratic has no real root, or no root in
+///   `[0, 1]` reaches the target.
 pub fn implied_precision_asymmetric(
     target_sharpe: f64,
     annual_bet_frequency: f64,
@@ -166,6 +266,18 @@ pub fn implied_precision_asymmetric(
         .ok_or(StrategyRiskError::NoValidRoot("no admissible implied precision root in [0, 1]"))
 }
 
+/// Bets per year needed for an asymmetric-payout strategy with `precision` to reach
+/// `target_sharpe`: `theta^2 d^2 p (1 - p) / (d p + pi_minus)^2` (AFML §15.3).
+///
+/// A strategy whose mean payoff is negative gets a positive frequency from this formula even
+/// though its Sharpe ratio is negative; check the sign of the mean payoff first.
+///
+/// # Errors
+///
+/// - [`StrategyRiskError::InvalidInput`] if `precision` is outside `[0, 1]`, `target_sharpe`
+///   is not finite and positive, the payouts are invalid, or the implied frequency is not
+///   positive (precision 0 or 1).
+/// - [`StrategyRiskError::NoValidRoot`] if the mean payoff is within `1e-12` of zero.
 pub fn implied_frequency_asymmetric(
     precision: f64,
     target_sharpe: f64,
@@ -189,6 +301,52 @@ pub fn implied_frequency_asymmetric(
     Ok(n)
 }
 
+/// Probability that a strategy misses its target Sharpe ratio (AFML §15.4, Snippets
+/// 15.4–15.5).
+///
+/// From a record of per-bet outcomes (`> 0` is a win; zero counts as a loss): estimates the
+/// payouts as the mean win and mean loss, the frequency as `len / years_elapsed`, and the
+/// required precision `p*` with [`implied_precision_asymmetric`]. It then bootstraps the
+/// precision `bootstrap_iterations` times from samples of
+/// `floor(frequency * investor_horizon_years)` bets (at least 1), drawn with replacement by a
+/// [`StdRng`] seeded with `cfg.seed`, and reports the share of samples at or below `p*`
+/// (empirical) and a Gaussian-KDE estimate of the same probability. Deterministic for a given
+/// seed. The bootstrap assumes precision stays what it was; it does not price edge decay.
+///
+/// # Errors
+///
+/// - [`StrategyRiskError::EmptyInput`] if `bet_outcomes` is empty.
+/// - [`StrategyRiskError::InvalidInput`] if an outcome is not finite; `years_elapsed`,
+///   `target_sharpe`, `investor_horizon_years` or `kde_bandwidth` is not finite and positive;
+///   `bootstrap_iterations` is zero; or the record lacks either a win or a loss.
+/// - [`StrategyRiskError::NoValidRoot`] from [`implied_precision_asymmetric`] when no
+///   precision reaches the target.
+///
+/// ```
+/// use openquant::strategy_risk::{estimate_strategy_failure_probability, StrategyRiskConfig};
+///
+/// # fn main() -> Result<(), openquant::strategy_risk::StrategyRiskError> {
+/// // Two years of bets: 60% win 1%, 40% lose 1%.
+/// let outcomes: Vec<f64> = (0..500).map(|i| if i % 5 < 3 { 0.01 } else { -0.01 }).collect();
+/// let cfg = StrategyRiskConfig {
+///     years_elapsed: 2.0,
+///     target_sharpe: 1.0,
+///     investor_horizon_years: 1.0,
+///     bootstrap_iterations: 1_000,
+///     seed: 7,
+///     kde_bandwidth: None,
+/// };
+/// let report = estimate_strategy_failure_probability(&outcomes, cfg)?;
+/// assert_eq!(report.annual_bet_frequency, 250.0);
+/// // Symmetric payouts: p* = (1 + 1 / sqrt(1 + 250)) / 2.
+/// let p_star = 0.5 * (1.0 + 1.0 / 251f64.sqrt());
+/// assert!((report.implied_precision_threshold - p_star).abs() < 1e-9);
+/// // 60% precision is about 2.2 standard errors above p* = 0.53 over a 250-bet year.
+/// let failure = report.empirical_failure_probability;
+/// assert!(failure > 0.0 && failure < 0.05);
+/// # Ok(())
+/// # }
+/// ```
 pub fn estimate_strategy_failure_probability(
     bet_outcomes: &[f64],
     cfg: StrategyRiskConfig,

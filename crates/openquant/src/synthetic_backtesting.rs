@@ -6,78 +6,175 @@
 //! 2) generating many synthetic paths under that calibrated process,
 //! 3) evaluating a PT/SL mesh on those paths, and
 //! 4) detecting when the response surface lacks a stable optimum.
+//!
+//! This is AFML §13.4–13.5 (Snippets 13.1–13.2): instead of picking barriers on the one
+//! historical path, which overfits, fit a discrete Ornstein–Uhlenbeck process
+//! `P_t = intercept + phi P_{t-1} + sigma eps_t`, simulate many paths, and read the whole
+//! profit-taking/stop-loss response surface. §13.6's result is that the surface flattens as
+//! `phi` approaches 1, which [`detect_no_stable_optimum`] flags with this library's own
+//! heuristic thresholds (not AFML's).
+//!
+//! Conventions:
+//!
+//! - Prices are levels, oldest first. Barriers are in **price units** (not multiples of
+//!   `sigma`), measured from the entry price; a barrier is touched when PnL reaches it
+//!   (`>=`).
+//! - Every rule is a **long** entry at the first price of each path; negate the series for a
+//!   short.
+//! - A rule's Sharpe ratio is the mean over the standard deviation of per-trade PnL, times
+//!   `sqrt(annualization_factor)`, regardless of holding time.
+//! - Simulation uses a [`StdRng`] seeded by the caller, so results are reproducible.
+//!
+//! ```
+//! use openquant::synthetic_backtesting::{
+//!     evaluate_rule_on_paths, generate_ou_paths, OuProcessParams, TradingRule,
+//! };
+//!
+//! # fn main() -> Result<(), openquant::synthetic_backtesting::SyntheticBacktestError> {
+//! // phi = 0.9 around 100 (intercept = (1 - phi) * equilibrium), entered three points below.
+//! let params = OuProcessParams {
+//!     phi: 0.9,
+//!     intercept: 10.0,
+//!     equilibrium: 100.0,
+//!     sigma: 1.0,
+//!     r_squared: 0.0,
+//!     stationary: true,
+//! };
+//! let paths = generate_ou_paths(params, 97.0, 2_000, 60, 11)?;
+//! assert_eq!(paths, generate_ou_paths(params, 97.0, 2_000, 60, 11)?);
+//! assert!(paths.iter().all(|p| p.len() == 60 && p[0] == 97.0));
+//!
+//! // Expecting reversion, a wide stop beats a tight one.
+//! let wide = TradingRule { profit_taking: 2.0, stop_loss: 8.0 };
+//! let tight = TradingRule { profit_taking: 2.0, stop_loss: 0.5 };
+//! let wide = evaluate_rule_on_paths(&paths, wide, 59, 1.0)?;
+//! let tight = evaluate_rule_on_paths(&paths, tight, 59, 1.0)?;
+//! assert!(wide.sharpe > tight.sharpe && wide.win_rate > 0.95);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
 
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_distr::{Distribution, StandardNormal};
 
+/// Errors returned by the synthetic-backtesting functions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SyntheticBacktestError {
+    /// Fewer than three prices to calibrate on.
     #[error("prices must include at least 3 observations")]
     TooFewPrices,
+    /// The named input violates its requirement.
     #[error("{name} must be {requirement}")]
-    Invalid { name: &'static str, requirement: &'static str },
+    Invalid {
+        /// Input name.
+        name: &'static str,
+        /// What it must satisfy.
+        requirement: &'static str,
+    },
+    /// The lagged prices are constant, so `phi` is undefined.
     #[error("cannot calibrate O-U from constant price series")]
     ConstantPrices,
+    /// The regression residuals have zero (or non-finite) deviation.
     #[error("estimated innovation sigma must be positive")]
     NonPositiveInnovationSigma,
+    /// `n_paths` is zero or `horizon` is below 2.
     #[error("n_paths must be > 0 and horizon must be >= 2")]
     InvalidPathShape,
+    /// An O-U parameter is not finite.
     #[error("O-U parameters must be finite")]
     NonFiniteOuParameters,
+    /// The named input is empty.
     #[error("{0} cannot be empty")]
     Empty(&'static str),
+    /// A barrier width is not positive.
     #[error("profit_taking and stop_loss must be > 0")]
     NonPositiveBarriers,
+    /// `annualization_factor` is not finite and positive.
     #[error("annualization_factor must be finite and > 0")]
     InvalidAnnualizationFactor,
+    /// A path has fewer than two points.
     #[error("every path must have at least 2 points")]
     PathTooShort,
+    /// A path contains a non-finite value.
     #[error("paths must contain only finite values")]
     NonFinitePaths,
+    /// No Sharpe values to diagnose (internal consistency check).
     #[error("no sharpe values")]
     NoSharpeValues,
+    /// A barrier grid is empty.
     #[error("profit_taking_grid and stop_loss_grid must be non-empty")]
     EmptyGrid,
+    /// The response surface is empty (internal consistency check).
     #[error("response surface is empty")]
     EmptyResponseSurface,
+    /// A profit-taking grid value is not finite and positive.
     #[error("profit_taking_grid values must be finite and > 0")]
     InvalidProfitTakingGrid,
+    /// A stop-loss grid value is not finite and positive.
     #[error("stop_loss_grid values must be finite and > 0")]
     InvalidStopLossGrid,
 }
 
+/// Parameters of the discrete O-U (AR(1)) process `P_t = intercept + phi P_{t-1} + sigma eps`.
+///
+/// [`generate_ou_paths`] simulates from `intercept`, `phi` and `sigma` only; when building by
+/// hand keep `intercept = (1 - phi) * equilibrium`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OuProcessParams {
+    /// Autoregressive coefficient; the speed of reversion is `1 - phi`.
     pub phi: f64,
+    /// Regression intercept.
     pub intercept: f64,
+    /// Long-run mean `intercept / (1 - phi)` (the mean of the prices when `phi` is 1).
     pub equilibrium: f64,
+    /// Standard deviation of the innovations, in price units.
     pub sigma: f64,
+    /// R-squared of the AR(1) regression (high for any persistent series).
     pub r_squared: f64,
+    /// `|phi| < 1`; true even for `phi = 0.999`.
     pub stationary: bool,
 }
 
+/// A profit-taking / stop-loss pair, both positive widths in price units from the entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TradingRule {
+    /// Exit when PnL reaches `+profit_taking`.
     pub profit_taking: f64,
+    /// Exit when PnL reaches `-stop_loss`.
     pub stop_loss: f64,
 }
 
+/// A trading rule's performance across the simulated paths.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuleSurfacePoint {
+    /// The rule evaluated.
     pub rule: TradingRule,
+    /// `mean_return / std_return * sqrt(annualization_factor)`, or 0 when the deviation is 0.
     pub sharpe: f64,
+    /// Mean per-trade PnL in price units.
     pub mean_return: f64,
+    /// Sample standard deviation of per-trade PnL.
     pub std_return: f64,
+    /// Share of trades with positive PnL.
     pub win_rate: f64,
+    /// Mean number of steps held.
     pub avg_holding_steps: f64,
 }
 
+/// Thresholds for [`detect_no_stable_optimum`]. These are this library's heuristics, not
+/// AFML's; the defaults are `phi >= 0.97`, margin 0.20, surface deviation 0.10 and best
+/// Sharpe 0.30 (the Python binding uses different defaults).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StabilityCriteria {
+    /// `|phi|` at or above this counts as near a random walk.
     pub random_walk_phi_threshold: f64,
+    /// Best-minus-median Sharpe below this is a weak peak.
     pub min_peak_margin: f64,
+    /// Surface Sharpe deviation below this is a flat surface.
     pub min_surface_std: f64,
+    /// Best Sharpe below this is a weak best rule.
     pub min_best_sharpe: f64,
 }
 
@@ -92,39 +189,76 @@ impl Default for StabilityCriteria {
     }
 }
 
+/// Result of [`detect_no_stable_optimum`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct StabilityDiagnostics {
+    /// Whether the surface lacks a stable optimum under the criteria.
     pub no_stable_optimum: bool,
+    /// Human-readable explanation of the verdict.
     pub reason: String,
+    /// Highest Sharpe ratio on the surface.
     pub best_sharpe: f64,
+    /// Median Sharpe ratio on the surface.
     pub median_sharpe: f64,
+    /// `best_sharpe - median_sharpe`.
     pub peak_margin: f64,
+    /// Sample standard deviation of the surface's Sharpe ratios.
     pub surface_std: f64,
+    /// The `phi` the diagnosis used.
     pub estimated_phi: f64,
 }
 
+/// Result of an optimal-trading-rule search.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OtrSearchResult {
+    /// The process parameters the paths came from.
     pub params: OuProcessParams,
+    /// The rule with the highest Sharpe ratio (ties broken by mean return).
     pub best_rule: TradingRule,
+    /// That rule's surface point.
     pub best_point: RuleSurfacePoint,
+    /// Every grid point, sorted by Sharpe ratio (then mean return), best first.
     pub response_surface: Vec<RuleSurfacePoint>,
+    /// Stability diagnosis of the surface.
     pub diagnostics: StabilityDiagnostics,
 }
 
+/// Configuration of [`run_synthetic_otr_workflow`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyntheticBacktestConfig {
+    /// Entry price of every simulated path (the forecast relative to equilibrium).
     pub initial_price: f64,
+    /// Number of simulated paths.
     pub n_paths: usize,
+    /// Points per path, including the entry.
     pub horizon: usize,
+    /// Seed of the simulation RNG.
     pub seed: u64,
+    /// Profit-taking widths to try, in price units.
     pub profit_taking_grid: Vec<f64>,
+    /// Stop-loss widths to try, in price units.
     pub stop_loss_grid: Vec<f64>,
+    /// Maximum holding period in steps (capped by the path length).
     pub max_holding_steps: usize,
+    /// Multiplier whose square root scales the per-trade Sharpe ratio (1.0 for per trade).
     pub annualization_factor: f64,
+    /// Thresholds for the stability diagnosis.
     pub stability_criteria: StabilityCriteria,
 }
 
+/// Fits the discrete O-U process to a price series by OLS of `P_t` on `P_{t-1}` (AFML
+/// §13.5.1, step 1).
+///
+/// `sigma` is the sample standard deviation of the residuals; `equilibrium` is
+/// `intercept / (1 - phi)`, or the mean price when `phi` is within `1e-12` of 1.
+///
+/// # Errors
+///
+/// - [`SyntheticBacktestError::TooFewPrices`] for fewer than three prices.
+/// - [`SyntheticBacktestError::Invalid`] if a price is not finite.
+/// - [`SyntheticBacktestError::ConstantPrices`] if the lagged prices are constant.
+/// - [`SyntheticBacktestError::NonPositiveInnovationSigma`] if the fit is exact (zero
+///   residual deviation).
 pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, SyntheticBacktestError> {
     if prices.len() < 3 {
         return Err(SyntheticBacktestError::TooFewPrices);
@@ -187,6 +321,18 @@ pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, SyntheticB
     })
 }
 
+/// Simulates `n_paths` O-U paths of `horizon` points each, starting at `initial_price`
+/// (AFML §13.5.1, step 2).
+///
+/// Uses `intercept`, `phi` and `sigma` from `params` with standard-normal innovations from a
+/// [`StdRng`] seeded with `seed`; the same seed reproduces the same paths.
+///
+/// # Errors
+///
+/// - [`SyntheticBacktestError::Invalid`] if `initial_price` is not finite or `sigma` is
+///   negative.
+/// - [`SyntheticBacktestError::InvalidPathShape`] if `n_paths` is zero or `horizon < 2`.
+/// - [`SyntheticBacktestError::NonFiniteOuParameters`] if a parameter is not finite.
 pub fn generate_ou_paths(
     params: OuProcessParams,
     initial_price: f64,
@@ -233,6 +379,22 @@ pub fn generate_ou_paths(
     Ok(out)
 }
 
+/// Evaluates one profit-taking/stop-loss rule on every path (AFML §13.5.1, step 3).
+///
+/// Each path is a long entry at its first price; the trade exits at the first step (up to
+/// `min(max_holding_steps, len - 1)`) whose PnL is `>= profit_taking` or `<= -stop_loss`,
+/// otherwise at that last step. Returns the mean, deviation, Sharpe ratio and win rate of the
+/// per-trade PnL (price units) and the mean holding time.
+///
+/// # Errors
+///
+/// - [`SyntheticBacktestError::Empty`] if `paths` is empty.
+/// - [`SyntheticBacktestError::NonPositiveBarriers`] if a barrier width is not positive.
+/// - [`SyntheticBacktestError::Invalid`] if `max_holding_steps` is zero.
+/// - [`SyntheticBacktestError::InvalidAnnualizationFactor`] if the factor is not finite and
+///   positive.
+/// - [`SyntheticBacktestError::PathTooShort`] if a path has fewer than two points.
+/// - [`SyntheticBacktestError::NonFinitePaths`] if a path contains a non-finite value.
 pub fn evaluate_rule_on_paths(
     paths: &[Vec<f64>],
     rule: TradingRule,
@@ -301,6 +463,16 @@ pub fn evaluate_rule_on_paths(
     Ok(RuleSurfacePoint { rule, sharpe, mean_return, std_return, win_rate, avg_holding_steps })
 }
 
+/// Flags a response surface without a stable optimum (the flattening of AFML §13.6).
+///
+/// The verdict is true when the process is near a random walk (`|phi| >=
+/// random_walk_phi_threshold`) and the peak is weak or the surface flat, or when the best
+/// Sharpe ratio is weak and so is the peak. The thresholds are heuristics; look at the
+/// surface too.
+///
+/// # Errors
+///
+/// [`SyntheticBacktestError::Empty`] if `response_surface` is empty.
 pub fn detect_no_stable_optimum(
     response_surface: &[RuleSurfacePoint],
     estimated_phi: f64,
@@ -348,6 +520,14 @@ pub fn detect_no_stable_optimum(
     })
 }
 
+/// Evaluates every `(profit_taking, stop_loss)` combination of the grids on `paths` and
+/// diagnoses the resulting surface (AFML §13.5.1, Snippets 13.1–13.2).
+///
+/// # Errors
+///
+/// - [`SyntheticBacktestError::EmptyGrid`] if either grid is empty.
+/// - Any [`evaluate_rule_on_paths`] error (including non-positive grid values, reported as
+///   [`SyntheticBacktestError::NonPositiveBarriers`]).
 pub fn search_optimal_trading_rule(
     params: OuProcessParams,
     paths: &[Vec<f64>],
@@ -386,6 +566,16 @@ pub fn search_optimal_trading_rule(
     Ok(OtrSearchResult { params, best_rule, best_point, response_surface, diagnostics })
 }
 
+/// End-to-end optimal-trading-rule search: calibrate on `historical_prices`, simulate, and
+/// search the configured grid (AFML §13.5).
+///
+/// # Errors
+///
+/// - [`SyntheticBacktestError::InvalidProfitTakingGrid`] or
+///   [`SyntheticBacktestError::InvalidStopLossGrid`] if a grid value is not finite and
+///   positive.
+/// - Any [`calibrate_ou_params`], [`generate_ou_paths`] or [`search_optimal_trading_rule`]
+///   error.
 pub fn run_synthetic_otr_workflow(
     historical_prices: &[f64],
     config: &SyntheticBacktestConfig,

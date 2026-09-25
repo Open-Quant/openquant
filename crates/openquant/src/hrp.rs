@@ -1,39 +1,131 @@
+//! Hierarchical Risk Parity (AFML chapter 16, Snippets 16.1–16.4).
+//!
+//! HRP allocates without inverting the covariance matrix, in three steps:
+//!
+//! 1. **Tree clustering** (§16.4.1): correlations become distances
+//!    `d = sqrt((1 - rho) / 2)` and assets are merged by single linkage on those pairwise
+//!    distances (as mlfinlab does; AFML's snippet clusters on distances between the columns
+//!    of the distance matrix, which usually but not always gives the same tree).
+//! 2. **Quasi-diagonalisation** (§16.4.2): assets are reordered so similar ones are adjacent.
+//! 3. **Recursive bisection** (§16.4.3): the ordered list is split in halves and weight is
+//!    divided between the halves in inverse proportion to their inverse-variance cluster
+//!    variances.
+//!
+//! The result is long-only and fully invested (weights sum to 1). From prices, returns are
+//! simple returns and the covariance is the unannualised sample covariance (HRP weights do
+//! not depend on the scale). Weights are in the column order of the inputs.
+//!
+//! ```
+//! use nalgebra::DMatrix;
+//! use openquant::hrp::HierarchicalRiskParity;
+//!
+//! # fn main() -> Result<(), openquant::hrp::HrpError> {
+//! // Assets 0 and 1 are nearly the same bet; asset 2 is independent. All have variance 0.04.
+//! let covariance = DMatrix::from_row_slice(3, 3, &[
+//!     0.040, 0.036, 0.000,
+//!     0.036, 0.040, 0.000,
+//!     0.000, 0.000, 0.040,
+//! ]);
+//! let names: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+//!
+//! let mut model = HierarchicalRiskParity::new();
+//! model.allocate(&names, None, None, Some(&covariance), None, false)?;
+//!
+//! assert_eq!(model.clusters[0], [0, 1]); // a and b merge first
+//! assert!((model.weights.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+//! // Bisection splits {a, b} from {c}: the pair's variance is 0.038, so c gets
+//! // 0.038 / (0.038 + 0.040) and a and b share the rest equally.
+//! assert!((model.weights[2] - 0.038 / 0.078).abs() < 1e-12);
+//! assert!((model.weights[0] - model.weights[1]).abs() < 1e-12);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use crate::util::resample::{freq_step, resample_prices};
 use nalgebra::DMatrix;
 
 #[derive(Debug, PartialEq, thiserror::Error)]
+/// Errors returned by [`HierarchicalRiskParity`].
 pub enum HrpError {
+    /// No input, no assets, too few observations, a zero price, or a non-positive variance.
     #[error("no data: supply asset prices, returns or a covariance matrix")]
     NoData,
+    /// An input's shape disagrees with the number of asset names (the message says which).
     #[error("dimension mismatch: {0}")]
     DimensionMismatch(&'static str),
+    /// [`HierarchicalRiskParity::plot_clusters`] was called before `allocate`.
     #[error("no clusters yet: call allocate first")]
     MissingClusters,
 }
 
 #[derive(Debug, Clone)]
+/// A scipy-style dendrogram description from [`HierarchicalRiskParity::plot_clusters`].
+///
+/// Only `ivl` and `leaves` are meaningful; `icoord`, `dcoord` and `color_list` are
+/// placeholders (every link at height 1). To draw the tree, use
+/// [`HierarchicalRiskParity::clusters`] with the seriated distances.
 pub struct HrpDendrogram {
+    /// Placeholder x coordinates of each link.
     pub icoord: Vec<[f64; 4]>,
+    /// Placeholder heights of each link (all 1).
     pub dcoord: Vec<[f64; 4]>,
+    /// Asset names in leaf order.
     pub ivl: Vec<String>,
+    /// Asset indices in leaf order.
     pub leaves: Vec<usize>,
+    /// Placeholder link colours.
     pub color_list: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
+/// Hierarchical Risk Parity allocator and its results.
+///
+/// Build with [`HierarchicalRiskParity::new`], call [`HierarchicalRiskParity::allocate`],
+/// then read the public fields.
 pub struct HierarchicalRiskParity {
+    /// Portfolio weights, one per asset in input order, non-negative and summing to 1.
     pub weights: Vec<f64>,
+    /// Correlation matrix with rows and columns in [`ordered_indices`](Self::ordered_indices)
+    /// order.
     pub seriated_correlations: Option<DMatrix<f64>>,
+    /// Distance matrix `sqrt((1 - rho) / 2)` in [`ordered_indices`](Self::ordered_indices)
+    /// order.
     pub seriated_distances: Option<DMatrix<f64>>,
+    /// Asset indices in quasi-diagonal (leaf) order.
     pub ordered_indices: Vec<usize>,
+    /// The single-linkage merges, scipy-style: ids below `n` are assets and `n + k` is the
+    /// cluster formed by merge `k`.
     pub clusters: Vec<[usize; 2]>,
 }
 
 impl HierarchicalRiskParity {
+    /// Creates an allocator with no results.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Computes HRP weights and stores them with the tree in the public fields.
+    ///
+    /// `asset_names` fixes the number of assets `n`. Supply whichever of these you have
+    /// (matrices have one row per observation, oldest first, and one column per asset):
+    ///
+    /// - `covariance_matrix` (`n x n`): always used as given when present;
+    /// - `asset_returns`: used for the covariance when no covariance is given;
+    /// - `asset_prices`: used (converted to simple returns, optionally resampled positionally
+    ///   with `resample_by`: `"W"` keeps every 5th row, `"M"` every 21st) only when neither of
+    ///   the others is given.
+    ///
+    /// `use_shrinkage` multiplies the off-diagonal terms of an estimated covariance by 0.9 (a
+    /// fixed shrink, not Ledoit–Wolf); it has no effect on a supplied covariance.
+    ///
+    /// # Errors
+    ///
+    /// - [`HrpError::NoData`] if no input is given, `asset_names` is empty, fewer than two
+    ///   price or return rows are available, a price used as a denominator is zero, or a
+    ///   variance is not positive.
+    /// - [`HrpError::DimensionMismatch`] if returns, prices or covariance disagree with the
+    ///   number of asset names.
     #[allow(clippy::too_many_arguments)]
     pub fn allocate(
         &mut self,
@@ -94,6 +186,17 @@ impl HierarchicalRiskParity {
         Ok(())
     }
 
+    /// Returns the leaf order of the last allocation as an [`HrpDendrogram`], labelled with
+    /// `assets` (indexed by asset position).
+    ///
+    /// # Errors
+    ///
+    /// [`HrpError::MissingClusters`] before a successful [`allocate`](Self::allocate) with at
+    /// least two assets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `assets` has fewer entries than the number of allocated assets.
     pub fn plot_clusters(&self, assets: &[String]) -> Result<HrpDendrogram, HrpError> {
         if self.clusters.is_empty() || self.ordered_indices.is_empty() {
             return Err(HrpError::MissingClusters);
