@@ -2,7 +2,7 @@
 title: "sample_weights"
 description: "Training weights for overlapping labels: return attribution and time decay."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -173,8 +173,7 @@ Both return `(event start, weight)` pairs in the order the events were given.
 - **Timestamps must match exactly.** A label's span is matched to `close` by comparing
   timestamps, so an event time that is not a bar time still works, but an `end` before its
   `start` silently produces a weight of 0 rather than an error. From Python, timestamps are
-  `"%Y-%m-%d %H:%M:%S"` strings with whole seconds
-  ([#87](https://github.com/Open-Quant/openquant/issues/87)).
+  `"%Y-%m-%d %H:%M:%S"` strings with an optional fractional second.
 - **`SampleWeightsError::NanInEvents` is vestigial.** It fires on a timestamp equal to the
   Unix epoch, a leftover of porting pandas `NaT`. It cannot be triggered with real data.
 - **Class imbalance is a separate correction.** Neither function looks at the label. AFML
