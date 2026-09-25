@@ -22,7 +22,8 @@ only `cargo`.
 | File | Run it with | Demonstrates |
 |---|---|---|
 | `crates/openquant/examples/research_notebook_smoke.rs` | `cargo run -p openquant --example research_notebook_smoke` | The minimum Rust path: CUSUM event sampling → max-Sharpe allocation → VaR/ES/CDaR. ~30 lines, asserts its own invariants. |
-| `notebooks/python/scripts/smoke_all.py` | `just notebook-smoke` | Executes all eight research notebooks headlessly. The broadest single check that the Python surface works. |
+| `notebooks/python/scripts/run_notebooks.py` | `just notebooks-run` | Executes all eight research notebooks in a Jupyter kernel and saves their tables and figures; fails on any cell error. CI runs it and checks the committed outputs are current. |
+| `notebooks/python/scripts/smoke_all.py` | `just notebook-smoke` | Plain-script mirror of the core notebook calls; a quick check that the Python surface works. |
 | `experiments/run_pipeline.py` | `just exp-run` | A config-driven pipeline run (`experiments/configs/futures_oil_baseline.toml`) that writes artifacts to `experiments/artifacts`. |
 | `python/benchmarks/benchmark_pipeline.py` | `just py-bench` | Times the mid-frequency pipeline over 30 iterations at 2048 bars. |
 | `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Ingestion and bar-building throughput at 200k rows × 4 symbols. Use this if you want a real memory profile before feeding it production data. |
@@ -30,9 +31,22 @@ only `cargo`.
 
 The eight notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
-`08_algo_wheel_experiments.ipynb`, and
-`06_afml_real_data_end_to_end.ipynb` is the one that runs on real data
-rather than synthetic.
+`08_algo_wheel_experiments.ipynb`. They are committed with their outputs,
+and their figures are exported to `docs-site/public/figures/notebooks/`.
+All of them run on synthetic data: `06_afml_real_data_end_to_end.ipynb`
+reads the SYNTHETIC `SYN_A`..`SYN_E` sample through `openquant.data.fetch`,
+and runs on real data only when you pass your own `source=`.
+
+### Figures from the executed notebooks
+
+`just notebooks-run` writes each notebook figure here in both site themes. These two come from
+`06_afml_real_data_end_to_end.ipynb` and describe the **SYNTHETIC** sample, not a real market.
+
+<img class="dark:sl-hidden" src="/figures/notebooks/nb06-equity-drawdown-light.svg" alt="Equity curve and drawdown of a five-day momentum signal on the synthetic SYN_A series, 2022 to 2023." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb06-equity-drawdown-dark.svg" alt="Equity curve and drawdown of a five-day momentum signal on the synthetic SYN_A series, 2022 to 2023." />
+
+<img class="dark:sl-hidden" src="/figures/notebooks/nb06-confusion-light.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb06-confusion-dark.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
 
 ## Worked example: cleaning a messy OHLCV file
 

@@ -36,6 +36,9 @@ features = []
 
 [dependency-groups]
 # ruff and mypy are pinned exactly so the CI lint gate and a local run agree.
+# nbclient + ipykernel execute the research notebooks in a real Jupyter kernel so
+# rich outputs (tables, inline figures) are kept; matplotlib draws the figures.
+# Those four are used by `just notebooks-run` and .github/workflows/notebooks.yml only.
 dev = [
   "maturin>=1.7,<2.0",
   "pytest>=8,<9",
@@ -45,6 +48,10 @@ dev = [
   # numpy 2.5 needs Python 3.12 and its stubs use `type` statements, which mypy rejects when
   # checking for 3.11 ([tool.mypy] python_version). Keeps the lint environment on 2.4.
   "numpy<2.5",
+  "nbclient>=0.10,<1",
+  "nbformat>=5.10,<6",
+  "ipykernel>=6.29,<8",
+  "matplotlib>=3.9,<4",
 ]
 
 [tool.ruff]
