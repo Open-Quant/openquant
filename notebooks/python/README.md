@@ -12,6 +12,7 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 6. `06_afml_real_data_end_to_end.ipynb` (full flywheel analysis on the SYNTHETIC `fetch` sample; pass your own `source=` for real data)
 7. `07_feature_engineering_discovery_loop.ipynb` (candidate feature generation + screening)
 8. `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
+10. `10_hrp_vs_ivp_cla_oos.ipynb` (runbook, #51: HRP vs inverse-variance and CLA out of sample, AFML §16.6 Monte Carlo on SYNTHETIC data; `OPENQUANT_RUNBOOK_RUNS=10000` for the book's run count)
 
 Every notebook runs offline. Notebook 06 reads market-shaped data through `openquant.data.fetch`, whose default
 source is the committed SYNTHETIC sample (`SYN_A` to `SYN_E`, see `DATA_SOURCES.md`); the others generate
