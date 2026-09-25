@@ -163,12 +163,9 @@ assert!((decision.expected_bagging_variance - 0.328).abs() < 1e-12);
 
 ## What to watch for
 
-- **`sequential_bootstrap_sample_indices` draws a uniform bootstrap.** To make the result
-  depend on `seed`, it fills `seq_bootstrap`'s warm-up list with as many uniform indices as
-  the sample is long, so the uniqueness-weighted draw never happens. For a given seed it
-  returns exactly what `bootstrap_sample_indices` returns. Use
-  [`sampling.seq_bootstrap`](/modules/sampling/) directly until
-  [#90](https://github.com/Open-Quant/openquant/issues/90) is closed.
+- **`sequential_bootstrap_sample_indices` is `sampling.seq_bootstrap` with a seed.** The
+  same `seed` gives the same indices, but not the indices `bootstrap_sample_indices` gives
+  for that seed: the two draw from different distributions.
 - **`noise` in `bias_variance_noise` needs the noiseless target.** Against the observed
   `y_true` alone, bias² + variance = MSE exactly and noise cannot be told apart from bias, so
   `noise` is `None` and `bias_sq` means "bias plus noise". Pass `y_expected` = E[y|x] (known in

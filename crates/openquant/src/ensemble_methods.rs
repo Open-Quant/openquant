@@ -10,7 +10,7 @@
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use crate::sampling::seq_bootstrap;
+use crate::sampling::seq_bootstrap_with_rng;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum EnsembleError {
@@ -173,8 +173,7 @@ pub fn sequential_bootstrap_sample_indices(
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
-    let warmup: Vec<usize> = (0..sample_size).map(|_| rng.gen_range(0..n_labels)).collect();
-    Ok(seq_bootstrap(ind_mat, Some(sample_size), Some(warmup))?)
+    Ok(seq_bootstrap_with_rng(ind_mat, Some(sample_size), None, &mut rng)?)
 }
 
 pub fn aggregate_regression_mean(

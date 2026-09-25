@@ -4,6 +4,7 @@ use openquant::ensemble_methods::{
     bias_variance_noise, bootstrap_sample_indices, recommend_bagging_vs_boosting,
     sequential_bootstrap_sample_indices, EnsembleError, EnsembleMethod,
 };
+use openquant::sampling::{get_ind_mat_average_uniqueness, get_ind_matrix};
 
 #[test]
 fn test_bias_variance_noise_decomposition() {
@@ -138,6 +139,40 @@ fn test_bootstrap_and_sequential_bootstrap_shapes() {
     let sb = sequential_bootstrap_sample_indices(&ind_mat, 8, 11).unwrap();
     assert_eq!(sb.len(), 8);
     assert!(sb.iter().all(|v| *v < ind_mat[0].len()));
+}
+
+#[test]
+fn test_sequential_bootstrap_indices_are_uniqueness_weighted() {
+    // 40 labels of 10 bars, one starting every 3 bars.
+    let n = 40;
+    let spans: Vec<(usize, usize)> = (0..n).map(|i| (3 * i, 3 * i + 9)).collect();
+    let bars: Vec<usize> = (0..3 * n + 10).collect();
+    let ind = get_ind_matrix(&spans, &bars).unwrap();
+    let uniqueness = |drawn: &[usize]| {
+        let sub: Vec<Vec<u8>> =
+            ind.iter().map(|row| drawn.iter().map(|&c| row[c]).collect()).collect();
+        get_ind_mat_average_uniqueness(&sub).unwrap()
+    };
+
+    assert_eq!(
+        sequential_bootstrap_sample_indices(&ind, n, 5).unwrap(),
+        sequential_bootstrap_sample_indices(&ind, n, 5).unwrap()
+    );
+    assert_ne!(
+        sequential_bootstrap_sample_indices(&ind, n, 5).unwrap(),
+        bootstrap_sample_indices(n, n, 5).unwrap()
+    );
+
+    let seeds = 0..300u64;
+    let sequential = seeds
+        .clone()
+        .map(|s| uniqueness(&sequential_bootstrap_sample_indices(&ind, n, s).unwrap()))
+        .sum::<f64>()
+        / 300.0;
+    let standard =
+        seeds.map(|s| uniqueness(&bootstrap_sample_indices(n, n, s).unwrap())).sum::<f64>() / 300.0;
+    // Uniform ~0.300 and sequential ~0.312 (AFML §4.5.4 setup, standard errors near 0.0005).
+    assert!(sequential > standard + 0.006, "sequential {sequential:.4} vs uniform {standard:.4}");
 }
 
 #[test]

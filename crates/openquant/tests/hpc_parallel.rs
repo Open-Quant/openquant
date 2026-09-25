@@ -30,6 +30,23 @@ fn nested_partition_biases_molecule_sizes() {
 }
 
 #[test]
+fn nested_partition_returns_the_requested_molecules_when_they_nearly_match_the_atoms() {
+    // 7 atoms on 7 threads used to panic in `clamp`, and 3 atoms in 3 molecules came back as 2.
+    for atoms in 1..200 {
+        for molecules in 1..=atoms {
+            let parts = partition_atoms(atoms, molecules, PartitionStrategy::Nested)
+                .expect("valid partition");
+            assert_eq!(parts.len(), molecules, "{atoms} atoms into {molecules} molecules");
+            assert_eq!(parts.last().expect("non-empty").end, atoms);
+            assert!(parts.iter().all(|p| !p.is_empty()));
+            for w in parts.windows(2) {
+                assert_eq!(w[0].end, w[1].start);
+            }
+        }
+    }
+}
+
+#[test]
 fn serial_and_threaded_results_match() {
     let atoms: Vec<u64> = (1..=512).collect();
     let serial = run_parallel(

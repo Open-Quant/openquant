@@ -18,6 +18,7 @@ fn asserted() -> BTreeSet<&'static str> {
         assert_error::<openquant::combinatorial_optimization::CombinatorialOptimizationError>(),
         assert_error::<openquant::cross_validation::CrossValidationError>(),
         assert_error::<openquant::data_processing::DataProcessingError>(),
+        assert_error::<openquant::dynamic_allocation::DynamicAllocationError>(),
         assert_error::<openquant::ensemble_methods::EnsembleError>(),
         assert_error::<openquant::etf_trick::EtfTrickError>(),
         assert_error::<openquant::feature_importance::FeatureImportanceError>(),

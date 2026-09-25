@@ -76,12 +76,30 @@ def _validate_required_columns(df: pl.DataFrame) -> None:
         raise ValueError(f"missing required OHLCV columns: {', '.join(missing)}")
 
 
+# Timestamp strings from the Rust bindings: "%Y-%m-%d %H:%M:%S" with an optional fractional
+# second (6 digits, or 9 below a microsecond). polars infers a format from the first value only, so a column
+# mixing whole and fractional seconds must be parsed with this explicit format.
+TS_FORMAT = "%Y-%m-%d %H:%M:%S%.f"
+
+
+def _parse_ts(expr: pl.Expr) -> pl.Expr:
+    """Parse timestamp strings, keeping fractional seconds (to microseconds).
+
+    Strings in `TS_FORMAT` are parsed with it; anything else (dates, ISO `T` forms) falls back
+    to polars' format inference, as before.
+    """
+    return pl.coalesce(
+        expr.str.strptime(pl.Datetime, TS_FORMAT, strict=False),
+        expr.str.strptime(pl.Datetime, strict=False),
+    )
+
+
 def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
     frame = _canonicalize_columns(df)
     _validate_required_columns(frame)
 
     lf = frame.lazy().with_columns(
-        pl.col("ts").cast(pl.Utf8).str.strptime(pl.Datetime, strict=False),
+        _parse_ts(pl.col("ts").cast(pl.Utf8)),
         pl.col("symbol").cast(pl.Utf8),
         pl.col("open").cast(pl.Float64),
         pl.col("high").cast(pl.Float64),
@@ -100,7 +118,11 @@ def _format_ts(v: Any) -> str | None:
     if v is None:
         return None
     if hasattr(v, "strftime"):
-        return v.strftime("%Y-%m-%d %H:%M:%S")
+        # Same form as str(datetime) and the Rust bindings: no fraction on a whole second.
+        out = v.strftime("%Y-%m-%d %H:%M:%S")
+        if getattr(v, "microsecond", 0):
+            out += f".{v.microsecond:06d}"
+        return out
     return str(v)
 
 
