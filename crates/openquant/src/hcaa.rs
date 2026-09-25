@@ -2,11 +2,13 @@
 //! cluster tree with a choice of risk measure.
 //!
 //! References: Raffinot (2017), *Hierarchical clustering-based asset allocation*, Journal of
-//! Portfolio Management 44(2); AFML Chapter 16 (§16.4, the tree and quasi-diagonalisation
-//! shared with HRP, Snippets 16.1–16.2).
+//! Portfolio Management 44(2); AFML Chapter 16 (§16.4, the tree and quasi-diagonalisation,
+//! Snippets 16.1–16.2).
 //!
-//! The tree is HRP's: single linkage on the correlation distance `sqrt(2 (1 - rho))`. Weight
-//! starts at 1 at the root. At each of the top `k - 1` merges (`k` = `optimal_num_clusters`)
+//! The tree is single linkage on the pairwise correlation distance `sqrt(2 (1 - rho))`, the
+//! tree of HRP's [`HrpDistance::Correlation`](crate::hrp::HrpDistance::Correlation) option;
+//! HRP's default instead clusters on the distance between rows of that distance matrix, as
+//! AFML's Snippet 16.4 does. Weight starts at 1 at the root. At each of the top `k - 1` merges (`k` = `optimal_num_clusters`)
 //! the node's weight is split between its children, the left one receiving a share `alpha`
 //! set by `allocation_metric`; below that cut each subtree is one cluster whose weight is
 //! shared equally (`"equal_weighting"`) or by inverse variance (every other metric). Each side
