@@ -38,7 +38,7 @@
 //! // Started at the true mu_2 and p_1, one iteration of either variant reproduces the
 //! // mixture: the truth is a fixed point.
 //! let m2n = M2N::with_defaults(moments.clone());
-//! for step in [m2n.iter_4(2.0, 0.7), m2n.iter_5(2.0, 0.7)] {
+//! for step in [m2n.iter_4(2.0, 0.7).unwrap(), m2n.iter_5(2.0, 0.7).unwrap()] {
 //!     assert!(step.iter().zip(&truth).all(|(a, b)| (a - b).abs() < 1e-9));
 //! }
 //! ```
@@ -58,7 +58,7 @@ pub struct M2N {
     /// Target raw moments `E[x^k]`, `k = 1..=5`. The fit needs all five.
     pub moments: Vec<f64>,
     /// Convergence tolerance on `p_1`; also the spacing of the `mu_2` start grid, which has
-    /// about `1 / epsilon` points. Must be `> 0`.
+    /// about `1 / epsilon` points. Must be finite and `> 0` ([`M2N::single_fit_loop`] checks).
     pub epsilon: f64,
     /// Width of the `mu_2` start grid in standard deviations: starts run from
     /// `m_1 + epsilon * factor * sigma` to about `m_1 + factor * sigma`.
@@ -158,22 +158,15 @@ impl M2N {
     /// parameters `[mu_1, mu_2, sigma_1, sigma_2, p_1]`.
     ///
     /// With `return_result = true` the moments are returned; with `false` they are stored in
-    /// [`M2N::new_moments`] and `None` is returned. Only the first five entries of
-    /// `parameters` are read; nothing is validated.
-    ///
-    /// # Panics
-    ///
-    /// If `parameters` has fewer than five entries.
+    /// [`M2N::new_moments`] and `None` is returned. Taking exactly five parameters by type
+    /// means a short slice cannot reach the indexing (convert a slice with
+    /// `slice.try_into()`); the values themselves are not validated.
     ///
     /// # Examples
     ///
     /// See the [module documentation](self).
-    pub fn get_moments(&mut self, parameters: &[f64], return_result: bool) -> Option<Vec<f64>> {
-        let u_1 = parameters[0];
-        let u_2 = parameters[1];
-        let s_1 = parameters[2];
-        let s_2 = parameters[3];
-        let p_1 = parameters[4];
+    pub fn get_moments(&mut self, parameters: &[f64; 5], return_result: bool) -> Option<Vec<f64>> {
+        let [u_1, u_2, s_1, s_2, p_1] = *parameters;
         let p_2 = 1.0 - p_1;
 
         let m_1 = p_1 * u_1 + p_2 * u_2;
@@ -202,14 +195,19 @@ impl M2N {
     /// vector if the step is inadmissible: a zero denominator, a negative variance, or a new
     /// `p_1` outside `[0, 1]` (NaN included).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// If [`M2N::moments`] has fewer than four entries.
+    /// [`InputError::TooShort`] if [`M2N::moments`] has fewer than four entries.
     ///
     /// # Examples
     ///
     /// See the [module documentation](self).
-    pub fn iter_4(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
+    pub fn iter_4(&self, mu_2: f64, p_1: f64) -> Result<Vec<f64>, InputError> {
+        self.require_moments(4)?;
+        Ok(self.iter_4_unchecked(mu_2, p_1))
+    }
+
+    fn iter_4_unchecked(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
         let m_1 = self.moments[0];
         let m_2 = self.moments[1];
         let m_3 = self.moments[2];
@@ -264,14 +262,19 @@ impl M2N {
     /// `1 - p_1 < 1e-4`, or a new `p_1` outside `[0, 1]` (NaN included). Called directly on
     /// raw moments it still takes the positive root (#115).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// If [`M2N::moments`] has fewer than five entries.
+    /// [`InputError::TooShort`] if [`M2N::moments`] has fewer than five entries.
     ///
     /// # Examples
     ///
     /// See the [module documentation](self).
-    pub fn iter_5(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
+    pub fn iter_5(&self, mu_2: f64, p_1: f64) -> Result<Vec<f64>, InputError> {
+        self.require_moments(5)?;
+        Ok(self.iter_5_unchecked(mu_2, p_1))
+    }
+
+    fn iter_5_unchecked(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
         let m_1 = self.moments[0];
         let m_2 = self.moments[1];
         let m_3 = self.moments[2];
@@ -348,35 +351,39 @@ impl M2N {
     ///
     /// # Errors
     ///
-    /// [`InputError::OutOfRange`] if `variant` is not 1 or 2. Inadmissible steps and hitting
-    /// `max_iter` end the attempt with `Ok(())`.
+    /// - [`InputError::OutOfRange`] if `variant` is not 1 or 2.
+    /// - [`InputError::TooShort`] if [`M2N::moments`] has fewer than four entries (variant 1)
+    ///   or five (variant 2).
     ///
-    /// # Panics
-    ///
-    /// If [`M2N::moments`] has fewer than four entries (variant 1) or five (variant 2).
+    /// Inadmissible steps and hitting `max_iter` end the attempt with `Ok(())`.
     pub fn fit(&mut self, mut mu_2: f64) -> Result<(), InputError> {
+        match self.variant {
+            1 => self.require_moments(4)?,
+            2 => self.require_moments(5)?,
+            _ => {
+                return Err(InputError::OutOfRange {
+                    name: "variant",
+                    value: self.variant as f64,
+                    expected: "1 (four moments) or 2 (five moments)",
+                })
+            }
+        }
         let mut rng = rand::thread_rng();
         let mut p_1 = rng.gen_range(0.0..1.0);
         let mut num_iter = 0usize;
 
         loop {
             num_iter += 1;
-            let parameters_new = match self.variant {
-                1 => self.iter_4(mu_2, p_1),
-                2 => self.iter_5(mu_2, p_1),
-                _ => {
-                    return Err(InputError::OutOfRange {
-                        name: "variant",
-                        value: self.variant as f64,
-                        expected: "1 (four moments) or 2 (five moments)",
-                    })
-                }
+            // Lengths and variant were checked above.
+            let step = if self.variant == 1 {
+                self.iter_4_unchecked(mu_2, p_1)
+            } else {
+                self.iter_5_unchecked(mu_2, p_1)
             };
-            if parameters_new.is_empty() {
+            let Ok(parameters) = <[f64; 5]>::try_from(step) else {
+                // An inadmissible step (the empty vector) ends the attempt.
                 return Ok(());
-            }
-
-            let parameters = parameters_new.clone();
+            };
             let _ = self.get_moments(&parameters, false);
             let error: f64 = self
                 .moments
@@ -385,7 +392,7 @@ impl M2N {
                 .map(|(a, b)| (a - b).powi(2))
                 .sum();
             if error < self.error {
-                self.parameters = parameters.clone();
+                self.parameters = parameters.to_vec();
                 self.error = error;
             }
 
@@ -403,12 +410,18 @@ impl M2N {
         Ok(())
     }
 
+    /// `moments` must hold at least `min` entries.
+    fn require_moments(&self, min: usize) -> Result<(), InputError> {
+        if self.moments.len() < min {
+            return Err(InputError::TooShort { name: "moments", len: self.moments.len(), min });
+        }
+        Ok(())
+    }
+
     /// The fit reads five raw moments and dispatches on `variant`; say so up front instead of
     /// indexing out of bounds or discarding every `fit` error.
     fn validate(&self) -> Result<(), InputError> {
-        if self.moments.len() < 5 {
-            return Err(InputError::TooShort { name: "moments", len: self.moments.len(), min: 5 });
-        }
+        self.require_moments(5)?;
         if !matches!(self.variant, 1 | 2) {
             return Err(InputError::OutOfRange {
                 name: "variant",
@@ -424,8 +437,7 @@ impl M2N {
     /// `1 / epsilon`, where `sigma` is the standard deviation implied by the moments, and
     /// returns the best fit found.
     ///
-    /// `epsilon_override` replaces [`M2N::epsilon`] when it is `Some` positive value (a
-    /// non-positive or NaN override is ignored). The search state ([`M2N::parameters`],
+    /// `epsilon_override`, when `Some`, replaces [`M2N::epsilon`]. The search state ([`M2N::parameters`],
     /// [`M2N::error`]) is reset first, and holds the best fit afterwards.
     ///
     /// Variant 2 with a non-zero mean is fitted about the mean: the search runs on the
@@ -439,12 +451,14 @@ impl M2N {
     /// # Errors
     ///
     /// - [`InputError::TooShort`] if [`M2N::moments`] has fewer than five entries.
-    /// - [`InputError::OutOfRange`] if [`M2N::variant`] is not 1 or 2.
+    /// - [`InputError::OutOfRange`] if [`M2N::variant`] is not 1 or 2, or if the epsilon in
+    ///   use (`epsilon_override`, else [`M2N::epsilon`]) is not finite and `> 0`. Zero used to
+    ///   build a start grid of `usize::MAX` points that never finished, and a negative or NaN
+    ///   value silently gave an empty result. Nothing is modified when this is returned.
     ///
     /// Non-finite or inconsistent moments (for example a negative implied variance) are not
-    /// errors: every attempt fails and the result is empty. With `epsilon == 0` the start grid
-    /// has `usize::MAX` points and the call effectively never returns; a negative or NaN
-    /// `epsilon` gives an empty grid and an empty result.
+    /// errors: every attempt fails and the result is empty. The grid has about `1 / epsilon`
+    /// points, so the run time grows as `epsilon` shrinks.
     ///
     /// ```
     /// use openquant::ef3m::M2N;
@@ -471,11 +485,14 @@ impl M2N {
         epsilon_override: Option<f64>,
     ) -> Result<Vec<FitResultRow>, InputError> {
         self.validate()?;
-        if let Some(eps) = epsilon_override {
-            if eps > 0.0 {
-                self.epsilon = eps;
-            }
+        let (name, eps) = match epsilon_override {
+            Some(eps) => ("epsilon_override", eps),
+            None => ("epsilon", self.epsilon),
+        };
+        if !(eps.is_finite() && eps > 0.0) {
+            return Err(InputError::OutOfRange { name, value: eps, expected: "finite and > 0" });
         }
+        self.epsilon = eps;
         if self.variant == 2 && self.moments[0] != 0.0 {
             return self.centred_fit_loop();
         }
@@ -534,16 +551,16 @@ impl M2N {
             self.parameters = vec![0.0; 5];
             self.error = self.moments.iter().map(|m| m * m).sum();
         } else {
-            let mut parameters = centred.parameters;
-            parameters[0] += mean;
-            parameters[1] += mean;
+            // `fit` only ever stores five parameters.
+            let p = &centred.parameters;
+            let parameters = [p[0] + mean, p[1] + mean, p[2], p[3], p[4]];
             self.error = self.moment_error(&parameters);
-            self.parameters = parameters;
+            self.parameters = parameters.to_vec();
         }
         Ok(rows)
     }
 
-    fn moment_error(&mut self, parameters: &[f64]) -> f64 {
+    fn moment_error(&mut self, parameters: &[f64; 5]) -> f64 {
         let fitted = self.get_moments(parameters, true).unwrap_or_default();
         self.moments.iter().zip(fitted.iter()).map(|(a, b)| (a - b).powi(2)).sum()
     }
@@ -557,7 +574,8 @@ impl M2N {
     /// # Errors
     ///
     /// Any error of [`M2N::single_fit_loop`]: [`InputError::TooShort`] for fewer than five
-    /// moments, [`InputError::OutOfRange`] for a `variant` other than 1 or 2.
+    /// moments, [`InputError::OutOfRange`] for a `variant` other than 1 or 2 or an `epsilon`
+    /// that is not finite and `> 0`.
     ///
     /// ```
     /// use openquant::ef3m::{most_likely_parameters, M2N};
@@ -576,7 +594,7 @@ impl M2N {
         let mut out = Vec::new();
         for _ in 0..self.n_runs {
             let mut worker = self.clone();
-            out.extend(worker.single_fit_loop(Some(worker.epsilon))?);
+            out.extend(worker.single_fit_loop(None)?);
         }
         Ok(out)
     }

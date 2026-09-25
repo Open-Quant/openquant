@@ -1,4 +1,6 @@
 import math
+import subprocess
+import sys
 
 import pytest
 from openquant import ef3m
@@ -68,3 +70,22 @@ def test_ef3m_rejects_wrongly_typed_input():
 def test_centered_moment_too_few_moments_raises_value_error():
     with pytest.raises(ValueError):
         ef3m.centered_moment([0.7], 5)
+
+
+@pytest.mark.parametrize("epsilon", [0.0, -1e-3, float("nan")])
+def test_fit_m2n_rejects_non_positive_or_nan_epsilon(epsilon):
+    # Rust: single_fit_loop_rejects_non_positive_or_nan_epsilon (#184). epsilon=0 used to build
+    # a start grid of usize::MAX points and hang, holding the GIL, so run it in a subprocess
+    # with a timeout; a negative or NaN epsilon silently returned no rows.
+    code = (
+        "from openquant import ef3m\n"
+        "try:\n"
+        f"    ef3m.fit_m2n([-0.1, 2.675, 0.05, 13.65625, -2.0375], epsilon={epsilon!r})\n"
+        "except ValueError as e:\n"
+        "    print('ValueError:', e)\n"
+    )
+    code = code.replace("nan", "float('nan')")
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=60, check=True
+    )
+    assert out.stdout.startswith("ValueError:") and "epsilon" in out.stdout, out.stdout
