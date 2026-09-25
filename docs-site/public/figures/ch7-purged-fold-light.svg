@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 230" role="img" aria-label="One fold of purged k-fold: test labels, purged labels on both sides, and the embargo">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 230" role="img" aria-label="One fold of purged k-fold: test labels, purged labels on both sides, and the embargo after the purge">
 <rect width="760" height="230" fill="#fbf9f4"/>
 <text x="56" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">FOLD 3 OF 5 · 40 LABELS OF 4 BARS · EMBARGO 0.15</text>
 <rect x="57.5" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
@@ -11,9 +11,9 @@
 <rect x="170.9" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
 <rect x="187.1" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
 <rect x="203.3" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
-<rect x="219.5" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
-<rect x="235.7" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
-<rect x="251.9" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
+<rect x="219.5" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
+<rect x="235.7" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
+<rect x="251.9" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
 <rect x="268.1" y="96" width="13.2" height="30" fill="#5c554b" fill-opacity="0.5"/>
 <rect x="284.3" y="96" width="13.2" height="30" fill="#5c554b" fill-opacity="0.5"/>
 <rect x="300.5" y="96" width="13.2" height="30" fill="#5c554b" fill-opacity="0.5"/>
@@ -31,9 +31,9 @@
 <rect x="494.9" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
 <rect x="511.1" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
 <rect x="527.3" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
-<rect x="543.5" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
-<rect x="559.7" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
-<rect x="575.9" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
+<rect x="543.5" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
+<rect x="559.7" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
+<rect x="575.9" y="96" width="13.2" height="30" fill="#cdc4b1" fill-opacity="1.0"/>
 <rect x="592.1" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
 <rect x="608.3" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>
 <rect x="624.5" y="96" width="13.2" height="30" fill="#1d1a16" fill-opacity="0.8"/>

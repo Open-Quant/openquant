@@ -461,58 +461,89 @@ pub fn get_target_pos_power(
     Ok((bet_size_power(w_param, forecast_price - market_price)? * max_pos).trunc())
 }
 
-/// Sigmoid breakeven limit price for moving from `pos` to `t_pos` with forecast `f`, width
-/// `w` and maximum position `max_pos` (AFML Snippet 10.4).
-///
-/// Averages [`inv_price_sigmoid`] over the units `j = |pos + sgn| ..= |t_pos|` (with `sgn` the sign
-/// of `t_pos - pos`, both truncated to whole units), each at size `j / max_pos`, and divides
-/// by `|t_pos - pos|`.
-///
-/// Returns `NaN` when the truncated target equals the truncated current position. When
-/// `|pos + sgn| > |t_pos|` (for example reducing a long position toward zero) the range is
-/// empty and the result is `0.0`, not a price.
-pub fn limit_price_sigmoid(t_pos: f64, pos: f64, f: f64, w: f64, max_pos: f64) -> f64 {
+/// Averages `inv(k / max_pos)` over the positions `k` passed through on the way from `pos`
+/// to `t_pos`: `pos + sgn, pos + 2 sgn, ..., t_pos`, with `sgn` the sign of `t_pos - pos` and
+/// both truncated to whole units. `NaN` when the truncated positions are equal.
+fn limit_price_traversal(t_pos: f64, pos: f64, max_pos: f64, inv: impl Fn(f64) -> f64) -> f64 {
     let target = t_pos.trunc() as i64;
     let current = pos.trunc() as i64;
     if target == current {
         return f64::NAN;
     }
     let sgn = (target - current).signum();
-    let mut l_p = 0.0;
-    let start = (current + sgn).abs();
-    let end = target.abs();
-    for j in start..=end {
-        let m_bet = j as f64 / max_pos;
-        l_p += inv_price_sigmoid(f, w, m_bet);
-    }
-    l_p / (target - current).abs() as f64
+    let steps = (target - current).abs();
+    let total: f64 = (1..=steps).map(|i| inv((current + sgn * i) as f64 / max_pos)).sum();
+    total / steps as f64
+}
+
+/// Sigmoid breakeven limit price for moving from `pos` to `t_pos` with forecast `f`, width
+/// `w` and maximum position `max_pos` (AFML Snippet 10.4, extended to every direction).
+///
+/// Both positions are truncated to whole units. With `sgn` the sign of `t_pos - pos`, the
+/// result is the mean of [`inv_price_sigmoid`]`(f, w, k / max_pos)` over the positions
+/// `k = pos + sgn, pos + 2 sgn, ..., t_pos` passed through on the way, signs kept:
+///
+/// ```text
+/// L = (1 / |t_pos - pos|) * sum_{i = 1}^{|t_pos - pos|} inv_price(f, w, (pos + i sgn) / max_pos)
+/// ```
+///
+/// Each term is the market price at which holding `k` units is exactly justified, so the
+/// definition reads the same when increasing, reducing, going short, or crossing zero (where
+/// the term for `k = 0` is `f`).
+///
+/// # Relation to Snippet 10.4
+///
+/// The snippet loops `j` over `range(abs(pos + sgn), abs(tPos + 1))` with unsigned `j` and
+/// divides by `tPos - pos`. When `0 <= pos < t_pos` that is the same set of positions and the
+/// two agree. Elsewhere the snippet's loop does not describe the move:
+///
+/// - **Reducing** (`t_pos < pos`, e.g. 10 to 5) its range is empty and it returns 0 (or
+///   `-0`); here it is the mean over 9, 8, 7, 6, 5.
+/// - **Negative targets** its upper bound `abs(tPos + 1)` is not `abs(tPos)` (for `tPos = -4`
+///   it stops at `j = 2`), its sizes are unsigned, so a short is priced like a long, and its
+///   divisor is negative. Here the sizes keep their sign, so the limit price of a short lies
+///   above `f`.
+/// - **Crossing zero** (e.g. 3 to -2) the snippet sums over `abs` values that do not follow
+///   the path; here it is the mean over 2, 1, 0, -1, -2.
+///
+/// Returns `NaN` when the truncated target equals the truncated current position: there is
+/// nothing to trade, and the mean over no positions is undefined.
+///
+/// ```
+/// use openquant::bet_sizing::limit_price_sigmoid;
+///
+/// // With w = 1.44 the sizes 0.6 and 0.8 map to f - 0.9 and f - 1.6.
+/// let up = limit_price_sigmoid(4.0, 2.0, 100.0, 1.44, 5.0); // through 3 and 4
+/// let down = limit_price_sigmoid(3.0, 5.0, 100.0, 1.44, 5.0); // through 4 and 3
+/// let short = limit_price_sigmoid(-4.0, -2.0, 100.0, 1.44, 5.0); // through -3 and -4
+/// assert!((up - 98.75).abs() < 1e-12 && (down - 98.75).abs() < 1e-12);
+/// assert!((short - 101.25).abs() < 1e-12);
+/// ```
+pub fn limit_price_sigmoid(t_pos: f64, pos: f64, f: f64, w: f64, max_pos: f64) -> f64 {
+    limit_price_traversal(t_pos, pos, max_pos, |m| inv_price_sigmoid(f, w, m))
 }
 
 /// Power-curve breakeven limit price for moving from `pos` to `t_pos` with forecast `f`,
 /// exponent `w` and maximum position `max_pos`.
 ///
-/// Averages [`inv_price_power`] over the units `j = |pos + sgn| ..= |t_pos|` (with `sgn` the sign
-/// of `t_pos - pos`, both truncated to whole units), each at size `j / max_pos`, and divides
-/// by `|t_pos - pos|`.
+/// The mean of [`inv_price_power`]`(f, w, k / max_pos)` over the positions
+/// `k = pos + sgn, ..., t_pos` passed through on the way (both truncated to whole units,
+/// signs kept). This is the convention of [`limit_price_sigmoid`], which describes where it
+/// departs from AFML Snippet 10.4 (reducing, negative targets, crossing zero).
 ///
-/// Returns `NaN` when the truncated target equals the truncated current position. When
-/// `|pos + sgn| > |t_pos|` (for example reducing a long position toward zero) the range is
-/// empty and the result is `0.0`, not a price.
+/// Returns `NaN` when the truncated target equals the truncated current position.
+///
+/// ```
+/// use openquant::bet_sizing::limit_price_power;
+///
+/// // With w = 1 the inverse price is f - m, so the limit is f minus the mean size.
+/// let reduce = limit_price_power(5.0, 10.0, 100.0, 1.0, 10.0); // mean of 9..=5 is 7
+/// let flip = limit_price_power(-2.0, 3.0, 100.0, 1.0, 10.0); // mean of 2..=-2 is 0
+/// assert!((reduce - 99.3).abs() < 1e-12);
+/// assert!((flip - 100.0).abs() < 1e-12);
+/// ```
 pub fn limit_price_power(t_pos: f64, pos: f64, f: f64, w: f64, max_pos: f64) -> f64 {
-    let target = t_pos.trunc() as i64;
-    let current = pos.trunc() as i64;
-    if target == current {
-        return f64::NAN;
-    }
-    let sgn = (target - current).signum();
-    let mut l_p = 0.0;
-    let start = (current + sgn).abs();
-    let end = target.abs();
-    for j in start..=end {
-        let m_bet = j as f64 / max_pos;
-        l_p += inv_price_power(f, w, m_bet);
-    }
-    l_p / (target - current).abs() as f64
+    limit_price_traversal(t_pos, pos, max_pos, |m| inv_price_power(f, w, m))
 }
 
 /// Dynamic bet sizing from a price forecast (AFML §10.6, Snippet 10.4).

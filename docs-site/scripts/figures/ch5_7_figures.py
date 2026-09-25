@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
+import numpy as np
 from _svg import MONO, THEMES, Chart
-from openquant import ensemble, fracdiff
+from openquant import cross_validation, ensemble, fracdiff
 
 
 def weights_figure():
@@ -34,24 +35,24 @@ def weights_figure():
 
 
 def purge_figure():
-    n, test_lo, test_hi, span, embargo = 40, 16, 23, 4, 6
+    # The docs-page example: 40 labels of 4 bars (start i, end i + 3), 5 folds, third fold.
+    n, fold, pct_embargo = 40, 2, 0.15
+    t0 = np.arange(n)
+    split = cross_validation.split_with_diagnostics(t0, t0 + 3, 5, pct_embargo)[fold]
+    kind_of = dict.fromkeys(split["train_indices"].tolist(), "train")
+    kind_of.update(dict.fromkeys(split["embargo_indices"].tolist(), "embargo"))
+    kind_of.update(dict.fromkeys(split["purged_indices"].tolist(), "purged"))
+    kind_of.update(dict.fromkeys(split["test_indices"].tolist(), "test"))
+    test_lo = int(split["test_indices"][0])
     for name, theme in THEMES.items():
-        ch = Chart(760, 230, theme, "One fold of purged k-fold: test labels, purged labels on both sides, and the embargo")
+        ch = Chart(760, 230, theme, "One fold of purged k-fold: test labels, purged labels on both sides, and the embargo after the purge")
         left, right = 56, 704
         x = ch.scale(0, n, left, right)
         row = 96
         ch.label(left, 28, "fold 3 of 5 · 40 labels of 4 bars · embargo 0.15")
         kinds = {"train": ("text", 0.8), "purged": ("muted", 0.5), "embargo": ("rule", 1.0), "test": ("accent", 1.0)}
         for i in range(n):
-            if test_lo <= i <= test_hi:
-                kind = "test"
-            elif i + span - 1 >= test_lo and i <= test_hi + span - 1:
-                kind = "purged"  # the label's span touches the window the test labels cover
-            elif test_lo - embargo <= i <= test_hi + embargo:
-                kind = "embargo"  # counted from the fold's edges, as PurgedKFold does
-            else:
-                kind = "train"
-            color, opacity = kinds[kind]
+            color, opacity = kinds[kind_of[i]]
             ch.band(x(i) + 1.5, x(i + 1) - 1.5, row, row + 30, color, opacity)
         for k, (kind, (color, opacity)) in enumerate(kinds.items()):
             lx = left + k * 150

@@ -2,7 +2,7 @@
 title: "bet_sizing"
 description: "From a model's confidence, or a price forecast, to a position size: probability-based sizing, averaging of live bets, discretisation, dynamic limit prices and concurrency-based sizing."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -146,15 +146,37 @@ to the market price $p$ and saturate (§10.6). With $x = f - p$:
 $$
 m(x) = \frac{x}{\sqrt{w + x^{2}}}, \qquad
 \hat q = \operatorname{trunc}\bigl(m(x)\,Q\bigr), \qquad
-L = \frac{1}{\lvert \hat q - q\rvert}\sum_{j=\lvert q + \operatorname{sgn}(\hat q-q)\rvert}^{\lvert \hat q\rvert}
-  \Bigl(f - \tfrac{j}{Q}\sqrt{\tfrac{w}{1-(j/Q)^{2}}}\Bigr)
+L = \frac{1}{n}\sum_{i=1}^{n}
+  \Bigl(f - \tfrac{k_i}{Q}\sqrt{\tfrac{w}{1-(k_i/Q)^{2}}}\Bigr),
+\qquad k_i = q + i\,\operatorname{sgn}(\hat q - q),\quad n = \lvert \hat q - q\rvert
 $$
 
 $\hat q$ is the target position out of a maximum $Q$, $q$ the current one, and $L$ the limit
-price: the average, over each unit between the current and the target position, of the price
-at which holding that unit is exactly justified. Buying above $L$ means paying more for the
-marginal units than the forecast supports. In the example, with the market at 95 and a
-forecast of 100, the target is 83 contracts and the order should not be filled above 98.22.
+price: the average, over each position $k_i$ passed through on the way from $q$ to $\hat q$,
+of the price at which holding $k_i$ units is exactly justified. Buying above $L$ means paying
+more for the marginal units than the forecast supports. In the example, with the market at 95
+and a forecast of 100, the target is 83 contracts and the order should not be filled above
+98.22. Both positions are truncated to whole units, and $L$ is `NaN` when they are equal.
+
+### Where this departs from Snippet 10.4
+
+Snippet 10.4 loops over `j in range(abs(pos + sgn), abs(tPos + 1))` with unsigned `j` and
+divides by `tPos - pos`. When the position is long and growing ($0 \le q < \hat q$) that is
+exactly the sum above, and the two agree. In every other direction the book's loop does not
+follow the move, so openquant uses the path $k_1, \dots, k_n$ with signs kept:
+
+| Move (with $Q = 10$) | Positions averaged here | Snippet 10.4 as written |
+| --- | --- | --- |
+| 0 → 4 (increasing a long) | 1, 2, 3, 4 | the same |
+| 10 → 5 (reducing a long) | 9, 8, 7, 6, 5 | none: the range is empty, $L = 0$ |
+| 0 → −4 (going short) | −1, −2, −3, −4 | $j = 1, 2$ (the bound is `abs(tPos + 1)` = 3), unsigned, divided by −4 |
+| 3 → −2 (crossing zero) | 2, 1, 0, −1, −2 | none: the range from 2 to 1 is empty |
+
+Keeping the sign matters: a short's limit price lies above $f$, the mirror image of a long's
+below it, and at $k = 0$ the term is $f$ itself. Until issue #163 openquant used the book's
+unsigned loop with `abs(tPos)` as the upper bound, so it returned 0 when reducing, the long's
+price for a short, and 19.96 for the 3 → −2 move on the power curve with $w = 1$ and
+$f = 100$ (now 100). `bet_size_dynamic` computes its limit column the same way.
 
 **`bet_size_dynamic` fixes $w$.** It calibrates the curve so that a divergence of 10 price
 units gives a size of 0.95 — `get_w_sigmoid(10.0, 0.95)` — and there is no argument to change

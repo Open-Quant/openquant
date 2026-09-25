@@ -106,13 +106,107 @@ fn test_bet_size_dynamic() {
         .iter()
         .map(|v| v.as_f64().unwrap())
         .collect();
-    let exp_lp: Vec<f64> =
-        fixture["dynamic"]["l_p"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let fixture_col = |key: &str| -> Vec<f64> {
+        fixture["dynamic"][key].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect()
+    };
+    let exp_lp_book = fixture_col("l_p");
+    let exp_lp_path = fixture_col("l_p_path");
     for (i, (b, tp, lp)) in res.iter().enumerate() {
         assert!((b - exp_bs[i]).abs() < 1e-12, "row {i} bet size");
         assert!((tp - exp_tpos[i]).abs() < 1e-12, "row {i} target position");
-        // Rows 1-3 cross zero, where AFML snippet 10.4's limit-price loop is empty and gives 0.
-        assert!((lp - exp_lp[i]).abs() < 1e-9, "row {i} limit price {lp}, reference {}", exp_lp[i]);
+        // Every row matches the reference's independent implementation of the convention.
+        assert!(
+            (lp - exp_lp_path[i]).abs() < 1e-9,
+            "row {i} limit price {lp}, reference {}",
+            exp_lp_path[i]
+        );
+        // Rows 0 and 4 increase a long position, where Snippet 10.4 as written applies and
+        // agrees. Rows 1-3 cross zero, where its loop is empty and it records 0.
+        if 0.0 <= pos[i] && pos[i] < *tp {
+            assert!((lp - exp_lp_book[i]).abs() < 1e-9, "row {i} vs Snippet 10.4 as written");
+        } else {
+            assert_eq!(exp_lp_book[i], 0.0, "row {i}: the snippet's loop is empty here");
+        }
+    }
+}
+
+// Hand-worked limit prices (issue #163). With the power curve and w = 1, inv_price is
+// f - m, so the limit price is f minus the mean of the positions passed through, over max_pos.
+// With the sigmoid and w = 1.44, sizes 0.6 and 0.8 map to f - 0.9 and f - 1.6 (and their
+// negatives to f + 0.9 and f + 1.6), since sqrt(1.44 / 0.64) = 1.5 and sqrt(1.44 / 0.36) = 2.
+
+#[test]
+fn test_limit_price_power_increasing_long() {
+    // 0 -> 4 passes through 1, 2, 3, 4: mean 2.5, limit 100 - 0.25.
+    assert!((limit_price_power(4.0, 0.0, 100.0, 1.0, 10.0) - 99.75).abs() < 1e-12);
+}
+
+#[test]
+fn test_limit_price_power_reducing_long() {
+    // 10 -> 5 passes through 9, 8, 7, 6, 5: mean 7, limit 100 - 0.7 (was 0.0).
+    let lp = limit_price_power(5.0, 10.0, 100.0, 1.0, 10.0);
+    assert!((lp - 99.3).abs() < 1e-12, "{lp}");
+}
+
+#[test]
+fn test_limit_price_power_sign_flip() {
+    // 3 -> -2 passes through 2, 1, 0, -1, -2: mean 0, limit f (was 99.8 / 5 = 19.96).
+    let lp = limit_price_power(-2.0, 3.0, 100.0, 1.0, 10.0);
+    assert!((lp - 100.0).abs() < 1e-12, "{lp}");
+    // -2 -> 3 passes through -1, 0, 1, 2, 3: mean 1, limit 100 - 0.1.
+    let lp = limit_price_power(3.0, -2.0, 100.0, 1.0, 10.0);
+    assert!((lp - 99.9).abs() < 1e-12, "{lp}");
+}
+
+#[test]
+fn test_limit_price_power_negative_target() {
+    // 0 -> -4 passes through -1, -2, -3, -4: mean -2.5, limit 100 + 0.25 (was 99.75, the
+    // price of the matching long).
+    let lp = limit_price_power(-4.0, 0.0, 100.0, 1.0, 10.0);
+    assert!((lp - 100.25).abs() < 1e-12, "{lp}");
+    // Covering a short, -6 -> -2, passes through -5, -4, -3, -2: mean -3.5, limit 100.35.
+    let lp = limit_price_power(-2.0, -6.0, 100.0, 1.0, 10.0);
+    assert!((lp - 100.35).abs() < 1e-12, "{lp}");
+}
+
+#[test]
+fn test_limit_price_sigmoid_hand_worked() {
+    let (f, w, q) = (100.0, 1.44, 5.0);
+    // Increasing 2 -> 4 through 3, 4: (98.4 + 99.1) / 2. Snippet 10.4 gives the same.
+    assert!((limit_price_sigmoid(4.0, 2.0, f, w, q) - 98.75).abs() < 1e-12);
+    // Reducing 5 -> 3 through 4, 3: the same two prices (was 0.0).
+    assert!((limit_price_sigmoid(3.0, 5.0, f, w, q) - 98.75).abs() < 1e-12);
+    // Negative target -2 -> -4 through -3, -4: (100.9 + 101.6) / 2 (was 98.75).
+    assert!((limit_price_sigmoid(-4.0, -2.0, f, w, q) - 101.25).abs() < 1e-12);
+    // Sign flip 4 -> -4 through 3..=-4: 3..=-3 cancel in pairs around f, leaving
+    // (7 f + f + 1.6) / 8.
+    assert!((limit_price_sigmoid(-4.0, 4.0, f, w, q) - 100.2).abs() < 1e-12);
+    // 3 -> -4 through 2..=-4: (7 f + 0.9 + 1.6) / 7.
+    assert!((limit_price_sigmoid(-4.0, 3.0, f, w, q) - (100.0 + 2.5 / 7.0)).abs() < 1e-12);
+}
+
+#[test]
+fn test_limit_price_truncates_positions_and_dispatches() {
+    // 4.9 -> 2.2 is the move 4 -> 2, through 3, 2: mean 2.5 over max_pos 10.
+    let lp = limit_price(2.2, 4.9, 100.0, 1.0, 10.0, "power").unwrap();
+    assert!((lp - 99.75).abs() < 1e-12, "{lp}");
+    let lp = limit_price(-4.0, -2.0, 100.0, 1.44, 5.0, "sigmoid").unwrap();
+    assert!((lp - 101.25).abs() < 1e-12, "{lp}");
+    // Same whole-unit position: nothing to trade.
+    assert!(limit_price(3.7, 3.1, 100.0, 1.0, 10.0, "power").unwrap().is_nan());
+}
+
+#[test]
+fn test_limit_price_short_mirrors_long() {
+    // For both curves inv_price(f, w, -m) - f = f - inv_price(f, w, m), so a move and its
+    // mirror image have limit prices symmetric about f.
+    for (t, p) in [(7.0, 2.0), (2.0, 7.0), (-3.0, 4.0), (0.0, 5.0)] {
+        let long = limit_price_sigmoid(t, p, 50.0, 3.0, 12.0);
+        let short = limit_price_sigmoid(-t, -p, 50.0, 3.0, 12.0);
+        assert!((long + short - 100.0).abs() < 1e-12, "sigmoid {p} -> {t}");
+        let long = limit_price_power(t, p, 50.0, 2.0, 12.0);
+        let short = limit_price_power(-t, -p, 50.0, 2.0, 12.0);
+        assert!((long + short - 100.0).abs() < 1e-12, "power {p} -> {t}");
     }
 }
 
