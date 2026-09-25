@@ -3,7 +3,7 @@ title: "streaming_hpc"
 description: "AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -44,18 +44,18 @@ where $V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bucket $i$, 
 ### Market Fragmentation HHI
 
 $$
-\mathrm{HHI}_t=\sum_{v=1}^{K}\left(\frac{n_{v,t}}{\sum_j n_{j,t}}\right)^2
+\mathrm{HHI}_t=\sum_{v=1}^{K}\left(\frac{Q_{v,t}}{\sum_j Q_{j,t}}\right)^2
 $$
 
-where $n_{v,t}$ is the event count on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.
+where $Q_{v,t}$ is the volume traded on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.
 
 ### Alert Condition
 
 $$
-\text{alert}_t\iff \mathrm{VPIN}_t\ge\tau_V\;\land\;\mathrm{HHI}_t\ge\tau_H,\qquad \text{risk}_t=\frac{1}{2}\left(\frac{\mathrm{VPIN}_t}{\tau_V}+\frac{\mathrm{HHI}_t}{\tau_H}\right)
+\text{alert}_t\iff F_t(\mathrm{VPIN}_t)\ge\tau_V\;\land\;\mathrm{HHI}_t\ge\tau_H,\qquad \text{risk}_t=\min\left(\frac{F_t(\mathrm{VPIN}_t)}{\tau_V},\frac{\mathrm{HHI}_t}{\tau_H}\right)
 $$
 
-where $\tau_V$ and $\tau_H$ are `AlertThresholds { vpin, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.
+where $F_t$ is the empirical CDF of VPIN over its last `cdf_lookback` values (ties count half), so $\tau_V$ is a probability such as 0.99 (AFML §22.6.5), not a VPIN level. $\tau_V$ and $\tau_H$ are `AlertThresholds { vpin_cdf, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.
 
 ## Usage Examples
 
@@ -82,9 +82,9 @@ let streams: Vec<_> = (0..16)
 let report = run_streaming_pipeline_parallel(
   &streams,
   StreamingPipelineConfig {
-    vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20 },
+    vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20, cdf_lookback: 100 },
     hhi: HhiConfig { lookback_events: 200 },
-    thresholds: AlertThresholds { vpin: 0.45, hhi: 0.30 },
+    thresholds: AlertThresholds { vpin_cdf: 0.99, hhi: 0.30 },
   },
   HpcParallelConfig {
     mode: ExecutionMode::Threaded { num_threads: 8 },
