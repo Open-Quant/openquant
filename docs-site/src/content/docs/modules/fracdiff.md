@@ -2,7 +2,7 @@
 title: "fracdiff"
 description: "Fractional differentiation: make a price series stationary while keeping as much of its memory as possible."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -162,9 +162,19 @@ let width = |thresh| get_weights_ffd(0.5, thresh, 10_000).len();
 assert_eq!((width(1e-2), width(1e-4)), (10, 200));
 ```
 
-The third argument of `get_weights_ffd` caps the number of weights. `frac_diff_ffd` sets it
-to the series length, so a threshold too small for the data yields a window as long as the
-series and a single non-`NaN` output.
+The third argument of `get_weights_ffd` caps the number of weights, for every value: `lim = 0`
+gives no weights and `lim = 1` gives just `[1.0]`. The cap is what ends the expansion when
+the threshold cannot: for a fractional $d$ the weights never reach zero, so a `thresh` of
+zero or below runs to exactly `lim` weights. `frac_diff_ffd` sets the cap to the series
+length, so a threshold too small for the data yields a window as long as the series and a
+single non-`NaN` output.
+
+```rust
+use openquant::fracdiff::get_weights_ffd;
+
+assert_eq!(get_weights_ffd(0.5, 0.0, 1), vec![1.0]);
+assert_eq!(get_weights_ffd(0.5, 0.0, 4).len(), 4);
+```
 
 ## What to watch for
 
