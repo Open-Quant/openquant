@@ -145,7 +145,7 @@ of the fixtures above, or are derived by hand in a comment next to the assertion
 | `backtest_statistics.rs`, `test_core_backtest_stats.py` | `backtest_statistics/reference.json`; holding period and drawdowns by hand |
 | `codependence.rs`, `test_core_codependence.py` | `codependence/reference.json` |
 | `microstructural_features.rs`, `test_core_microstructural.py` | `microstructural_features/reference.json`; entropies of "11100001" by hand |
-| `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` (the Chu-Stinchcombe-White statistic is also pinned to the library's own output; see the FINDING test) |
+| `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` |
 | `volatility_features.rs`, `test_core_volatility.py` | `volatility/range_reference.json` |
 | `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` (the two ETF values that remain inline pin the library's own output; see the FINDING test) |
 | `labeling.rs` | `labeling/reference.json` |

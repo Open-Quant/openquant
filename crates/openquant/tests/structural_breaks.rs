@@ -90,19 +90,11 @@ fn test_chu_stinchcombe_white_test() {
     assert_eq!(log_prices.len() - 2, one_sided.critical_value.len());
     assert_eq!(log_prices.len() - 2, two_sided.critical_value.len());
 
-    // The critical values (AFML 17.3.2) do not depend on how the statistic is scaled; the
-    // statistic itself is checked against AFML in test_chu_stinchcombe_white_statistic_matches_afml.
+    // AFML 17.3.2 values for the critical values and the statistic (#104 fixed sigma_t^2 for
+    // sigma_t, #173 the divisor of sigma_t^2).
     let reference = reference();
     assert_csw_matches(&reference, &one_sided, &two_sided, "critical_value");
-
-    // Pins of the library's own statistic since #104 (divides by sigma_t, not sigma_t^2). Not
-    // AFML values: sigma_t^2 still averages over one difference fewer than AFML (see the FINDING).
-    assert!((max(&one_sided.stat) - 5.3797).abs() < 0.001);
-    assert!((mean(&one_sided.stat) - 1.2582).abs() < 0.001);
-    assert!((one_sided.stat[20] - 0.6098).abs() < 0.001);
-    assert!((max(&two_sided.stat) - 8.5793).abs() < 0.001);
-    assert!((mean(&two_sided.stat) - 1.8875).abs() < 0.001);
-    assert!((two_sided.stat[20] - 1.4779).abs() < 0.001);
+    assert_csw_matches(&reference, &one_sided, &two_sided, "stat");
 
     let invalid = get_chu_stinchcombe_white_statistics(&log_prices, "rubbish text");
     assert!(matches!(invalid, Err(StructuralBreakError::InvalidTestType(_))));
@@ -118,19 +110,31 @@ fn assert_csw_matches(
         let want = &reference["chu_stinchcombe_white"][name];
         let values = if field == "stat" { &result.stat } else { &result.critical_value };
         let what = format!("{name} {field}");
-        assert_rel(max(values), num(want, &[field, "max"]), 1e-8, &format!("{what} max"));
-        assert_rel(mean(values), num(want, &[field, "mean"]), 1e-8, &format!("{what} mean"));
-        assert_rel(values[20], num(want, &[field, "at_20"]), 1e-8, &format!("{what} [20]"));
+        assert_rel(max(values), num(want, &[field, "max"]), 1e-10, &format!("{what} max"));
+        assert_rel(mean(values), num(want, &[field, "mean"]), 1e-10, &format!("{what} mean"));
+        assert_rel(values[20], num(want, &[field, "at_20"]), 1e-10, &format!("{what} [20]"));
     }
 }
 
+/// #147's FINDING, fixed by #173: sigma_t^2 is the mean of the squared differences up to bar t
+/// (AFML 17.3.2); it used to divide their sum by one fewer than their number.
 #[test]
-#[ignore = "FINDING: get_chu_stinchcombe_white_statistics averages sigma_t^2 over t-2 where AFML 17.3.2 uses t-1 (1-based t; the t-1 squared differences up to bar t), so the statistic is slightly low (one-sided max 5.3797 vs 5.3921). The sigma_t^2-for-sigma_t half of this finding was fixed by #104"]
 fn test_chu_stinchcombe_white_statistic_matches_afml() {
     let log_prices = log_prices();
     let one_sided = get_chu_stinchcombe_white_statistics(&log_prices, "one_sided").unwrap();
     let two_sided = get_chu_stinchcombe_white_statistics(&log_prices, "two_sided").unwrap();
     assert_csw_matches(&reference(), &one_sided, &two_sided, "stat");
+}
+
+#[test]
+fn test_chu_stinchcombe_white_by_hand() {
+    // y = 0, 1, 3. At t = 2 (0-based) the differences are 1 and 2, so sigma^2 = (1 + 4) / 2.
+    // S = (3 - 0) / (sigma sqrt 2) = 3 / sqrt 5 against n = 0, and (3 - 1) / sigma = 4 / sqrt 10
+    // against n = 1; the first is larger. The old divisor (1 instead of 2) gave 3 / sqrt 10.
+    let out = get_chu_stinchcombe_white_statistics(&[0.0, 1.0, 3.0], "one_sided").unwrap();
+    assert_eq!(out.stat.len(), 1);
+    assert_rel(out.stat[0], 3.0 / 5f64.sqrt(), 1e-14, "S at t = 2");
+    assert_rel(out.critical_value[0], (4.6 + 2f64.ln()).sqrt(), 1e-14, "c at t = 2");
 }
 
 #[test]

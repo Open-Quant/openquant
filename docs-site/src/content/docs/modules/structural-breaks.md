@@ -193,7 +193,11 @@ assert!(matches!(
   $\hat\sigma_t^{2}\sqrt{t-n}$, so the result depended on the units of the series: on random
   walks with a 1% step it exceeded its critical value on 94% of bars. It now follows the book
   and is unchanged by rescaling the series; on the same walks it exceeds the critical value on
-  about 4% of bars at any step size. From Python it returns the tuple
+  about 4% of bars at any step size. Since
+  [#173](https://github.com/Open-Quant/openquant/issues/173) $\hat\sigma_t^2$ is also the
+  book's mean of the squared differences up to bar $t$; it used to divide their sum by one
+  fewer than their number, which made early statistics slightly small (the one-sided maximum
+  on the test fixture moved from 5.3797 to 5.3921). From Python it returns the tuple
   `(critical_values, statistics)`, in that order.
 - **SADF is cubic in the sample length.** Every bar refits a regression for every admissible
   start: $O(n^2)$ regressions of up to $n$ rows. A few hundred bars are quick, a few thousand
