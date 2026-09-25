@@ -122,6 +122,46 @@ fn test_single_fit_loop_and_mp_fit_types() {
     assert!(out_mp.len() <= 3);
 }
 
+/// Raw moments of p_1 N(mu_1, sigma_1^2) + (1 - p_1) N(mu_2, sigma_2^2).
+fn mixture_moments(params: [f64; 5]) -> Vec<f64> {
+    M2N::with_defaults(vec![0.0; 5]).get_moments(&params, true).unwrap()
+}
+
+/// Fits the five-moment variant and checks every run and the modal fit against the truth.
+fn assert_variant_2_recovers(truth: [f64; 5], run_tol: f64, mode_tol: f64) {
+    let moments = mixture_moments(truth);
+    let rows = M2N::new(moments.clone(), 1e-4, 5.0, 10, 2, 100_000, 1).mp_fit().unwrap();
+    assert_eq!(rows.len(), 10);
+    let names = ["mu_1", "mu_2", "sigma_1", "sigma_2", "p_1"];
+    for row in &rows {
+        let got = [row.mu_1, row.mu_2, row.sigma_1, row.sigma_2, row.p_1];
+        for ((name, g), t) in names.iter().zip(got).zip(truth) {
+            assert!((g - t).abs() < run_tol, "{name}: fitted {g}, true {t} (row {got:?})");
+        }
+        // A row's error is measured against the moments the caller passed.
+        let implied = mixture_moments(got);
+        let error: f64 = moments.iter().zip(&implied).map(|(a, b)| (a - b).powi(2)).sum();
+        assert!((error - row.error).abs() <= 1e-9 * error.max(1.0));
+    }
+    let mode = most_likely_parameters(&rows, None, 100);
+    for (name, t) in names.iter().zip(truth) {
+        assert!((mode[*name] - t).abs() < mode_tol, "modal {name}: {}, true {t}", mode[*name]);
+    }
+}
+
+#[test]
+fn test_variant_2_recovers_a_negative_second_mean() {
+    // #115: iter_5 takes the positive root for mu_2, so on raw moments it could never return
+    // mu_2 < 0. This mixture used to come back as mu_1 = -2.6, mu_2 = +0.84, p_1 = 0.66.
+    assert_variant_2_recovers([-3.0, -1.0, 1.0, 0.5, 0.5], 0.3, 0.1);
+}
+
+#[test]
+fn test_variant_2_still_recovers_positive_and_straddling_mixtures() {
+    assert_variant_2_recovers([-1.0, 2.0, 1.0, 0.5, 0.7], 0.3, 0.1);
+    assert_variant_2_recovers([-2.0, 0.5, 1.0, 0.7, 0.6], 0.3, 0.1);
+}
+
 #[test]
 fn test_centered_moment_result() {
     let raw = vec![0.701756, 2.591815, 0.450519, 24.689030, -57.756735];

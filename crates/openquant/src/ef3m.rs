@@ -143,6 +143,9 @@ impl M2N {
         vec![mu_1, mu_2, sigma_1, sigma_2, p_1_new]
     }
 
+    /// One step of the five-moment variant. Like the paper, it takes the positive root for mu_2,
+    /// so on raw moments it cannot return mu_2 < 0; `single_fit_loop` therefore runs this variant
+    /// on centred moments (see `centred_fit_loop`).
     pub fn iter_5(&self, mu_2: f64, p_1: f64) -> Vec<f64> {
         let m_1 = self.moments[0];
         let m_2 = self.moments[1];
@@ -282,6 +285,9 @@ impl M2N {
                 self.epsilon = eps;
             }
         }
+        if self.variant == 2 && self.moments[0] != 0.0 {
+            return self.centred_fit_loop();
+        }
         self.parameters = vec![0.0; 5];
         self.error = self.moments.iter().map(|m| m * m).sum();
 
@@ -307,6 +313,48 @@ impl M2N {
         }
 
         Ok(best.into_iter().collect())
+    }
+
+    /// The five-moment variant fitted about the mean, then shifted back.
+    ///
+    /// `iter_5` solves the fourth-moment equation for mu_2² and, as in López de Prado and
+    /// Foreman (2014), takes the positive root. On raw moments that means mu_2 can never be
+    /// negative, so a mixture whose upper component has a negative mean cannot be recovered
+    /// (#115). Every start of the search puts mu_2 above the mean, so after centring the upper
+    /// component's mean is positive and the positive root is the right one, wherever the mixture
+    /// sits. The run is otherwise the same algorithm on the moments of X − E[X]; the returned
+    /// row's `error` is recomputed against the raw moments, the ones the caller passed.
+    fn centred_fit_loop(&mut self) -> Result<Vec<FitResultRow>, InputError> {
+        let mean = self.moments[0];
+        let mut centred = self.clone();
+        centred.moments = (1..=5)
+            .map(|order| centered_moment(&self.moments, order))
+            .collect::<Result<Vec<f64>, InputError>>()?;
+        centred.moments[0] = 0.0;
+        let mut rows = centred.single_fit_loop(None)?;
+
+        for row in &mut rows {
+            row.mu_1 += mean;
+            row.mu_2 += mean;
+            row.error = self.moment_error(&[row.mu_1, row.mu_2, row.sigma_1, row.sigma_2, row.p_1]);
+        }
+        if centred.parameters.iter().all(|p| *p == 0.0) {
+            // No start produced an admissible iterate: same state as the uncentred loop leaves.
+            self.parameters = vec![0.0; 5];
+            self.error = self.moments.iter().map(|m| m * m).sum();
+        } else {
+            let mut parameters = centred.parameters;
+            parameters[0] += mean;
+            parameters[1] += mean;
+            self.error = self.moment_error(&parameters);
+            self.parameters = parameters;
+        }
+        Ok(rows)
+    }
+
+    fn moment_error(&mut self, parameters: &[f64]) -> f64 {
+        let fitted = self.get_moments(parameters, true).unwrap_or_default();
+        self.moments.iter().zip(fitted.iter()).map(|(a, b)| (a - b).powi(2)).sum()
     }
 
     pub fn mp_fit(&self) -> Result<Vec<FitResultRow>, InputError> {
