@@ -2,10 +2,15 @@
 //!
 //! This module emphasizes bounded-memory, incremental updates suitable for
 //! near-real-time decision workflows. It includes:
-//! - VPIN-like flow-toxicity tracking with rolling volume buckets,
-//! - HHI-style market fragmentation concentration tracking over rolling windows,
+//! - VPIN-like flow-toxicity tracking with rolling volume buckets, and the empirical CDF of
+//!   VPIN over a rolling history of past VPIN values,
+//! - HHI-style market fragmentation concentration (venue volume shares) over rolling windows,
 //! - an event-by-event early-warning pipeline, and
 //! - serial/parallel execution helpers for multi-stream workloads.
+//!
+//! The VPIN alert threshold applies to the CDF of VPIN, not to raw VPIN (AFML §22.6.5; Easley,
+//! López de Prado and O'Hara, 2011): alerting at `CDF(VPIN) >= 0.99` means "VPIN is in the top 1%
+//! of its own recent history", which adapts to each instrument's baseline level of toxicity.
 
 use crate::hpc_parallel::{run_parallel, HpcParallelConfig, HpcParallelError, ParallelRunReport};
 use std::collections::{HashMap, VecDeque};
@@ -58,17 +63,30 @@ pub struct VpinConfig {
     pub bucket_volume: f64,
     /// Number of completed buckets in rolling VPIN window.
     pub support_buckets: usize,
+    /// Number of past VPIN values in the rolling history that VPIN's empirical CDF is taken over.
+    ///
+    /// One VPIN value is recorded each time a bucket completes (once `support_buckets` buckets
+    /// exist), so the history spans the last `cdf_lookback` buckets, i.e.
+    /// `cdf_lookback * bucket_volume` units of volume. The CDF is `None` until the history is
+    /// full. It includes the current value and ties count half (see [`VpinState::current_cdf`]),
+    /// so the largest CDF a value can reach is `1 - 0.5 / cdf_lookback`. Must be at least 2.
+    pub cdf_lookback: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HhiConfig {
-    /// Number of events in rolling concentration window.
+    /// Number of events in rolling concentration window. Venues are weighted by their share of
+    /// the volume traded in these events, not by their number of events.
     pub lookback_events: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AlertThresholds {
-    pub vpin: f64,
+    /// Threshold on the empirical CDF of VPIN, in (0, 1): 0.99 alerts when VPIN is in the top 1%
+    /// of its rolling history. It is a probability, not a raw VPIN level, and must be at most
+    /// `1 - 0.5 / vpin.cdf_lookback`, the largest value the CDF can take.
+    pub vpin_cdf: f64,
+    /// Threshold on the volume-share HHI (1 = one venue carries all the volume).
     pub hhi: f64,
 }
 
@@ -84,8 +102,11 @@ pub struct EarlyWarningSnapshot {
     pub timestamp_ns: i64,
     pub price: f64,
     pub vpin: Option<f64>,
+    /// Empirical CDF of the current VPIN over its rolling history ([`VpinConfig::cdf_lookback`]).
+    pub vpin_cdf: Option<f64>,
     pub hhi: Option<f64>,
-    /// Simple normalized alert score for operations dashboards.
+    /// `min(vpin_cdf / thresholds.vpin_cdf, hhi / thresholds.hhi)`: the alert condition as one
+    /// number for dashboards. It is at least 1 exactly when `is_alert` is true (up to rounding).
     pub normalized_risk_score: Option<f64>,
     pub is_alert: bool,
 }
@@ -111,6 +132,7 @@ pub struct StreamSummary {
     pub processed_events: usize,
     pub alert_count: usize,
     pub latest_vpin: Option<f64>,
+    pub latest_vpin_cdf: Option<f64>,
     pub latest_hhi: Option<f64>,
     pub latest_risk_score: Option<f64>,
 }
@@ -128,7 +150,14 @@ pub struct VpinState {
     window_sum: f64,
     current_bucket_abs_imbalance: f64,
     current_bucket_volume: f64,
+    /// The last `cdf_lookback` VPIN values in arrival order, and the same values sorted.
+    history: VecDeque<f64>,
+    history_sorted: Vec<f64>,
 }
+
+/// VPIN values closer than this are ties for [`VpinState::current_cdf`], so rounding noise in the
+/// rolling sum cannot rank one of two equal VPIN values above the other.
+const VPIN_CDF_TIE_TOL: f64 = 1e-9;
 
 impl VpinState {
     pub fn new(cfg: VpinConfig) -> Result<Self, StreamingHpcError> {
@@ -140,12 +169,17 @@ impl VpinState {
         if cfg.support_buckets == 0 {
             return Err(StreamingHpcError::InvalidConfig("vpin.support_buckets must be > 0"));
         }
+        if cfg.cdf_lookback < 2 {
+            return Err(StreamingHpcError::InvalidConfig("vpin.cdf_lookback must be >= 2"));
+        }
         Ok(Self {
             cfg,
             window: VecDeque::with_capacity(cfg.support_buckets),
             window_sum: 0.0,
             current_bucket_abs_imbalance: 0.0,
             current_bucket_volume: 0.0,
+            history: VecDeque::with_capacity(cfg.cdf_lookback + 1),
+            history_sorted: Vec::with_capacity(cfg.cdf_lookback + 1),
         })
     }
 
@@ -188,6 +222,9 @@ impl VpinState {
                 }
                 self.current_bucket_volume = 0.0;
                 self.current_bucket_abs_imbalance = 0.0;
+                if let Some(vpin) = self.current() {
+                    self.record_vpin(vpin);
+                }
             }
         }
         Ok(self.current())
@@ -201,17 +238,54 @@ impl VpinState {
         }
     }
 
+    /// Empirical CDF of the current VPIN over the last `cdf_lookback` VPIN values (the current
+    /// one included), or `None` until that many have been recorded.
+    ///
+    /// Ties count half (the mid-distribution function): with `n` values in the history, `b` of
+    /// them below the current VPIN and `t` equal to it (itself included), the CDF is
+    /// `(b + t / 2) / n`. A history of identical values gives 0.5 rather than 1, so a perfectly
+    /// steady stream does not look like its own extreme; a new maximum gives `1 - 0.5 / n`.
+    pub fn current_cdf(&self) -> Option<f64> {
+        let n = self.history_sorted.len();
+        if n < self.cfg.cdf_lookback {
+            return None;
+        }
+        let v = *self.history.back()?;
+        let below = self.history_sorted.partition_point(|&x| x < v - VPIN_CDF_TIE_TOL);
+        let at_or_below = self.history_sorted.partition_point(|&x| x <= v + VPIN_CDF_TIE_TOL);
+        let ties = at_or_below - below;
+        Some((below as f64 + 0.5 * ties as f64) / n as f64)
+    }
+
     pub fn completed_buckets(&self) -> usize {
         self.window.len()
     }
+
+    fn record_vpin(&mut self, vpin: f64) {
+        self.history.push_back(vpin);
+        let at = self.history_sorted.partition_point(|&x| x < vpin);
+        self.history_sorted.insert(at, vpin);
+        if self.history.len() > self.cfg.cdf_lookback {
+            if let Some(expired) = self.history.pop_front() {
+                // Values are stored bit for bit, so the expired one is found exactly.
+                let at = self.history_sorted.partition_point(|&x| x < expired);
+                self.history_sorted.remove(at);
+            }
+        }
+    }
 }
 
+/// Herfindahl–Hirschman index of venue concentration over the last `lookback_events` events,
+/// each venue weighted by its share of the volume traded in those events:
+/// `HHI = sum_v (volume_v / total_volume)^2`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HhiState {
     cfg: HhiConfig,
-    window: VecDeque<usize>,
-    venue_counts: HashMap<usize, usize>,
-    sum_sq_counts: usize,
+    /// `(venue_id, volume)` of each event in the window.
+    window: VecDeque<(usize, f64)>,
+    /// Per venue in the window: `(events, volume)`. A venue is dropped when its last event leaves
+    /// the window, so rounding in its running volume cannot accumulate.
+    venues: HashMap<usize, (usize, f64)>,
 }
 
 impl HhiState {
@@ -221,32 +295,38 @@ impl HhiState {
         }
         Ok(Self {
             cfg,
-            window: VecDeque::with_capacity(cfg.lookback_events),
-            venue_counts: HashMap::new(),
-            sum_sq_counts: 0,
+            window: VecDeque::with_capacity(cfg.lookback_events + 1),
+            venues: HashMap::new(),
         })
     }
 
-    pub fn update(&mut self, venue_id: usize) -> Option<f64> {
-        self.window.push_back(venue_id);
-        let count_before = *self.venue_counts.get(&venue_id).unwrap_or(&0);
-        self.sum_sq_counts += 2 * count_before + 1;
-        self.venue_counts.insert(venue_id, count_before + 1);
+    /// Adds one event that traded `volume` (finite, > 0) on `venue_id`.
+    pub fn update(
+        &mut self,
+        venue_id: usize,
+        volume: f64,
+    ) -> Result<Option<f64>, StreamingHpcError> {
+        if !volume.is_finite() || volume <= 0.0 {
+            return Err(StreamingHpcError::InvalidEvent("volume must be finite and > 0"));
+        }
+        self.window.push_back((venue_id, volume));
+        let entry = self.venues.entry(venue_id).or_insert((0, 0.0));
+        entry.0 += 1;
+        entry.1 += volume;
 
         if self.window.len() > self.cfg.lookback_events {
-            if let Some(expired) = self.window.pop_front() {
-                let old_count = *self.venue_counts.get(&expired).unwrap_or(&0);
-                if old_count > 0 {
-                    self.sum_sq_counts = self.sum_sq_counts.saturating_sub(2 * old_count - 1);
-                    if old_count == 1 {
-                        self.venue_counts.remove(&expired);
+            if let Some((expired, expired_volume)) = self.window.pop_front() {
+                if let Some(entry) = self.venues.get_mut(&expired) {
+                    if entry.0 <= 1 {
+                        self.venues.remove(&expired);
                     } else {
-                        self.venue_counts.insert(expired, old_count - 1);
+                        entry.0 -= 1;
+                        entry.1 -= expired_volume;
                     }
                 }
             }
         }
-        self.current()
+        Ok(self.current())
     }
 
     pub fn current(&self) -> Option<f64> {
@@ -254,8 +334,11 @@ impl HhiState {
         if n < self.cfg.lookback_events || n == 0 {
             return None;
         }
-        let denom = (n * n) as f64;
-        Some(self.sum_sq_counts as f64 / denom)
+        let total: f64 = self.venues.values().map(|&(_, v)| v).sum();
+        if total <= 0.0 {
+            return None;
+        }
+        Some(self.venues.values().map(|&(_, v)| (v / total) * (v / total)).sum())
     }
 
     pub fn window_len(&self) -> usize {
@@ -272,13 +355,21 @@ pub struct StreamingEarlyWarningEngine {
 
 impl StreamingEarlyWarningEngine {
     pub fn new(cfg: StreamingPipelineConfig) -> Result<Self, StreamingHpcError> {
-        if !cfg.thresholds.vpin.is_finite() || cfg.thresholds.vpin <= 0.0 {
-            return Err(StreamingHpcError::InvalidConfig("thresholds.vpin must be finite and > 0"));
+        let vpin_cdf = cfg.thresholds.vpin_cdf;
+        if !vpin_cdf.is_finite() || vpin_cdf <= 0.0 || vpin_cdf >= 1.0 {
+            return Err(StreamingHpcError::InvalidConfig("thresholds.vpin_cdf must be in (0, 1)"));
         }
         if !cfg.thresholds.hhi.is_finite() || cfg.thresholds.hhi <= 0.0 {
             return Err(StreamingHpcError::InvalidConfig("thresholds.hhi must be finite and > 0"));
         }
-        Ok(Self { vpin_state: VpinState::new(cfg.vpin)?, hhi_state: HhiState::new(cfg.hhi)?, cfg })
+        let vpin_state = VpinState::new(cfg.vpin)?;
+        // The largest CDF value is 1 - 0.5 / cdf_lookback; allow for rounding in that expression.
+        if vpin_cdf > 1.0 - 0.5 / cfg.vpin.cdf_lookback as f64 + 1e-12 {
+            return Err(StreamingHpcError::InvalidConfig(
+                "thresholds.vpin_cdf is unreachable: it must be <= 1 - 0.5 / vpin.cdf_lookback",
+            ));
+        }
+        Ok(Self { vpin_state, hhi_state: HhiState::new(cfg.hhi)?, cfg })
     }
 
     pub fn on_event(
@@ -287,21 +378,22 @@ impl StreamingEarlyWarningEngine {
     ) -> Result<EarlyWarningSnapshot, StreamingHpcError> {
         validate_event(event)?;
         let vpin = self.vpin_state.update(event.buy_volume, event.sell_volume)?;
-        let hhi = self.hhi_state.update(event.venue_id);
-        let normalized_risk_score = match (vpin, hhi) {
-            (Some(v), Some(h)) => {
-                Some(0.5 * (v / self.cfg.thresholds.vpin + h / self.cfg.thresholds.hhi))
-            }
+        let vpin_cdf = self.vpin_state.current_cdf();
+        let hhi = self.hhi_state.update(event.venue_id, event.total_volume())?;
+        let t = self.cfg.thresholds;
+        let normalized_risk_score = match (vpin_cdf, hhi) {
+            (Some(c), Some(h)) => Some((c / t.vpin_cdf).min(h / t.hhi)),
             _ => None,
         };
-        let is_alert = match (vpin, hhi) {
-            (Some(v), Some(h)) => v >= self.cfg.thresholds.vpin && h >= self.cfg.thresholds.hhi,
+        let is_alert = match (vpin_cdf, hhi) {
+            (Some(c), Some(h)) => c >= t.vpin_cdf && h >= t.hhi,
             _ => false,
         };
         Ok(EarlyWarningSnapshot {
             timestamp_ns: event.timestamp_ns,
             price: event.price,
             vpin,
+            vpin_cdf,
             hhi,
             normalized_risk_score,
             is_alert,
@@ -374,6 +466,7 @@ pub fn run_streaming_pipeline_parallel(
                     processed_events: run.metrics.processed_events,
                     alert_count: run.alert_count,
                     latest_vpin: last.and_then(|s| s.vpin),
+                    latest_vpin_cdf: last.and_then(|s| s.vpin_cdf),
                     latest_hhi: last.and_then(|s| s.hhi),
                     latest_risk_score: last.and_then(|s| s.normalized_risk_score),
                 });

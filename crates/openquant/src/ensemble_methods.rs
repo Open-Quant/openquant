@@ -10,7 +10,7 @@
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use crate::sampling::seq_bootstrap;
+use crate::sampling::seq_bootstrap_with_rng;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum EnsembleError {
@@ -42,11 +42,22 @@ pub enum EnsembleMethod {
     Boosting,
 }
 
+/// Error decomposition of an ensemble's forecasts (AFML §6.2), averaged over observations.
+///
+/// `mse` is always measured against the observed labels `y_true`. The other terms depend on
+/// whether the noiseless target `y_expected` = E\[y|x\] was supplied to [`bias_variance_noise`]:
+///
+/// - **With `y_expected`:** `bias_sq` = mean((mean_pred − y_expected)²), `noise` =
+///   `Some(mean((y_true − y_expected)²))`, and `bias_sq + variance + noise` equals `mse` in
+///   expectation (exactly only when the label noise is uncorrelated with the predictions in
+///   the sample at hand).
+/// - **Without it:** `bias_sq` = mean((mean_pred − y_true)²), which *includes* the irreducible
+///   noise, and `noise` is `None`. In that case `bias_sq + variance == mse` identically.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BiasVarianceNoise {
     pub bias_sq: f64,
     pub variance: f64,
-    pub noise: f64,
+    pub noise: Option<f64>,
     pub mse: f64,
 }
 
@@ -57,9 +68,22 @@ pub struct BaggingBoostingDecision {
     pub expected_variance_reduction: f64,
 }
 
+/// Bias², variance, noise and MSE of an ensemble's predictions, averaged over observations.
+///
+/// `per_model_predictions` holds one row per model, each as long as `y_true`. `variance` is
+/// the population variance of the models' predictions around their mean, per observation.
+///
+/// Pass `y_expected` (the noiseless target E\[y|x\], known in simulation studies) to split
+/// the irreducible noise out of the bias; see [`BiasVarianceNoise`] for the formulas. Without
+/// it `noise` is `None`, because noise cannot be separated from bias using observed labels
+/// alone.
+///
+/// Errors: `Empty` for empty `y_true` or no models; `LengthMismatch("prediction")` if a model
+/// row's length differs from `y_true`; `LengthMismatch("y_expected")` if `y_expected` does.
 pub fn bias_variance_noise(
     y_true: &[f64],
     per_model_predictions: &[Vec<f64>],
+    y_expected: Option<&[f64]>,
 ) -> Result<BiasVarianceNoise, EnsembleError> {
     if y_true.is_empty() {
         return Err(EnsembleError::Empty("y_true"));
@@ -70,6 +94,9 @@ pub fn bias_variance_noise(
     if per_model_predictions.iter().any(|row| row.len() != y_true.len()) {
         return Err(EnsembleError::LengthMismatch("prediction"));
     }
+    if y_expected.is_some_and(|target| target.len() != y_true.len()) {
+        return Err(EnsembleError::LengthMismatch("y_expected"));
+    }
 
     let n_models = per_model_predictions.len() as f64;
     let n_samples = y_true.len() as f64;
@@ -77,6 +104,7 @@ pub fn bias_variance_noise(
     let mut bias_sq_sum = 0.0;
     let mut var_sum = 0.0;
     let mut mse_sum = 0.0;
+    let mut noise_sum = 0.0;
 
     for i in 0..y_true.len() {
         let mut mean_pred = 0.0;
@@ -87,7 +115,16 @@ pub fn bias_variance_noise(
         }
         mean_pred /= n_models;
 
-        let bias = mean_pred - y_true[i];
+        // Bias is measured against E[y|x] when it is known, else against the observed label.
+        let reference = match y_expected {
+            Some(target) => {
+                let eps = y_true[i] - target[i];
+                noise_sum += eps * eps;
+                target[i]
+            }
+            None => y_true[i],
+        };
+        let bias = mean_pred - reference;
         bias_sq_sum += bias * bias;
 
         let mut local_var = 0.0;
@@ -102,7 +139,7 @@ pub fn bias_variance_noise(
     let bias_sq = bias_sq_sum / n_samples;
     let variance = var_sum / n_samples;
     let mse = mse_sum / (n_samples * n_models);
-    let noise = (mse - bias_sq - variance).max(0.0);
+    let noise = y_expected.map(|_| noise_sum / n_samples);
 
     Ok(BiasVarianceNoise { bias_sq, variance, noise, mse })
 }
@@ -136,8 +173,7 @@ pub fn sequential_bootstrap_sample_indices(
     }
 
     let mut rng = StdRng::seed_from_u64(seed);
-    let warmup: Vec<usize> = (0..sample_size).map(|_| rng.gen_range(0..n_labels)).collect();
-    Ok(seq_bootstrap(ind_mat, Some(sample_size), Some(warmup))?)
+    Ok(seq_bootstrap_with_rng(ind_mat, Some(sample_size), None, &mut rng)?)
 }
 
 pub fn aggregate_regression_mean(

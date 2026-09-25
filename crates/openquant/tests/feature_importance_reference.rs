@@ -90,8 +90,15 @@ fn mdi_standard_error_is_symmetric_for_mirrored_columns() {
 
 type Splits = Vec<(Vec<usize>, Vec<usize>)>;
 
+/// MDA shuffles each test-fold column with a seeded RNG (snippet 8.3's `np.random.shuffle`). A
+/// two-row column has only two orders, and a shuffle may leave it in place. With this seed the
+/// f0 column of fold A is swapped, which is the case the numbers below are worked for. (A seed
+/// that left it in place would give f0 an importance of 0 there instead of 1. Fold B scores 0
+/// for f0 in either order, and f1 is never read.)
+const SEED: u64 = 2;
+
 /// Two folds whose test sets have two rows each, so "permute the column" can only mean "swap the
-/// two values": the expected numbers do not depend on how the library shuffles.
+/// two values" (given `SEED`, see above).
 ///
 ///            f0   f1   y
 ///   row 0    +1   -1   1      fold A tests rows 0,1
@@ -124,6 +131,7 @@ fn mda_accuracy_hand_worked() {
         &splits,
         None,
         Scoring::Accuracy,
+        SEED,
     )
     .unwrap();
     assert!((mda["f0"].mean - 0.5).abs() < 1e-15, "{}", mda["f0"].mean);
@@ -149,6 +157,7 @@ fn mda_neg_log_loss_hand_worked() {
         &splits,
         None,
         Scoring::NegLogLoss,
+        SEED,
     )
     .unwrap();
     let want = (1.0 - 0.9f64.ln() / 0.1f64.ln()) / 2.0;
@@ -172,6 +181,7 @@ fn mda_standard_error_uses_sample_std_hand_worked() {
         &splits,
         None,
         Scoring::Accuracy,
+        SEED,
     )
     .unwrap();
     assert!((mda["f0"].std - 0.5).abs() < 1e-12, "{}", mda["f0"].std);

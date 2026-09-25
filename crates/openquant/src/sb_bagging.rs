@@ -3,7 +3,7 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 
-use crate::sampling::seq_bootstrap;
+use crate::sampling::seq_bootstrap_with_rng;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SbBaggingError {
@@ -23,6 +23,8 @@ pub enum SbBaggingError {
     InvalidEstimators,
     #[error("the base estimator does not support sample weights")]
     SampleWeightNotSupported,
+    #[error("sample weights must be finite, non-negative and not all zero")]
+    InvalidSampleWeight,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,11 +46,28 @@ struct ClassifierEstimator {
     positive_on_ge: bool,
 }
 
+impl ClassifierEstimator {
+    fn predicts_one(&self, x: &DMatrix<f64>, row: usize) -> bool {
+        let ge = x[(row, self.feature_idx)] >= self.threshold;
+        if self.positive_on_ge {
+            ge
+        } else {
+            !ge
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct RegressorEstimator {
     feature_idx: usize,
     slope: f64,
     intercept: f64,
+}
+
+impl RegressorEstimator {
+    fn predict_row(&self, x: &DMatrix<f64>, row: usize) -> f64 {
+        self.slope * x[(row, self.feature_idx)] + self.intercept
+    }
 }
 
 fn validate_and_resolve_max_samples(
@@ -89,6 +108,38 @@ fn validate_and_resolve_max_features(
     Ok(resolved.max(1))
 }
 
+/// Checks shared by both estimators. Label `j` of `ind_mat` (column `j`) is row `j` of `x`,
+/// so every row of `ind_mat` must have `x.nrows()` entries.
+fn validate_fit_inputs(
+    x: &DMatrix<f64>,
+    y_len: usize,
+    ind_mat: &[Vec<u8>],
+    sample_weight: Option<&[f64]>,
+    supports_sample_weight: bool,
+) -> Result<(), SbBaggingError> {
+    if x.nrows() == 0 || x.ncols() == 0 {
+        return Err(SbBaggingError::EmptyInput);
+    }
+    if y_len != x.nrows() {
+        return Err(SbBaggingError::DimensionMismatch);
+    }
+    if ind_mat.is_empty() || ind_mat.iter().any(|row| row.len() != x.nrows()) {
+        return Err(SbBaggingError::DimensionMismatch);
+    }
+    if let Some(w) = sample_weight {
+        if !supports_sample_weight {
+            return Err(SbBaggingError::SampleWeightNotSupported);
+        }
+        if w.len() != x.nrows() {
+            return Err(SbBaggingError::DimensionMismatch);
+        }
+        if w.iter().any(|v| !v.is_finite() || *v < 0.0) || w.iter().all(|v| *v == 0.0) {
+            return Err(SbBaggingError::InvalidSampleWeight);
+        }
+    }
+    Ok(())
+}
+
 fn sampled_features(
     rng: &mut StdRng,
     n_features: usize,
@@ -104,8 +155,34 @@ fn sampled_features(
     }
 }
 
-fn warmup_indices(rng: &mut StdRng, n_labels: usize, n: usize) -> Vec<usize> {
-    (0..n).map(|_| rng.gen_range(0..n_labels)).collect()
+/// One weight per draw (a row drawn twice counts twice). A bag whose drawn rows all have
+/// zero weight falls back to equal weights.
+fn bag_weights(samples: &[usize], sample_weight: Option<&[f64]>) -> Vec<f64> {
+    match sample_weight {
+        Some(w) => {
+            let bag: Vec<f64> = samples.iter().map(|&i| w[i]).collect();
+            if bag.iter().sum::<f64>() > 0.0 {
+                bag
+            } else {
+                vec![1.0; samples.len()]
+            }
+        }
+        None => vec![1.0; samples.len()],
+    }
+}
+
+/// `in_bag[e][row]` is true when estimator `e` drew `row`.
+fn in_bag_masks(estimators_samples: &[Vec<usize>], n_rows: usize) -> Vec<Vec<bool>> {
+    estimators_samples
+        .iter()
+        .map(|samples| {
+            let mut mask = vec![false; n_rows];
+            for &i in samples {
+                mask[i] = true;
+            }
+            mask
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -142,6 +219,8 @@ impl SequentiallyBootstrappedBaggingClassifier {
         }
     }
 
+    /// Fits `n_estimators` stumps, each on a sequential bootstrap sample of the labels in
+    /// `ind_mat` (bars x labels, one label per row of `x`).
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -149,17 +228,9 @@ impl SequentiallyBootstrappedBaggingClassifier {
         ind_mat: &[Vec<u8>],
         sample_weight: Option<&[f64]>,
     ) -> Result<(), SbBaggingError> {
-        if x.nrows() == 0 || x.ncols() == 0 {
-            return Err(SbBaggingError::EmptyInput);
-        }
-        if y.len() != x.nrows() {
-            return Err(SbBaggingError::DimensionMismatch);
-        }
+        validate_fit_inputs(x, y.len(), ind_mat, sample_weight, self.supports_sample_weight)?;
         if self.n_estimators == 0 {
             return Err(SbBaggingError::InvalidEstimators);
-        }
-        if !self.supports_sample_weight && sample_weight.is_some() {
-            return Err(SbBaggingError::SampleWeightNotSupported);
         }
         if self.warm_start && self.oob_score {
             return Err(SbBaggingError::WarmStartWithOob);
@@ -186,41 +257,33 @@ impl SequentiallyBootstrappedBaggingClassifier {
         for _ in 0..(n_more as usize) {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
-            let warmup = warmup_indices(
-                &mut rng,
-                ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
-                max_samples,
-            );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+            let samples = seq_bootstrap_with_rng(ind_mat, Some(max_samples), None, &mut rng)
                 .map_err(|_| SbBaggingError::DimensionMismatch)?;
+            let weights = bag_weights(&samples, sample_weight);
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
 
-            let mut thr = 0.0;
-            for &i in &samples {
-                thr += x[(i, feature_idx)];
-            }
-            thr /= samples.len() as f64;
+            let total: f64 = weights.iter().sum();
+            let thr =
+                samples.iter().zip(&weights).map(|(&i, w)| w * x[(i, feature_idx)]).sum::<f64>()
+                    / total;
 
-            let mut pos_ge = 0usize;
-            let mut tot_ge = 0usize;
-            let mut pos_lt = 0usize;
-            let mut tot_lt = 0usize;
-            for &i in &samples {
+            let mut pos_ge = 0.0;
+            let mut tot_ge = 0.0;
+            let mut pos_lt = 0.0;
+            let mut tot_lt = 0.0;
+            for (&i, &w) in samples.iter().zip(&weights) {
+                let positive = if y[i] == 1 { w } else { 0.0 };
                 if x[(i, feature_idx)] >= thr {
-                    tot_ge += 1;
-                    if y[i] == 1 {
-                        pos_ge += 1;
-                    }
+                    tot_ge += w;
+                    pos_ge += positive;
                 } else {
-                    tot_lt += 1;
-                    if y[i] == 1 {
-                        pos_lt += 1;
-                    }
+                    tot_lt += w;
+                    pos_lt += positive;
                 }
             }
-            let rate_ge = if tot_ge == 0 { 0.0 } else { pos_ge as f64 / tot_ge as f64 };
-            let rate_lt = if tot_lt == 0 { 0.0 } else { pos_lt as f64 / tot_lt as f64 };
+            let rate_ge = if tot_ge > 0.0 { pos_ge / tot_ge } else { 0.0 };
+            let rate_lt = if tot_lt > 0.0 { pos_lt / tot_lt } else { 0.0 };
 
             self.estimators.push(ClassifierEstimator {
                 feature_idx,
@@ -230,13 +293,34 @@ impl SequentiallyBootstrappedBaggingClassifier {
             self.estimators_samples.push(samples);
         }
 
-        if self.oob_score {
-            let preds = self.predict(x)?;
-            let correct = preds.iter().zip(y.iter()).filter(|(p, t)| **p == **t).count();
-            self.oob_score_value = Some(correct as f64 / y.len() as f64);
-        }
+        self.oob_score_value = if self.oob_score { self.out_of_bag_accuracy(x, y) } else { None };
 
         Ok(())
+    }
+
+    /// Accuracy over the rows that at least one estimator did not draw, each row predicted
+    /// by majority vote of only those estimators. `None` if every row was drawn by every
+    /// estimator.
+    fn out_of_bag_accuracy(&self, x: &DMatrix<f64>, y: &[u8]) -> Option<f64> {
+        let in_bag = in_bag_masks(&self.estimators_samples, x.nrows());
+        let mut scored = 0usize;
+        let mut correct = 0usize;
+        for (r, &target) in y.iter().enumerate() {
+            let mut votes = 0usize;
+            let mut voters = 0usize;
+            for (est, mask) in self.estimators.iter().zip(&in_bag) {
+                if !mask[r] {
+                    voters += 1;
+                    votes += usize::from(est.predicts_one(x, r));
+                }
+            }
+            if voters > 0 {
+                scored += 1;
+                let pred = u8::from(votes * 2 >= voters);
+                correct += usize::from(pred == target);
+            }
+        }
+        (scored > 0).then(|| correct as f64 / scored as f64)
     }
 
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<u8>, SbBaggingError> {
@@ -244,16 +328,9 @@ impl SequentiallyBootstrappedBaggingClassifier {
             return Err(SbBaggingError::EmptyInput);
         }
         let mut out = vec![0u8; x.nrows()];
-        for r in 0..x.nrows() {
-            let mut votes = 0usize;
-            for est in &self.estimators {
-                let ge = x[(r, est.feature_idx)] >= est.threshold;
-                let pred_one = if est.positive_on_ge { ge } else { !ge };
-                if pred_one {
-                    votes += 1;
-                }
-            }
-            out[r] = if votes * 2 >= self.estimators.len() { 1 } else { 0 };
+        for (r, pred) in out.iter_mut().enumerate() {
+            let votes = self.estimators.iter().filter(|est| est.predicts_one(x, r)).count();
+            *pred = u8::from(votes * 2 >= self.estimators.len());
         }
         Ok(out)
     }
@@ -291,6 +368,8 @@ impl SequentiallyBootstrappedBaggingRegressor {
         }
     }
 
+    /// Fits `n_estimators` least-squares lines, each on a sequential bootstrap sample of the
+    /// labels in `ind_mat` (bars x labels, one label per row of `x`).
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -298,17 +377,9 @@ impl SequentiallyBootstrappedBaggingRegressor {
         ind_mat: &[Vec<u8>],
         sample_weight: Option<&[f64]>,
     ) -> Result<(), SbBaggingError> {
-        if x.nrows() == 0 || x.ncols() == 0 {
-            return Err(SbBaggingError::EmptyInput);
-        }
-        if y.len() != x.nrows() {
-            return Err(SbBaggingError::DimensionMismatch);
-        }
+        validate_fit_inputs(x, y.len(), ind_mat, sample_weight, self.supports_sample_weight)?;
         if self.n_estimators == 0 {
             return Err(SbBaggingError::InvalidEstimators);
-        }
-        if !self.supports_sample_weight && sample_weight.is_some() {
-            return Err(SbBaggingError::SampleWeightNotSupported);
         }
         if self.warm_start && self.oob_score {
             return Err(SbBaggingError::WarmStartWithOob);
@@ -335,24 +406,22 @@ impl SequentiallyBootstrappedBaggingRegressor {
         for _ in 0..(n_more as usize) {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
-            let warmup = warmup_indices(
-                &mut rng,
-                ind_mat.first().map(|r| r.len()).unwrap_or(0).max(1),
-                max_samples,
-            );
-            let samples = seq_bootstrap(ind_mat, Some(max_samples), Some(warmup))
+            let samples = seq_bootstrap_with_rng(ind_mat, Some(max_samples), None, &mut rng)
                 .map_err(|_| SbBaggingError::DimensionMismatch)?;
+            let weights = bag_weights(&samples, sample_weight);
 
             let feature_idx = *features.first().ok_or(SbBaggingError::EmptyInput)?;
-            let n = samples.len() as f64;
-            let mean_x = samples.iter().map(|&i| x[(i, feature_idx)]).sum::<f64>() / n;
-            let mean_y = samples.iter().map(|&i| y[i]).sum::<f64>() / n;
+            let total: f64 = weights.iter().sum();
+            let mean_x =
+                samples.iter().zip(&weights).map(|(&i, w)| w * x[(i, feature_idx)]).sum::<f64>()
+                    / total;
+            let mean_y = samples.iter().zip(&weights).map(|(&i, w)| w * y[i]).sum::<f64>() / total;
             let mut cov_xy = 0.0;
             let mut var_x = 0.0;
-            for &i in &samples {
+            for (&i, &w) in samples.iter().zip(&weights) {
                 let dx = x[(i, feature_idx)] - mean_x;
-                cov_xy += dx * (y[i] - mean_y);
-                var_x += dx * dx;
+                cov_xy += w * dx * (y[i] - mean_y);
+                var_x += w * dx * dx;
             }
             let slope = if var_x <= 1e-12 { 0.0 } else { cov_xy / var_x };
             let intercept = mean_y - slope * mean_x;
@@ -361,22 +430,36 @@ impl SequentiallyBootstrappedBaggingRegressor {
             self.estimators_samples.push(samples);
         }
 
-        if self.oob_score {
-            let preds = self.predict(x)?;
-            let mean = y.iter().sum::<f64>() / y.len() as f64;
-            let ss_tot = y.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>();
-            let ss_res = preds
-                .iter()
-                .zip(y.iter())
-                .map(|(p, t)| {
-                    let d = p - t;
-                    d * d
-                })
-                .sum::<f64>();
-            self.oob_score_value = Some(if ss_tot <= 1e-12 { 0.0 } else { 1.0 - ss_res / ss_tot });
-        }
+        self.oob_score_value = if self.oob_score { self.out_of_bag_r2(x, y) } else { None };
 
         Ok(())
+    }
+
+    /// R² over the rows that at least one estimator did not draw, each row predicted by the
+    /// mean of only those estimators. `None` if every row was drawn by every estimator.
+    fn out_of_bag_r2(&self, x: &DMatrix<f64>, y: &[f64]) -> Option<f64> {
+        let in_bag = in_bag_masks(&self.estimators_samples, x.nrows());
+        let mut scored: Vec<(f64, f64)> = Vec::new();
+        for (r, &target) in y.iter().enumerate() {
+            let mut sum = 0.0;
+            let mut voters = 0usize;
+            for (est, mask) in self.estimators.iter().zip(&in_bag) {
+                if !mask[r] {
+                    voters += 1;
+                    sum += est.predict_row(x, r);
+                }
+            }
+            if voters > 0 {
+                scored.push((sum / voters as f64, target));
+            }
+        }
+        if scored.is_empty() {
+            return None;
+        }
+        let mean = scored.iter().map(|(_, t)| t).sum::<f64>() / scored.len() as f64;
+        let ss_tot = scored.iter().map(|(_, t)| (t - mean) * (t - mean)).sum::<f64>();
+        let ss_res = scored.iter().map(|(p, t)| (p - t) * (p - t)).sum::<f64>();
+        Some(if ss_tot <= 1e-12 { 0.0 } else { 1.0 - ss_res / ss_tot })
     }
 
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
@@ -384,13 +467,9 @@ impl SequentiallyBootstrappedBaggingRegressor {
             return Err(SbBaggingError::EmptyInput);
         }
         let mut out = vec![0.0; x.nrows()];
-        for r in 0..x.nrows() {
-            let mut s = 0.0;
-            for est in &self.estimators {
-                let xv = x[(r, est.feature_idx)];
-                s += est.slope * xv + est.intercept;
-            }
-            out[r] = s / self.estimators.len() as f64;
+        for (r, pred) in out.iter_mut().enumerate() {
+            let s: f64 = self.estimators.iter().map(|est| est.predict_row(x, r)).sum();
+            *pred = s / self.estimators.len() as f64;
         }
         Ok(out)
     }

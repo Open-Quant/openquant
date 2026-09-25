@@ -6,6 +6,7 @@ mod bet_sizing;
 mod cla;
 mod codependence;
 mod data;
+mod dynamic_allocation;
 mod ef3m;
 mod ensemble;
 mod fast_ewma;
@@ -59,5 +60,6 @@ fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     onc::register(py, m)?;
     cla::register(py, m)?;
     sb_bagging::register(py, m)?;
+    dynamic_allocation::register(py, m)?;
     Ok(())
 }

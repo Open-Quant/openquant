@@ -424,15 +424,15 @@ fn dfs_paths(
     inventory_path: &mut Vec<i64>,
     out: &mut Vec<TradingTrajectoryPath>,
 ) -> Result<(), CombinatorialOptimizationError> {
-    if out.len() >= schema.max_paths {
-        return Err(CombinatorialOptimizationError::EnumerationLimitExceeded {
-            limit: schema.max_paths,
-        });
-    }
     if step == schema.horizon() {
         let inventory_final = *inventory_path.last().unwrap_or(&schema.initial_inventory);
         if schema.terminal_inventory.is_some_and(|required| required != inventory_final) {
             return Ok(());
+        }
+        if out.len() == schema.max_paths {
+            return Err(CombinatorialOptimizationError::EnumerationLimitExceeded {
+                limit: schema.max_paths,
+            });
         }
         out.push(TradingTrajectoryPath {
             trades: trades.clone(),
