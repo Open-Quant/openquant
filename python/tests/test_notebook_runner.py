@@ -114,7 +114,7 @@ def test_figure_fingerprint_ignores_embedded_png_bytes_and_path_ids() -> None:
     def svg(png: str, pid: str, x: str) -> str:
         return (
             f'<path id="{pid}" d="M 0 {x}"/>\n'
-            f'<image xlink:href="data:image/png;base64,\n{png}" width="10"/>\n'
+            f'<image xlink:href="data:image/png;base64,\n{png}" id="image{pid[1:]}"/>\n'
         )
 
     base = runner.figure_fingerprint(svg("iVBORw0KAAAA", "m0123456789", "1.00000001"))

@@ -54,7 +54,7 @@ EXCLUDED: dict[str, str] = {}
 
 SIG_DIGITS = 4
 _FLOAT = re.compile(r"-?\d+\.\d+(?:[eE][-+]?\d+)?")
-_SVG_ID = re.compile(r"\b([mpc])[0-9a-f]{10}\b")
+_SVG_ID = re.compile(r"\b([mpc]|image)[0-9a-f]{10}\b")  # ids hashed from the content
 # Raster tiles matplotlib embeds in an SVG (imshow, colorbars): libpng/zlib
 # builds differ between platforms, so the bytes do, like the notebook PNGs.
 _SVG_PNG = re.compile(r"data:image/png;base64,\s*[A-Za-z0-9+/=\s]+")
