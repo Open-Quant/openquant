@@ -115,6 +115,9 @@ Input conventions:
 
 Return conventions:
 - tuple `(weights, portfolio_risk, portfolio_return, portfolio_sharpe)`
+- from prices: simple returns; return, risk (volatility) and Sharpe ratio are all annualised
+  with 252 periods a year, and `risk_free_rate` is an annual rate. `portfolio_sharpe` is
+  reported for every solution.
 
 Input conventions:
 - `prices`: rectangular nested list of floats (`rows=time`, `cols=assets`)

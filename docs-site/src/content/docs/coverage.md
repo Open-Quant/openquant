@@ -43,8 +43,8 @@ tally below cannot be bulk-applied.
 |---|---|---|
 | `generated` | 8 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
 | `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 34 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
-| `reviewed` | 10 | A human read the page end to end. |
+| `authored` | 35 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `reviewed` | 9 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
 <!-- coverage:end:status-tally -->
