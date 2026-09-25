@@ -137,13 +137,14 @@ assert!((sfi["strong"].mean + 0.330).abs() < 1e-3);
 Printed to three decimals with their standard errors, the two results are:
 
 ```text
-strong  MDA +0.725 ± 0.015   SFI -0.330 ± 0.007
-weak    MDA +0.187 ± 0.016   SFI -0.666 ± 0.009
+strong  MDA +0.725 ± 0.017   SFI -0.330 ± 0.007
+weak    MDA +0.187 ± 0.018   SFI -0.666 ± 0.009
 noise   MDA -0.003 ± 0.003   SFI -0.696 ± 0.001
 ```
 
 The `±` is `ImportanceStats::std`, which despite the name is the standard error of the mean
-across folds.
+across folds. Each method follows its snippet: MDI and MDA divide pandas' sample standard
+deviation (ddof 1) by $\sqrt{n}$, SFI divides numpy's population deviation (ddof 0).
 
 ## The PCA cross-check
 
@@ -154,12 +155,12 @@ with the unsupervised one, that is weak evidence the model has not simply overfi
 onto the leading eigenvectors that explain `variance_thresh` of the variance;
 `feature_pca_analysis(rows, importance, variance_thresh)` correlates an importance vector
 with the eigenvector loadings and returns Pearson, Spearman, Kendall and weighted-Kendall
-coefficients.
-
-Treat the rank coefficients as unreliable for now: with more than one retained component the
-Spearman and Kendall values mishandle ties, and the weighted Kendall is not
-`scipy.stats.weightedtau`, which is what the book uses
-([#94](https://github.com/Open-Quant/openquant/issues/94)). Pearson is unaffected.
+coefficients. They match `scipy.stats` as Snippet 8.6 calls it: with more than one retained
+component the importance vector is repeated once per component and so is full of ties, and
+Spearman uses average ranks and Kendall is tau-b, as scipy's are. The weighted Kendall is
+`scipy.stats.weightedtau(importance, 1 / pca_rank)`, with hyperbolic weights by rank, and
+`pca_rank` gives tied loadings their average rank. Where scipy would return NaN because an
+input is constant, the rank coefficients here return 0.
 
 ## What to watch for
 
@@ -177,9 +178,8 @@ Spearman and Kendall values mishandle ties, and the weighted Kendall is not
   other setting a zero means "offered and useless", and dropping it inflates the mean: a
   feature given `[0.0, 0.2, 0.0]` by three trees is averaged as 0.2, not 0.067. Either train
   the forest as the book does or replace zeros with a tiny positive number first.
-- **Standard errors are computed with a population standard deviation** (divide by $n$).
-  Snippets 8.2 and 8.3 use pandas' sample deviation; the reported error is too small by
-  $\sqrt{(n-1)/n}$, 18% with three folds and 11% with five (#94).
+- **A standard error from one fold or one tree is reported as 0**, not NaN as pandas would
+  give. With MDI, a feature that only one tree split on also gets 0.
 - **SFI scores on unweighted test folds.** It delegates to
   [`ml_cross_val_score`](/modules/cross-validation/#what-to-watch-for), which passes weights
   to `fit` only. MDA weights both.

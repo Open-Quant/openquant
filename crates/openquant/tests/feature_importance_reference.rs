@@ -61,7 +61,6 @@ fn mdi_ignores_zero_importances_hand_worked() {
 ///     sample std = sqrt(0.02 / 2) = 0.1,   standard error = 0.1 / sqrt(3) = 0.0577350269...
 /// (A population std would give sqrt(0.02 / 3) / sqrt(3) = 0.0471404521...)
 #[test]
-#[ignore = "FINDING: feature_importance MDI/MDA standard errors use the population std (ddof=0); AFML snippets 8.2/8.3 use pandas .std() (ddof=1), so reported std is too small by sqrt((n-1)/n)"]
 fn mdi_standard_error_uses_sample_std_hand_worked() {
     let imp = vec![vec![0.6, 0.4], vec![0.8, 0.2], vec![0.7, 0.3]];
     let mdi = mean_decrease_impurity(&imp, &names(2)).unwrap();
@@ -170,7 +169,6 @@ fn mda_neg_log_loss_hand_worked() {
 /// Accuracy importances of f0 over the two folds are (1, 0): sample std = sqrt(0.5),
 /// standard error = sqrt(0.5) / sqrt(2) = 0.5. (Population std would give 0.5 / sqrt(2) = 0.3536.)
 #[test]
-#[ignore = "FINDING: feature_importance MDI/MDA standard errors use the population std (ddof=0); AFML snippets 8.2/8.3 use pandas .std() (ddof=1), so reported std is too small by sqrt((n-1)/n)"]
 fn mda_standard_error_uses_sample_std_hand_worked() {
     let (x, y, splits) = mda_data();
     let mda = mean_decrease_accuracy(
@@ -315,7 +313,6 @@ fn pca_rank_correlations_match_scipy_without_ties() {
 /// With several components the importance vector is tiled and therefore tied. scipy (and
 /// mlfinlab, which calls it) uses average ranks for Spearman and tau-b for Kendall.
 #[test]
-#[ignore = "FINDING: feature_pca_analysis rank correlations mishandle ties (ordinal ranks for Spearman, tau-a over untied pairs for Kendall); differs from scipy spearmanr/kendalltau whenever more than one PC is kept"]
 fn pca_rank_correlations_match_scipy_with_ties() {
     let r = pca_reference();
     let case = &r.several_components;
@@ -332,7 +329,6 @@ fn pca_rank_correlations_match_scipy_with_ties() {
 /// AFML 8.4.2 / mlfinlab use scipy.stats.weightedtau (Vigna's additive hyperbolic weighting by
 /// rank).
 #[test]
-#[ignore = "FINDING: feature_pca_analysis weighted_kendall_rank is a home-grown 1/(1+i+j) positional weighting, not scipy.stats.weightedtau as in AFML 8.4.2 / mlfinlab; values differ"]
 fn pca_weighted_kendall_matches_scipy_weightedtau() {
     let r = pca_reference();
     for case in [&r.one_component, &r.several_components] {

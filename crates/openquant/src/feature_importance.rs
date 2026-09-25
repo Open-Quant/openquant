@@ -63,7 +63,8 @@ pub fn mean_decrease_impurity(
             .iter()
             .map(|r| if r[j] == 0.0 { f64::NAN } else { r[j] })
             .collect();
-        let (m, s) = nan_mean_std(&col);
+        // Snippet 8.2: pandas `df0.std()`, the sample deviation (ddof = 1).
+        let (m, s) = nan_mean_std(&col, 1);
         means[j] = m;
         stderrs[j] = s * (per_tree_importances.len() as f64).powf(-0.5);
     }
@@ -152,7 +153,8 @@ pub fn single_feature_importance<C: SimpleClassifier>(
     for (j, name) in feature_names.iter().enumerate() {
         let xj: Vec<Vec<f64>> = x.iter().map(|r| vec![r[j]]).collect();
         let scores = ml_cross_val_score(clf, &xj, y, sample_weight, splits, scoring);
-        let (mean, std) = mean_std(&scores);
+        // Snippet 8.4 takes `.std()` of the numpy array cvScore returns: ddof = 0.
+        let (mean, std) = mean_std(&scores, 0);
         out.insert(
             name.clone(),
             ImportanceStats { mean, std: std * (scores.len() as f64).powf(-0.5) },
@@ -212,7 +214,7 @@ pub fn feature_pca_analysis(
         pca_strength[r] = s;
     }
     let pca_rank = rank_desc(&pca_strength);
-    let inv_rank: Vec<f64> = pca_rank.iter().map(|r| 1.0 / *r as f64).collect();
+    let inv_rank: Vec<f64> = pca_rank.iter().map(|r| 1.0 / r).collect();
     let weighted = weighted_kendall_tau(feature_importance_mean, &inv_rank);
 
     Ok(PcaCorrelation { pearson, spearman, kendall, weighted_kendall_rank: weighted })
@@ -389,7 +391,8 @@ fn permute_col(x: &mut [Vec<f64>], col: usize, rng: &mut StdRng) {
 fn pack_stats(feature_names: &[String], values: &[Vec<f64>]) -> BTreeMap<String, ImportanceStats> {
     let mut out = BTreeMap::new();
     for (j, name) in feature_names.iter().enumerate() {
-        let (m, s) = mean_std(&values[j]);
+        // Snippet 8.3: `imp.std()` on a pandas DataFrame, the sample deviation (ddof = 1).
+        let (m, s) = mean_std(&values[j], 1);
         let mean = if m.is_finite() { m } else { 0.0 };
         let std = if s.is_finite() { s * (values[j].len() as f64).powf(-0.5) } else { 0.0 };
         out.insert(name.clone(), ImportanceStats { mean, std });
@@ -397,17 +400,22 @@ fn pack_stats(feature_names: &[String], values: &[Vec<f64>]) -> BTreeMap<String,
     out
 }
 
-fn nan_mean_std(v: &[f64]) -> (f64, f64) {
+fn nan_mean_std(v: &[f64], ddof: usize) -> (f64, f64) {
     let vals: Vec<f64> = v.iter().copied().filter(|x| x.is_finite()).collect();
-    mean_std(&vals)
+    mean_std(&vals, ddof)
 }
 
-fn mean_std(v: &[f64]) -> (f64, f64) {
+/// Mean and standard deviation with `ddof` delta degrees of freedom (divide by `n - ddof`).
+/// The deviation is 0 when there are no more than `ddof` values (pandas would give NaN).
+fn mean_std(v: &[f64], ddof: usize) -> (f64, f64) {
     if v.is_empty() {
         return (0.0, 0.0);
     }
     let mean = v.iter().sum::<f64>() / v.len() as f64;
-    let var = v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / v.len() as f64;
+    if v.len() <= ddof {
+        return (mean, 0.0);
+    }
+    let var = v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (v.len() - ddof) as f64;
     (mean, var.sqrt())
 }
 
@@ -470,71 +478,143 @@ fn pearson_corr(x: &[f64], y: &[f64]) -> f64 {
     }
 }
 
-fn rank_desc(values: &[f64]) -> Vec<usize> {
+/// Ranks with 1 for the largest value; tied values share the average of their ranks, as
+/// pandas `rank(ascending=False)` and `scipy.stats.rankdata(-v)` do.
+fn rank_desc(values: &[f64]) -> Vec<f64> {
     let mut idx: Vec<usize> = (0..values.len()).collect();
     idx.sort_by(|&a, &b| values[b].partial_cmp(&values[a]).unwrap_or(std::cmp::Ordering::Equal));
-    let mut rank = vec![0usize; values.len()];
-    for (r, i) in idx.iter().enumerate() {
-        rank[*i] = r + 1;
+    let mut rank = vec![0.0; values.len()];
+    let mut first = 0;
+    while first < idx.len() {
+        let mut last = first;
+        while last + 1 < idx.len() && values[idx[last + 1]] == values[idx[first]] {
+            last += 1;
+        }
+        // positions first..=last hold ranks first+1 ..= last+1
+        let avg = (first + last) as f64 / 2.0 + 1.0;
+        for i in &idx[first..=last] {
+            rank[*i] = avg;
+        }
+        first = last + 1;
     }
     rank
 }
 
+/// `scipy.stats.spearmanr`: Pearson correlation of average ranks.
 fn spearman_corr(x: &[f64], y: &[f64]) -> f64 {
-    let rx = rank_desc(x).iter().map(|r| *r as f64).collect::<Vec<_>>();
-    let ry = rank_desc(y).iter().map(|r| *r as f64).collect::<Vec<_>>();
-    pearson_corr(&rx, &ry)
+    pearson_corr(&rank_desc(x), &rank_desc(y))
 }
 
+/// `scipy.stats.kendalltau` (the default tau-b): `(C - D) / sqrt((P - T_x) (P - T_y))`, where
+/// `P` counts all pairs and `T_x`, `T_y` the pairs tied in x and in y. 0 when either input is
+/// constant (scipy returns NaN).
 fn kendall_tau(x: &[f64], y: &[f64]) -> f64 {
     if x.len() != y.len() || x.len() < 2 {
         return 0.0;
     }
-    let mut c = 0.0;
-    let mut d = 0.0;
+    let (mut s, mut untied_x, mut untied_y) = (0.0, 0.0, 0.0);
     for i in 0..x.len() {
         for j in (i + 1)..x.len() {
-            let sx = (x[i] - x[j]).signum();
-            let sy = (y[i] - y[j]).signum();
-            let p = sx * sy;
-            if p > 0.0 {
-                c += 1.0;
-            } else if p < 0.0 {
-                d += 1.0;
-            }
+            let sx = sign(x[i] - x[j]);
+            let sy = sign(y[i] - y[j]);
+            s += sx * sy;
+            untied_x += sx.abs();
+            untied_y += sy.abs();
         }
     }
-    let denom = c + d;
-    if denom == 0.0 {
+    if untied_x == 0.0 || untied_y == 0.0 {
         0.0
     } else {
-        (c - d) / denom
+        s / (untied_x.sqrt() * untied_y.sqrt())
     }
 }
 
+/// `scipy.stats.weightedtau` with its defaults (AFML Snippet 8.6): Vigna's weighted tau with
+/// additive hyperbolic weights, averaged over ranking the elements by `(x, y)` and by `(y, x)`.
+/// 0 when either input is constant (scipy returns NaN).
 fn weighted_kendall_tau(x: &[f64], y: &[f64]) -> f64 {
     if x.len() != y.len() || x.len() < 2 {
         return 0.0;
     }
-    let mut c = 0.0;
-    let mut d = 0.0;
-    for i in 0..x.len() {
-        for j in (i + 1)..x.len() {
-            let w = 1.0 / (1.0 + i as f64 + j as f64);
-            let sx = (x[i] - x[j]).signum();
-            let sy = (y[i] - y[j]).signum();
-            let p = sx * sy;
-            if p > 0.0 {
-                c += w;
-            } else if p < 0.0 {
-                d += w;
-            }
+    match (weighted_tau_ranked(x, y), weighted_tau_ranked(y, x)) {
+        (Some(a), Some(b)) => (a + b) / 2.0,
+        _ => 0.0,
+    }
+}
+
+/// One half of `weightedtau`: the element with the largest `x` (ties broken by larger `y`, then
+/// by larger index, as scipy's reversed `lexsort` does) has rank 0 and weight 1, the next
+/// weight 1/2, and so on. A pair weighs the sum of its two elements' weights. The result is
+/// `sum_pairs w * sgn(dx) * sgn(dy) / sqrt(sum_{dx != 0} w * sum_{dy != 0} w)`.
+fn weighted_tau_ranked(x: &[f64], y: &[f64]) -> Option<f64> {
+    let n = x.len();
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| {
+        x[a].partial_cmp(&x[b])
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(y[a].partial_cmp(&y[b]).unwrap_or(std::cmp::Ordering::Equal))
+            .then(a.cmp(&b))
+    });
+    let mut weight = vec![0.0; n];
+    for (rank, i) in order.iter().rev().enumerate() {
+        weight[*i] = 1.0 / (rank as f64 + 1.0);
+    }
+
+    let (mut s, mut untied_x, mut untied_y) = (0.0, 0.0, 0.0);
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let w = weight[i] + weight[j];
+            let sx = sign(x[i] - x[j]);
+            let sy = sign(y[i] - y[j]);
+            s += w * sx * sy;
+            untied_x += w * sx.abs();
+            untied_y += w * sy.abs();
         }
     }
-    let denom = c + d;
-    if denom == 0.0 {
-        0.0
+    if untied_x == 0.0 || untied_y == 0.0 {
+        return None;
+    }
+    Some((s / (untied_x.sqrt() * untied_y.sqrt())).clamp(-1.0, 1.0))
+}
+
+/// -1, 0 or 1. Unlike `f64::signum`, 0.0 maps to 0 so that ties count as ties.
+fn sign(v: f64) -> f64 {
+    if v > 0.0 {
+        1.0
+    } else if v < 0.0 {
+        -1.0
     } else {
-        (c - d) / denom
+        0.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Both inputs have ties: x at 0.1 and 0.3, y at 2.0 and 3.0. Expected values from scipy 1.18:
+    //   spearmanr(x, y) = 0.5454545454545454
+    //   kendalltau(x, y) = 0.3846153846153847   (tau-b: S = 5 over 15 pairs, 2 tied in each)
+    //   weightedtau(x, y) = 0.23914127716864048
+    const X: [f64; 6] = [0.3, 0.1, 0.3, 0.2, 0.1, 0.4];
+    const Y: [f64; 6] = [2.0, 1.0, 3.0, 3.0, 0.5, 2.0];
+
+    #[test]
+    fn average_ranks_for_ties() {
+        assert_eq!(rank_desc(&X), vec![2.5, 5.5, 2.5, 4.0, 5.5, 1.0]);
+    }
+
+    #[test]
+    fn rank_correlations_match_scipy_with_ties() {
+        assert!((spearman_corr(&X, &Y) - 0.5454545454545454).abs() < 1e-12);
+        assert!((kendall_tau(&X, &Y) - 5.0 / 13.0).abs() < 1e-12);
+        assert!((weighted_kendall_tau(&X, &Y) - 0.23914127716864048).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rank_correlations_of_a_constant_are_zero() {
+        let c = [1.0; 6];
+        assert_eq!(kendall_tau(&c, &Y), 0.0);
+        assert_eq!(weighted_kendall_tau(&c, &Y), 0.0);
     }
 }
