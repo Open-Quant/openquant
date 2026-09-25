@@ -2,12 +2,12 @@
 title: "hyperparameter_tuning"
 description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
 module: "hyperparameter_tuning"
-api_surface: "rust-only"
+api_surface: "both"
 afml_chapter:
   - "9"
 citation:
@@ -19,6 +19,7 @@ rust_api:
   - "expand_param_grid"
   - "classification_score"
   - "sample_log_uniform"
+  - "sample_param_sets"
   - "SearchData"
   - "SearchScoring"
   - "SearchResult"
@@ -27,6 +28,11 @@ rust_api:
   - "RandomParamDistribution"
   - "ParamSet"
   - "TuningError"
+python_api:
+  - "hyperparameter_tuning.expand_param_grid"
+  - "hyperparameter_tuning.sample_param_sets"
+  - "hyperparameter_tuning.classification_score"
+  - "hyperparameter_tuning.purged_search"
 sidebar:
   badge: Module
 ---
@@ -177,6 +183,77 @@ bounds must be positive.
 Random search is also usually the better use of a fixed budget when only some parameters
 matter, because a grid spends most of its trials varying the ones that do not (Bergstra and
 Bengio, 2012).
+
+## From Python
+
+`grid_search` and `randomized_search` build and fit a Rust `SimpleClassifier`, so they are not
+bound. The parts that need no model are, and the fit loop runs in Python:
+
+- `expand_param_grid(grid)` and `sample_param_sets(space, n_iter, seed)` return the candidates
+  the Rust searches evaluate, in the same order. `space` values are `("choice", [values])`,
+  `("uniform", low, high)`, `("log_uniform", low, high)` or `("int", low, high)`.
+- `classification_score(y_true, probabilities, sample_weight=None, scoring="neg_log_loss")`
+  is the weighted score above; `scoring` may also be `"accuracy"` or `"balanced_accuracy"`.
+- `purged_search(make_estimator, param_sets, X, y, t0, t1, *, n_splits, pct_embargo, scoring,
+  sample_weight)` builds a model per candidate with `make_estimator(params)`, fits it on each
+  purged fold with the training weights, and scores the test fold with `classification_score`
+  and the test weights, as `grid_search` does. It returns `best_params`, `best_score` and
+  `trials`.
+
+```python
+import numpy as np
+from openquant import hyperparameter_tuning as ht
+
+
+class Threshold:
+    """P(y = 1) is a logistic in the one feature, centred on `threshold`."""
+
+    def __init__(self, params):
+        self.threshold, self.sharpness = params["threshold"], params["sharpness"]
+
+    def fit(self, X, y, sample_weight=None):
+        return self
+
+    def predict_proba(self, X):
+        return 1.0 / (1.0 + np.exp(-(X[:, 0] - self.threshold) * self.sharpness))
+
+
+n = 120
+X = np.linspace(0.0, 1.0, n).reshape(-1, 1)
+y = (X[:, 0] >= 0.7).astype(float)
+w = np.where(y == 1.0, 4.0, 1.0)
+t0 = np.arange(n)
+t1 = t0 + 3
+
+grid = ht.expand_param_grid({"threshold": [0.5, 0.7, 0.9], "sharpness": [4.0, 8.0]})
+best = ht.purged_search(Threshold, grid, X, y, t0, t1, n_splits=4, pct_embargo=0.02, sample_weight=w)
+print(len(grid), "candidates; best", best["best_params"], round(best["best_score"], 4))
+
+space = {"threshold": ("uniform", 0.45, 0.85), "sharpness": ("log_uniform", 0.1, 20.0)}
+draws = ht.sample_param_sets(space, n_iter=12, seed=42)
+print(len(draws), "draws, reproducible:", draws == ht.sample_param_sets(space, n_iter=12, seed=42))
+
+# Test-fold weights count in the score: the weighted log loss of three predictions.
+print(round(ht.classification_score([1, 0, 1], [0.8, 0.3, 0.4], [2.0, 1.0, 1.0]), 4))
+```
+
+```text
+6 candidates; best {'sharpness': 8.0, 'threshold': 0.7} -0.2076
+12 draws, reproducible: True
+-0.4298
+```
+
+With scikit-learn, the purged splits can also go straight into its own search, as long as
+unweighted scoring is acceptable:
+
+```python doc-check=skip doc-check-reason="needs scikit-learn and the caller's X, y, w, t0, t1"
+from sklearn.model_selection import GridSearchCV
+from openquant.cross_validation import purged_kfold_splits
+
+splits = purged_kfold_splits(t0, t1, n_splits=5, pct_embargo=0.01)
+search = GridSearchCV(model, {"C": [0.01, 0.1, 1.0]}, cv=splits, scoring="neg_log_loss")
+search.fit(X, y, sample_weight=w)  # weights reach fit, not the score
+```
 
 ## What to watch for
 

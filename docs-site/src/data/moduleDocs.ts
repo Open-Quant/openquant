@@ -87,6 +87,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.",
     handwritten: true,
+    apiSurface: "both",
+    pythonApis: ["backtesting_engine.cpcv_path_count", "backtesting_engine.run_cpcv", "backtesting_engine.assemble_cpcv_paths"],
   },
   {
     slug: "bet-sizing",
@@ -121,7 +123,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Purged k-fold cross-validation with an embargo, for overlapping labels.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["cross_validation.purged_kfold_splits", "cross_validation.split_with_diagnostics", "cross_validation.cpcv_splits", "cross_validation.cpcv_paths", "cross_validation.naive_kfold_splits", "cross_validation.count_train_test_overlaps"],
   },
   {
     slug: "data-structures",
@@ -139,7 +142,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Grid and randomised search on purged k-fold splits, scored with sample weights.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["hyperparameter_tuning.expand_param_grid", "hyperparameter_tuning.sample_param_sets", "hyperparameter_tuning.classification_score", "hyperparameter_tuning.purged_search"],
   },
   {
     slug: "ef3m",
@@ -192,7 +196,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["feature_importance.mean_decrease_impurity", "feature_importance.mean_decrease_accuracy", "feature_importance.single_feature_importance", "feature_importance.mda_from_probabilities", "feature_importance.sfi_from_probabilities"],
   },
   {
     slug: "filters",
