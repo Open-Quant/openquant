@@ -145,12 +145,12 @@ of the fixtures above, or are derived by hand in a comment next to the assertion
 | `backtest_statistics.rs`, `test_core_backtest_stats.py` | `backtest_statistics/reference.json`; holding period and drawdowns by hand |
 | `codependence.rs`, `test_core_codependence.py` | `codependence/reference.json` |
 | `microstructural_features.rs`, `test_core_microstructural.py` | `microstructural_features/reference.json`; entropies of "11100001" by hand |
-| `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` (the Chu-Stinchcombe-White statistic is also pinned to the library's own output; see the FINDING test) |
+| `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` |
 | `volatility_features.rs`, `test_core_volatility.py` | `volatility/range_reference.json` |
 | `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` |
 | `labeling.rs` | `labeling/reference.json` |
 | `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json` |
-| `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage) |
+| `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage: `hrp.rs` on the Snippet 16.4 distance of distances, `hcaa.rs` on pairwise distances) |
 | `fast_ewma.rs`, `test_core_fast_ewma.py` | by hand: (21 * 1005 + 19 * 1205) / 40 = 1100 |
 | `sampling.rs` | by hand, AFML section 4.5.3's worked example (5/6, 3/4, 1; 6/7; 5/14, 3/14, 6/14) |
 | `ef3m.rs`, `test_core_ef3m.py` | expected values computed in the test; the moment vector is the example of Lopez de Prado & Foreman (2014), derivable by hand |

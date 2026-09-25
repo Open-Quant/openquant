@@ -1,8 +1,12 @@
 import csv
+import json
 
 import pytest
 from _core_fixtures import FIXTURES
 from openquant import hrp
+
+DEFAULT_DISTANCE = "distance_of_distances"
+OTHER_DISTANCE = "correlation"
 
 # Two tight pairs: (0, 1) correlate at 0.9 and (2, 3) at 0.8, the pairs at 0.1.
 _VOLS = [0.1, 0.2, 0.3, 0.4]
@@ -110,6 +114,36 @@ def test_hrp_ordering_depends_on_the_data():
     _, order = hrp.allocate_hrp([str(i) for i in range(n)], covariance_matrix=cov)
 
     assert abs(order.index(0) - order.index(12)) == 1
+
+
+@pytest.mark.parametrize(
+    ("distance", "key"),
+    [
+        ("correlation", None),
+        ("distance_of_distances", "distance_of_distances"),
+    ],
+)
+def test_hrp_distance_matches_independent_reference(distance, key):
+    # tests/fixtures/hrp/generate.py: scipy single linkage on the pairwise distances, or on the
+    # square distance matrix exactly as AFML Snippet 16.4 passes it.
+    reference = json.loads((FIXTURES / "hrp" / "reference.json").read_text())
+    case = reference["stock_prices"]
+    want = case if key is None else case[key]
+    prices, names = _load_prices_and_names()
+
+    weights, order = hrp.allocate_hrp(names, asset_prices=prices, distance=distance)
+
+    assert order == want["order"]
+    assert weights == pytest.approx(want["weights"], abs=1e-9)
+
+
+def test_hrp_distance_default_and_validation():
+    prices, names = _load_prices_and_names()
+    default = hrp.allocate_hrp(names, asset_prices=prices)
+    assert default == hrp.allocate_hrp(names, asset_prices=prices, distance=DEFAULT_DISTANCE)
+    assert default != hrp.allocate_hrp(names, asset_prices=prices, distance=OTHER_DISTANCE)
+    with pytest.raises(ValueError, match="unknown distance"):
+        hrp.allocate_hrp(names, asset_prices=prices, distance="euclidean")
 
 
 @pytest.mark.parametrize("n", [22, 24])

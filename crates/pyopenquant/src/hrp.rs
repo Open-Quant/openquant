@@ -9,7 +9,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
     asset_returns=None,
     covariance_matrix=None,
     resample_by=None,
-    use_shrinkage=false
+    use_shrinkage=false,
+    distance=None
 ))]
 fn hrp_allocate(
     asset_names: Vec<String>,
@@ -18,12 +19,17 @@ fn hrp_allocate(
     covariance_matrix: Option<Vec<Vec<f64>>>,
     resample_by: Option<String>,
     use_shrinkage: bool,
+    distance: Option<String>,
 ) -> PyResult<(Vec<f64>, Vec<usize>)> {
+    let distance: openquant::hrp::HrpDistance = match distance {
+        Some(name) => name.parse().map_err(to_py_err)?,
+        None => openquant::hrp::HrpDistance::default(),
+    };
     let prices_m = asset_prices.map(matrix_from_rows).transpose()?;
     let returns_m = asset_returns.map(matrix_from_rows).transpose()?;
     let cov_m = covariance_matrix.map(matrix_from_rows).transpose()?;
 
-    let mut hrp = openquant::hrp::HierarchicalRiskParity::new();
+    let mut hrp = openquant::hrp::HierarchicalRiskParity::with_distance(distance);
     hrp.allocate(
         &asset_names,
         prices_m.as_ref(),

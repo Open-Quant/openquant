@@ -2,7 +2,7 @@
 title: "hcaa"
 description: "Hierarchical allocation down the cluster tree, cut into a chosen number of clusters, with a choice of risk measure: variance, standard deviation, expected shortfall, conditional drawdown, Sharpe ratio or equal splits."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -41,7 +41,11 @@ the leaf list was halved at its midpoint, as HRP does.
 
 ## The metrics
 
-The tree is HRP's: single linkage on correlation distance. Weight starts at the root and is
+The tree is single linkage on the pairwise correlation distance, the tree of HRP's
+`distance="correlation"` option. HRP's default instead clusters on the distance between rows
+of the distance matrix, as AFML's Snippet 16.4 does (see
+[which distance is clustered](/modules/hrp/#which-distance-is-clustered)). Weight starts at
+the root and is
 handed down it. At each of the top $k-1$ merges, where $k$ is `optimal_num_clusters`, the
 node's weight is split between its two children, the left scaled by $\alpha$ and the right by
 $1-\alpha$. Below that cut each subtree is one cluster, and its weight is shared equally among
@@ -189,7 +193,7 @@ assert!(matches!(
 - **Results differ from [HRP](/modules/hrp/) even with `"minimum_variance"`.** HRP halves the
   ordered leaf list at its midpoint, which can cut across a branch of the tree; this module
   splits only at the tree's own branches. They agree when every branch happens to divide
-  the list in half.
+  the list in half and HRP is given the same tree (`distance="correlation"`).
 
 ## Related modules
 

@@ -288,7 +288,8 @@ export const apiInventory = {
     "openquant::hrp": [
       "allocate",
       "new",
-      "plot_clusters"
+      "plot_clusters",
+      "with_distance"
     ],
     "openquant::hyperparameter_tuning": [
       "as_bool",
