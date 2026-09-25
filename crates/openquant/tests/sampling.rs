@@ -129,6 +129,9 @@ fn test_get_ind_mat_uniqueness() {
     ind[3] = vec![0, 1, 0];
     ind[4] = vec![0, 0, 1];
     ind[5] = vec![0, 0, 1];
+    // AFML section 4.5.3's worked example. By hand: bar 2 is shared by labels 0 and 1, so the
+    // average uniqueness of the labels is (1 + 1 + 1/2) / 3 = 5/6, (1/2 + 1) / 2 = 3/4 and 1,
+    // and the mean over the seven non-zero cells is 6/7 = 0.8571.
     let uniq = get_ind_mat_label_uniqueness(&ind).unwrap();
     let avg = get_ind_mat_average_uniqueness(&ind).unwrap();
     assert!(
@@ -173,7 +176,9 @@ fn test_bootstrap_loop_run() {
     let second = openquant::sampling::bootstrap_loop_run(&ind, &prev_conc).unwrap();
     let sum: f64 = second.iter().sum();
     let probs: Vec<f64> = second.iter().map(|v| *v / sum).collect();
-    let target = [0.35714286, 0.21428571, 0.42857143];
+    // AFML section 4.5.3: after drawing label 1, the next draw's probabilities are
+    // (5/6, 1/2, 1) / (7/3) = (5/14, 3/14, 6/14).
+    let target = [5.0 / 14.0, 3.0 / 14.0, 6.0 / 14.0];
     for (p, t) in probs.iter().zip(target.iter()) {
         assert!((p - t).abs() <= 1e-6);
     }

@@ -1,9 +1,10 @@
 # Bet sizing fixtures
 
-- `reserve_fixture.json`: Generated via Python `.venv_x86` using `scripts/gen_bet_sizing_fixtures.py`. Contains EF3M fit params and resulting `bet_size` for a 500-sample synthetic dataset (same seed as mlfinlab tests).
+The fixtures live in `tests/fixtures/bet_sizing/` at the repository root, each with its generator
+beside it (neither imports openquant or mlfinlab):
 
-Generation command:
-```bash
-cd mlfinlab
-.venv_x86/bin/python -c "import sys; sys.path.insert(0,''); import scripts.gen_bet_sizing_fixtures as m; m.main()"
-```
+- `reserve_fixture.json`: AFML section 10.2 "reserve" sizing on 500 synthetic events
+  (`numpy default_rng(138)`): concurrent long/short counts, a two-Gaussian fit and the bet sizes.
+  `uv run --with pandas --with scipy python tests/fixtures/bet_sizing/generate_reserve.py`
+- `prob_dynamic_budget.json`: AFML snippets 10.1-10.4 and the budget approach of section 10.2.
+  `uv run --with pandas --with scipy python tests/fixtures/bet_sizing/generate_prob_dynamic_budget.py`
