@@ -80,8 +80,8 @@ def test_core_submodules_are_discovered():
     # parametrized check below vacuously green.
     lib_rs = TESTS_DIR.parents[1] / "crates" / "pyopenquant" / "src" / "lib.rs"
     registered = re.findall(r"^\s*(\w+)::register\(py, m\)\?;", lib_rs.read_text(), re.MULTILINE)
-    # 27 today, fast_ewma included; README.md and the setup docs quote this count.
-    assert len(registered) == 27
+    # 32 today, fast_ewma included; README.md and the setup docs quote this count.
+    assert len(registered) == 32
     assert CORE_SUBMODULES == sorted(registered)
     for name in CORE_SUBMODULES:
         assert _public_callables(getattr(_core, name)), f"_core.{name} exposes no callables"

@@ -3,7 +3,6 @@
 import random
 
 import pytest
-
 from openquant import ensemble, labeling, sampling, sb_bagging, synthetic_bt
 
 
@@ -49,9 +48,9 @@ def test_add_vertical_barrier_defaults_to_zero_and_takes_keywords():
     assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, num_hours=48) == positional
     # Components add up: one day plus 24 hours is two days.
     assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, 1, num_hours=24) == positional
-    assert labeling.add_vertical_barrier(
-        events, STAMPS, CLOSE, num_minutes=1
-    ) == [(STAMPS[i], STAMPS[i + 1]) for i in range(3)]
+    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, num_minutes=1) == [
+        (STAMPS[i], STAMPS[i + 1]) for i in range(3)
+    ]
 
 
 def test_add_vertical_barrier_requires_a_horizon():
@@ -112,6 +111,11 @@ def test_otr_workflow_stability_defaults_are_the_rust_defaults():
     assert _otr(history, **OLD_PYTHON_CRITERIA)["diagnostics"]["no_stable_optimum"] is False
 
     # Each threshold can still be overridden on its own.
-    loose = _otr(history, random_walk_phi_threshold=0.999, min_peak_margin=0.0,
-                 min_surface_std=0.0, min_best_sharpe=-10.0)
+    loose = _otr(
+        history,
+        random_walk_phi_threshold=0.999,
+        min_peak_margin=0.0,
+        min_surface_std=0.0,
+        min_best_sharpe=-10.0,
+    )
     assert loose["diagnostics"]["no_stable_optimum"] is False

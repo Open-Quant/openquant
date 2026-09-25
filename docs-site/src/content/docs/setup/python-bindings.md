@@ -130,17 +130,18 @@ print(result["promotion"])
 
 | Attribute | Kind | Comes from |
 |---|---|---|
-| `risk`, `filters`, `sampling`, `labeling`, `bet_sizing`, `portfolio`, `fracdiff`, `fast_ewma`, `volatility`, `codependence`, `backtest_stats`, `sample_weights`, `microstructural`, `strategy_risk`, `ensemble`, `structural_breaks`, `synthetic_bt`, `ef3m`, `streaming_hpc`, `hrp`, `hcaa`, `onc`, `cla`, `sb_bagging` | compiled | `openquant._core`, i.e. the Rust crate |
-| `bars`, `data`, `feature_diagnostics`, `pipeline`, `research`, `adapters`, `viz` | Python | `python/openquant/*.py` |
+| `risk`, `filters`, `sampling`, `labeling`, `bet_sizing`, `portfolio`, `fracdiff`, `fast_ewma`, `volatility`, `codependence`, `backtest_stats`, `sample_weights`, `microstructural`, `strategy_risk`, `ensemble`, `structural_breaks`, `synthetic_bt`, `ef3m`, `streaming_hpc`, `hrp`, `hcaa`, `onc`, `cla`, `sb_bagging`, `dynamic_allocation` | compiled | `openquant._core`, i.e. the Rust crate |
+| `bars`, `data`, `pipeline`, `backtesting_engine`, `cross_validation`, `feature_importance`, `hyperparameter_tuning`, `evaluation`, `feature_diagnostics`, `research`, `adapters`, `viz` | Python | `python/openquant/*.py` |
 
-The extension registers 27 submodules: the 24 in the first row, re-exported
-unchanged, plus `bars`, `data` and `pipeline`, which the Python modules of the
-same name wrap (the compiled ones stay reachable as `openquant._core.<name>`).
+The extension registers 32 submodules: the 25 in the first row, re-exported
+unchanged, plus `bars`, `data`, `pipeline`, `backtesting_engine`,
+`cross_validation`, `feature_importance` and `hyperparameter_tuning`, which the
+Python modules of the same name wrap (the compiled ones stay reachable as `openquant._core.<name>`).
 Only the first row requires the compile step. That is why editing a file
 under `python/openquant/` takes effect immediately, while editing
 anything under `crates/` needs `maturin develop` re-run.
 
-Runtime dependencies are `polars>=1.0,<2` and `pyarrow>=15,<20`
+Runtime dependencies are `numpy>=1.26,<3`, `polars>=1.0,<2` and `pyarrow>=15,<20`
 (`pyproject.toml`); `uv` installs them for you.
 
 ## Next
