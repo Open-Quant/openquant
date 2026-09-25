@@ -2,12 +2,12 @@
 title: "feature_importance"
 description: "MDI, MDA and SFI feature importance, and a PCA cross-check, for models validated on purged folds."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
 module: "feature_importance"
-api_surface: "rust-only"
+api_surface: "both"
 afml_chapter:
   - "8"
 citation:
@@ -23,6 +23,12 @@ rust_api:
   - "ImportanceStats"
   - "PcaCorrelation"
   - "FeatureImportanceError"
+python_api:
+  - "feature_importance.mean_decrease_impurity"
+  - "feature_importance.mean_decrease_accuracy"
+  - "feature_importance.single_feature_importance"
+  - "feature_importance.mda_from_probabilities"
+  - "feature_importance.sfi_from_probabilities"
 sidebar:
   badge: Module
 ---
@@ -34,8 +40,10 @@ against what you believe about the market, and which survives the model being re
 
 Chapter 8 gives three methods, and the reason to have three is that each one is wrong in a
 different way. This module implements them for any model behind the
-[`SimpleClassifier`](/modules/cross-validation/#scoring) trait. The Python counterpart,
-with its own model, is [`feature-diagnostics`](/modules/feature-diagnostics/).
+[`SimpleClassifier`](/modules/cross-validation/#scoring) trait, and from Python for any model
+with `fit` and `predict_proba` (see [From Python](#from-python)).
+[`feature-diagnostics`](/modules/feature-diagnostics/) is an older pure-Python version with its
+own linear model.
 
 | | In- or out-of-sample | What it can be fooled by |
 | --- | --- | --- |
@@ -161,6 +169,69 @@ Spearman uses average ranks and Kendall is tau-b, as scipy's are. The weighted K
 `scipy.stats.weightedtau(importance, 1 / pca_rank)`, with hyperbolic weights by rank, and
 `pca_rank` gives tied loadings their average rank. Where scipy would return NaN because an
 input is constant, the rank coefficients here return 0.
+
+## From Python
+
+`openquant.feature_importance` scores with the Rust functions above, but the model stays in
+Python. MDA and SFI always run on purged k-fold splits built from the label spans `t0` and
+`t1`, which are required arguments: called without them, every function raises. There is no
+argument for passing folds of your own.
+
+| Function | Model | Result |
+| --- | --- | --- |
+| `mean_decrease_impurity(per_tree_importances, feature_names=None)` | none: one row per tree, e.g. `[t.feature_importances_ for t in forest.estimators_]` | MDI |
+| `mean_decrease_accuracy(estimator, X, y, t0, t1, *, n_splits, pct_embargo, scoring, sample_weight, seed=42)` | any object with `fit(X, y, sample_weight=...)` and `predict_proba(X)`; copied per fold with `sklearn.base.clone` when scikit-learn is installed | MDA, each test column shuffled with `numpy.random.default_rng(seed)`; the default seed is 42, as for `feature_diagnostics.mda_importance` |
+| `single_feature_importance(estimator, X, y, t0, t1, ...)` | the same, fitted on one column at a time | SFI |
+| `mda_from_probabilities(y, t0, t1, base_proba, permuted_proba, *, n_splits, ..., seed=42)` | none: out-of-sample probabilities you computed on `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | MDA |
+| `sfi_from_probabilities(y, t0, t1, proba, *, n_splits, ...)` | the same, one column per single-feature model | SFI |
+
+The estimator-driven functions fit in Python and pass the probabilities to the last two, which
+rebuild the purged folds and hand the Rust MDA and SFI a stand-in classifier that plays the
+probabilities back. Each result maps a feature name to `{"mean", "std"}`, `std` being the
+standard error, in the order of `feature_names`. Labels must be 0/1 and `scoring` is
+`"neg_log_loss"`, `"accuracy"` or `"f1"`. `mda_from_probabilities` passes its `seed` on to the
+Rust MDA, but the shuffled predictions are already yours, so the seed cannot change its
+result; in `mean_decrease_accuracy` it drives the shuffles.
+
+```python
+import numpy as np
+from openquant import feature_importance as fi
+
+
+class NearestMean:
+    """A tiny classifier with the scikit-learn interface: fit and predict_proba."""
+
+    def fit(self, X, y, sample_weight=None):
+        self.w = X[y == 1].mean(axis=0) - X[y == 0].mean(axis=0)
+        return self
+
+    def predict_proba(self, X):
+        p = 1.0 / (1.0 + np.exp(-4.0 * X @ self.w))
+        return np.column_stack([1.0 - p, p])
+
+
+rng = np.random.default_rng(0)
+n = 400
+X = rng.normal(size=(n, 3))  # f0 drives the label; f1 and f2 are noise
+y = (X[:, 0] + 0.5 * rng.normal(size=n) > 0).astype(float)
+t0 = np.arange(n)  # the bar of each event ...
+t1 = t0 + 5        # ... and the bar its label resolves on
+
+mda = fi.mean_decrease_accuracy(NearestMean(), X, y, t0, t1, n_splits=5, pct_embargo=0.01)
+sfi = fi.single_feature_importance(NearestMean(), X, y, t0, t1, n_splits=5, pct_embargo=0.01)
+mdi = fi.mean_decrease_impurity([[0.6, 0.3, 0.1], [0.5, 0.3, 0.2], [0.7, 0.2, 0.1]])
+for name in ("f0", "f1", "f2"):
+    print(name, round(mda[name]["mean"], 3), round(sfi[name]["mean"], 3), round(mdi[name]["mean"], 3))
+```
+
+```text
+f0 0.882 -0.282 0.6
+f1 -0.042 -0.735 0.267
+f2 -0.024 -0.708 0.133
+```
+
+The three columns are MDA, SFI and (from made-up per-tree importances) MDI. SFI is scored by
+negative log loss, so every value is negative and the least negative feature is best.
 
 ## What to watch for
 

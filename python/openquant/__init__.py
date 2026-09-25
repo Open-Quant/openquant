@@ -1,10 +1,25 @@
 import sys as _sys
 
-from . import _core, adapters, bars, data, evaluation, feature_diagnostics, pipeline, research, viz
+from . import (
+    _core,
+    adapters,
+    backtesting_engine,
+    bars,
+    cross_validation,
+    data,
+    evaluation,
+    feature_diagnostics,
+    feature_importance,
+    hyperparameter_tuning,
+    pipeline,
+    research,
+    viz,
+)
 
-# Compiled submodules re-exported as-is. `bars`, `data` and `pipeline` are
-# deliberately absent: the pure-Python modules imported above wrap the compiled
-# ones (still reachable as `openquant._core.<name>`).
+# Compiled submodules re-exported as-is. `backtesting_engine`, `bars`,
+# `cross_validation`, `data`, `feature_importance`, `hyperparameter_tuning` and
+# `pipeline` are deliberately absent: the pure-Python modules imported above wrap
+# the compiled ones (still reachable as `openquant._core.<name>`).
 risk = _core.risk
 filters = _core.filters
 sampling = _core.sampling
@@ -67,10 +82,14 @@ del _name
 
 __all__ = [
     *_CORE_REEXPORTS,
+    "backtesting_engine",
     "bars",
+    "cross_validation",
     "data",
     "evaluation",
     "feature_diagnostics",
+    "feature_importance",
+    "hyperparameter_tuning",
     "pipeline",
     "research",
     "adapters",

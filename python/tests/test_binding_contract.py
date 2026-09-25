@@ -45,7 +45,15 @@ LEGACY_TEST_FILES = {
 
 # Names where `openquant.<name>` is a pure-Python module wrapping the compiled
 # one, so the compiled callables are not re-exported one-to-one.
-PYTHON_WRAPPERS = {"bars", "data", "pipeline"}
+PYTHON_WRAPPERS = {
+    "backtesting_engine",
+    "bars",
+    "cross_validation",
+    "data",
+    "feature_importance",
+    "hyperparameter_tuning",
+    "pipeline",
+}
 
 _TEST_DEF_RE = re.compile(r"^def (test_\w+)\(", re.MULTILINE)
 

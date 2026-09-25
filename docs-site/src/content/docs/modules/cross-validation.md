@@ -2,12 +2,12 @@
 title: "cross_validation"
 description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
 module: "cross_validation"
-api_surface: "rust-only"
+api_surface: "both"
 afml_chapter:
   - "7"
   - "12"
@@ -27,6 +27,13 @@ rust_api:
   - "naive_kfold_splits"
   - "count_train_test_overlaps"
   - "CrossValidationError"
+python_api:
+  - "cross_validation.purged_kfold_splits"
+  - "cross_validation.split_with_diagnostics"
+  - "cross_validation.cpcv_splits"
+  - "cross_validation.cpcv_paths"
+  - "cross_validation.naive_kfold_splits"
+  - "cross_validation.count_train_test_overlaps"
 sidebar:
   badge: Module
 ---
@@ -39,8 +46,8 @@ between. If a training label's span overlaps a test label's span, the two share 
 model has been shown part of the answer, and the fold's score is inflated. Shuffling makes it
 worse, since it scatters such pairs across every fold boundary.
 
-This module is Rust-only. Python bindings are tracked in
-[#42](https://github.com/Open-Quant/openquant/issues/42).
+From Python, `openquant.cross_validation` returns the same splits as numpy index arrays, to
+use with any model (see [From Python](#from-python)).
 
 ## Purging and embargo
 
@@ -215,6 +222,61 @@ let entropy = -(0.25 * 0.25f64.ln() + 0.75 * 0.75f64.ln());
 assert_eq!(scores.len(), 5);
 assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
 ```
+
+## From Python
+
+`openquant.cross_validation` returns indices and fits nothing, so any model can use them.
+`t0` and `t1` are required: `t0[i]` is when label $i$ starts and `t1[i]` when it resolves.
+They can be numpy `datetime64` arrays, pandas or polars datetime columns, `datetime` objects,
+ISO strings, or plain integers such as bar positions. The splitting is the Rust code above.
+
+| Function | Returns |
+| --- | --- |
+| `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | `[(train_idx, test_idx), ...]`, numpy int arrays |
+| `split_with_diagnostics(t0, t1, n_splits, pct_embargo)` | one dict per fold: the indices plus `test_ranges`, `purged_indices`, `embargo_indices`, `overlap_count_after_purge` |
+| `cpcv_splits(t0, t1, n_splits, n_test_splits, pct_embargo)` | the same dicts for the $\binom{N}{k}$ CPCV splits, with `test_fold_ids` |
+| `cpcv_paths(n_splits, n_test_splits)` | an `(n_paths, n_splits)` array: `paths[p, g]` is the split whose predictions path `p` uses for fold `g` |
+| `naive_kfold_splits(n_samples, n_splits)` | the unpurged baseline |
+| `count_train_test_overlaps(t0, t1, train, test)` | the number of leaking training samples |
+
+```python
+import numpy as np
+from openquant import cross_validation as cv
+
+# The example above: 40 hourly labels, each resolved 3 hours after it starts.
+t0 = np.datetime64("2024-01-02T09:00") + np.arange(40) * np.timedelta64(1, "h")
+t1 = t0 + np.timedelta64(3, "h")
+
+train, test = cv.purged_kfold_splits(t0, t1, n_splits=5, pct_embargo=0.15)[2]
+print("test", test.min(), "-", test.max(), "train", train.tolist())
+
+fold = cv.split_with_diagnostics(t0, t1, n_splits=5, pct_embargo=0.15)[2]
+print("purged", fold["purged_indices"].tolist())
+
+splits = cv.cpcv_splits(t0, t1, n_splits=5, n_test_splits=2, pct_embargo=0.15)
+print(len(splits), "CPCV splits; split 1 tests folds", splits[1]["test_fold_ids"])
+print(cv.cpcv_paths(n_splits=5, n_test_splits=2))
+
+naive_train, naive_test = cv.naive_kfold_splits(40, 5)[2]
+print("naive fold 2 overlaps:", cv.count_train_test_overlaps(t0, t1, naive_train, naive_test))
+```
+
+```text
+test 16 - 23 train [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+purged [13, 14, 15, 24, 25, 26]
+10 CPCV splits; split 1 tests folds (0, 2)
+[[0 0 1 2 3]
+ [1 4 4 5 6]
+ [2 5 7 7 8]
+ [3 6 8 9 9]]
+naive fold 2 overlaps: 6
+```
+
+The list from `purged_kfold_splits` is a valid `cv=` for scikit-learn:
+`cross_val_score(model, X, y, cv=splits)` or `GridSearchCV(model, grid, cv=splits)`.
+scikit-learn then passes `sample_weight` to `fit` but not to the scorer (the bug Snippet 7.4
+fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
+`purged_search` weights the score as well.
 
 ## What to watch for
 
