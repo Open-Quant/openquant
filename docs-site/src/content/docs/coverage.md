@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,9 +42,9 @@ tally below cannot be bulk-applied.
 | `status` | Pages | Means |
 |---|---|---|
 | `generated` | 8 | Emitted from `src/data/moduleDocs.ts`. Nobody has read it. |
-| `draft` | 5 | Hand-written, known incomplete. Claims nothing. |
+| `draft` | 6 | Hand-written, known incomplete. Claims nothing. |
 | `authored` | 35 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
-| `reviewed` | 9 | A human read the page end to end. |
+| `reviewed` | 8 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **57** | |
 <!-- coverage:end:status-tally -->
