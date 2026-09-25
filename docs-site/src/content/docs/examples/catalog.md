@@ -31,23 +31,23 @@ only `cargo`.
 
 The ten notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
-`10_hrp_vs_ivp_cla_oos.ipynb`. Notebooks 09 and 10 are research runbooks,
-listed under [Runbooks](#runbooks) below. They are committed with their outputs,
+`11_meta_labeling_triple_barrier.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 11 are
+research runbooks, listed under [Runbooks](#runbooks) below. They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
-All of them run on synthetic data: `06_afml_real_data_end_to_end.ipynb`, `09` and `10`
-read the SYNTHETIC `SYN_A`..`SYN_E` sample through `openquant.data.fetch`,
-and run on real data only when you pass your own source.
+All of them run on synthetic data: `09`, `10` and `11` read the SYNTHETIC `SYN_A`..`SYN_E` sample
+through `openquant.data.fetch`, and run on real data only when you pass your own source.
 
 ### Figures from the executed notebooks
 
 `just notebooks-run` writes each notebook figure here in both site themes. These two come from
-`06_afml_real_data_end_to_end.ipynb` and describe the **SYNTHETIC** sample, not a real market.
+`11_meta_labeling_triple_barrier.ipynb` and describe **SYNTHETIC** price paths with a planted
+signal, not a real market.
 
-<img class="dark:sl-hidden" src="/figures/notebooks/nb06-equity-drawdown-light.svg" alt="Equity curve and drawdown of a five-day momentum signal on the synthetic SYN_A series, 2022 to 2023." />
-<img class="light:sl-hidden" src="/figures/notebooks/nb06-equity-drawdown-dark.svg" alt="Equity curve and drawdown of a five-day momentum signal on the synthetic SYN_A series, 2022 to 2023." />
+<img class="dark:sl-hidden" src="/figures/notebooks/nb11-headline-equity-light.svg" alt="Cumulative net log return on a simulated planted-signal path for a moving-average crossover, the crossover filtered by a meta-labeling model, and an oracle filter that knows the hidden regime." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb11-headline-equity-dark.svg" alt="Cumulative net log return on a simulated planted-signal path for a moving-average crossover, the crossover filtered by a meta-labeling model, and an oracle filter that knows the hidden regime." />
 
-<img class="dark:sl-hidden" src="/figures/notebooks/nb06-confusion-light.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
-<img class="light:sl-hidden" src="/figures/notebooks/nb06-confusion-dark.svg" alt="Two-by-two confusion matrix of the momentum side against the next-day direction of SYN_A; the hit rate is about one half." />
+<img class="dark:sl-hidden" src="/figures/notebooks/nb11-monte-carlo-light.svg" alt="Box plots over simulated paths of the precision gain and the net Sharpe ratio gain of meta-labeling over the primary model at three signal strengths, with the oracle's mean gain marked." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb11-monte-carlo-dark.svg" alt="Box plots over simulated paths of the precision gain and the net Sharpe ratio gain of meta-labeling over the primary model at three signal strengths, with the oracle's mean gain marked." />
 
 ### Runbooks
 
@@ -59,6 +59,10 @@ Runbooks:
   checked against simulated series of known memory.
 - [HRP vs IVP and CLA out of sample](/runbooks/hrp-vs-ivp-cla-oos/) —
   `10_hrp_vs_ivp_cla_oos.ipynb`, AFML §16.6's Monte Carlo on SYNTHETIC data.
+- [Triple-barrier labeling and meta-labeling](/runbooks/meta-labeling-triple-barrier/) —
+  `11_meta_labeling_triple_barrier.ipynb`, primary vs meta-labeled bets in purged k-fold, net of
+  costs, deflated by a trial registry, on SYNTHETIC paths with a planted signal and a no-signal
+  control.
 
 ## Worked example: cleaning a messy OHLCV file
 
