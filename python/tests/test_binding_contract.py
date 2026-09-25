@@ -24,9 +24,8 @@ import re
 import types
 from pathlib import Path
 
-import pytest
-
 import openquant
+import pytest
 from openquant import _core
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -46,7 +45,15 @@ LEGACY_TEST_FILES = {
 
 # Names where `openquant.<name>` is a pure-Python module wrapping the compiled
 # one, so the compiled callables are not re-exported one-to-one.
-PYTHON_WRAPPERS = {"bars", "data", "pipeline"}
+PYTHON_WRAPPERS = {
+    "backtesting_engine",
+    "bars",
+    "cross_validation",
+    "data",
+    "feature_importance",
+    "hyperparameter_tuning",
+    "pipeline",
+}
 
 _TEST_DEF_RE = re.compile(r"^def (test_\w+)\(", re.MULTILINE)
 
@@ -61,9 +68,7 @@ def _core_submodules():
 
 def _public_callables(module):
     return sorted(
-        name
-        for name, value in vars(module).items()
-        if callable(value) and not name.startswith("_")
+        name for name, value in vars(module).items() if callable(value) and not name.startswith("_")
     )
 
 

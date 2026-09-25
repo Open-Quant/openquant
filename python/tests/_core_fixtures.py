@@ -30,13 +30,9 @@ def load_json(relative_path):
 
 
 def load_timestamps(relative_path, column="date_time"):
-    """Timestamps truncated to whole seconds.
-
-    The fixtures carry milliseconds but the bindings only parse
-    '%Y-%m-%d %H:%M:%S'.
-    """
+    """Timestamps as the fixture stores them, milliseconds included."""
     (raw,) = load_csv_columns(relative_path, [column], convert=str)
-    return [value[:19] for value in raw]
+    return raw
 
 
 def finite(values):

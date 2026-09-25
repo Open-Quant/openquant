@@ -13,6 +13,13 @@ fn risk_calculate_expected_shortfall(returns: Vec<f64>, confidence_level: f64) -
     RiskMetrics.calculate_expected_shortfall(&returns, confidence_level).map_err(to_py_err)
 }
 
+/// Conditional drawdown at risk: the mean of the worst `1 - confidence_level` share of the
+/// drawdowns of `returns`.
+///
+/// Despite its name (kept so existing keyword calls work), `returns` must be a cumulative
+/// series such as an equity curve or a price, not per-period returns. `confidence_level` is
+/// the upper-tail level (0.95 averages the worst 5%), the opposite of
+/// `calculate_value_at_risk`, which takes the lower-tail probability (0.05).
 #[pyfunction(name = "calculate_conditional_drawdown_risk")]
 fn risk_calculate_conditional_drawdown_risk(
     returns: Vec<f64>,
@@ -45,6 +52,8 @@ fn risk_calculate_expected_shortfall_from_matrix(
     RiskMetrics.calculate_expected_shortfall_from_matrix(&m, confidence_level).map_err(to_py_err)
 }
 
+/// `calculate_conditional_drawdown_risk` on the first column of `returns`, which must be a
+/// cumulative series.
 #[pyfunction(name = "calculate_conditional_drawdown_risk_from_matrix")]
 fn risk_calculate_conditional_drawdown_risk_from_matrix(
     returns: Vec<Vec<f64>>,

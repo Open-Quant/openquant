@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_json
-
 from openquant import codependence
 
 # Computed from the published definitions by tests/fixtures/codependence/generate.py
@@ -30,15 +28,21 @@ def test_correlation_distances_match_reference():
     # Mirrors crates/openquant/tests/codependence.rs::test_correlations
     x, y_1, y_2 = _load_series()
 
-    assert codependence.angular_distance(x, y_1) == pytest.approx(REF["angular_distance_x_y1"], abs=TOL)
+    assert codependence.angular_distance(x, y_1) == pytest.approx(
+        REF["angular_distance_x_y1"], abs=TOL
+    )
     assert codependence.absolute_angular_distance(x, y_1) == pytest.approx(
         REF["absolute_angular_distance_x_y1"], abs=TOL
     )
     assert codependence.squared_angular_distance(x, y_1) == pytest.approx(
         REF["squared_angular_distance_x_y1"], abs=TOL
     )
-    assert codependence.distance_correlation(x, y_1) == pytest.approx(REF["distance_correlation_x_y1"], abs=TOL)
-    assert codependence.distance_correlation(x, y_2) == pytest.approx(REF["distance_correlation_x_y2"], abs=TOL)
+    assert codependence.distance_correlation(x, y_1) == pytest.approx(
+        REF["distance_correlation_x_y1"], abs=TOL
+    )
+    assert codependence.distance_correlation(x, y_2) == pytest.approx(
+        REF["distance_correlation_x_y2"], abs=TOL
+    )
 
 
 def test_information_metrics_match_reference():
@@ -52,8 +56,12 @@ def test_information_metrics_match_reference():
 
     voi = codependence.variation_of_information_score
     assert voi(x, y_1) == pytest.approx(REF["variation_of_information_x_y1"], abs=TOL)
-    assert voi(x, y_1, normalize=True) == pytest.approx(REF["variation_of_information_normalised_x_y1"], abs=TOL)
-    assert voi(x, y_1, n_bins=10) == pytest.approx(REF["variation_of_information_x_y1_10_bins"], abs=TOL)
+    assert voi(x, y_1, normalize=True) == pytest.approx(
+        REF["variation_of_information_normalised_x_y1"], abs=TOL
+    )
+    assert voi(x, y_1, n_bins=10) == pytest.approx(
+        REF["variation_of_information_x_y1_10_bins"], abs=TOL
+    )
 
 
 def test_optimal_number_of_bins_match_reference():
@@ -61,7 +69,10 @@ def test_optimal_number_of_bins_match_reference():
     x, y_1, _ = _load_series()
 
     assert codependence.get_optimal_number_of_bins(len(x)) == REF["optimal_bins_univariate"]
-    assert codependence.get_optimal_number_of_bins(len(x), _corrcoef(x, y_1)) == REF["optimal_bins_bivariate_x_y1"]
+    assert (
+        codependence.get_optimal_number_of_bins(len(x), _corrcoef(x, y_1))
+        == REF["optimal_bins_bivariate_x_y1"]
+    )
 
 
 def test_codependence_rejects_invalid_inputs():

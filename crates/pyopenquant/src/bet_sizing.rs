@@ -1,6 +1,8 @@
 use pyo3::prelude::*;
 
-use crate::helpers::{pair_timestamps_values, parse_naive_datetimes, to_py_err};
+use crate::helpers::{
+    format_naive_datetime, pair_timestamps_values, parse_naive_datetimes, to_py_err,
+};
 
 /// Python-facing reserve bet-size row: `(timestamp, active_long, active_short, c_t, bet_size)`.
 type ReserveRow = (String, f64, f64, f64, f64);
@@ -134,7 +136,7 @@ fn bet_sizing_avg_active_signals(
     )?;
     let t1 = parse_naive_datetimes(t1_timestamps)?;
     let result = openquant::bet_sizing::avg_active_signals(&signal, &t1);
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "bet_size_dynamic")]
@@ -175,7 +177,7 @@ fn bet_sizing_get_concurrent_sides(
     let result = openquant::bet_sizing::get_concurrent_sides(&t1, &side).map_err(to_py_err)?;
     Ok(result
         .into_iter()
-        .map(|(ts, long, short)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), long, short))
+        .map(|(ts, long, short)| (format_naive_datetime(&ts), long, short))
         .collect())
 }
 
@@ -195,7 +197,7 @@ fn bet_sizing_bet_size_budget(
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
     let result = openquant::bet_sizing::bet_size_budget(&t1, &side).map_err(to_py_err)?;
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "bet_size_probability")]
@@ -228,7 +230,7 @@ fn bet_sizing_bet_size_probability(
         step_size,
         average_active,
     );
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "mp_avg_active_signals")]
@@ -247,7 +249,7 @@ fn bet_sizing_mp_avg_active_signals(
     let t1 = parse_naive_datetimes(t1_timestamps)?;
     let molecule = parse_naive_datetimes(molecule_timestamps)?;
     let result = openquant::bet_sizing::mp_avg_active_signals(&signal, &t1, &molecule);
-    Ok(result.into_iter().map(|(ts, v)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), v)).collect())
+    Ok(result.into_iter().map(|(ts, v)| (format_naive_datetime(&ts), v)).collect())
 }
 
 #[pyfunction(name = "bet_size_reserve")]
@@ -267,10 +269,7 @@ fn bet_sizing_bet_size_reserve(
     let t1: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> =
         starts.into_iter().zip(ends).collect();
     let result = openquant::bet_sizing::bet_size_reserve(&t1, &side, &fit).map_err(to_py_err)?;
-    Ok(result
-        .into_iter()
-        .map(|(ts, l, s, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, b))
-        .collect())
+    Ok(result.into_iter().map(|(ts, l, s, b)| (format_naive_datetime(&ts), l, s, b)).collect())
 }
 
 #[pyfunction(name = "bet_size_reserve_with_fit")]
@@ -293,7 +292,7 @@ fn bet_sizing_bet_size_reserve_with_fit(
         openquant::bet_sizing::bet_size_reserve_with_fit(&t1, &side, &fit).map_err(to_py_err)?;
     Ok(result
         .into_iter()
-        .map(|(ts, l, s, c, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, c, b))
+        .map(|(ts, l, s, c, b)| (format_naive_datetime(&ts), l, s, c, b))
         .collect())
 }
 
@@ -327,7 +326,7 @@ fn bet_sizing_bet_size_reserve_full(
     .map_err(to_py_err)?;
     let out_events = events
         .into_iter()
-        .map(|(ts, l, s, c, b)| (ts.format("%Y-%m-%d %H:%M:%S").to_string(), l, s, c, b))
+        .map(|(ts, l, s, c, b)| (format_naive_datetime(&ts), l, s, c, b))
         .collect();
     Ok((out_events, params))
 }

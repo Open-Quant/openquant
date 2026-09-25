@@ -3,9 +3,12 @@ use openquant::microstructural_features::{
     encode_tick_rule_array, get_bar_based_amihud_lambda, get_bar_based_hasbrouck_lambda,
     get_bar_based_kyle_lambda, get_bekker_parkinson_vol, get_bvc_buy_volume,
     get_corwin_schultz_estimator, get_konto_entropy, get_lempel_ziv_entropy, get_plug_in_entropy,
-    get_roll_impact, get_roll_measure, get_shannon_entropy, get_vpin, quantile_mapping,
-    MicrostructuralFeaturesGenerator,
+    get_roll_impact, get_roll_measure, get_shannon_entropy, get_trades_based_hasbrouck_lambda,
+    get_vpin, quantile_mapping, MicrostructuralFeaturesGenerator,
 };
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
+use rand_distr::{Distribution, Normal};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -281,4 +284,25 @@ fn test_feature_generator_emits_one_row_per_tick_threshold() {
 
     let avg_tick_sizes: Vec<f64> = feats.iter().map(|row| row[1]).collect();
     assert_eq!(avg_tick_sizes, vec![1.0, 2.0, 3.0]);
+}
+
+#[test]
+fn test_trades_based_hasbrouck_lambda_recovers_lambda_under_balanced_flow() {
+    // r_t = lambda * b_t * sqrt(p_t V_t) + noise, with buys and sells equally likely (#105).
+    let lambda = 1e-5;
+    let mut rng = StdRng::seed_from_u64(105);
+    let noise = Normal::new(0.0, 1e-4).unwrap();
+    let n = 5_000;
+    let mut log_ret = Vec::with_capacity(n);
+    let mut dollar_volume = Vec::with_capacity(n);
+    let mut sides = Vec::with_capacity(n);
+    for _ in 0..n {
+        let side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
+        let dv: f64 = rng.gen_range(1e4..1e6);
+        log_ret.push(lambda * side * dv.sqrt() + noise.sample(&mut rng));
+        dollar_volume.push(dv);
+        sides.push(side);
+    }
+    let est = get_trades_based_hasbrouck_lambda(&log_ret, &dollar_volume, &sides).unwrap();
+    assert!((est - lambda).abs() < 0.02 * lambda, "estimate {est:e}, true {lambda:e}");
 }

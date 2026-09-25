@@ -28,6 +28,7 @@ deploy = "none"
 brief = "docs/design/production-readiness-brief.md"
 plan = "docs/design/production-readiness-slices.md"
 tracker = "44"
+spec = "openspec/changes/archive/2026-09-25-res-evaluation-module"
 
 [bindings]
 specs = "a8f8f91947ed105b68ab6c04da0b24fa96e4c95b3d0b07f7292fa0e13c6e20e0"

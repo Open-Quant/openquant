@@ -1,17 +1,16 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_json
-
 from openquant import structural_breaks
 
 # AFML chapter 17 recomputed in numpy by tests/fixtures/structural_breaks/generate.py.
 REFERENCE = load_json("structural_breaks/reference.json")
 
 CSW_FINDING = (
-    "FINDING: the Chu-Stinchcombe-White statistic divides by sigma_t^2 (and averages over t-2)"
-    " where AFML 17.3.2 divides by sigma_t (averaging over t-1)"
+    "FINDING: the Chu-Stinchcombe-White statistic averages sigma_t^2 over t-2 where AFML 17.3.2"
+    " uses t-1 (one-sided max 5.3797 vs 5.3921); dividing by sigma_t^2 instead of sigma_t was"
+    " fixed by #104"
 )
 SADF_FINDING = (
     "FINDING: 'quadratic' omits the linear trend of AFML's 'ctt'; the sm_* models take the sup of"
@@ -61,6 +60,15 @@ def test_chu_stinchcombe_white_statistics():
     # The critical values do not depend on how the statistic is scaled; the statistic is
     # checked in test_chu_stinchcombe_white_statistic_matches_afml.
     _assert_csw(one_critical, two_critical, "critical_value")
+
+    # Pins of the library's own statistic since #104 (divides by sigma_t, not sigma_t^2).
+    # Not AFML values: sigma_t^2 still averages over one difference fewer (see CSW_FINDING).
+    assert abs(max(one_stat) - 5.3797) < 0.001
+    assert abs(_mean(one_stat) - 1.2582) < 0.001
+    assert abs(one_stat[20] - 0.6098) < 0.001
+    assert abs(max(two_stat) - 8.5793) < 0.001
+    assert abs(_mean(two_stat) - 1.8875) < 0.001
+    assert abs(two_stat[20] - 1.4779) < 0.001
 
 
 def _assert_csw(one, two, field):

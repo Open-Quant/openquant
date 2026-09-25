@@ -53,5 +53,6 @@ Update 2026-09-18: `OQ-ojp` landed in PR #14. `OQ-det` was closed without its co
 
 ## Conclusion
 - Closed-issue claims for bindings, notebooks, pipeline, and CI smoke are materially present in tree.
-- Two acceptance-criteria gaps remain and are now explicitly tracked as open issues.
+- Of the two acceptance-criteria gaps found, `OQ-ojp` is resolved (PR #14); `OQ-det` remains
+  open as GitHub issue #33 (see the 2026-09-18 update above).
 - `docs/project_status.md` has been updated to reflect this reconciled state.

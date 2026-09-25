@@ -4,14 +4,14 @@ import argparse
 import json
 import statistics
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Callable
-
-import polars as pl
+from typing import Any
 
 import openquant
+import polars as pl
 
 
 @dataclass(frozen=True)

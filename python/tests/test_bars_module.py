@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import polars as pl
-
 import openquant
+import polars as pl
 
 
 def _base_frame() -> pl.DataFrame:
@@ -19,7 +18,18 @@ def _base_frame() -> pl.DataFrame:
         "2024-01-01 09:41:00",
     ]
     close = [100.0, 100.4, 100.1, 100.8, 100.7, 101.2, 101.0, 101.5, 101.4, 101.7]
-    volume = [80_000.0, 85_000.0, 90_000.0, 88_000.0, 95_000.0, 300_000.0, 92_000.0, 98_000.0, 99_000.0, 97_000.0]
+    volume = [
+        80_000.0,
+        85_000.0,
+        90_000.0,
+        88_000.0,
+        95_000.0,
+        300_000.0,
+        92_000.0,
+        98_000.0,
+        99_000.0,
+        97_000.0,
+    ]
     return pl.DataFrame(
         {
             "ts": ts,

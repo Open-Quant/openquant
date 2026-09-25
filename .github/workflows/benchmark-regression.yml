@@ -1,38 +1,118 @@
 name: Benchmark Regression
 
+# Compares the PR head against its merge base ON THE SAME RUNNER.
+#
+# The previous version compared one short run against a committed absolute
+# baseline (benchmarks/baseline_benchmarks.json). Hosted runners differ in CPU
+# model from job to job: on #97 and #122 every benchmark moved +25-35% at once
+# (e.g. synthetic_ticker_pipeline_end_to_end 73.6 ms on one runner, 94.9 ms on
+# another, same code), so the gate failed on docs-only changes and passed on
+# rerun. Measuring base and head back to back on one machine removes that
+# machine-to-machine term; what is left is same-machine noise (criterion's
+# confidence intervals on those runs were under 1% wide).
+#
+# Path-filtered: a change that cannot touch the benchmarked code does not pay
+# for two benchmark runs. Because of the filter this job is NOT suitable as a
+# required status check (a filtered-out required check never reports).
 on:
   workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Branch, tag or SHA to compare HEAD against"
+        required: false
+        default: "main"
   pull_request:
     paths:
       - "crates/openquant/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "scripts/check_bench_thresholds.py"
       - "scripts/collect_bench_results.py"
-      - "benchmarks/baseline_benchmarks.json"
+      - "benchmarks/benchmark_manifest.json"
+      - "benchmarks/threshold_overrides.json"
       - ".github/workflows/benchmark-regression.yml"
+
+concurrency:
+  group: bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Explicit bash gives -eo pipefail; GitHub's implicit default is bash -e.
+    shell: bash
 
 jobs:
   benchmark-regression:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       CARGO_TERM_COLOR: always
+      BENCH_ARGS: "--sample-size 30 --warm-up-time 2 --measurement-time 3"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - name: Run benchmark suites (short measurement)
+      - name: Resolve base revision
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INPUT_BASE_REF: ${{ inputs.base_ref }}
         run: |
-          cargo bench -p openquant --bench perf_hotspots -- --sample-size 30 --warm-up-time 2 --measurement-time 3
-          cargo bench -p openquant --bench synthetic_ticker_pipeline -- --sample-size 30 --warm-up-time 2 --measurement-time 3
+          if [ -n "$PR_BASE_SHA" ]; then
+            base="$(git merge-base "$PR_BASE_SHA" HEAD)"
+          else
+            ref="${INPUT_BASE_REF:-main}"
+            base="$(git rev-parse --verify "origin/$ref^{commit}" 2>/dev/null || git rev-parse --verify "$ref^{commit}")"
+          fi
+          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
+          echo "base: $base  head: $(git rev-parse HEAD)"
+          git worktree add --detach "$RUNNER_TEMP/base" "$base"
+      # Build both trees before timing either, so compilation does not overlap
+      # a measurement.
+      - name: Build benchmarks (base and head)
+        run: |
+          (cd "$RUNNER_TEMP/base" && cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run)
+          cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run
+      - name: Run benchmarks on base
+        working-directory: ${{ runner.temp }}/base
+        run: |
+          cargo bench -p openquant --bench perf_hotspots -- $BENCH_ARGS
+          cargo bench -p openquant --bench synthetic_ticker_pipeline -- $BENCH_ARGS
+      - name: Run benchmarks on head
+        run: |
+          cargo bench -p openquant --bench perf_hotspots -- $BENCH_ARGS
+          cargo bench -p openquant --bench synthetic_ticker_pipeline -- $BENCH_ARGS
+      # Both collections use HEAD's manifest, so a benchmark added or removed
+      # by the PR is compared only where both sides have it.
       - name: Collect benchmark results
-        run: python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
-      - name: Check regression thresholds
         run: |
+          python3 scripts/collect_bench_results.py --criterion-dir "$RUNNER_TEMP/base/target/criterion" --out benchmarks/base_benchmarks.json --allow-list benchmarks/benchmark_manifest.json --commit "$BASE_SHA"
+          python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json --commit "$(git rev-parse HEAD)"
+      - name: Check regression thresholds (head vs base, same runner)
+        run: |
+          set -o pipefail
           python3 scripts/check_bench_thresholds.py \
-            --baseline benchmarks/baseline_benchmarks.json \
+            --baseline benchmarks/base_benchmarks.json \
             --latest benchmarks/latest_benchmarks.json \
             --max-regression-pct 35 \
-            --overrides benchmarks/threshold_overrides.json
+            --overrides benchmarks/threshold_overrides.json \
+            | tee "$RUNNER_TEMP/bench-report.txt"
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo '### Benchmarks: head vs base on the same runner'
+            echo '```'
+            cat "$RUNNER_TEMP/bench-report.txt" 2>/dev/null || echo "no report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload benchmark report artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: latest-benchmarks
-          path: benchmarks/latest_benchmarks.json
+          name: benchmarks-base-vs-head
+          path: |
+            benchmarks/base_benchmarks.json
+            benchmarks/latest_benchmarks.json
+          if-no-files-found: ignore

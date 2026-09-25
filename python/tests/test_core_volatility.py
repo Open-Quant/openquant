@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_json, nanmean
-
 from openquant import volatility
 
 # Expected values from tests/fixtures/volatility/generate_range.py (Parkinson 1980,

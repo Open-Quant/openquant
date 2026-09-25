@@ -4,7 +4,6 @@ import json
 import tempfile
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -24,7 +23,13 @@ def test_execute_notebook_writes_to_explicit_output_path():
     nb = {
         "cells": [
             {"cell_type": "markdown", "metadata": {}, "source": ["# t\n"]},
-            {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [], "source": ["print('ok')\n"]},
+            {
+                "cell_type": "code",
+                "metadata": {},
+                "execution_count": None,
+                "outputs": [],
+                "source": ["print('ok')\n"],
+            },
         ],
         "metadata": {},
         "nbformat": 4,

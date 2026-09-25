@@ -2,12 +2,12 @@
 title: "backtesting_engine"
 description: "Walk-forward, purged cross-validation and combinatorial purged cross-validation splits, with the out-of-sample paths CPCV produces."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
 module: "backtesting_engine"
-api_surface: "rust-only"
+api_surface: "both"
 afml_chapter:
   - "11"
   - "12"
@@ -30,6 +30,10 @@ rust_api:
   - "CpcvPathPerformance"
   - "BacktestDiagnostics"
   - "BacktestError"
+python_api:
+  - "backtesting_engine.cpcv_path_count"
+  - "backtesting_engine.run_cpcv"
+  - "backtesting_engine.assemble_cpcv_paths"
 sidebar:
   badge: Module
 ---
@@ -44,7 +48,8 @@ one.
 
 This module builds the splits for all three, purges and embargoes them, runs a callback you
 supply on each, and assembles the results. It does not fit models, size positions, or know
-about prices. It is Rust-only ([#42](https://github.com/Open-Quant/openquant/issues/42)).
+about prices. From Python, CPCV is available without a callback: see
+[From Python](#from-python).
 
 ## How a run is set up
 
@@ -77,6 +82,15 @@ it down, and returns it with the results in `BacktestDiagnostics`, where
 In every mode a training sample is **purged** if its label span overlaps the span of *any*
 test sample, compared pair by pair. That matters for CPCV, where the test set is several
 disjoint blocks and a single covering window would purge everything in between.
+
+A non-zero `pct_embargo` then **embargoes** $h$ more training samples after each test block,
+where $h$ is `pct_embargo` times the sample count, rounded up (§7.4.2, Snippet 7.3). The count
+starts where the purge ends, at the first sample whose label starts after the block's last
+label has ended, so the embargo removes samples the purge kept (fewer than $h$ only at the
+end of the data or where the next test block begins). Samples before a test block are never
+embargoed: their features cannot contain prices from the test window. In CPCV, adjacent test
+groups form one block. `SplitDefinition::purged_count` and `embargo_count` count the two
+removals separately.
 
 ## Combinatorial purged cross-validation
 
@@ -197,6 +211,73 @@ Walk-forward gives four numbers about four 40-day windows and says nothing about
 about the strategy rather than about a window. Three paths coincide here because the model
 has only two states; with a real learner they differ.
 
+## From Python
+
+A Python model cannot be the evaluator without handing a Python callable to Rust, so
+`openquant.backtesting_engine` turns the callback inside out. Get the splits from
+[`cross_validation.cpcv_splits`](/modules/cross-validation/#from-python), fit and trade each
+one in Python, and pass the out-of-sample returns in: `split_returns[s]` holds one return per
+index of split `s`'s `test_indices`, in order. `run_cpcv` then runs the Rust `run_cpcv` with a
+closure that hands back your returns, and returns its result as a dict: `folds`, `splits`,
+`path_count`, `path_assignments`, `path_distribution` and `diagnostics`. The run record is
+required here too, as keyword arguments. `assemble_cpcv_paths` stitches any per-split values
+(returns, predictions, positions) into an `(n_paths, n_samples)` array, for statistics the
+engine does not compute, such as a [deflated Sharpe ratio](/modules/backtest-statistics/) per
+path.
+
+```python
+import numpy as np
+from openquant import backtesting_engine as bt
+from openquant import cross_validation as cv
+
+# 60 daily labels, each resolved 2 days later; 6 groups, tested 2 at a time.
+t0 = np.datetime64("2024-01-01") + np.arange(60) * np.timedelta64(1, "D")
+t1 = t0 + np.timedelta64(2, "D")
+splits = cv.cpcv_splits(t0, t1, n_splits=6, n_test_splits=2, pct_embargo=0.02)
+
+# Stand-in for "fit on train_indices, trade test_indices": the market's return per sample,
+# plus a per-split difference, since each split's model is trained on different data.
+rng = np.random.default_rng(0)
+market = rng.normal(0.001, 0.01, size=60)
+split_returns = [market[s["test_indices"]] + rng.normal(0, 0.002, len(s["test_indices"])) for s in splits]
+
+result = bt.run_cpcv(
+    t0, t1, split_returns,
+    n_groups=6, test_groups=2, pct_embargo=0.02,
+    mode_provenance="docs example", trials_count=1,
+    safeguards={
+        "survivorship_bias_control": "synthetic data",
+        "look_ahead_control": "synthetic data",
+        "data_mining_control": "one configuration",
+        "cost_assumption": "none",
+        "multiple_testing_control": "trials_count = 1",
+    },
+)
+print(result["path_count"], "paths from", len(result["splits"]), "splits")
+for path in result["path_distribution"]:
+    print(path["path_id"], path["observations"], round(path["mean_return"], 6))
+
+paths = bt.assemble_cpcv_paths(split_returns, splits, cv.cpcv_paths(6, 2))
+print(paths.shape, np.round(paths.mean(axis=1), 6).tolist())
+```
+
+```text
+5 paths from 15 splits
+0 60 0.001902
+1 60 0.00163
+2 60 0.001869
+3 60 0.001289
+4 60 0.001633
+(5, 60) [0.001902, 0.00163, 0.001869, 0.001289, 0.001633]
+```
+
+Both modules test the same samples in the same split order, and the engine's
+`path_assignments` equal `cross_validation.cpcv_paths`. The training sets differ:
+`cross_validation` purges each block of adjacent test groups against its whole window, and the
+engine purges pair by pair. The engine's own training sets appear in `result["splits"]` as a
+record only; the model was trained on the ones you used. Walk-forward and purged-CV modes are
+not bound; purged k-fold splits come from `cross_validation.purged_kfold_splits`.
+
 ## What to watch for
 
 - **`sharpe` is a t-statistic, not an annualised Sharpe ratio.** It is
@@ -206,11 +287,13 @@ has only two states; with a real learner they differ.
 - **CPCV paths are not independent.** They are rearrangements of the same 15 sets of
   predictions and share most of their returns. The spread across paths understates the true
   uncertainty; it is a lower bound on how fragile the result is, not a confidence interval.
-- **The embargo is applied on both sides of every test sample.** AFML embargoes only after a
-  test set. In walk-forward mode, where training data lies entirely *before* the test block,
-  a non-zero `pct_embargo` therefore only ever removes the most recent training samples and
-  buys nothing. Leave it at zero for walk-forward
-  ([#94](https://github.com/Open-Quant/openquant/issues/94)).
+- **In walk-forward mode the embargo removes nothing.** Training data lies entirely *before*
+  the test block, and only samples after a block are embargoed, so `pct_embargo` has no
+  effect there. If you want a gap between training and test in walk-forward, leave it out of
+  `train_indices` in your evaluator. Before
+  [#94](https://github.com/Open-Quant/openquant/issues/94) the embargo was applied on both
+  sides of every test sample, counted from the block's edge rather than from the end of the
+  purge.
 - **Your evaluator must return one value per test index, in order.** A different length is an
   error in CPCV and goes unnoticed in the other two modes, where returns are only summarised.
 - **Walk-forward windows can overlap or leave gaps.** `step_size` below `test_size` tests

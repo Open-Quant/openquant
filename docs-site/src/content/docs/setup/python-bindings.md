@@ -1,8 +1,8 @@
 ---
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
-status: reviewed
-last_validated: '2026-09-19'
+status: authored
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -22,12 +22,13 @@ toolchain, a linker, and `uv`.
 
 ## Setup
 
-Four commands, from the repository root. This is the sequence
-`.github/workflows/python-bindings.yml` runs on every PR that touches the
-bindings, so it is the one with continuous evidence behind it.
+Four commands, from the repository root. The `python` jobs in
+`.github/workflows/ci.yml` run the same build on every PR, on Python 3.11
+and 3.13 (CI installs `maturin` from the dev dependency group rather than
+with `--with`; the result is the same).
 
 ```bash
-# 1. Create an isolated interpreter. 3.11 is what CI builds against.
+# 1. Create an isolated interpreter. CI builds against 3.11 and 3.13.
 uv venv --python 3.11 .venv
 
 # 2. Compile the extension and install it into that environment.

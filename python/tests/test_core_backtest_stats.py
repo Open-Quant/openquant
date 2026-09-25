@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_json, load_timestamps
-
 from openquant import backtest_stats
 
 DATES = [f"2000-01-{day:02d} 00:00:00" for day in range(1, 11)]

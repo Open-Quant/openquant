@@ -20,6 +20,12 @@
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`
 3. `cargo publish -p openquant`
 
+Only `openquant` goes to crates.io. `pyopenquant` (the Python extension)
+has `publish = false` and ships as a wheel built with maturin, because it
+relies on the `[patch.crates-io]` entry for `vendor/pyo3-polars` (see
+`vendor/README.md`). Cargo ignores `[patch]` for crates downloaded from a
+registry, so the patch only applies to builds from this repository.
+
 ## Post-release
 - Copy `benchmarks/latest_benchmarks.json` to `benchmarks/baseline_benchmarks.json` for next cycle.
 - Update docs examples/changelog and GitHub Pages docs if API changed.

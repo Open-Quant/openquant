@@ -87,6 +87,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.",
     handwritten: true,
+    apiSurface: "both",
+    pythonApis: ["backtesting_engine.cpcv_path_count", "backtesting_engine.run_cpcv", "backtesting_engine.assemble_cpcv_paths"],
   },
   {
     slug: "bet-sizing",
@@ -121,7 +123,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Purged k-fold cross-validation with an embargo, for overlapping labels.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["cross_validation.purged_kfold_splits", "cross_validation.split_with_diagnostics", "cross_validation.cpcv_splits", "cross_validation.cpcv_paths", "cross_validation.naive_kfold_splits", "cross_validation.count_train_test_overlaps"],
   },
   {
     slug: "data-structures",
@@ -139,35 +142,19 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "Grid and randomised search on purged k-fold splits, scored with sample weights.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["hyperparameter_tuning.expand_param_grid", "hyperparameter_tuning.sample_param_sets", "hyperparameter_tuning.classification_score", "hyperparameter_tuning.purged_search"],
   },
   {
     slug: "ef3m",
-    conceptOverview:
-      "Exact Fit of the first 3, 4 or 5 Moments: fits a mixture of two Gaussians by matching sample moments instead of by maximum likelihood. `M2N` takes the observed moments and searches over the second mean and the mixing probability, solving the remaining parameters analytically at each candidate (`iter_4` and `iter_5` for the four- and five-moment variants); `most_likely_parameters` then picks the modal solution across that search. It is fast and derivative-free, which is what makes it usable as an initialiser.",
-    whenToUse:
-      "Use it when a return or bet-outcome distribution is visibly bimodal — two regimes, or a mixture of trades that ran and trades that were stopped — and you want the components without paying for EM. It is the standard way to obtain the mixture parameters `bet_size_reserve` needs. Because it works from higher moments it is sensitive to tail estimation noise, so on small samples treat its output as an initialisation for a heavier optimiser rather than a final answer.",
-    relatedModules: ["bet-sizing", "backtest-statistics", "strategy-risk"],
     module: "ef3m",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "Moment-based mixture fitting utilities for two-normal components.",
-    whyItExists: "Provides robust parameter estimation for bimodal return mixtures when full MLE is heavy.",
-    keyApis: ["M2N", "centered_moment", "raw_moment", "most_likely_parameters"],
-    formulas: [
-      { label: "Raw Moment", latex: "m_k=E[X^k]" },
-      { label: "Mixture Mean", latex: "\\mu=p\\mu_1+(1-p)\\mu_2" },
-    ],
-    examples: [
-      {
-        title: "Estimate moments",
-        language: "rust",
-        code: `use openquant::ef3m::centered_moment;\n\nlet moments = vec![0.0, 1.0, 0.1, 3.0];\nlet m3 = centered_moment(&moments, 3)?;`,
-      },
-    ],
-    notes: ["Use as initialization for more expensive optimizers.", "Sensitive to higher-moment estimation noise."],
+    summary: "EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["ef3m.centered_moment", "ef3m.raw_moment", "ef3m.most_likely_parameters", "ef3m.fit_m2n"],
   },
+
   {
     slug: "ensemble-methods",
     module: "ensemble_methods",
@@ -192,7 +179,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Sampling, Validation and ML Diagnostics",
     summary: "MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.",
     handwritten: true,
-    apiSurface: "rust-only",
+    apiSurface: "both",
+    pythonApis: ["feature_importance.mean_decrease_impurity", "feature_importance.mean_decrease_accuracy", "feature_importance.single_feature_importance", "feature_importance.mda_from_probabilities", "feature_importance.sfi_from_probabilities"],
   },
   {
     slug: "filters",
@@ -226,7 +214,7 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "hcaa",
     module: "hcaa",
     subject: "Portfolio Construction and Risk",
-    summary: "Hierarchical allocation with a choice of risk measure; currently HRP's bisection, not Raffinot's cut.",
+    summary: "Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.",
     handwritten: true,
     apiSurface: "both",
     pythonApis: ["hcaa.allocate_hcaa"],
@@ -297,167 +285,32 @@ export const moduleDocs: ModuleDoc[] = [
   },
   {
     slug: "hpc-parallel",
-    conceptOverview:
-      "AFML Chapter 20's atom/molecule model: a job is a list of independent atoms, atoms are grouped into molecules, and molecules are dispatched to workers. What this adds over a plain thread pool is the partitioning choice — linear for uniform-cost atoms, nested for the triangular workloads that dominate this library, where atom k touches k earlier observations — together with a metrics report and a serial mode whose callback semantics are identical to the threaded one.",
-    whenToUse:
-      "Use it for any embarrassingly parallel research loop: per-asset feature computation, bootstrap replicas, parameter sweeps. Choose `PartitionStrategy::Nested` when per-atom cost grows with the atom index, otherwise the final molecule becomes the whole runtime; choose `Linear` when atoms cost the same. Debug with `ExecutionMode::Serial` first — the callback contract is unchanged, so a bug that reproduces there is not a concurrency bug and you have just halved the search space.",
-    relatedModules: ["streaming-hpc", "combinatorial-optimization", "sampling", "backtesting-engine"],
     module: "hpc_parallel",
     subject: "Scaling, HPC and Infrastructure",
-    summary: "AFML Chapter 20 atom/molecule execution utilities with serial/threaded modes and partition diagnostics.",
-    whyItExists:
-      "Research pipelines bottleneck on repeated independent computations; this module exposes reproducible partitioning and dispatch controls to scale those workloads safely.",
-    keyApis: [
-      "partition_atoms",
-      "run_parallel",
-      "dispatch_async",
-      "ExecutionMode",
-      "PartitionStrategy",
-      "HpcParallelConfig",
-      "ParallelRunReport",
-      "HpcParallelMetrics",
-    ],
-    formulas: [
-      {
-        label: "Linear Partition Boundary",
-        latex: "b_i=\\left\\lfloor\\frac{iN}{M}\\right\\rfloor,\\;i=0,\\dots,M",
-        where: "$N$ is the number of atoms, $M$ the number of molecules (`mp_batches` x workers), and molecule $i$ covers atoms $[b_{i-1},b_i)$. Every molecule gets the same *count* of atoms, which is correct only when atoms cost the same.",
-      },
-      {
-        label: "Nested Partition Boundary",
-        latex: "b_i=\\left\\lfloor N\\sqrt{\\frac{i}{M}}\\right\\rfloor,\\;i=0,\\dots,M",
-        where: "The same $N$ and $M$, for the triangular workloads that dominate this library — building an overlap or codependence matrix, where atom $k$ touches $k$ earlier observations, so its cost grows linearly with $k$. Later molecules therefore hold fewer atoms.",
-      },
-      {
-        label: "Equal-Cost Condition",
-        latex: "\\text{cost}(i)\\;\\propto\\;\\frac{b_i^2-b_{i-1}^2}{2}=\\frac{N^2}{2M}\\quad\\text{for every }i",
-        where: "$b_i$ and $M$ are as above. This is why the square root is there: if atom $k$ costs $\\propto k$, a molecule spanning $[b_{i-1},b_i)$ costs $\\propto(b_i^2-b_{i-1}^2)/2$; substituting $b_i=N\\sqrt{i/M}$ makes that $N^2/(2M)$, the same for every molecule. Linear partitioning on the same workload leaves the last molecule roughly $2M-1$ times more expensive than the first, and the run is only as fast as that straggler.",
-      },
-    ],
-    examples: [
-      {
-        title: "Run atom->molecule callback in threaded mode",
-        language: "rust",
-        code: `use openquant::hpc_parallel::{run_parallel, ExecutionMode, HpcParallelConfig, PartitionStrategy};\n\nlet atoms: Vec<f64> = (0..10_000).map(|i| i as f64).collect();\nlet report = run_parallel(\n  &atoms,\n  HpcParallelConfig {\n    mode: ExecutionMode::Threaded { num_threads: 8 },\n    partition: PartitionStrategy::Nested,\n    mp_batches: 4,\n    progress_every: 4,\n  },\n  |chunk| Ok::<f64, &'static str>(chunk.iter().map(|x| x.sqrt()).sum()),\n)?;\n\nprintln!(\"molecules={} atoms/s={:.0}\", report.metrics.molecules_total, report.metrics.throughput_atoms_per_sec);`,
-      },
-    ],
-    notes: [
-      "Use `ExecutionMode::Serial` for deterministic debugging with identical callback semantics.",
-      "If per-atom cost rises with atom index (e.g., expanding windows), nested partitioning can reduce tail stragglers versus linear chunking.",
-    ],
+    summary: "AFML's atoms and molecules: equal-work partitions of a job, run in serial or on threads, outputs in order.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
+
   {
     slug: "combinatorial-optimization",
-    conceptOverview:
-      "AFML Chapter 21 tooling for discrete, path-dependent problems, built around keeping the integer structure explicit rather than relaxing it away. `DecisionSchema` describes an integer decision space and `solve_exact` enumerates it. `TradingTrajectorySchema` describes a trading path — per-step trade bounds, inventory limits, an optional terminal inventory — and `enumerate_trading_paths` produces every feasible trajectory, which `evaluate_trading_path` scores against expected returns, risk aversion, market impact and a fixed per-ticket cost.",
-    whenToUse:
-      "Use exact enumeration on small instances as a correctness oracle: `compare_exact_and_adapter` exists precisely so a heuristic or external solver can be validated against ground truth before it is trusted at scale. The decision space grows exponentially in horizon and dimension and `max_paths` will stop you — treat that as the signal to move to an adapter, not to raise the cap. The fixed ticket cost is what makes the problem genuinely combinatorial; without it a continuous relaxation would do.",
-    relatedModules: ["hpc-parallel", "bet-sizing", "portfolio-optimization", "backtesting-engine"],
     module: "combinatorial_optimization",
     subject: "Scaling, HPC and Infrastructure",
-    summary:
-      "AFML Chapter 21 integer-encoded optimization and trajectory state-space tooling with exact baselines and solver adapters.",
-    whyItExists:
-      "Many trading/search problems are discrete and path-dependent; this module keeps integer structure explicit and provides exact small-instance baselines before scaling to heuristics.",
-    keyApis: [
-      "DecisionSchema",
-      "IntegerVariable",
-      "IntegerObjective",
-      "solve_exact",
-      "SolverAdapter",
-      "solve_with_adapter",
-      "compare_exact_and_adapter",
-      "TradingTrajectorySchema",
-      "enumerate_trading_paths",
-      "evaluate_trading_path",
-      "solve_trading_trajectory_exact",
-    ],
-    formulas: [
-      {
-        label: "Finite Integer Program",
-        latex: "x^*=\\arg\\max_{x\\in\\mathcal X\\subset\\mathbb Z^d} f(x),\\quad |\\mathcal X|<\\infty",
-      },
-      {
-        label: "Path-Dependent Objective",
-        latex:
-          "J(\\tau)=\\sum_{t=1}^{T}\\left(q_t r_t-\\lambda q_t^2-c_t|\\Delta q_t|-\\kappa\\,\\mathbf 1_{\\Delta q_t\\ne0}\\right)-\\eta(q_T-q^*)^2",
-      },
-      {
-        label: "Adapter Gap vs Exact",
-        latex:
-          "\\Delta_{alg}=\\begin{cases}f(x^*)-f(\\hat x) & \\text{maximize}\\\\f(\\hat x)-f(x^*) & \\text{minimize}\\end{cases}",
-      },
-    ],
-    examples: [
-      {
-        title: "Exact trajectory search with fixed ticket costs",
-        language: "rust",
-        code: `use openquant::combinatorial_optimization::{\n  TradeBounds, TradingTrajectoryObjectiveConfig, TradingTrajectoryPath, TradingTrajectorySchema,\n  enumerate_trading_paths, evaluate_trading_path,\n};\n\nlet schema = TradingTrajectorySchema {\n  initial_inventory: 0,\n  inventory_min: -2,\n  inventory_max: 2,\n  step_trade_bounds: vec![\n    TradeBounds { min_trade: -1, max_trade: 1 },\n    TradeBounds { min_trade: -1, max_trade: 1 },\n    TradeBounds { min_trade: -1, max_trade: 1 },\n  ],\n  terminal_inventory: Some(0),\n  max_paths: 50_000,\n};\nlet cfg = TradingTrajectoryObjectiveConfig {\n  expected_returns: vec![0.01, -0.015, 0.012],\n  risk_aversion: 0.001,\n  impact_coefficients: vec![0.0005, 0.0005, 0.0005],\n  fixed_ticket_cost: 0.002,\n  terminal_inventory_target: 0,\n  terminal_inventory_penalty: 0.05,\n};\n\nlet best = enumerate_trading_paths(&schema)?\n  .into_iter()\n  .map(|path| {\n    let score = evaluate_trading_path(&path, &cfg)?;\n    Ok::<(TradingTrajectoryPath, f64), openquant::combinatorial_optimization::CombinatorialOptimizationError>((path, score))\n  })\n  .collect::<Result<Vec<_>, _>>()?\n  .into_iter()\n  .max_by(|a, b| a.1.total_cmp(&b.1))\n  .expect(\"at least one feasible path\");\n\nprintln!(\"best objective: {:.6}\", best.1);\nprintln!(\"trades: {:?}\", best.0.trades);`,
-      },
-    ],
-    notes: [
-      "Exact enumeration scales exponentially in decision dimension/horizon; treat it as a correctness baseline and regression oracle.",
-      "Use adapter interfaces to compare heuristic/external solvers against exact solutions on small calibration instances before production deployment.",
-    ],
+    summary: "Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.",
+    handwritten: true,
     apiSurface: "rust-only",
   },
+
   {
     slug: "streaming-hpc",
-    conceptOverview:
-      "AFML Chapter 22 is about turnaround time rather than throughput: an early-warning metric that arrives after the event is worthless however fast it was computed. This module keeps VPIN and venue-concentration HHI as incremental state with bounded memory — VPIN fills equal-volume buckets and retains a fixed-length window of completed ones, HHI retains a fixed event lookback — so per-event cost and memory stay constant however long the stream runs. `run_streaming_pipeline_parallel` fans many streams across workers through `hpc_parallel`.",
-    whenToUse:
-      "Use it for live or replayed order-flow monitoring where the alert has to fire during the event, not after it. The bundled `generate_synthetic_flash_crash_stream` exists to calibrate thresholds against a known-bad path first: a threshold pair that fires late on a synthetic crash will fire late on a real one. For batch feature computation over a completed history use `microstructural_features` instead, which is cheaper per bar and gives the same quantities.",
-    relatedModules: ["hpc-parallel", "microstructural-features", "structural-breaks", "data-structures"],
     module: "streaming_hpc",
     subject: "Scaling, HPC and Infrastructure",
-    summary:
-      "AFML Chapter 22 streaming analytics utilities for low-latency early-warning metrics with bounded-memory incremental state.",
-    whyItExists:
-      "Streaming decisions are turnaround-time constrained; this module maintains VPIN/HHI-style indicators incrementally and supports multi-stream scaling across cores/chunk sizes.",
-    keyApis: [
-      "StreamEvent",
-      "VpinState",
-      "HhiState",
-      "StreamingEarlyWarningEngine",
-      "run_streaming_pipeline",
-      "run_streaming_pipeline_parallel",
-      "generate_synthetic_flash_crash_stream",
-      "StreamingPipelineConfig",
-      "StreamingRunMetrics",
-    ],
-    formulas: [
-      {
-        label: "VPIN (Rolling Volume Buckets)",
-        latex: "\\mathrm{VPIN}_t=\\frac{1}{N}\\sum_{i=t-N+1}^{t}\\frac{\\left|V_i^{B}-V_i^{S}\\right|}{V},\\qquad V_i^{B}+V_i^{S}=V",
-        where: "$V_i^{B}$ and $V_i^{S}$ are buy- and sell-initiated volume in bucket $i$, $V$ the fixed `bucket_volume` every bucket is filled to, and $N$ = `support_buckets` the rolling window. Because buckets are equal-volume by construction, the denominator is a constant — this is the canonical Easley-Lopez de Prado form. The bar-based `get_vpin` in [`microstructural-features`](/modules/microstructural-features/) estimates the same quantity over unequal bars and so must normalise differently.",
-      },
-      {
-        label: "Market Fragmentation HHI",
-        latex: "\\mathrm{HHI}_t=\\sum_{v=1}^{K}\\left(\\frac{n_{v,t}}{\\sum_j n_{j,t}}\\right)^2",
-        where: "$n_{v,t}$ is the event count on venue $v$ over the trailing `lookback_events` window and $K$ the number of venues. $1/K$ means flow is spread evenly; $1$ means one venue carries everything. Concentration spikes are the fragmentation half of a flash-crash signature.",
-      },
-      {
-        label: "Alert Condition",
-        latex: "\\text{alert}_t\\iff \\mathrm{VPIN}_t\\ge\\tau_V\\;\\land\\;\\mathrm{HHI}_t\\ge\\tau_H,\\qquad \\text{risk}_t=\\frac{1}{2}\\left(\\frac{\\mathrm{VPIN}_t}{\\tau_V}+\\frac{\\mathrm{HHI}_t}{\\tau_H}\\right)",
-        where: "$\\tau_V$ and $\\tau_H$ are `AlertThresholds { vpin, hhi }`. Both conditions must hold — toxic flow alone, or concentrated flow alone, is common; together they are not. $\\text{risk}_t$ is the threshold-normalised score reported alongside the boolean, and is undefined until both estimators have filled their windows.",
-      },
-    ],
-    examples: [
-      {
-        title: "Incremental early-warning pipeline on streaming trades",
-        language: "rust",
-        code: `use openquant::hpc_parallel::{ExecutionMode, HpcParallelConfig, PartitionStrategy};\nuse openquant::streaming_hpc::{\n  run_streaming_pipeline_parallel, AlertThresholds, HhiConfig, StreamingPipelineConfig,\n  SyntheticStreamConfig, VpinConfig, generate_synthetic_flash_crash_stream,\n};\n\nlet streams: Vec<_> = (0..16)\n  .map(|k| generate_synthetic_flash_crash_stream(SyntheticStreamConfig {\n    events: 2_000,\n    crash_start_fraction: 0.7,\n    calm_venues: 8,\n    shock_venue: k % 2,\n  }))\n  .collect::<Result<Vec<_>, _>>()?;\n\nlet report = run_streaming_pipeline_parallel(\n  &streams,\n  StreamingPipelineConfig {\n    vpin: VpinConfig { bucket_volume: 1_000.0, support_buckets: 20 },\n    hhi: HhiConfig { lookback_events: 200 },\n    thresholds: AlertThresholds { vpin: 0.45, hhi: 0.30 },\n  },\n  HpcParallelConfig {\n    mode: ExecutionMode::Threaded { num_threads: 8 },\n    partition: PartitionStrategy::Linear,\n    mp_batches: 4,\n    progress_every: 8,\n  },\n)?;\n\nprintln!(\"streams={} molecules={} events/s={:.0}\",\n  report.stream_summaries.len(),\n  report.parallel_metrics.molecules_total,\n  report.parallel_metrics.throughput_atoms_per_sec\n);`,
-      },
-    ],
-    notes: [
-      "Chapter 22 stresses turnaround-time over pure throughput: bounded rolling windows avoid unbounded latency/memory growth.",
-      "For low-latency alerts, keep stream partitioning stable and calibrate `mp_batches` against scheduling overhead and cache locality.",
-      "Use synthetic flash-crash replays to validate that warning thresholds react early without excessive false positives.",
-    ],
+    summary: "VPIN and a venue-concentration HHI updated event by event in constant memory, with a joint alert.",
+    handwritten: true,
     apiSurface: "both",
     pythonApis: ["streaming_hpc.run_streaming_pipeline", "streaming_hpc.generate_synthetic_flash_crash_stream"],
   },
+
   {
     slug: "sample-weights",
     module: "sample_weights",
@@ -482,7 +335,7 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "sb-bagging",
     module: "sb_bagging",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.",
+    summary: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.",
     handwritten: true,
     apiSurface: "both",
     pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor"],
@@ -572,11 +425,54 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "data",
     module: "data",
     subject: "Data Ingestion and Quality",
-    summary: "OHLCV loading, cleaning, calendar alignment, and data quality reporting.",
+    summary: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.",
     whyItExists: "Provides a consistent entrypoint for market data ingestion with automatic column normalization, deduplication, and quality diagnostics.",
     keyApis: ["load_ohlcv", "clean_ohlcv", "align_calendar", "data_quality_report"],
     formulas: [],
     examples: [
+      {
+        title: "Fetch through the cache and record the dataset hash",
+        language: "python",
+        code: `import tempfile
+
+from openquant.data import data_quality_report, fetch, quality_failures, record_dataset_hash
+
+cache = tempfile.mkdtemp()  # omit cache_dir to use ~/.cache/openquant/data
+
+# The default source is the bundled SYNTHETIC sample (SYN_A ... SYN_E), so this runs offline.
+df, meta = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31", cache_dir=cache, return_meta=True)
+print(df.columns)  # ['ts', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'adj_close']
+print(df.height, meta["cache"])  # 130 {'SYN_A': 'miss', 'SYN_B': 'miss'}
+assert quality_failures(data_quality_report(df)) == []
+
+# The same request again is read from disk; offline=True guarantees the source is not called.
+again, meta2 = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31", cache_dir=cache, return_meta=True, offline=True)
+print(meta2["cache"])  # {'SYN_A': 'hit', 'SYN_B': 'hit'}
+assert again.equals(df) and meta2["dataset_hash"] == meta["dataset_hash"]
+
+# Put the content hash, source, terms and request into the run manifest.
+manifest = record_dataset_hash({"run_name": "demo"}, df, **meta)
+print(manifest["dataset_hash"].startswith("sha256:"))  # True`,
+      },
+      {
+        title: "Plug in your own data vendor (fetch-only, your own key)",
+        language: "python",
+        docCheck: "skip",
+        code: `import os
+
+import polars as pl
+from openquant.data import CallableSource, fetch
+
+
+def my_vendor(symbol, start, end):
+    key = os.environ["MY_VENDOR_API_KEY"]  # your own key, from the environment; never commit it
+    rows = my_vendor_client.daily_bars(symbol, start, end, api_key=key)  # your vendor's client
+    return pl.DataFrame(rows)  # columns such as date/open/high/low/close/volume[/adj_close]
+
+
+source = CallableSource(my_vendor, name="my-vendor", terms="https://my-vendor.example/terms")
+df, meta = fetch(["SPY", "TLT"], "2020-01-01", "2024-12-31", source=source, return_meta=True)`,
+      },
       {
         title: "Load, clean, and inspect OHLCV data",
         language: "python",
@@ -596,33 +492,59 @@ quality = data_quality_report(df)`,
       },
     ],
     notes: [
+      "The bundled sample is SYNTHETIC, not market data. Its symbols (SYN_A ... SYN_E) are not real tickers. DATA_SOURCES.md at the repository root records the terms of every source and why no real sample is committed yet.",
+      "Your vendor's terms govern data you fetch with your own adapter. Several vendors forbid redistribution, and some forbid persistent storage on free plans. The cache is for you only: never commit it.",
+      "dataset_hash (oq-dataset-sha256-v1) ignores row and column order and Parquet layout. It changes with any value, column name, column type or row, so equal hashes mean the same data.",
       "Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol').",
       "clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically.",
       "align_calendar marks missing bars with is_missing_bar=True for downstream imputation logic.",
     ],
-    conceptOverview: `Before any AFML workflow begins, raw market data must be loaded into a consistent schema, cleaned of duplicates and formatting issues, and aligned to a regular time grid. This module handles that ingestion layer.
+    conceptOverview: `Before any AFML workflow begins, raw market data must be fetched, loaded into a consistent schema, cleaned of duplicates and formatting issues, and aligned to a regular time grid. This module handles that ingestion layer.
 
-It accepts CSV or Parquet files with flexible column naming (e.g., "timestamp", "datetime", "date" all map to "ts"; "ticker" or "asset" map to "symbol") and produces a standardized Polars DataFrame with canonical OHLCV columns. Deduplication handles duplicate (symbol, timestamp) keys, and calendar alignment generates a regular grid with explicit gap markers.
+\`fetch(symbols, start, end, source=..., cache_dir=...)\` gets daily OHLCV bars from a pluggable source. The source is any object with a \`name\` and a \`fetch_symbol(symbol, start, end)\` method (the \`DataSource\` protocol). Three sources ship with the module. \`LocalSampleSource\` reads the bundled synthetic sample and is the default. \`LocalFileSource\` reads your own CSV or Parquet file. \`CallableSource\` wraps your own function, which calls your vendor with your key. Each (source, symbol, date range) request is cached as a Parquet file and a JSON sidecar under \`<cache_dir>/<source>[@<version>]/<symbol>/<start>_<end>.parquet\`. A repeated request is served from disk without calling the source, so it works offline, and \`offline=True\` makes that a guarantee. The returned frame is the canonical \`clean_ohlcv\` frame, and it has passed \`data_quality_report\`.
+
+\`dataset_hash(df)\` is a deterministic SHA-256 of a table's contents. \`record_dataset_hash(manifest, df, **meta)\` writes that hash, with the source, terms and request, into a run manifest, so every result can name the exact data behind it. \`experiments/run_pipeline.py\` records it in every \`run_manifest.json\`.
+
+The loaders accept CSV or Parquet files with flexible column naming (e.g., "timestamp", "datetime", "date" all map to "ts"; "ticker" or "asset" map to "symbol") and produce a standardized Polars DataFrame with canonical OHLCV columns. Deduplication handles duplicate (symbol, timestamp) keys, and calendar alignment generates a regular grid with explicit gap markers.
 
 The data quality report provides diagnostics — row counts, symbol counts, duplicate counts, gap intervals, and null counts — that should be inspected before feeding data into bars, labeling, or any downstream module.`,
-    whenToUse: `Use this module as the first step when working with pre-aggregated OHLCV data (daily bars, minute bars from a vendor). If you have raw tick/trade data instead, use the \`data_structures\` module to construct bars first.
+    whenToUse: `Use \`fetch\` when a study needs daily bars for a list of symbols and must be reproducible. Record the dataset hash in the run manifest. Use the loaders directly when you already hold pre-aggregated OHLCV data (daily bars, minute bars from a vendor). If you have raw tick/trade data instead, use the \`data_structures\` module to construct bars first.
 
-**Prerequisites**: A CSV or Parquet file, or an existing Polars DataFrame with OHLCV-like columns.
+**Prerequisites**: For \`fetch\`, a source: the bundled synthetic sample, your own file, or your own vendor function and key. For the loaders, a CSV or Parquet file, or an existing Polars DataFrame with OHLCV-like columns.
 
 **Alternatives**: Direct Polars/pandas loading if you handle column normalization and cleaning yourself.`,
     keyParameters: [
-      { name: "path", type: "str | Path", description: "File path to CSV or Parquet OHLCV data", default: "—" },
+      { name: "symbols", type: "str | Iterable[str]", description: "Symbols to fetch; duplicates are dropped", default: "—" },
+      { name: "start, end", type: "date | datetime | str", description: "Inclusive date range (ISO strings accepted)", default: "—" },
+      { name: "source", type: "DataSource | None", description: "Where bars come from; None uses the synthetic LocalSampleSource", default: "None" },
+      { name: "cache_dir", type: "str | Path | None", description: "Cache root; None uses $OPENQUANT_DATA_CACHE, $XDG_CACHE_HOME/openquant/data or ~/.cache/openquant/data", default: "None" },
+      { name: "refresh / offline", type: "bool", description: "Refetch even if cached / never call the source (raise CacheMissError)", default: "False" },
+      { name: "return_meta", type: "bool", description: "Also return provenance (source, terms, cache status, dataset_hash) for the run manifest", default: "False" },
+      { name: "path", type: "str | Path", description: "File path to CSV or Parquet OHLCV data (load_ohlcv)", default: "—" },
       { name: "symbol", type: "str | None", description: "Symbol name if not present as a column in the data", default: "None" },
       { name: "interval", type: "str", description: "Calendar alignment interval (e.g., '1d', '1h', '5m')", default: "'1d'" },
       { name: "dedupe_keep", type: "str", description: "Which duplicate to keep: 'first' or 'last'", default: "'last'" },
     ],
     commonPitfalls: [
+      "Treating the bundled sample as market data. It is synthetic, so any result computed on it says nothing about real markets.",
+      "Committing a cache directory or fetched data to a repository. Almost every vendor's terms forbid that; see DATA_SOURCES.md.",
+      "Expecting a cached range to serve a sub-range. The cache key is the exact (source, symbol, start, end), so a different range is a new fetch.",
       "Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.",
       "Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.",
     ],
-    relatedModules: ["data-structures"],
+    relatedModules: ["data-structures", "research"],
     apiSurface: "both",
-    pythonApis: ["data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report", "data.clean_ohlcv_df", "data.quality_report_df", "data.align_calendar_df"],
+    pythonApis: ["data.fetch", "data.dataset_hash", "data.record_dataset_hash", "data.quality_failures", "data.default_cache_dir", "data.DataSource", "data.LocalSampleSource", "data.LocalFileSource", "data.CallableSource", "data.CacheMissError", "data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report", "data.clean_ohlcv_df", "data.quality_report_df", "data.align_calendar_df"],
+  },
+  {
+    slug: "evaluation",
+    module: "evaluation",
+    subject: "Research Workflows",
+    summary: "PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.",
+    handwritten: true,
+    afmlChapters: [3, 14, 15],
+    apiSurface: "python-only",
+    pythonApis: ["evaluation.return_moments", "evaluation.probabilistic_sharpe_ratio", "evaluation.deflated_sharpe_ratio", "evaluation.expected_max_sharpe", "evaluation.minimum_track_record_length", "evaluation.meta_label_metrics", "evaluation.strategy_failure_probability", "evaluation.config_hash", "evaluation.TrialRegistry"],
   },
   {
     slug: "feature-diagnostics",

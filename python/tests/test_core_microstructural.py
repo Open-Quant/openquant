@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import finite_max, finite_mean, load_csv_columns, load_json
-
 from openquant import microstructural
 
 # Written by tests/fixtures/microstructural_features/generate.py (AFML ch. 19 in pandas).

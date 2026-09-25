@@ -1,7 +1,5 @@
 import pytest
-
 from _core_fixtures import load_csv_columns
-
 from openquant import fast_ewma
 
 

@@ -127,7 +127,9 @@ pub struct SplitDefinition {
     pub train_indices: Vec<usize>,
     pub test_indices: Vec<usize>,
     pub test_groups: Vec<usize>,
+    /// Training samples removed because their label overlaps a test label.
     pub purged_count: usize,
+    /// Training samples removed by the embargo that the purge had not already removed.
     pub embargo_count: usize,
 }
 
@@ -574,10 +576,8 @@ fn apply_purge_and_embargo(
     n_samples: usize,
 ) -> (Vec<usize>, usize, usize) {
     let mut train_mask = vec![false; n_samples];
-    let mut initial_train_mask = vec![false; n_samples];
     for idx in initial_train {
         train_mask[*idx] = true;
-        initial_train_mask[*idx] = true;
     }
 
     let mut purged_count = 0;
@@ -595,21 +595,37 @@ fn apply_purge_and_embargo(
         }
     }
 
+    // Embargo (AFML 7.4.2, Snippet 7.3): only training samples that FOLLOW a test block are
+    // embargoed, and the count starts where the purge ends: at the first sample after the block
+    // whose label starts after the block's latest label end. Samples before a test block are
+    // never embargoed. A CPCV split has one block per run of adjacent test groups.
     let embargo_width = (pct_embargo * n_samples as f64).ceil() as usize;
     let mut embargoed = vec![false; n_samples];
     if embargo_width > 0 {
-        for test_idx in test_indices {
-            let start = test_idx.saturating_sub(embargo_width);
-            let stop = (*test_idx + embargo_width + 1).min(n_samples);
-            for idx in start..stop {
-                if initial_train_mask[idx] {
-                    embargoed[idx] = true;
-                }
-            }
+        let mut test_mask = vec![false; n_samples];
+        for idx in test_indices {
+            test_mask[*idx] = true;
         }
-        for idx in 0..n_samples {
-            if embargoed[idx] {
-                train_mask[idx] = false;
+        let mut idx = 0;
+        while idx < n_samples {
+            if !test_mask[idx] {
+                idx += 1;
+                continue;
+            }
+            let mut block_end = label_spans[idx].1;
+            while idx < n_samples && test_mask[idx] {
+                block_end = block_end.max(label_spans[idx].1);
+                idx += 1;
+            }
+            let mut resume = idx;
+            while resume < n_samples && label_spans[resume].0 <= block_end {
+                resume += 1;
+            }
+            for e in resume..(resume + embargo_width).min(n_samples) {
+                if train_mask[e] {
+                    embargoed[e] = true;
+                    train_mask[e] = false;
+                }
             }
         }
     }

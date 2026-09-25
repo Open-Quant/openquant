@@ -3,6 +3,9 @@ use openquant::structural_breaks::{
     _get_betas, _get_values_diff, get_chow_type_stat, get_chu_stinchcombe_white_statistics,
     get_sadf, SadfLags, StructuralBreakError,
 };
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use rand_distr::{Distribution, Normal};
 use serde_json::Value;
 use std::path::Path;
 
@@ -88,9 +91,18 @@ fn test_chu_stinchcombe_white_test() {
     assert_eq!(log_prices.len() - 2, two_sided.critical_value.len());
 
     // The critical values (AFML 17.3.2) do not depend on how the statistic is scaled; the
-    // statistic itself is checked in test_chu_stinchcombe_white_statistic_matches_afml.
+    // statistic itself is checked against AFML in test_chu_stinchcombe_white_statistic_matches_afml.
     let reference = reference();
     assert_csw_matches(&reference, &one_sided, &two_sided, "critical_value");
+
+    // Pins of the library's own statistic since #104 (divides by sigma_t, not sigma_t^2). Not
+    // AFML values: sigma_t^2 still averages over one difference fewer than AFML (see the FINDING).
+    assert!((max(&one_sided.stat) - 5.3797).abs() < 0.001);
+    assert!((mean(&one_sided.stat) - 1.2582).abs() < 0.001);
+    assert!((one_sided.stat[20] - 0.6098).abs() < 0.001);
+    assert!((max(&two_sided.stat) - 8.5793).abs() < 0.001);
+    assert!((mean(&two_sided.stat) - 1.8875).abs() < 0.001);
+    assert!((two_sided.stat[20] - 1.4779).abs() < 0.001);
 
     let invalid = get_chu_stinchcombe_white_statistics(&log_prices, "rubbish text");
     assert!(matches!(invalid, Err(StructuralBreakError::InvalidTestType(_))));
@@ -113,12 +125,54 @@ fn assert_csw_matches(
 }
 
 #[test]
-#[ignore = "FINDING: get_chu_stinchcombe_white_statistics divides y_t - y_n by sigma_t^2 * sqrt(t - n); AFML 17.3.2 divides by sigma_t * sqrt(t - n), and sigma_t^2 averages t-1 squared differences where the library divides by t-2 (one-sided max 3729.0 vs 5.39)"]
+#[ignore = "FINDING: get_chu_stinchcombe_white_statistics averages sigma_t^2 over t-2 where AFML 17.3.2 uses t-1 (1-based t; the t-1 squared differences up to bar t), so the statistic is slightly low (one-sided max 5.3797 vs 5.3921). The sigma_t^2-for-sigma_t half of this finding was fixed by #104"]
 fn test_chu_stinchcombe_white_statistic_matches_afml() {
     let log_prices = log_prices();
     let one_sided = get_chu_stinchcombe_white_statistics(&log_prices, "one_sided").unwrap();
     let two_sided = get_chu_stinchcombe_white_statistics(&log_prices, "two_sided").unwrap();
     assert_csw_matches(&reference(), &one_sided, &two_sided, "stat");
+}
+
+#[test]
+fn test_chu_stinchcombe_white_is_scale_invariant() {
+    // A standardised statistic must not depend on the units of the series (#104).
+    let log_prices = log_prices();
+    for test_type in ["one_sided", "two_sided"] {
+        let base = get_chu_stinchcombe_white_statistics(&log_prices, test_type).unwrap();
+        for scale in [0.01, 100.0] {
+            let scaled_prices = log_prices.iter().map(|v| v * scale).collect::<Vec<_>>();
+            let scaled = get_chu_stinchcombe_white_statistics(&scaled_prices, test_type).unwrap();
+            for (a, b) in base.stat.iter().zip(&scaled.stat) {
+                assert!(
+                    (a - b).abs() <= 1e-9 * a.abs().max(1.0),
+                    "{test_type} x{scale}: {a} vs {b}"
+                );
+            }
+            assert_eq!(base.critical_value, scaled.critical_value);
+        }
+    }
+}
+
+#[test]
+fn test_chu_stinchcombe_white_size_on_random_walks() {
+    // With no break, the one-sided statistic should rarely exceed its critical value, and how
+    // rarely must not depend on the volatility of the walk (#104).
+    for step_vol in [1.0, 0.01] {
+        let mut rng = StdRng::seed_from_u64(104);
+        let normal = Normal::new(0.0, step_vol).unwrap();
+        let (mut above, mut total) = (0usize, 0usize);
+        for _ in 0..20 {
+            let mut y = vec![0.0];
+            for _ in 0..300 {
+                y.push(y.last().unwrap() + normal.sample(&mut rng));
+            }
+            let out = get_chu_stinchcombe_white_statistics(&y, "one_sided").unwrap();
+            above += out.stat.iter().zip(&out.critical_value).filter(|(s, c)| s > c).count();
+            total += out.stat.len();
+        }
+        let share = above as f64 / total as f64;
+        assert!(share < 0.15, "step volatility {step_vol}: rejection share {share}");
+    }
 }
 
 #[test]
