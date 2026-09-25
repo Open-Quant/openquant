@@ -135,9 +135,14 @@ export const apiInventory = {
       "validate"
     ],
     "openquant::cross_validation": [
+      "count_train_test_overlaps",
+      "cpcv_paths",
+      "cpcv_splits",
       "ml_get_train_times",
+      "naive_kfold_splits",
       "new",
-      "split"
+      "split",
+      "split_with_diagnostics"
     ],
     "openquant::data_processing": [
       "align_calendar_columns",
