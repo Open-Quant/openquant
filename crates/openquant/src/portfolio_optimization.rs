@@ -106,10 +106,21 @@ pub enum AllocError {
         /// Sum of the upper bounds, each capped at 1.
         upper_sum: f64,
     },
+    /// Asset `asset`'s bounds are unusable: a bound is `NaN`, or the lower bound exceeds the
+    /// upper bound (after capping it at 1). Checked before any solution runs.
+    #[error("invalid weight bounds for asset {asset}: lower {lower}, upper {upper}")]
+    InvalidBounds {
+        /// Column index of the asset.
+        asset: usize,
+        /// Its lower bound.
+        lower: f64,
+        /// Its upper bound, as given.
+        upper: f64,
+    },
     /// The solver or a solution-specific precondition failed; the message says which:
     /// `"no portfolio satisfies the constraints"` (infeasible constraints such as an
     /// unreachable `target_return`, or no convergence), `"covariance is not positive
-    /// definite"` (malformed problem, which also covers a lower bound above its upper bound),
+    /// definite"` (malformed problem),
     /// `"no asset has a return above the risk-free rate"` (`"max_sharpe"`), or a zero
     /// covariance diagonal (`"inverse_variance"`).
     #[error("optimization failed: {0}")]
@@ -371,6 +382,13 @@ fn build_bounds(
 }
 
 fn check_bounds_feasible(bounds: &[(f64, f64)]) -> Result<(), AllocError> {
+    for (asset, &(lo, hi)) in bounds.iter().enumerate() {
+        // `f64::min` drops a NaN `hi`, so test it first; `!(lo <= upper)` also catches NaN `lo`.
+        let upper = hi.min(1.0);
+        if hi.is_nan() || !(lo <= upper) {
+            return Err(AllocError::InvalidBounds { asset, lower: lo, upper: hi });
+        }
+    }
     let lower: f64 = bounds.iter().map(|b| b.0).sum();
     let upper: f64 = bounds.iter().map(|b| b.1.min(1.0)).sum();
     if lower - 1.0 > 1e-9 || upper + 1e-9 < 1.0 {
@@ -622,13 +640,6 @@ pub fn allocate_inverse_variance(prices: &DMatrix<f64>) -> Result<MeanVariance, 
 /// # Errors
 ///
 /// As [`allocate_with_solution`] with `"inverse_variance"`.
-///
-/// # Panics
-///
-/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
-/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
-/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
-/// [`f64::clamp`] with an invalid range.
 pub fn allocate_inverse_variance_with(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
@@ -744,22 +755,16 @@ pub fn allocate_efficient_risk_with(
 /// - [`AllocError::DimensionMismatch`] if `covariance` is not square or its size differs from
 ///   `expected_returns.len()`.
 /// - [`AllocError::UnknownSolution`] for an unsupported `solution`.
+/// - [`AllocError::InvalidBounds`] if an asset's lower bound is above its (capped) upper
+///   bound, or a bound is `NaN`.
 /// - [`AllocError::InfeasibleBounds`] if the bounds cannot sum to 1 (including an empty asset
 ///   set), or the inverse-variance projection cannot place the weight.
 /// - [`AllocError::OptimizationFailed`] if the solver finds no feasible portfolio (e.g. an
 ///   unreachable `target_return`) or does not converge, the problem is malformed (reported as
-///   "covariance is not positive definite", which also covers a lower bound above its upper
-///   bound), no asset beats `risk_free_rate` (`"max_sharpe"`), or a covariance diagonal entry
+///   "covariance is not positive definite"), no asset beats `risk_free_rate` (`"max_sharpe"`), or a covariance diagonal entry
 ///   is zero (`"inverse_variance"`).
 /// - [`AllocError::NaNResult`] if the portfolio risk is not finite or the maximum-Sharpe
 ///   solution is degenerate.
-///
-/// # Panics
-///
-/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
-/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
-/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
-/// [`f64::clamp`] with an invalid range.
 ///
 /// ```
 /// use nalgebra::DMatrix;
@@ -824,13 +829,6 @@ pub fn allocate_from_inputs(
 /// - [`AllocError::NoData`] if fewer than two price rows remain after resampling.
 /// - [`AllocError::NaNResult`] if a price used as a return denominator is zero.
 /// - Otherwise as [`allocate_from_inputs`].
-///
-/// # Panics
-///
-/// With `"inverse_variance"`, if some asset's lower bound exceeds its (capped) upper bound or
-/// a bound is `NaN` while the bound sums still pass the feasibility check (for example
-/// `bounds = {0: (0.3, 0.2)}` with the other assets unbounded): the projection calls
-/// [`f64::clamp`] with an invalid range.
 ///
 /// ```
 /// use nalgebra::DMatrix;
