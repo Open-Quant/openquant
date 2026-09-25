@@ -143,16 +143,20 @@ mutations.
    `cross_validation::PurgedKFold` in this same crate has the same two-sided shape, so I lean
    "unintended". Test: `backtesting_engine_reference.rs:219`.
 3. **feature_importance MDI / MDA standard errors use ddof = 0 - convention difference with a
-   numeric effect.** AFML snippets 8.2/8.3 call pandas `.std()` (ddof = 1). Reported std is too
+   numeric effect.** *Fixed by #94: MDI and MDA now use ddof = 1; the two tests below are no
+   longer ignored.* AFML snippets 8.2/8.3 call pandas `.std()` (ddof = 1). Reported std is too
    small by sqrt((n-1)/n): 18% for 3 folds. SFI (snippet 8.4, numpy `.std()`, ddof = 0) is correct
    as is and is pinned by a passing test. Tests: `feature_importance_reference.rs:64`, `:164`.
-4. **feature_pca_analysis Spearman / Kendall mishandle ties - library bug.** The importance vector
+4. **feature_pca_analysis Spearman / Kendall mishandle ties - library bug.** *Fixed by #94:
+   average ranks and tau-b; the test below is no longer ignored.* The importance vector
    is tiled once per principal component, so ties are guaranteed whenever more than one component
    is kept; `rank_desc` (`src/feature_importance.rs:464`) assigns ordinal rather than average
    ranks and `kendall_tau` (`:480`) is tau-a over untied pairs. scipy gives Spearman -0.0123,
    the library 0.0662 (sign differs). With one component (no ties) both match scipy to 1e-9.
    Test: `feature_importance_reference.rs:308`.
 5. **feature_pca_analysis weighted Kendall is not `scipy.stats.weightedtau` - wrong algorithm.**
+   *Fixed by #94: it now computes `weightedtau` with scipy's defaults; the test below is no
+   longer ignored.*
    `weighted_kendall_tau` (`:506`) weights pair (i, j) by `1 / (1 + i + j)` using input positions.
    AFML 8.4.2 / mlfinlab use weightedtau (hyperbolic weights by rank). 0.179 vs scipy 0.354 on
    the reference case. Test: `feature_importance_reference.rs:325`.
