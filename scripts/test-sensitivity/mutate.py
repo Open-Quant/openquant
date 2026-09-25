@@ -85,7 +85,7 @@ MUTATIONS = [
     ("ef3m-1", "src/ef3m.rs", "let m_3 = p_1 * (3.0 * s_1.powi(2) * u_1 + u_1.powi(3))", "let m_3 = p_1 * (2.0 * s_1.powi(2) * u_1 + u_1.powi(3))", "ef3m", ""),
     ("ef3m-2", "src/ef3m.rs", "let mu_1 = (m_1 - (1.0 - p_1) * mu_2) / p_1;", "let mu_1 = (m_1 + (1.0 - p_1) * mu_2) / p_1;", "ef3m", ""),
     ("ensemble_methods-1", "src/ensemble_methods.rs", "Ok(single_estimator_variance * (rho + (1.0 - rho) / n))", "Ok(single_estimator_variance * (rho + (1.0 + rho) / n))", "ensemble_methods", ""),
-    ("ensemble_methods-2", "src/ensemble_methods.rs", "let noise = (mse - bias_sq - variance).max(0.0);", "let noise = (mse - bias_sq + variance).max(0.0);", "ensemble_methods", ""),
+    ("ensemble_methods-2", "src/ensemble_methods.rs", "let bias = mean_pred - reference;", "let bias = mean_pred - y_true[i];", "ensemble_methods", ""),
     ("ensemble_methods-3", "src/ensemble_methods.rs", "if votes * 2 >= per_model_predictions.len()", "if votes * 2 > per_model_predictions.len()", "ensemble_methods", ""),
     ("etf_trick-1", "src/etf_trick.rs", "k += h_prev[j] * rates.values[i][j] * (delta[j] + costs.values[i][j]);", "k += h_prev[j] * rates.values[i][j] * (delta[j] - costs.values[i][j]);", "etf_trick", ""),
     ("etf_trick-2", "src/etf_trick.rs", "let delever = weights[j] / abs_w_sum;", "let delever = weights[j];", "etf_trick", ""),
