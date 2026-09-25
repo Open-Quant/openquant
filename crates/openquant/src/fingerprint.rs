@@ -1,39 +1,123 @@
+//! Model fingerprints (Li, Turkington and Yazdani, 2020): decompose what a fitted model has
+//! learned into linear, non-linear and pairwise-interaction effects per feature.
+//!
+//! Not from AFML; a port of mlfinlab's implementation, complementary to the feature
+//! importance of AFML chapter 8 (importance says *how much* a feature matters, the
+//! fingerprint says *how*). It needs only predictions: implement [`RegressionPredictor`] or
+//! [`ClassificationPredictor`] for your model.
+//!
+//! For each feature `k`, the partial dependence `f_k(v)` (Friedman, 2001) is the mean
+//! prediction with column `k` set to `v` in every row, evaluated at `num_values` quantiles
+//! from the feature's minimum to its maximum. With `l_k` the least-squares line through
+//! those points and `f_k_bar` their mean:
+//!
+//! - linear effect = mean over the grid of `|l_k(v) - f_k_bar|`;
+//! - non-linear effect = mean over the grid of `|f_k(v) - l_k(v)|`;
+//! - pairwise effect of `(k, l)` = mean over the joint grid of the part of the joint partial
+//!   dependence that the two centred single-feature curves do not explain.
+//!
+//! All effects are in the units of the prediction ([`Effect::raw`]); [`Effect::norm`]
+//! rescales each family to sum to 1. Features are identified by column index; pairs by the
+//! string `"(k, l)"`.
+//!
+//! ```
+//! use openquant::fingerprint::{RegressionModelFingerprint, RegressionPredictor};
+//!
+//! // 2 x0 is linear, x1^2 is non-linear on a symmetric grid, x0 x2 is a pure interaction.
+//! struct Known;
+//! impl RegressionPredictor for Known {
+//!     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {
+//!         x.iter().map(|r| 2.0 * r[0] + r[1] * r[1] + r[0] * r[2]).collect()
+//!     }
+//! }
+//!
+//! # fn main() -> Result<(), openquant::fingerprint::FingerprintError> {
+//! // Every combination of 11 evenly spaced values in [-1, 1].
+//! let grid: Vec<f64> = (0..=10).map(|i| f64::from(i) / 5.0 - 1.0).collect();
+//! let mut x = Vec::new();
+//! for &a in &grid {
+//!     for &b in &grid {
+//!         for &c in &grid {
+//!             x.push(vec![a, b, c]);
+//!         }
+//!     }
+//! }
+//!
+//! let mut fingerprint = RegressionModelFingerprint::new();
+//! fingerprint.fit(&Known, &x, 11, Some(&[(0, 2), (0, 1)]))?;
+//! let (linear, non_linear, pairwise) = fingerprint.get_effects()?;
+//! let pairwise = pairwise.expect("pairs were requested");
+//!
+//! // Mean |2 v| over the grid is 12/11.
+//! assert!((linear.raw[&0] - 12.0 / 11.0).abs() < 1e-9);
+//! assert!(linear.raw[&1] < 1e-9 && non_linear.norm[&1] > 0.999);
+//! assert!(linear.raw[&2] < 1e-9 && non_linear.raw[&2] < 1e-9);
+//! // The interaction is x0 x2 itself: mean |v w| = (6/11)^2.
+//! assert!((pairwise.raw["(0, 2)"] - 36.0 / 121.0).abs() < 1e-9);
+//! assert!(pairwise.raw["(0, 1)"] < 1e-9);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
 use std::collections::BTreeMap;
 
+/// Errors returned by the fingerprint types.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum FingerprintError {
+    /// `get_effects` or `plot_effects` was called before a successful `fit`.
     #[error("fit must be called before get_effects")]
     NotFitted,
+    /// The named input is empty.
     #[error("{0} cannot be empty")]
     Empty(&'static str),
+    /// The named parameter violates its requirement.
     #[error("{name} must be {requirement}")]
-    Invalid { name: &'static str, requirement: &'static str },
+    Invalid {
+        /// Parameter name.
+        name: &'static str,
+        /// What it must satisfy.
+        requirement: &'static str,
+    },
+    /// The rows of `x` have no columns.
     #[error("x must have at least one feature")]
     NoFeatures,
+    /// The rows of `x` differ in length.
     #[error("ragged x rows")]
     RaggedX,
 }
 
+/// Per-feature effects, keyed by feature (column) index.
 #[derive(Clone, Debug, Default)]
 pub struct Effect {
+    /// Effects in the units of the prediction.
     pub raw: BTreeMap<usize, f64>,
+    /// Effects divided by their sum (all zero if the sum is zero).
     pub norm: BTreeMap<usize, f64>,
 }
 
+/// Pairwise-interaction effects, keyed by the string `"(k, l)"`.
 #[derive(Clone, Debug, Default)]
 pub struct PairwiseEffect {
+    /// Effects in the units of the prediction.
     pub raw: BTreeMap<String, f64>,
+    /// Effects divided by their sum (all zero if the sum is zero).
     pub norm: BTreeMap<String, f64>,
 }
 
+/// A fitted regression model, as seen by [`RegressionModelFingerprint`].
 pub trait RegressionPredictor {
+    /// Predicts one value per row of `x` (rows are observations, columns features).
     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64>;
 }
 
+/// A fitted classifier, as seen by [`ClassificationModelFingerprint`].
 pub trait ClassificationPredictor {
+    /// Predicts one probability per row of `x` (typically of the positive class).
     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64>;
 }
 
+/// Fingerprint of a regression model; see the [module docs](self) for the decomposition.
 #[derive(Clone, Debug, Default)]
 pub struct RegressionModelFingerprint {
     linear_effect: Option<Effect>,
@@ -41,6 +125,8 @@ pub struct RegressionModelFingerprint {
     pair_wise_effect: Option<PairwiseEffect>,
 }
 
+/// Fingerprint of a classifier, computed on predicted probabilities, so effects are in
+/// probability units and compressed near 0 and 1.
 #[derive(Clone, Debug, Default)]
 pub struct ClassificationModelFingerprint {
     linear_effect: Option<Effect>,
@@ -49,10 +135,29 @@ pub struct ClassificationModelFingerprint {
 }
 
 impl RegressionModelFingerprint {
+    /// Creates an unfitted fingerprint.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Computes the linear, non-linear and (optionally) pairwise effects of `model.predict`
+    /// on `x`.
+    ///
+    /// `x` has one row per observation and one column per feature; `num_values` is the number
+    /// of quantile grid points per feature; `pairwise_combinations` lists the feature pairs
+    /// `(k, l)` whose interaction to measure. Cost is `features * num_values` predictions
+    /// over `x`, plus `num_values^2` per pair.
+    ///
+    /// # Errors
+    ///
+    /// - [`FingerprintError::Empty`] if `x` is empty.
+    /// - [`FingerprintError::Invalid`] if `num_values < 2`.
+    /// - [`FingerprintError::NoFeatures`] if the rows have no columns.
+    /// - [`FingerprintError::RaggedX`] if the rows differ in length.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pair names a feature index `>= x[0].len()`.
     pub fn fit<M: RegressionPredictor>(
         &mut self,
         model: &M,
@@ -68,6 +173,12 @@ impl RegressionModelFingerprint {
         Ok(())
     }
 
+    /// Returns `(linear, non_linear, pairwise)` from the last [`fit`](Self::fit);
+    /// `pairwise` is `None` unless pairs were requested.
+    ///
+    /// # Errors
+    ///
+    /// [`FingerprintError::NotFitted`] before a successful fit.
     pub fn get_effects(
         &self,
     ) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), FingerprintError> {
@@ -76,6 +187,12 @@ impl RegressionModelFingerprint {
         Ok((lin, nonlin, self.pair_wise_effect.as_ref()))
     }
 
+    /// Returns one summary line per effect family (e.g. `"linear:3 features"`); there is no
+    /// plotting in the Rust crate.
+    ///
+    /// # Errors
+    ///
+    /// [`FingerprintError::NotFitted`] before a successful fit.
     pub fn plot_effects(&self) -> Result<Vec<String>, FingerprintError> {
         let (lin, nonlin, pair) = self.get_effects()?;
         let mut lines = vec![
@@ -90,10 +207,29 @@ impl RegressionModelFingerprint {
 }
 
 impl ClassificationModelFingerprint {
+    /// Creates an unfitted fingerprint.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Computes the linear, non-linear and (optionally) pairwise effects of
+    /// `model.predict_proba` on `x`.
+    ///
+    /// `x` has one row per observation and one column per feature; `num_values` is the number
+    /// of quantile grid points per feature; `pairwise_combinations` lists the feature pairs
+    /// `(k, l)` whose interaction to measure. Cost is `features * num_values` predictions
+    /// over `x`, plus `num_values^2` per pair.
+    ///
+    /// # Errors
+    ///
+    /// - [`FingerprintError::Empty`] if `x` is empty.
+    /// - [`FingerprintError::Invalid`] if `num_values < 2`.
+    /// - [`FingerprintError::NoFeatures`] if the rows have no columns.
+    /// - [`FingerprintError::RaggedX`] if the rows differ in length.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pair names a feature index `>= x[0].len()`.
     pub fn fit<M: ClassificationPredictor>(
         &mut self,
         model: &M,
@@ -109,6 +245,12 @@ impl ClassificationModelFingerprint {
         Ok(())
     }
 
+    /// Returns `(linear, non_linear, pairwise)` from the last [`fit`](Self::fit);
+    /// `pairwise` is `None` unless pairs were requested.
+    ///
+    /// # Errors
+    ///
+    /// [`FingerprintError::NotFitted`] before a successful fit.
     pub fn get_effects(
         &self,
     ) -> Result<(&Effect, &Effect, Option<&PairwiseEffect>), FingerprintError> {
@@ -117,6 +259,12 @@ impl ClassificationModelFingerprint {
         Ok((lin, nonlin, self.pair_wise_effect.as_ref()))
     }
 
+    /// Returns one summary line per effect family (e.g. `"linear:3 features"`); there is no
+    /// plotting in the Rust crate.
+    ///
+    /// # Errors
+    ///
+    /// [`FingerprintError::NotFitted`] before a successful fit.
     pub fn plot_effects(&self) -> Result<Vec<String>, FingerprintError> {
         let (lin, nonlin, pair) = self.get_effects()?;
         let mut lines = vec![
