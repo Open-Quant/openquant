@@ -1,6 +1,6 @@
 set shell := ["bash", "-cu"]
 
-default := help
+# `help` is the first recipe, so a bare `just` lists the recipes.
 
 help:
     @just --list
