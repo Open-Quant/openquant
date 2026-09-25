@@ -2,7 +2,7 @@ use openquant::ensemble_methods::{
     aggregate_classification_probability_mean, aggregate_classification_vote,
     aggregate_regression_mean, average_pairwise_prediction_correlation, bagging_ensemble_variance,
     bias_variance_noise, bootstrap_sample_indices, recommend_bagging_vs_boosting,
-    sequential_bootstrap_sample_indices, EnsembleMethod,
+    sequential_bootstrap_sample_indices, EnsembleError, EnsembleMethod,
 };
 
 #[test]
@@ -10,14 +10,122 @@ fn test_bias_variance_noise_decomposition() {
     let y = vec![1.0, 0.0, 1.0, 0.0];
     let preds = vec![vec![0.9, 0.1, 0.8, 0.2], vec![0.8, 0.2, 0.7, 0.3], vec![1.0, 0.0, 0.9, 0.1]];
 
-    let out = bias_variance_noise(&y, &preds).unwrap();
+    // Without the noiseless target there is no noise estimate; bias_sq absorbs it and
+    // bias_sq + variance == mse holds exactly.
+    let out = bias_variance_noise(&y, &preds, None).unwrap();
     assert!(out.bias_sq >= 0.0);
     assert!(out.variance >= 0.0);
-    assert!(out.noise >= 0.0);
     assert!(out.mse >= 0.0);
+    assert_eq!(out.noise, None);
+    assert!((out.bias_sq + out.variance - out.mse).abs() < 1e-12);
+    assert!((out.bias_sq - 0.025).abs() < 1e-12);
+    assert!((out.variance - 0.02 / 3.0).abs() < 1e-12);
 
-    let lhs = out.bias_sq + out.variance + out.noise;
-    assert!((lhs - out.mse).abs() < 1e-10);
+    // With the target: bias is measured against it and noise against the labels.
+    let target = vec![0.9, 0.1, 0.9, 0.1];
+    let out = bias_variance_noise(&y, &preds, Some(&target)).unwrap();
+    // mean prediction [0.9, 0.1, 0.8, 0.2] vs target: squared bias mean([0, 0, 0.01, 0.01]).
+    assert!((out.bias_sq - 0.005).abs() < 1e-12);
+    assert!((out.variance - 0.02 / 3.0).abs() < 1e-12);
+    // y - target = [0.1, -0.1, 0.1, -0.1].
+    assert!((out.noise.unwrap() - 0.01).abs() < 1e-12);
+    // MSE is still against y_true, so it matches the no-target call.
+    assert!((out.mse - (0.025 + 0.02 / 3.0)).abs() < 1e-12);
+}
+
+/// Least-squares line through (x, y).
+fn fit_line(x: &[f64], y: &[f64]) -> (f64, f64) {
+    let n = x.len() as f64;
+    let mx = x.iter().sum::<f64>() / n;
+    let my = y.iter().sum::<f64>() / n;
+    let sxy: f64 = x.iter().zip(y).map(|(a, b)| (a - mx) * (b - my)).sum();
+    let sxx: f64 = x.iter().map(|a| (a - mx) * (a - mx)).sum();
+    let slope = sxy / sxx;
+    (my - slope * mx, slope)
+}
+
+#[test]
+fn test_bias_variance_noise_recovers_known_label_noise() {
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+    use rand_distr::{Distribution, Normal};
+
+    // AFML §6.2 simulation: y = f(x) + eps with Var(eps) = sigma^2 known. Each model is a line
+    // fitted to its own noisy training sample of a curved f, so the ensemble has real bias and
+    // real variance. The models are evaluated on fresh test labels.
+    let sigma = 0.5;
+    let sigma_sq = sigma * sigma;
+    let f = |x: f64| (2.0 * std::f64::consts::PI * x).sin();
+    let normal = Normal::new(0.0, sigma).unwrap();
+    let mut rng = StdRng::seed_from_u64(128);
+
+    let n_test = 400;
+    let x_test: Vec<f64> = (0..n_test).map(|i| (i as f64 + 0.5) / n_test as f64).collect();
+    let y_expected: Vec<f64> = x_test.iter().map(|&x| f(x)).collect();
+
+    let n_models = 50;
+    let n_train = 30;
+    let preds: Vec<Vec<f64>> = (0..n_models)
+        .map(|_| {
+            let x: Vec<f64> = (0..n_train).map(|_| rng.gen::<f64>()).collect();
+            let y: Vec<f64> = x.iter().map(|&v| f(v) + normal.sample(&mut rng)).collect();
+            let (a, b) = fit_line(&x, &y);
+            x_test.iter().map(|&v| a + b * v).collect()
+        })
+        .collect();
+
+    // Average over many independent draws of the test labels: noise -> sigma^2 and
+    // bias^2 + variance + noise -> mse (the expectation identity).
+    let reps = 200;
+    let (mut noise_sum, mut gap_sum, mut bias_sum, mut var_sum) = (0.0, 0.0, 0.0, 0.0);
+    for rep in 0..reps {
+        let y_true: Vec<f64> = y_expected.iter().map(|&m| m + normal.sample(&mut rng)).collect();
+        let out = bias_variance_noise(&y_true, &preds, Some(&y_expected)).unwrap();
+        let noise = out.noise.expect("noise is reported when y_expected is given");
+        noise_sum += noise;
+        gap_sum += out.mse - (out.bias_sq + out.variance + noise);
+        bias_sum += out.bias_sq;
+        var_sum += out.variance;
+
+        if rep == 0 {
+            // A single draw: noise within ~4 standard errors (sigma^2 * sqrt(2 / n) = 0.018).
+            assert!((noise - sigma_sq).abs() < 0.07, "noise {noise} vs {sigma_sq}");
+            // Without the target, noise is not reported and bias_sq absorbs it.
+            let observed = bias_variance_noise(&y_true, &preds, None).unwrap();
+            assert_eq!(observed.noise, None);
+            assert!((observed.mse - out.mse).abs() < 1e-12);
+            assert!((observed.variance - out.variance).abs() < 1e-12);
+            assert!((observed.bias_sq - (out.bias_sq + noise)).abs() < 0.1);
+        }
+    }
+    let reps = reps as f64;
+    let mean_noise = noise_sum / reps;
+    let mean_gap = gap_sum / reps;
+    // Standard error of mean_noise is sigma^2 * sqrt(2 / (n_test * reps)) ~ 0.00125.
+    assert!((mean_noise - sigma_sq).abs() < 0.006, "mean noise {mean_noise} vs {sigma_sq}");
+    assert!(mean_gap.abs() < 0.01, "mse - (bias^2 + var + noise) averaged {mean_gap}");
+    // The line cannot fit a full sine period, so bias dominates; both terms are material.
+    assert!(bias_sum / reps > 0.1);
+    assert!(var_sum / reps > 0.005);
+}
+
+#[test]
+fn test_bias_variance_noise_validates_lengths() {
+    let y = vec![1.0, 0.0, 1.0];
+    let preds = vec![vec![0.9, 0.1, 0.8], vec![0.8, 0.2, 0.7]];
+    assert_eq!(
+        bias_variance_noise(&y, &preds, Some(&[1.0, 0.0])),
+        Err(EnsembleError::LengthMismatch("y_expected"))
+    );
+    assert_eq!(
+        bias_variance_noise(&y, &[vec![0.9, 0.1]], None),
+        Err(EnsembleError::LengthMismatch("prediction"))
+    );
+    assert_eq!(bias_variance_noise(&[], &preds, None), Err(EnsembleError::Empty("y_true")));
+    assert_eq!(
+        bias_variance_noise(&y, &[], None),
+        Err(EnsembleError::Empty("per_model_predictions"))
+    );
 }
 
 #[test]
