@@ -19,7 +19,8 @@ directory's SVGs, so a figure a notebook no longer draws does not linger.
 runs the notebooks in place and then ``--against-git HEAD``, which compares the
 fresh files with the committed ones without executing anything twice. The
 comparison ignores what may legitimately differ between machines: PNG bytes
-(only the number and type of outputs is compared), stderr, SVG path ids, and
+(only the number and type of outputs is compared; the same for raster tiles
+inside SVGs), stderr, SVG path ids, and
 floating-point noise (numbers are compared to ``SIG_DIGITS`` significant
 digits). A changed source cell, a new output line or a missing or extra figure
 is stale.
@@ -54,6 +55,9 @@ EXCLUDED: dict[str, str] = {}
 SIG_DIGITS = 4
 _FLOAT = re.compile(r"-?\d+\.\d+(?:[eE][-+]?\d+)?")
 _SVG_ID = re.compile(r"\b([mpc])[0-9a-f]{10}\b")
+# Raster tiles matplotlib embeds in an SVG (imshow, colorbars): libpng/zlib
+# builds differ between platforms, so the bytes do, like the notebook PNGs.
+_SVG_PNG = re.compile(r"data:image/png;base64,\s*[A-Za-z0-9+/=\s]+")
 
 
 def discover() -> list[Path]:
@@ -108,7 +112,8 @@ def notebook_fingerprint(text: str) -> list[str]:
 
 
 def figure_fingerprint(text: str) -> list[str]:
-    return normalize_text(_SVG_ID.sub(r"\1ID", text)).splitlines()
+    text = _SVG_PNG.sub("data:image/png;base64,PNG", _SVG_ID.sub(r"\1ID", text))
+    return normalize_text(text).splitlines()
 
 
 @dataclass

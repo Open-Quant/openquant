@@ -106,3 +106,17 @@ def test_every_notebook_is_run_or_excluded_with_a_reason() -> None:
     for name, reason in runner.EXCLUDED.items():
         assert (runner.NOTEBOOK_DIR / name).exists(), name
         assert reason.strip(), name
+
+
+def test_figure_fingerprint_ignores_embedded_png_bytes_and_path_ids() -> None:
+    runner = _load("run_notebooks")
+
+    def svg(png: str, pid: str, x: str) -> str:
+        return (
+            f'<path id="{pid}" d="M 0 {x}"/>\n'
+            f'<image xlink:href="data:image/png;base64,\n{png}" width="10"/>\n'
+        )
+
+    base = runner.figure_fingerprint(svg("iVBORw0KAAAA", "m0123456789", "1.00000001"))
+    assert runner.figure_fingerprint(svg("iVBORw0KBBBB", "mabcdefabcd", "1.00000002")) == base
+    assert runner.figure_fingerprint(svg("iVBORw0KAAAA", "m0123456789", "2.0")) != base
