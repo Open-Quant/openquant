@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Any
 
 import polars as pl
 
 
-def _validate_equal_length(name_a: str, a: Sequence[object], name_b: str, b: Sequence[object]) -> None:
+def _validate_equal_length(
+    name_a: str, a: Sequence[object], name_b: str, b: Sequence[object]
+) -> None:
     if len(a) != len(b):
         raise ValueError(f"{name_a}/{name_b} length mismatch: {len(a)} vs {len(b)}")
 
@@ -18,7 +21,7 @@ def to_polars_signal_frame(
     symbol: str | None = None,
 ) -> pl.DataFrame:
     _validate_equal_length("timestamps", timestamps, "signal", signal)
-    data: dict[str, object] = {"ts": list(timestamps), "signal": list(signal)}
+    data: dict[str, Any] = {"ts": list(timestamps), "signal": list(signal)}
     if side is not None:
         _validate_equal_length("timestamps", timestamps, "side", side)
         data["side"] = list(side)
@@ -36,7 +39,7 @@ def to_polars_event_frame(
 ) -> pl.DataFrame:
     _validate_equal_length("starts", starts, "ends", ends)
     _validate_equal_length("starts", starts, "probs", probs)
-    data: dict[str, object] = {"start_ts": list(starts), "end_ts": list(ends), "prob": list(probs)}
+    data: dict[str, Any] = {"start_ts": list(starts), "end_ts": list(ends), "prob": list(probs)}
     if sides is not None:
         _validate_equal_length("starts", starts, "sides", sides)
         data["side"] = list(sides)
@@ -67,7 +70,7 @@ def to_polars_indicator_matrix(
         bar_index = list(range(len(ind_mat)))
     _validate_equal_length("bar_index", bar_index, "ind_mat_rows", ind_mat)
 
-    data: dict[str, object] = {"bar_index": list(bar_index)}
+    data: dict[str, Any] = {"bar_index": list(bar_index)}
     for j, name in enumerate(label_names):
         data[name] = [int(row[j]) for row in ind_mat]
     return pl.DataFrame(data)
@@ -79,7 +82,7 @@ def to_polars_weights_frame(
     as_of: str | None = None,
 ) -> pl.DataFrame:
     _validate_equal_length("asset_names", asset_names, "weights", weights)
-    data: dict[str, object] = {"asset": list(asset_names), "weight": list(weights)}
+    data: dict[str, Any] = {"asset": list(asset_names), "weight": list(weights)}
     if as_of is not None:
         data["as_of"] = [as_of] * len(asset_names)
     df = pl.DataFrame(data)
@@ -96,7 +99,7 @@ def to_polars_frontier_frame(
 ) -> pl.DataFrame:
     _validate_equal_length("volatility", volatility, "returns", returns)
     n = len(volatility)
-    data: dict[str, object] = {"volatility": list(volatility), "return": list(returns)}
+    data: dict[str, Any] = {"volatility": list(volatility), "return": list(returns)}
     if sharpe is not None:
         _validate_equal_length("volatility", volatility, "sharpe", sharpe)
         data["sharpe"] = list(sharpe)
@@ -115,7 +118,7 @@ def to_polars_backtest_frame(
     positions: Sequence[float] | None = None,
 ) -> pl.DataFrame:
     _validate_equal_length("timestamps", timestamps, "equity_curve", equity_curve)
-    data: dict[str, object] = {"ts": list(timestamps), "equity": list(equity_curve)}
+    data: dict[str, Any] = {"ts": list(timestamps), "equity": list(equity_curve)}
     if returns is not None:
         _validate_equal_length("timestamps", timestamps, "returns", returns)
         data["returns"] = list(returns)
@@ -152,7 +155,7 @@ class SignalStreamBuffer:
         self._frames.clear()
 
 
-def to_pandas(df: pl.DataFrame):  # type: ignore[no-untyped-def]
+def to_pandas(df: pl.DataFrame) -> Any:
     """Optional pandas conversion for downstream tooling."""
     try:
         import pandas  # noqa: F401

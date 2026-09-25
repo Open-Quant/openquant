@@ -1,5 +1,4 @@
 import pytest
-
 from openquant import streaming_hpc
 
 # pipeline_cfg() in crates/openquant/tests/streaming_hpc.rs

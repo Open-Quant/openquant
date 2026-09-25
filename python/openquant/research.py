@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 import hashlib
 import json
-from math import sin
 import random
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from math import sin
 from typing import Any
 
 import polars as pl
@@ -58,7 +58,9 @@ def make_synthetic_futures_dataset(
         raise ValueError("asset_names must contain at least 2 assets")
 
     start = datetime(2024, 1, 1, 9, 30, 0)
-    timestamps = [(start + timedelta(minutes=i)).strftime("%Y-%m-%d %H:%M:%S") for i in range(n_bars)]
+    timestamps = [
+        (start + timedelta(minutes=i)).strftime("%Y-%m-%d %H:%M:%S") for i in range(n_bars)
+    ]
 
     base = 80.0
     close: list[float] = []
@@ -154,7 +156,8 @@ def run_flywheel_iteration(
     net_sharpe = (mean_r / std_r) * annualizer if std_r > 0 else 0.0
 
     promotion = {
-        "passed_realized_sharpe": out["risk"]["realized_sharpe"] >= float(cfg["min_realized_sharpe"]),
+        "passed_realized_sharpe": out["risk"]["realized_sharpe"]
+        >= float(cfg["min_realized_sharpe"]),
         "passed_net_sharpe": net_sharpe >= float(cfg["min_net_sharpe"]),
         "passed_alignment_guard": bool(out["leakage_checks"]["inputs_aligned"]),
         "passed_event_order_guard": bool(out["leakage_checks"]["event_indices_sorted"]),

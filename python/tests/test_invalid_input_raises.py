@@ -5,7 +5,6 @@ accept it: each of these failed before the core returned ``Err`` for the input.
 """
 
 import pytest
-
 from openquant._core import backtest_stats, bars, bet_sizing, ef3m, microstructural, sampling
 
 MOMENTS = [0.7, 2.6, 0.4, 25.0, -59.8]

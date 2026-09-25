@@ -1,9 +1,7 @@
 import math
 
 import pytest
-
 from _core_fixtures import load_csv_columns, load_timestamps
-
 from openquant import filters, labeling, sample_weights, volatility
 
 DATES = [f"2000-01-{day:02d} 00:00:00" for day in range(1, 11)]
@@ -76,7 +74,9 @@ def test_time_decay_weights_on_fixture():
     events, timestamps, close = _setup_events()
 
     def decay(value):
-        return [w for _, w in sample_weights.get_weights_by_time_decay(events, timestamps, close, value)]
+        return [
+            w for _, w in sample_weights.get_weights_by_time_decay(events, timestamps, close, value)
+        ]
 
     standard = decay(0.5)
     no_decay = decay(1.0)

@@ -4,9 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
-import polars as pl
-
 import openquant
+import polars as pl
 
 
 def _fixture_path() -> Path:

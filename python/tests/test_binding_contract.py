@@ -24,9 +24,8 @@ import re
 import types
 from pathlib import Path
 
-import pytest
-
 import openquant
+import pytest
 from openquant import _core
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -61,9 +60,7 @@ def _core_submodules():
 
 def _public_callables(module):
     return sorted(
-        name
-        for name, value in vars(module).items()
-        if callable(value) and not name.startswith("_")
+        name for name, value in vars(module).items() if callable(value) and not name.startswith("_")
     )
 
 

@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import sampling, sb_bagging
 
 N_SAMPLES = 240
@@ -103,4 +102,3 @@ def test_sb_classifier_all_features():
     x, y, _, ind_mat = _synthetic_dataset()
     out = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=10, random_state=1)
     assert _accuracy(out["predictions"], y) >= 0.55
-

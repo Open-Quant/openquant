@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 import polars as pl
-
 
 CANONICAL_OHLCV_COLUMNS = [
     "ts",
@@ -104,15 +103,18 @@ def _format_ts(v: Any) -> str | None:
     return str(v)
 
 
-def _gap_expr(symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600) -> pl.Expr:
+def _gap_expr(
+    symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600
+) -> pl.Expr:
     threshold_us = int(threshold_seconds) * 1_000_000
-    return (
-        (symbol_expr == symbol_expr.shift(1))
-        & ((ts_us_expr - ts_us_expr.shift(1)) > threshold_us)
+    return (symbol_expr == symbol_expr.shift(1)) & (
+        (ts_us_expr - ts_us_expr.shift(1)) > threshold_us
     )
 
 
-def _build_quality_report(sorted_df: pl.DataFrame, rows_removed_by_deduplication: int) -> dict[str, Any]:
+def _build_quality_report(
+    sorted_df: pl.DataFrame, rows_removed_by_deduplication: int
+) -> dict[str, Any]:
     if sorted_df.height == 0:
         return {
             "row_count": 0,
@@ -131,11 +133,17 @@ def _build_quality_report(sorted_df: pl.DataFrame, rows_removed_by_deduplication
             pl.len().alias("row_count"),
             pl.col("symbol").n_unique().alias("symbol_count"),
             (
-                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                (
+                    (pl.col("symbol") == pl.col("symbol").shift(1))
+                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                )
                 .cast(pl.UInt32)
                 .sum()
             ).alias("duplicate_key_count"),
-            _gap_expr(pl.col("symbol"), pl.col("ts_us")).cast(pl.UInt32).sum().alias("gap_interval_count"),
+            _gap_expr(pl.col("symbol"), pl.col("ts_us"))
+            .cast(pl.UInt32)
+            .sum()
+            .alias("gap_interval_count"),
             pl.col("ts").min().alias("ts_min"),
             pl.col("ts").max().alias("ts_max"),
         )
@@ -167,23 +175,54 @@ def _interval_to_seconds(interval: str) -> int:
     raise ValueError(f"unsupported interval format: {interval}")
 
 
+@overload
 def clean_ohlcv(
     df: pl.DataFrame,
     *,
-    dedupe_keep: str = "last",
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: Literal[False] = ...,
+) -> pl.DataFrame: ...
+
+
+@overload
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: Literal[True],
+) -> tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+@overload
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = ...,
+    return_report: bool = ...,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+def clean_ohlcv(
+    df: pl.DataFrame,
+    *,
+    dedupe_keep: Literal["first", "last"] = "last",
     return_report: bool = False,
 ) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
     if dedupe_keep not in {"first", "last"}:
         raise ValueError("dedupe_keep must be 'first' or 'last'")
 
-    base_lf = _prepare_ohlcv_lf(df).with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
+    base_lf = _prepare_ohlcv_lf(df).with_columns(
+        pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us")
+    )
     sorted_lf = base_lf.sort(["symbol", "ts_us"])
 
     duplicate_key_count = int(
-        sorted_lf
-        .select(
+        sorted_lf.select(
             (
-                ((pl.col("symbol") == pl.col("symbol").shift(1)) & (pl.col("ts_us") == pl.col("ts_us").shift(1)))
+                (
+                    (pl.col("symbol") == pl.col("symbol").shift(1))
+                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                )
                 .cast(pl.UInt32)
                 .sum()
             ).alias("duplicate_key_count")
