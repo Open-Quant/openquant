@@ -43,9 +43,8 @@ fn test_etf_trick_costs_defined() {
     assert_eq!(in_memory.len(), csv_100.len());
     assert_eq!(in_memory.len(), csv_all.len());
 
-    // Regression pin of the library's own output, not a reference: it is one bar off AFML 2.4.1,
-    // see etf_series_matches_afml_reference below.
-    assert!((in_memory[20].1 - 0.9933502667307338).abs() < 1e-12);
+    // AFML 2.4.1, from tests/fixtures/etf_trick/generate.py (reference.json, with_rates[20]).
+    assert!((in_memory[20].1 - 0.9910955906772763).abs() < 1e-12);
     assert_eq!(in_memory[0].1, 1.0);
     assert_eq!(csv_4[0].1, 1.0);
     assert_eq!(csv_100[0].1, 1.0);
@@ -91,8 +90,8 @@ fn test_etf_trick_rates_not_defined() {
     assert_eq!(in_memory.len(), csv_100.len());
     assert_eq!(in_memory.len(), csv_all.len());
 
-    // Regression pin of the library's own output; see etf_series_matches_afml_reference.
-    assert!((in_memory[20].1 - 0.9933372583080832).abs() < 1e-12);
+    // AFML 2.4.1, from tests/fixtures/etf_trick/generate.py (reference.json, without_rates[20]).
+    assert!((in_memory[20].1 - 0.9911139304610538).abs() < 1e-12);
     assert_eq!(in_memory[0].1, 1.0);
     assert_eq!(csv_4[0].1, 1.0);
     assert_eq!(csv_100[0].1, 1.0);
@@ -160,12 +159,20 @@ fn test_docs_page_example_values() {
     let series = etf.get_etf_series(100).unwrap();
     let values: Vec<f64> = series.iter().map(|(_, k)| *k).collect();
     assert_eq!(series[0].0, "2024-01-03");
-    for (got, want) in values.iter().zip([1.0, 1.007332, 1.023143, 1.019626]) {
+    for (got, want) in values.iter().zip([1.0, 1.007939, 1.028298, 1.024786]) {
         assert!((got - want).abs() < 5e-7, "got {got}, page says {want}");
     }
-    // The hand calculation on the page.
-    let by_hand = 1.0 + 0.5 / 71.4 * (71.1 - 71.2) + 0.5 / 2.49 * (2.54 - 2.50);
+    // The hand calculation on the page: bought at the 01-04 opens, so 01-04 earns open-to-close.
+    let h1 = [0.5 / 71.4, 0.5 / 2.49];
+    let by_hand = 1.0 + h1[0] * (71.1 - 71.4) + h1[1] * (2.54 - 2.49);
     assert!((values[1] - by_hand).abs() < 1e-12);
+    // 01-05 is not after a rebalance: the same holdings earn close-to-close.
+    let k2 = by_hand + h1[0] * (72.0 - 71.1) + h1[1] * (2.61 - 2.54);
+    assert!((values[2] - k2).abs() < 1e-12);
+    // 01-05 rebalances to 80/20, sized at the 01-08 opens; 01-08 earns open-to-close.
+    let h3 = [0.8 * k2 / 72.2, 0.2 * k2 / 2.60];
+    let k3 = k2 + h3[0] * (72.1 - 72.2) + h3[1] * (2.57 - 2.60);
+    assert!((values[3] - k3).abs() < 1e-12);
 
     let chain: Vec<FuturesRollRow> = [
         (2, 70.0, 70.4, "CLG4"),
@@ -195,8 +202,8 @@ fn reference() -> serde_json::Value {
 }
 
 /// The ETF trick as AFML 2.4.1 writes it, computed in pandas by tests/fixtures/etf_trick/generate.py.
+/// Issue #164: the holdings that earn bar t are h_{t-1} = w_{t-1} K_{t-1} / (o_t phi_{t-1} sum|w|).
 #[test]
-#[ignore = "FINDING: etf_trick sizes the holdings that earn bar t's p_t - o_t from bar t's allocation and the NEXT bar's open o_{t+1}; AFML 2.4.1 uses h_{t-1} = w_{t-1} K_{t-1} / (o_t phi_{t-1} sum|w|), so K is one bar off (row 20: 0.99335 vs 0.99110)"]
 fn etf_series_matches_afml_reference() {
     let reference = reference();
     let dates: Vec<&str> = reference["etf_trick"]["dates"]

@@ -147,7 +147,7 @@ of the fixtures above, or are derived by hand in a comment next to the assertion
 | `microstructural_features.rs`, `test_core_microstructural.py` | `microstructural_features/reference.json`; entropies of "11100001" by hand |
 | `structural_breaks.rs`, `test_core_structural_breaks.py` | `structural_breaks/reference.json` (the Chu-Stinchcombe-White statistic is also pinned to the library's own output; see the FINDING test) |
 | `volatility_features.rs`, `test_core_volatility.py` | `volatility/range_reference.json` |
-| `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` (the two ETF values that remain inline pin the library's own output; see the FINDING test) |
+| `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` |
 | `labeling.rs` | `labeling/reference.json` |
 | `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json` |
 | `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage) |

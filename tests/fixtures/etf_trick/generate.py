@@ -13,9 +13,12 @@ ETF trick, AFML section 2.4.1, implemented as written:
 
 with o = open_df, p = close_df, omega = alloc_df, d = costs_df, phi = rates_df (or 1 when no
 rates are given), and B the bars whose allocation differs from the previous bar's (in this data
-every bar). Two conventions follow the library rather than the book, because the book leaves
-them open: the series starts at the second row with K = 1, and it stops one row before the end
-(h at the last row would need the next open).
+every bar). The holdings that earn bar t's move are h_{t-1}: sized from bar t-1's allocation, K
+and FX, bought at bar t's open. Two conventions follow the library rather than the book, because
+the book leaves them open: the series starts at the second row with K = 1, and it stops one row
+before the end (h at the last row would need the next open). The starting bar is in B: its
+holdings are set by the rebalance formula and bought at the next open, so the first move earned
+is open-to-close.
 
 Futures roll gaps, AFML snippet 2.2 (rollGaps): at each roll date, gap = open of the new contract
 minus the previous close; gaps are cumulated, and "roll backward" subtracts the last value so
@@ -42,7 +45,7 @@ rates = read("rates_df.csv")[o.columns]
 
 def etf_trick(phi, start=1):
     rebalance = (w != w.shift()).any(axis=1)
-    rebalance.iloc[0] = True
+    rebalance.iloc[start] = True
     k = {o.index[start]: 1.0}
     h = w.iloc[start] * 1.0 / (o.iloc[start + 1] * phi.iloc[start] * w.iloc[start].abs().sum())
     for t in range(start + 1, len(o) - 1):

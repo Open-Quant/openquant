@@ -10,8 +10,10 @@
 //!
 //! - [`Table`]s share one row index (oldest first) and one set of columns (instruments).
 //!   Columns are matched by name to the allocation table's order.
-//! - Allocations are de-levered by the sum of their absolute values, and holdings are sized
-//!   at the **next** bar's open; the bar after a rebalance earns open-to-close only.
+//! - Allocations are de-levered by the sum of their absolute values. Holdings chosen at a
+//!   rebalance on bar `t` use bar `t`'s allocation, `K_t` and FX, are sized at the **next**
+//!   bar's open `o_{t+1}`, and earn from bar `t + 1` on; that bar earns open-to-close only.
+//!   The first bar of the series counts as a rebalance.
 //! - `costs` holds carry or dividends in price units with the sign of a credit: it is
 //!   **added** to the price change. Transaction costs are not modelled, so `K_t` is gross.
 //! - A rebalance is detected by exact equality of consecutive allocation rows.
@@ -40,11 +42,13 @@
 //!     None,                 // no FX
 //! )?;
 //! let series = etf.get_etf_series(100)?;
-//! // Six rows give four values: the first seeds the previous close, the last lacks a next open.
+//! // Six rows give four values: the series starts on the second row, and the last row lacks a
+//! // next open.
 //! assert_eq!(series.len(), 4);
 //! assert_eq!(series[0], ("01-03".to_string(), 1.0));
-//! // 1 + 0.5 / 71.4 * (-0.10) + 0.5 / 2.49 * 0.04
-//! assert!((series[1].1 - 1.007332).abs() < 1e-6);
+//! // Bought at the 01-04 opens and held to the closes:
+//! // 1 + 0.5 / 71.4 * (-0.30) + 0.5 / 2.49 * 0.05
+//! assert!((series[1].1 - 1.007939).abs() < 1e-6);
 //! # Ok(())
 //! # }
 //! ```
@@ -103,7 +107,8 @@ pub enum EtfTrickError {
     /// The tables have different numbers of columns.
     #[error("DataFrames columns are different")]
     ColumnMismatch,
-    /// Internal: holdings were not initialised before use.
+    /// Internal: holdings were not initialised before use. No longer returned; kept so that
+    /// existing `match`es compile.
     #[error("missing previous h")]
     MissingPreviousHoldings,
     /// The roll method is not `"absolute"` or `"relative"`.
@@ -274,11 +279,17 @@ impl EtfTrick {
 
     /// Computes the value series `(index, K_t)`, starting from `K = 1`.
     ///
-    /// Holdings at a rebalance are `h = w K / (o_{t+1} fx sum|w|)`; each later bar adds
-    /// `sum h fx (delta + costs)`, with `delta` the close-to-close change, or open-to-close on
-    /// the bar after a rebalance. The first row only seeds the previous close and the last
-    /// row is dropped (sizing there needs a next open), so `n` rows give `n - 2` values;
-    /// fewer than two rows give none. This matches mlfinlab's output.
+    /// Implements AFML §2.4.1: at a rebalance on bar `t` the holdings become
+    /// `h_t = w_t K_t / (o_{t+1} fx_t sum|w_t|)`, and bar `t + 1` adds
+    /// `sum h_t fx_{t+1} (delta_{t+1} + costs_{t+1})`, with `delta` the open-to-close change on
+    /// the bar after a rebalance and the close-to-close change otherwise. Between rebalances
+    /// the holdings are carried unchanged.
+    ///
+    /// The series starts on the second row with `K = 1`, and that row counts as a rebalance.
+    /// The first row is not used, and the last row is dropped (sizing there needs a next open),
+    /// so `n` rows give `n - 2` values; fewer than three rows give none. The row index matches
+    /// mlfinlab's output; the values do not, because mlfinlab sizes the holdings one bar late
+    /// (see the module page).
     ///
     /// `batch_size` exists for mlfinlab compatibility: it is checked for CSV sources and
     /// otherwise ignored. CSV files are read in full.
@@ -392,66 +403,50 @@ fn compute_etf_series(
         }
     };
 
-    if open.values.len() < 2 {
+    // The series starts on the second row with K = 1 and stops one row before the end, where
+    // sizing a position would need the next open.
+    let n_rows = open.values.len();
+    if n_rows < 3 {
         return Ok(Vec::new());
     }
-
-    let n_rows = open.values.len();
     let n_cols = securities.len();
-    let mut out = Vec::new();
 
-    let mut prev_k = 1.0f64;
-    let mut prev_allocs_change = false;
-    let mut prev_h: Option<Vec<f64>> = None;
-    let mut prev_allocs = vec![f64::NAN; n_cols];
+    // h_{i,t} = w_{i,t} K_t / (o_{i,t+1} phi_{i,t} sum_j |w_{j,t}|): the holdings set at the
+    // close of a rebalance bar t, bought at the next open, which earn bar t + 1.
+    let holdings = |t: usize, k: f64| -> Vec<f64> {
+        let abs_w_sum: f64 = alloc.values[t].iter().map(|w| w.abs()).sum();
+        (0..n_cols)
+            .map(|j| {
+                alloc.values[t][j] * k / (open.values[t + 1][j] * rates.values[t][j] * abs_w_sum)
+            })
+            .collect()
+    };
 
-    // Last row needs next-open for h_t and is effectively omitted in mlfinlab output.
-    for i in 1..(n_rows - 1) {
-        let weights = alloc.values[i].clone();
+    let start = 1;
+    let mut k = 1.0f64;
+    let mut out = vec![(open.index[start].clone(), k)];
+    // The initial allocation is a rebalance: its holdings are bought at the next open.
+    let mut h = holdings(start, k);
+    let mut prev_rebalanced = true;
 
-        let allocs_change = !weights.iter().zip(prev_allocs.iter()).all(|(a, b)| a == b);
-
-        let mut abs_w_sum = 0.0;
-        for w in &weights {
-            abs_w_sum += w.abs();
+    for t in (start + 1)..(n_rows - 1) {
+        // K_t = K_{t-1} + sum_i h_{i,t-1} phi_{i,t} (delta_{i,t} + d_{i,t}), where h_{t-1} was
+        // sized from bar t-1's allocation, K and FX and bar t's open.
+        for (j, h_j) in h.iter().enumerate() {
+            let delta = if prev_rebalanced {
+                close.values[t][j] - open.values[t][j]
+            } else {
+                close.values[t][j] - close.values[t - 1][j]
+            };
+            k += h_j * rates.values[t][j] * (delta + costs.values[t][j]);
         }
+        out.push((open.index[t].clone(), k));
 
-        let mut h_t = vec![f64::NAN; n_cols];
-        if i + 1 < n_rows && abs_w_sum != 0.0 {
-            for j in 0..n_cols {
-                let delever = weights[j] / abs_w_sum;
-                let denom = open.values[i + 1][j] * rates.values[i][j];
-                h_t[j] = delever / denom;
-            }
+        let rebalanced = alloc.values[t] != alloc.values[t - 1];
+        if rebalanced {
+            h = holdings(t, k);
         }
-
-        let mut delta = vec![0.0; n_cols];
-        for (j, delta_j) in delta.iter_mut().enumerate() {
-            let close_open = close.values[i][j] - open.values[i][j];
-            let price_diff = close.values[i][j] - close.values[i - 1][j];
-            *delta_j = if prev_allocs_change { close_open } else { price_diff };
-        }
-
-        if prev_h.is_none() {
-            prev_h = Some(h_t.iter().map(|v| v * prev_k).collect());
-            out.push((open.index[i].clone(), prev_k));
-            continue;
-        }
-
-        if prev_allocs_change {
-            prev_h = Some(h_t.iter().map(|v| v * prev_k).collect());
-        }
-
-        let h_prev = prev_h.as_ref().ok_or(EtfTrickError::MissingPreviousHoldings)?;
-        let mut k = prev_k;
-        for j in 0..n_cols {
-            k += h_prev[j] * rates.values[i][j] * (delta[j] + costs.values[i][j]);
-        }
-        out.push((open.index[i].clone(), k));
-
-        prev_k = k;
-        prev_allocs_change = allocs_change;
-        prev_allocs = weights;
+        prev_rebalanced = rebalanced;
     }
 
     Ok(out)
