@@ -36,8 +36,7 @@ def _synthetic_dataset():
 
 
 def _accuracy(predictions, y):
-    # Class predictions cross the boundary as `bytes` (Rust Vec<u8>), hence list().
-    return sum(p == t for p, t in zip(list(predictions), y)) / len(y)
+    return sum(p == t for p, t in zip(predictions, y)) / len(y)
 
 
 def _errors(predictions, y):
@@ -65,7 +64,7 @@ def test_sb_classifier_single_feature():
     again = sb_bagging.fit_predict_sb_classifier(
         signal_only, y, ind_mat, n_estimators=10, random_state=1
     )
-    assert list(again["predictions"]) == list(out["predictions"])
+    assert again["predictions"] == out["predictions"]
 
 
 def test_sb_regressor_single_feature():

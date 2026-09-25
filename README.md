@@ -24,7 +24,7 @@
 
 ## Status
 Pre-release (0.1.0, unpublished). The Rust core covers most AFML chapters and is
-tested in CI; the Python bindings expose 27 submodules. Nothing is on crates.io or
+tested in CI; the Python bindings expose 32 submodules. Nothing is on crates.io or
 PyPI yet, so installing means building from source. Open work is tracked in
 [issues](https://github.com/Open-Quant/openquant/issues); the reasoning behind it is in
 `docs/design/production-readiness-brief.md`.

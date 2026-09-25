@@ -87,16 +87,15 @@ def test_aggregation_helpers():
     # Mirrors crates/openquant/tests/ensemble_methods.rs::test_aggregation_helpers
     assert ensemble.aggregate_regression_mean([[1.0, 3.0], [3.0, 1.0]]) == [2.0, 2.0]
 
-    # Label vectors cross the boundary as `bytes` (Rust Vec<u8>), hence list().
     vote = ensemble.aggregate_classification_vote([[1, 0, 1], [1, 1, 0], [0, 1, 1]])
-    assert list(vote) == [1, 1, 1]
+    assert vote == [1, 1, 1]
 
     probabilities, labels = ensemble.aggregate_classification_probability_mean(
         [[0.9, 0.2], [0.7, 0.4], [0.8, 0.3]], 0.5
     )
     assert abs(probabilities[0] - 0.8) < 1e-12
     assert abs(probabilities[1] - 0.3) < 1e-12
-    assert list(labels) == [1, 0]
+    assert labels == [1, 0]
 
 
 def test_bagging_variance_reduction():
