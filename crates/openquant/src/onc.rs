@@ -28,6 +28,8 @@ struct ClusterState {
     silhouette_scores: Vec<f64>,
 }
 
+/// Keep the re-clustered partition only if its mean cluster t-stat beats the mean t-stat of the
+/// clusters that were re-clustered (MLAM Snippet 4.2); otherwise keep the old partition.
 pub fn check_improve_clusters<T: Clone>(
     new_tstat_mean: f64,
     mean_redo_tstat: f64,
@@ -35,9 +37,9 @@ pub fn check_improve_clusters<T: Clone>(
     new_cluster: T,
 ) -> T {
     if new_tstat_mean > mean_redo_tstat {
-        old_cluster
-    } else {
         new_cluster
+    } else {
+        old_cluster
     }
 }
 

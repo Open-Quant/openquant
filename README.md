@@ -109,5 +109,10 @@ bun run dev
 
 Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.
 
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test and docs gates, and pull
+request conventions, and [tests/FIXTURES.md](tests/FIXTURES.md) for where the test
+fixtures come from. Report security problems privately ([SECURITY.md](SECURITY.md)).
+
 ## License
 MIT (`LICENSE`)

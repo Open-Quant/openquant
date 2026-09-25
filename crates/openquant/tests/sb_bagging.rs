@@ -1,9 +1,11 @@
 use nalgebra::DMatrix;
-use openquant::sampling::get_ind_matrix;
+use openquant::sampling::{get_ind_mat_average_uniqueness, get_ind_matrix};
 use openquant::sb_bagging::{
     MaxFeatures, MaxSamples, SbBaggingError, SequentiallyBootstrappedBaggingClassifier,
     SequentiallyBootstrappedBaggingRegressor,
 };
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 fn synthetic_dataset() -> (DMatrix<f64>, Vec<u8>, Vec<f64>, Vec<Vec<u8>>) {
     let n = 240usize;
@@ -31,14 +33,19 @@ fn synthetic_dataset() -> (DMatrix<f64>, Vec<u8>, Vec<f64>, Vec<Vec<u8>>) {
         x[(i, 7)] = ((i * 7) % 13) as f64 / 13.0;
     }
 
+    // One label per row of `x`, each spanning the next 6 bars.
     let bar_index: Vec<usize> = (0..n).collect();
-    let mut t1 = Vec::new();
-    for start in (0..n - 6).step_by(3) {
-        t1.push((start, start + 6));
-    }
+    let t1: Vec<(usize, usize)> = (0..n).map(|start| (start, (start + 6).min(n - 1))).collect();
     let ind = get_ind_matrix(&t1, &bar_index).unwrap();
 
     (x, y_clf, y_reg, ind)
+}
+
+// One label per training row, each spanning the next 4 bars.
+fn train_ind_mat(rows: usize) -> Vec<Vec<u8>> {
+    let bar_index: Vec<usize> = (0..rows).collect();
+    let t1: Vec<(usize, usize)> = (0..rows).map(|s| (s, (s + 4).min(rows - 1))).collect();
+    get_ind_matrix(&t1, &bar_index).unwrap()
 }
 
 #[test]
@@ -176,10 +183,7 @@ fn test_sb_classifier() {
     sb.oob_score = true;
 
     // indicator matrix needs the same number of labels as rows in train set
-    let bar_index: Vec<usize> = (0..split).collect();
-    let t1: Vec<(usize, usize)> =
-        (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
-    let ind_train = get_ind_matrix(&t1, &bar_index).unwrap();
+    let ind_train = train_ind_mat(split);
 
     sb.fit(&x_train, y_train, &ind_train, None).unwrap();
     let preds = sb.predict(&x_test).unwrap();
@@ -200,10 +204,7 @@ fn test_sb_regressor() {
     let y_train = &y[0..split];
     let y_test = &y[split..];
 
-    let bar_index: Vec<usize> = (0..split).collect();
-    let t1: Vec<(usize, usize)> =
-        (0..split.saturating_sub(4)).step_by(2).map(|s| (s, s + 4)).collect();
-    let ind_train = get_ind_matrix(&t1, &bar_index).unwrap();
+    let ind_train = train_ind_mat(split);
 
     let mut sb = SequentiallyBootstrappedBaggingRegressor::new(1);
     sb.n_estimators = 100;
@@ -226,4 +227,194 @@ fn test_sb_regressor() {
 
     assert!(mse < 0.4, "mse={mse}");
     assert!(mae < 0.5, "mae={mae}");
+}
+
+// Labels of 8 bars, one starting every 2 bars (the setup measured in #90).
+fn overlapping_labels(n: usize) -> Vec<Vec<u8>> {
+    let spans: Vec<(usize, usize)> = (0..n).map(|i| (2 * i, 2 * i + 7)).collect();
+    let bars: Vec<usize> = (0..2 * n + 8).collect();
+    get_ind_matrix(&spans, &bars).unwrap()
+}
+
+fn sample_uniqueness(ind_mat: &[Vec<u8>], drawn: &[usize]) -> f64 {
+    let sub: Vec<Vec<u8>> =
+        ind_mat.iter().map(|row| drawn.iter().map(|&c| row[c]).collect()).collect();
+    get_ind_mat_average_uniqueness(&sub).unwrap()
+}
+
+fn mean_uniqueness(ind_mat: &[Vec<u8>], samples: &[Vec<usize>]) -> f64 {
+    samples.iter().map(|s| sample_uniqueness(ind_mat, s)).sum::<f64>() / samples.len() as f64
+}
+
+#[test]
+fn test_estimators_are_sequentially_bootstrapped() {
+    let n = 60;
+    let ind = overlapping_labels(n);
+    let x = DMatrix::from_fn(n, 1, |r, _| r as f64);
+    let y: Vec<u8> = (0..n).map(|r| u8::from(r % 3 == 0)).collect();
+
+    let mut rng = StdRng::seed_from_u64(7);
+    let uniform: Vec<Vec<usize>> =
+        (0..300).map(|_| (0..n).map(|_| rng.gen_range(0..n)).collect()).collect();
+    let standard = mean_uniqueness(&ind, &uniform);
+
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(7);
+    clf.n_estimators = 300;
+    clf.fit(&x, &y, &ind, None).unwrap();
+    let sequential = mean_uniqueness(&ind, &clf.estimators_samples);
+    // Uniform ~0.254 and sequential ~0.261, each with a standard error near 0.0005.
+    assert!(
+        sequential > standard + 0.003,
+        "classifier: sequential {sequential:.4} vs uniform bootstrap {standard:.4}"
+    );
+
+    let mut reg = SequentiallyBootstrappedBaggingRegressor::new(7);
+    reg.n_estimators = 300;
+    let y_reg: Vec<f64> = (0..n).map(|r| r as f64).collect();
+    reg.fit(&x, &y_reg, &ind, None).unwrap();
+    let sequential = mean_uniqueness(&ind, &reg.estimators_samples);
+    assert!(
+        sequential > standard + 0.003,
+        "regressor: sequential {sequential:.4} vs uniform bootstrap {standard:.4}"
+    );
+}
+
+#[test]
+fn test_random_state_reproduces_a_fit() {
+    let n = 40;
+    let ind = overlapping_labels(n);
+    let x = DMatrix::from_fn(n, 1, |r, _| r as f64);
+    let y: Vec<u8> = (0..n).map(|r| u8::from(r >= 20)).collect();
+    let fit = |seed: u64| {
+        let mut clf = SequentiallyBootstrappedBaggingClassifier::new(seed);
+        clf.n_estimators = 5;
+        clf.fit(&x, &y, &ind, None).unwrap();
+        clf.estimators_samples
+    };
+    assert_eq!(fit(3), fit(3));
+    assert_ne!(fit(3), fit(4));
+}
+
+#[test]
+fn test_ind_mat_label_count_must_match_rows() {
+    let n = 30;
+    let x = DMatrix::from_fn(n, 1, |r, _| r as f64);
+    let y: Vec<u8> = (0..n).map(|r| u8::from(r >= 15)).collect();
+    let y_reg: Vec<f64> = (0..n).map(|r| r as f64).collect();
+    for labels in [n - 5, n + 5] {
+        let ind = overlapping_labels(labels);
+        let mut clf = SequentiallyBootstrappedBaggingClassifier::new(1);
+        assert_eq!(clf.fit(&x, &y, &ind, None), Err(SbBaggingError::DimensionMismatch));
+        let mut reg = SequentiallyBootstrappedBaggingRegressor::new(1);
+        assert_eq!(reg.fit(&x, &y_reg, &ind, None), Err(SbBaggingError::DimensionMismatch));
+    }
+}
+
+// A weak, noisy relationship, so that in-sample and out-of-bag scores differ.
+fn noisy_rows(n: usize) -> (DMatrix<f64>, Vec<u8>, Vec<f64>) {
+    let mut rng = StdRng::seed_from_u64(11);
+    let x = DMatrix::from_fn(n, 1, |_, _| rng.gen_range(-1.0..1.0));
+    let y: Vec<u8> = (0..n).map(|r| u8::from(x[(r, 0)] + rng.gen_range(-1.0..1.0) > 0.0)).collect();
+    let y_reg: Vec<f64> = (0..n).map(|r| x[(r, 0)] + rng.gen_range(-1.0..1.0)).collect();
+    (x, y, y_reg)
+}
+
+fn out_of_bag_rows(n: usize, drawn: &[usize]) -> Vec<usize> {
+    (0..n).filter(|r| !drawn.contains(r)).collect()
+}
+
+// With one estimator the ensemble prediction is that estimator's, so the out-of-bag score
+// is the score of `predict` over the rows the estimator did not draw.
+#[test]
+fn test_classifier_oob_score_uses_only_held_out_rows() {
+    let n = 60;
+    let ind = overlapping_labels(n);
+    let (x, y, _) = noisy_rows(n);
+
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(5);
+    clf.n_estimators = 1;
+    clf.oob_score = true;
+    clf.fit(&x, &y, &ind, None).unwrap();
+    let preds = clf.predict(&x).unwrap();
+    let accuracy = |rows: &[usize]| {
+        rows.iter().filter(|&&r| preds[r] == y[r]).count() as f64 / rows.len() as f64
+    };
+    let oob = out_of_bag_rows(n, &clf.estimators_samples[0]);
+    let all: Vec<usize> = (0..n).collect();
+    assert!((accuracy(&oob) - accuracy(&all)).abs() > 1e-9, "data does not separate the two");
+    assert!((clf.oob_score_value.unwrap() - accuracy(&oob)).abs() < 1e-12);
+}
+
+#[test]
+fn test_regressor_oob_score_uses_only_held_out_rows() {
+    let n = 60;
+    let ind = overlapping_labels(n);
+    let (x, _, y) = noisy_rows(n);
+
+    let mut reg = SequentiallyBootstrappedBaggingRegressor::new(5);
+    reg.n_estimators = 1;
+    reg.oob_score = true;
+    reg.fit(&x, &y, &ind, None).unwrap();
+    let preds = reg.predict(&x).unwrap();
+    let r2 = |rows: &[usize]| {
+        let mean = rows.iter().map(|&r| y[r]).sum::<f64>() / rows.len() as f64;
+        let ss_tot = rows.iter().map(|&r| (y[r] - mean).powi(2)).sum::<f64>();
+        let ss_res = rows.iter().map(|&r| (y[r] - preds[r]).powi(2)).sum::<f64>();
+        1.0 - ss_res / ss_tot
+    };
+    let oob = out_of_bag_rows(n, &reg.estimators_samples[0]);
+    let all: Vec<usize> = (0..n).collect();
+    assert!((r2(&oob) - r2(&all)).abs() > 1e-9, "data does not separate the two");
+    assert!((reg.oob_score_value.unwrap() - r2(&oob)).abs() < 1e-12);
+}
+
+#[test]
+fn test_sample_weight_changes_the_fit() {
+    // Rows 0..30 follow y = x and rows 30..60 follow y = -x. Zero weight on one half leaves
+    // the other half's relationship.
+    let n = 60;
+    let ind = overlapping_labels(n);
+    let x = DMatrix::from_fn(n, 1, |r, _| (r % 30) as f64 - 14.5);
+    let first_half: Vec<f64> = (0..n).map(|r| if r < 30 { 1.0 } else { 0.0 }).collect();
+    let second_half: Vec<f64> = first_half.iter().map(|w| 1.0 - w).collect();
+
+    let y: Vec<f64> = (0..n).map(|r| if r < 30 { x[(r, 0)] } else { -x[(r, 0)] }).collect();
+    let probe = DMatrix::from_row_slice(1, 1, &[10.0]);
+    let mut reg = SequentiallyBootstrappedBaggingRegressor::new(2);
+    reg.n_estimators = 20;
+    reg.fit(&x, &y, &ind, Some(&first_half)).unwrap();
+    let weighted = reg.predict(&probe).unwrap()[0];
+    assert!((weighted - 10.0).abs() < 1e-9, "weighted prediction {weighted}");
+    reg.fit(&x, &y, &ind, None).unwrap();
+    let unweighted = reg.predict(&probe).unwrap()[0];
+    assert!(unweighted.abs() < 5.0, "unweighted prediction {unweighted}");
+
+    // Class 1 where x >= 0 in the first half, where x < 0 in the second.
+    let y_clf: Vec<u8> = (0..n).map(|r| u8::from((x[(r, 0)] >= 0.0) == (r < 30))).collect();
+    let probe = DMatrix::from_row_slice(2, 1, &[-10.0, 10.0]);
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(2);
+    clf.n_estimators = 21;
+    clf.fit(&x, &y_clf, &ind, Some(&first_half)).unwrap();
+    assert_eq!(clf.predict(&probe).unwrap(), vec![0, 1]);
+    clf.fit(&x, &y_clf, &ind, Some(&second_half)).unwrap();
+    assert_eq!(clf.predict(&probe).unwrap(), vec![1, 0]);
+}
+
+#[test]
+fn test_sample_weight_is_validated() {
+    let n = 20;
+    let ind = overlapping_labels(n);
+    let x = DMatrix::from_fn(n, 1, |r, _| r as f64);
+    let y: Vec<u8> = (0..n).map(|r| u8::from(r >= 10)).collect();
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(1);
+    assert_eq!(clf.fit(&x, &y, &ind, Some(&[1.0])), Err(SbBaggingError::DimensionMismatch));
+    let mut bad = vec![1.0; n];
+    bad[3] = -1.0;
+    assert_eq!(clf.fit(&x, &y, &ind, Some(&bad)), Err(SbBaggingError::InvalidSampleWeight));
+    bad[3] = f64::NAN;
+    assert_eq!(clf.fit(&x, &y, &ind, Some(&bad)), Err(SbBaggingError::InvalidSampleWeight));
+    assert_eq!(
+        clf.fit(&x, &y, &ind, Some(&vec![0.0; n])),
+        Err(SbBaggingError::InvalidSampleWeight)
+    );
 }

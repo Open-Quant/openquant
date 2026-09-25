@@ -71,6 +71,10 @@ def test_sampling_contracts():
     assert len(samples) == 4
     assert all(0 <= i < len(label_endtime) for i in samples)
 
+    seeded = openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=3)
+    assert seeded == openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=3)
+    assert seeded != openquant.sampling.seq_bootstrap(ind_mat, sample_length=50, random_state=4)
+
 
 def test_labeling_contracts():
     close_timestamps = [
@@ -159,6 +163,27 @@ def test_portfolio_fixture_smoke():
         assert isinstance(risk, float)
         assert isinstance(port_ret, float)
         assert isinstance(sharpe, float)
+
+
+def test_portfolio_statistics_are_annual_simple_return_figures():
+    # #110: from prices, risk was a daily volatility beside an annual return, and the Sharpe
+    # ratio was reported only for max_sharpe. All three are now annual, for every solution.
+    prices = _load_fixture_prices()
+    rets = [
+        [prices[t][j] / prices[t - 1][j] - 1.0 for j in range(len(prices[0]))]
+        for t in range(1, len(prices))
+    ]
+    rf = 0.01
+    for solution in ("inverse_variance", "min_volatility", "max_sharpe"):
+        weights, risk, port_ret, sharpe = openquant.portfolio.allocate_with_solution(
+            prices, solution, risk_free_rate=rf
+        )
+        daily = [sum(w * r for w, r in zip(weights, row)) for row in rets]
+        mean = sum(daily) / len(daily)
+        var = sum((d - mean) ** 2 for d in daily) / (len(daily) - 1)
+        assert port_ret == pytest.approx(252.0 * mean, rel=1e-9, abs=1e-12)
+        assert risk == pytest.approx((252.0 * var) ** 0.5, rel=1e-9)
+        assert sharpe == pytest.approx((port_ret - rf) / risk, rel=1e-9)
 
 
 def test_portfolio_rejects_ragged_matrix():

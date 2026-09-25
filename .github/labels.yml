@@ -1,0 +1,81 @@
+# Issue and pull request labels for Open-Quant/openquant.
+#
+# This file describes the labels; it does not create them. Nothing in CI reads it.
+# To apply it, use a label-sync tool that reads this name/color/description format
+# (e.g. EndBug/label-sync or crazy-max/ghaction-github-labeler), or run `gh label create`
+# / `gh label edit` by hand. Colors are hex without the leading '#'.
+#
+# Every backlog issue carries one track:* label and one priority label.
+# Entries marked "new" do not exist on GitHub yet; the rest match `gh label list`
+# (2026-09-24), with descriptions added where GitHub had none.
+
+# --- Tracks: which part of the backlog an issue belongs to --------------------------
+- name: "track:code"
+  color: "1f6feb"
+  description: "Rust core and bindings: correctness, errors, API"
+- name: "track:testing"
+  color: "1a7f37"
+  description: "Tests, reference fixtures and CI gates"
+- name: "track:docs"
+  color: "0969da"
+  description: "Documentation site content"
+- name: "track:design"
+  color: "bf3989"
+  description: "Visual identity and docs-site design"
+- name: "track:research"
+  color: "bf8700"
+  description: "Research enablement: data layer, notebooks, experiments"
+- name: "track:runbook"
+  color: "bc4c00"
+  description: "End-to-end research runbooks on real data"
+- name: "track:release"
+  color: "8250df"
+  description: "Packaging, publishing and repository community files"
+- name: "track:hygiene"
+  color: "6e7781"
+  description: "Repository cleanup and tooling"
+
+# --- Priority ------------------------------------------------------------------------
+- name: "P0"
+  color: "b60205"
+  description: "Blocks correctness or release; do first"
+- name: "P1"
+  color: "d93f0b"
+  description: "Important; next in line"
+- name: "P2"
+  color: "fbca04"
+  description: "Worth doing; not urgent"
+
+# --- Kind (GitHub defaults, used by the issue templates) ------------------------------
+- name: "bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+- name: "enhancement"
+  color: "a2eeef"
+  description: "New feature or request"
+- name: "documentation"
+  color: "0075ca"
+  description: "Improvements or additions to documentation"
+- name: "dependencies"  # new; Dependabot applies it (and creates it if missing)
+  color: "0366d6"
+  description: "Dependency updates"
+
+# --- Triage (GitHub defaults) ----------------------------------------------------------
+- name: "good first issue"
+  color: "7057ff"
+  description: "Good for newcomers"
+- name: "help wanted"
+  color: "008672"
+  description: "Extra attention is needed"
+- name: "question"
+  color: "d876e3"
+  description: "Further information is requested"
+- name: "duplicate"
+  color: "cfd3d7"
+  description: "This issue or pull request already exists"
+- name: "invalid"
+  color: "e4e669"
+  description: "This doesn't seem right"
+- name: "wontfix"
+  color: "ffffff"
+  description: "This will not be worked on"

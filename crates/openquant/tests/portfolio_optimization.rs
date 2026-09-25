@@ -66,10 +66,9 @@ fn test_against_python_fixture_weights() {
         .zip(weights.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    // Sensitive to matrix orientation: 5.6e-4 with the prices read correctly, 0.22 when the
-    // loader interleaved rows and columns (#74). The remaining comparisons below still use
-    // tolerances too loose to mean anything; min-vol is 0.17 from the reference (#76).
-    assert!(max_diff < 1e-3, "inverse variance max diff {max_diff}");
+    // Exact now that both sides use simple returns (9e-16). It was 5.6e-4 with log returns here
+    // (#110), and 0.22 when the loader interleaved rows and columns (#74).
+    assert!(max_diff < 1e-12, "inverse variance max diff {max_diff}");
 
     let w_min = fixture["weights"]["min_volatility"].as_array().unwrap();
     let res_min = allocate_min_vol(&prices, None, None).unwrap();
@@ -79,10 +78,10 @@ fn test_against_python_fixture_weights() {
         .zip(w_min.iter())
         .map(|(r, e)| (r - e.as_f64().unwrap()).abs())
         .fold(0.0_f64, f64::max);
-    // 0.0028 now that the long-only problem is actually solved (it was 0.17 when the
-    // unconstrained optimum was clamped). What is left is the returns convention: log returns
-    // here, simple returns in the fixture, the same gap inverse-variance shows above.
-    assert!(max_diff < 5e-3, "min vol diff {max_diff}");
+    // 4.1e-5 with simple returns on both sides; 0.0028 with log returns here (#110), and 0.17
+    // when the unconstrained optimum was clamped. What is left is the reference optimiser's
+    // own tolerance.
+    assert!(max_diff < 1e-4, "min vol diff {max_diff}");
 
     // The fixture's max_sharpe weights are not compared: they depend on a risk-free rate and an
     // annualisation this file does not know, and the old `< 1.0` tolerance could not fail anyway.
@@ -265,5 +264,111 @@ fn efficient_risk_does_not_depend_on_the_units_of_the_return_constraint() {
         for (a, b) in decimal.weights.iter().zip(&percent.weights) {
             assert!((a - b).abs() < 1e-6, "target {target}: {a} vs {b}");
         }
+    }
+}
+
+/// Per-period simple returns of a price matrix, computed independently of the library.
+fn simple_returns(prices: &DMatrix<f64>) -> DMatrix<f64> {
+    DMatrix::from_fn(prices.nrows() - 1, prices.ncols(), |r, c| {
+        prices[(r + 1, c)] / prices[(r, c)] - 1.0
+    })
+}
+
+/// #110: from prices the module took log returns where `cla`, `hrp` and `hcaa` take simple
+/// returns. Asset 0 goes 100 -> 110 -> 99: simple returns +10% and -10%, mean 0; the mean log
+/// return is ln(0.99)/2, about -0.5% a day.
+#[test]
+fn expected_returns_from_prices_are_annualised_mean_simple_returns() {
+    let prices = DMatrix::from_row_slice(3, 2, &[100.0, 100.0, 110.0, 102.0, 99.0, 104.04]);
+    let (mu, cov) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+    assert!(mu[0].abs() < 1e-12, "mean simple return of +10%, -10% is 0, got {}", mu[0]);
+    assert!((mu[1] - 0.02 * 252.0).abs() < 1e-9, "got {}", mu[1]);
+    // Sample variance of (0.1, -0.1) is 0.02 a day, annualised with the same 252 as the mean.
+    assert!((cov[(0, 0)] - 0.02 * 252.0).abs() < 1e-9, "got {}", cov[(0, 0)]);
+    assert!(cov[(1, 1)].abs() < 1e-12);
+}
+
+/// #110: `portfolio_return` was annualised and `portfolio_risk` was not, so `portfolio_sharpe`
+/// was sqrt(252) too large; and it was 0 for every solution but max Sharpe. Each figure is
+/// checked here against the portfolio's own daily simple-return series.
+#[test]
+fn reported_risk_return_and_sharpe_are_annual_for_every_solution() {
+    let prices = load_prices();
+    let returns = simple_returns(&prices);
+    let n = returns.nrows() as f64;
+    let rf = 0.02;
+    // A binding target: halfway between the minimum-variance return and the best asset's.
+    let (mu, _) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+    let min_vol_return = allocate_min_vol(&prices, None, None).unwrap().portfolio_return;
+    let target = 0.5 * (min_vol_return + mu.iter().cloned().fold(f64::MIN, f64::max));
+    for solution in ["inverse_variance", "min_volatility", "max_sharpe", "efficient_risk"] {
+        let opts =
+            AllocationOptions { risk_free_rate: rf, target_return: target, ..Default::default() };
+        let res = allocate_with_solution(&prices, solution, &opts).unwrap();
+        let w = nalgebra::DVector::from_column_slice(&res.weights);
+        let daily = &returns * &w;
+        let mean = daily.sum() / n;
+        let var = daily.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (n - 1.0);
+
+        let annual_return = 252.0 * mean;
+        let annual_risk = (252.0 * var).sqrt();
+        // Checked first: before #110 this ratio was 1/sqrt(252), whatever the return convention.
+        assert!(
+            (res.portfolio_risk / annual_risk - 1.0).abs() < 1e-9,
+            "{solution}: risk {} is not the annualised volatility {annual_risk}",
+            res.portfolio_risk
+        );
+        assert!((res.portfolio_return - annual_return).abs() < 1e-9, "{solution} return");
+        let sharpe = (annual_return - rf) / annual_risk;
+        assert!(
+            (res.portfolio_sharpe - sharpe).abs() < 1e-9,
+            "{solution}: sharpe {} should be {sharpe}",
+            res.portfolio_sharpe
+        );
+    }
+}
+
+/// The estimates `compute_expected_and_covariance` returns are the ones the price-based
+/// allocators solve with, units included.
+#[test]
+fn supplied_estimates_reproduce_the_price_based_allocation() {
+    let prices = load_prices();
+    let (mu, cov) = compute_expected_and_covariance(&prices, ReturnsMethod::Mean, None).unwrap();
+    let opts = AllocationOptions { risk_free_rate: 0.02, ..Default::default() };
+    let from_prices = allocate_with_solution(&prices, "max_sharpe", &opts).unwrap();
+    let from_inputs = allocate_from_inputs(&mu, &cov, "max_sharpe", &opts).unwrap();
+    assert_eq!(from_prices.weights, from_inputs.weights);
+    assert_eq!(from_prices.portfolio_risk, from_inputs.portfolio_risk);
+    assert_eq!(from_prices.portfolio_sharpe, from_inputs.portfolio_sharpe);
+}
+
+/// #110 acceptance: from the same prices, `cla` and this module find the same maximum-Sharpe
+/// portfolio. With log returns here they differed in the second decimal.
+#[test]
+fn max_sharpe_from_prices_agrees_with_cla() {
+    use openquant::cla::{AssetPricesInput, WeightBounds, CLA};
+
+    let all = load_prices();
+    for cols in [vec![0, 1, 2, 3], (0..all.ncols()).collect::<Vec<_>>()] {
+        let prices = all.select_columns(&cols);
+        let qp = allocate_max_sharpe(&prices, 0.0, None, None).unwrap();
+
+        let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
+        cla.allocate(
+            Some(AssetPricesInput::RawMatrix(&prices)),
+            None,
+            None,
+            None,
+            Some("max_sharpe"),
+        )
+        .unwrap();
+        let max_diff = qp
+            .weights
+            .iter()
+            .zip(&cla.weights[0])
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f64, f64::max);
+        // 1.4e-9 on four assets and 9.4e-9 on all 23; with log returns here it was 0.094.
+        assert!(max_diff < 1e-7, "{} assets: max weight difference {max_diff}", cols.len());
     }
 }
