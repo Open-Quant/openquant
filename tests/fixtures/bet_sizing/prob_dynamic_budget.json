@@ -1,4 +1,5 @@
 {
+  "source": "tests/fixtures/bet_sizing/generate_prob_dynamic_budget.py: AFML snippets 10.1-10.4 and section 10.2, pandas 3.0.6, scipy.stats.norm",
   "prob_default": [
     0.08005561918299264,
     -0.3374794164599424,
