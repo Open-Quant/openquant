@@ -330,7 +330,7 @@ export const moduleDocs: ModuleDoc[] = [
     slug: "sb-bagging",
     module: "sb_bagging",
     subject: "Sampling, Validation and ML Diagnostics",
-    summary: "A bagging ensemble meant to draw samples with the sequential bootstrap; see its status note.",
+    summary: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a one-feature base learner.",
     handwritten: true,
     apiSurface: "both",
     pythonApis: ["sb_bagging.fit_predict_sb_classifier", "sb_bagging.fit_predict_sb_regressor"],

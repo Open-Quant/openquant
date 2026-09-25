@@ -94,7 +94,7 @@ Label regimes:
 ### `openquant.sampling`
 - `get_ind_matrix(label_endtime, bar_index)`
 - `get_ind_mat_average_uniqueness(ind_mat)`
-- `seq_bootstrap(ind_mat, sample_length=None, warmup_samples=None)`
+- `seq_bootstrap(ind_mat, sample_length=None, warmup_samples=None, random_state=None)`
 
 Input conventions:
 - `label_endtime`: list of `(start_idx, end_idx)` tuples
