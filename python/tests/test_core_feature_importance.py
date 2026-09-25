@@ -10,7 +10,6 @@ from math import log, sqrt
 
 import numpy as np
 import pytest
-
 from openquant import _core
 from openquant import feature_importance as fi
 
@@ -47,9 +46,7 @@ def sign_of_first(x):
 # Out-of-sample probabilities of that classifier: unpermuted, then with each feature's two test
 # values swapped (the only non-trivial permutation of a two-row fold). f1 is never read.
 BASE = sign_of_first(X_REF)
-PERMUTED = np.column_stack(
-    [sign_of_first(X_REF[[1, 0, 3, 2]] * [1, 0] + X_REF * [0, 1]), BASE]
-)
+PERMUTED = np.column_stack([sign_of_first(X_REF[[1, 0, 3, 2]] * [1, 0] + X_REF * [0, 1]), BASE])
 # SFI: the classifier shown f0 alone, then f1 alone.
 SFI_PROBA = np.column_stack([sign_of_first(X_REF[:, [0]]), sign_of_first(X_REF[:, [1]])])
 
@@ -71,6 +68,14 @@ def test_mdi_standard_error_is_symmetric_for_mirrored_columns():
     mdi = fi.mean_decrease_impurity([[0.6, 0.4], [0.8, 0.2], [0.7, 0.3]])
     assert mdi["f0"]["std"] == pytest.approx(mdi["f1"]["std"], abs=1e-15)
     assert 0.047 < mdi["f0"]["std"] < 0.058
+
+
+def test_mdi_standard_error_uses_sample_std_hand_worked():
+    # Rust: mdi_standard_error_uses_sample_std_hand_worked. Snippet 8.2 takes the pandas
+    # (ddof = 1) std: each column deviates by (-0.1, 0.1, 0.0), so std 0.1, SE 0.1 / sqrt(3).
+    mdi = fi.mean_decrease_impurity([[0.6, 0.4], [0.8, 0.2], [0.7, 0.3]])
+    assert mdi["f0"]["std"] == pytest.approx(0.1 / sqrt(3), abs=1e-12)
+    assert mdi["f1"]["std"] == pytest.approx(0.1 / sqrt(3), abs=1e-12)
 
 
 def test_mdi_orders_the_rust_forest_fixture():
@@ -100,9 +105,36 @@ def test_mda_neg_log_loss_hand_worked():
     assert mda["f1"]["mean"] == 0.0
 
 
+def test_mda_standard_error_uses_sample_std_hand_worked():
+    # Rust: mda_standard_error_uses_sample_std_hand_worked. f0's accuracy importances over the
+    # two folds are (1, 0): pandas (ddof = 1) std sqrt(0.5), SE sqrt(0.5) / sqrt(2) = 0.5.
+    mda = fi.mda_from_probabilities(
+        Y_REF, T0_REF, T1_REF, BASE, PERMUTED, n_splits=2, scoring="accuracy"
+    )
+    assert mda["f0"]["std"] == pytest.approx(0.5, abs=1e-12)
+
+
+def test_mda_from_probabilities_does_not_depend_on_seed():
+    # The seed reaches the Rust `mean_decrease_accuracy`, but the shuffled predictions are the
+    # caller's, so it cannot change the result.
+    results = [
+        fi.mda_from_probabilities(
+            Y_REF, T0_REF, T1_REF, BASE, PERMUTED, n_splits=2, scoring="accuracy", seed=seed
+        )
+        for seed in (0, 42, 2**63)
+    ]
+    assert results[0] == results[1] == results[2]
+    with pytest.raises(ValueError, match="seed must be a non-negative"):
+        fi.mda_from_probabilities(
+            Y_REF, T0_REF, T1_REF, BASE, PERMUTED, n_splits=2, scoring="accuracy", seed=-1
+        )
+
+
 def test_sfi_accuracy_hand_worked():
     # Rust: sfi_accuracy_hand_worked
-    sfi = fi.sfi_from_probabilities(Y_REF, T0_REF, T1_REF, SFI_PROBA, n_splits=2, scoring="accuracy")
+    sfi = fi.sfi_from_probabilities(
+        Y_REF, T0_REF, T1_REF, SFI_PROBA, n_splits=2, scoring="accuracy"
+    )
     assert sfi["f0"]["mean"] == pytest.approx(0.75, abs=1e-15)
     assert sfi["f1"]["mean"] == pytest.approx(0.5, abs=1e-15)
     assert sfi["f0"]["std"] == pytest.approx(0.25 / sqrt(2), abs=1e-15)
@@ -111,7 +143,13 @@ def test_sfi_accuracy_hand_worked():
 
 def test_estimator_driven_sfi_reproduces_the_hand_worked_values():
     sfi = fi.single_feature_importance(
-        SignOfFirstColumn(), X_REF, Y_REF, T0_REF, T1_REF, n_splits=2, pct_embargo=0.0,
+        SignOfFirstColumn(),
+        X_REF,
+        Y_REF,
+        T0_REF,
+        T1_REF,
+        n_splits=2,
+        pct_embargo=0.0,
         scoring="accuracy",
     )
     assert sfi["f0"]["mean"] == pytest.approx(0.75, abs=1e-15)
@@ -122,8 +160,15 @@ def test_estimator_driven_mda_leaves_an_unread_feature_at_zero():
     # However the two-row test folds are shuffled, a feature the model never reads scores 0.
     for seed in range(4):
         mda = fi.mean_decrease_accuracy(
-            SignOfFirstColumn(), X_REF, Y_REF, T0_REF, T1_REF, n_splits=2, pct_embargo=0.0,
-            scoring="accuracy", seed=seed,
+            SignOfFirstColumn(),
+            X_REF,
+            Y_REF,
+            T0_REF,
+            T1_REF,
+            n_splits=2,
+            pct_embargo=0.0,
+            scoring="accuracy",
+            seed=seed,
         )
         assert mda["f1"] == {"mean": 0.0, "std": 0.0}
         assert mda["f0"]["mean"] in (0.0, 0.5)
@@ -162,10 +207,14 @@ def test_mda_and_sfi_order_the_rust_fixture():
     for scoring in ("accuracy", "f1"):
         mda = fi.mean_decrease_accuracy(LinearProbClassifier(), x, y, t0, t1, scoring=scoring, **kw)
         assert mda["f0"]["mean"] > mda["f2"]["mean"]
-        sfi = fi.single_feature_importance(LinearProbClassifier(), x, y, t0, t1, scoring=scoring, **kw)
+        sfi = fi.single_feature_importance(
+            LinearProbClassifier(), x, y, t0, t1, scoring=scoring, **kw
+        )
         assert sfi["f0"]["mean"] >= sfi["f2"]["mean"]
     again = fi.mean_decrease_accuracy(LinearProbClassifier(), x, y, t0, t1, scoring="f1", **kw)
-    assert again == fi.mean_decrease_accuracy(LinearProbClassifier(), x, y, t0, t1, scoring="f1", **kw)
+    assert again == fi.mean_decrease_accuracy(
+        LinearProbClassifier(), x, y, t0, t1, scoring="f1", **kw
+    )
 
 
 def test_feature_importance_cannot_run_without_label_spans():
@@ -189,8 +238,13 @@ def test_feature_importance_cannot_run_without_label_spans():
     # The compiled functions take the spans positionally too; there is no unpurged path.
     with pytest.raises(TypeError):
         _core.feature_importance.mda_from_probabilities(
-            Y_REF.tolist(), BASE.tolist(), PERMUTED.T.tolist(), ["f0", "f1"],
-            n_splits=2, pct_embargo=0.0, scoring="accuracy",
+            Y_REF.tolist(),
+            BASE.tolist(),
+            PERMUTED.T.tolist(),
+            ["f0", "f1"],
+            n_splits=2,
+            pct_embargo=0.0,
+            scoring="accuracy",
         )
 
 

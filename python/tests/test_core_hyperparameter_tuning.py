@@ -8,7 +8,6 @@ import math
 
 import numpy as np
 import pytest
-
 from openquant import hyperparameter_tuning as ht
 
 
@@ -63,8 +62,16 @@ def test_grid_search_with_purged_kfold_and_embargo():
     w = np.where(y == 1.0, 4.0, 1.0)
     t0, t1 = minute_spans(n)
     result = ht.purged_search(
-        ThresholdClassifier, ht.expand_param_grid(GRID), x, y, t0, t1,
-        n_splits=4, pct_embargo=0.02, scoring="neg_log_loss", sample_weight=w,
+        ThresholdClassifier,
+        ht.expand_param_grid(GRID),
+        x,
+        y,
+        t0,
+        t1,
+        n_splits=4,
+        pct_embargo=0.02,
+        scoring="neg_log_loss",
+        sample_weight=w,
     )
     assert len(result["trials"]) == 6
     assert math.isfinite(result["best_score"])
@@ -97,8 +104,15 @@ def test_randomized_search_seeded_deterministic_and_log_uniform():
 
     def run():
         return ht.purged_search(
-            ThresholdClassifier, draws, x, y, t0, t1,
-            n_splits=3, pct_embargo=0.01, scoring="balanced_accuracy",
+            ThresholdClassifier,
+            draws,
+            x,
+            y,
+            t0,
+            t1,
+            n_splits=3,
+            pct_embargo=0.01,
+            scoring="balanced_accuracy",
         )
 
     first, second = run(), run()
@@ -114,7 +128,11 @@ def test_sample_param_sets_match_the_rust_pinned_draws():
 
 def test_sample_param_sets_distributions():
     draws = ht.sample_param_sets(
-        {"depth": ("int", 2, 4), "kernel": ("choice", [1, 2, 3]), "flag": ("choice", [True, False])},
+        {
+            "depth": ("int", 2, 4),
+            "kernel": ("choice", [1, 2, 3]),
+            "flag": ("choice", [True, False]),
+        },
         200,
         7,
     )
@@ -157,4 +175,6 @@ def test_invalid_input_raises_value_error():
         ht.purged_search(ThresholdClassifier, [{}], np.zeros((4, 1)), np.zeros(4), None, None)
     t0, t1 = minute_spans(10)
     with pytest.raises(ValueError, match="describe 10 samples"):
-        ht.purged_search(ThresholdClassifier, [{}], np.zeros((12, 1)), np.zeros(12), t0, t1, n_splits=2)
+        ht.purged_search(
+            ThresholdClassifier, [{}], np.zeros((12, 1)), np.zeros(12), t0, t1, n_splits=2
+        )

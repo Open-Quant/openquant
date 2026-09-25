@@ -180,16 +180,18 @@ argument for passing folds of your own.
 | Function | Model | Result |
 | --- | --- | --- |
 | `mean_decrease_impurity(per_tree_importances, feature_names=None)` | none: one row per tree, e.g. `[t.feature_importances_ for t in forest.estimators_]` | MDI |
-| `mean_decrease_accuracy(estimator, X, y, t0, t1, *, n_splits, pct_embargo, scoring, sample_weight, seed)` | any object with `fit(X, y, sample_weight=...)` and `predict_proba(X)`; copied per fold with `sklearn.base.clone` when scikit-learn is installed | MDA, each test column shuffled with `numpy.random.default_rng(seed)` |
+| `mean_decrease_accuracy(estimator, X, y, t0, t1, *, n_splits, pct_embargo, scoring, sample_weight, seed=42)` | any object with `fit(X, y, sample_weight=...)` and `predict_proba(X)`; copied per fold with `sklearn.base.clone` when scikit-learn is installed | MDA, each test column shuffled with `numpy.random.default_rng(seed)`; the default seed is 42, as for `feature_diagnostics.mda_importance` |
 | `single_feature_importance(estimator, X, y, t0, t1, ...)` | the same, fitted on one column at a time | SFI |
-| `mda_from_probabilities(y, t0, t1, base_proba, permuted_proba, *, n_splits, ...)` | none: out-of-sample probabilities you computed on `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | MDA |
+| `mda_from_probabilities(y, t0, t1, base_proba, permuted_proba, *, n_splits, ..., seed=42)` | none: out-of-sample probabilities you computed on `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | MDA |
 | `sfi_from_probabilities(y, t0, t1, proba, *, n_splits, ...)` | the same, one column per single-feature model | SFI |
 
 The estimator-driven functions fit in Python and pass the probabilities to the last two, which
 rebuild the purged folds and hand the Rust MDA and SFI a stand-in classifier that plays the
 probabilities back. Each result maps a feature name to `{"mean", "std"}`, `std` being the
 standard error, in the order of `feature_names`. Labels must be 0/1 and `scoring` is
-`"neg_log_loss"`, `"accuracy"` or `"f1"`.
+`"neg_log_loss"`, `"accuracy"` or `"f1"`. `mda_from_probabilities` passes its `seed` on to the
+Rust MDA, but the shuffled predictions are already yours, so the seed cannot change its
+result; in `mean_decrease_accuracy` it drives the shuffles.
 
 ```python
 import numpy as np
@@ -223,9 +225,9 @@ for name in ("f0", "f1", "f2"):
 ```
 
 ```text
-f0 0.86 -0.282 0.6
-f1 -0.036 -0.735 0.267
-f2 -0.019 -0.708 0.133
+f0 0.882 -0.282 0.6
+f1 -0.042 -0.735 0.267
+f2 -0.024 -0.708 0.133
 ```
 
 The three columns are MDA, SFI and (from made-up per-tree importances) MDI. SFI is scored by

@@ -9,7 +9,6 @@ from math import ceil
 
 import numpy as np
 import pytest
-
 from openquant import cross_validation as cv
 
 

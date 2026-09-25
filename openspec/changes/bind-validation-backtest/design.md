@@ -49,6 +49,8 @@ evaluator that Rust owns. The splitters (`PurgedKFold::split`, `split_with_diagn
 - [`run_cpcv` re-purges its own copy of the splits with a different rule] → only its test
   indices, which equal `cpcv_splits`' (tested), and the caller's returns are used; its
   training sets are reported, not trained on. Documented.
-- [When #127 lands, Rust MDA takes a `seed`] → the binding passes any constant; the replay
-  ignores the permutation. When #132 lands, MDA and MDI standard errors change; the Python
-  tests assert the same brackets as the Rust tests.
+- [Rust MDA takes a `seed` (#127)] → `mda_from_probabilities` and `mean_decrease_accuracy`
+  take `seed: int = 42`, as `feature_diagnostics.mda_importance` does, and pass it to Rust;
+  the replay ignores the Rust permutation, so only the numpy shuffle in
+  `mean_decrease_accuracy` depends on it. MDA and MDI standard errors use ddof = 1 (#132);
+  the Python tests mirror the Rust hand-worked values.

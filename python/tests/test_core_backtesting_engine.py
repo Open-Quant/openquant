@@ -9,7 +9,6 @@ from math import comb, sqrt
 
 import numpy as np
 import pytest
-
 from openquant import backtesting_engine as bt
 from openquant import cross_validation as cv
 
@@ -50,10 +49,29 @@ def test_cpcv_split_and_path_counts_match_combinatorics():
             t0, t1 = point_labels(2 * n_groups)
             splits = cv.cpcv_splits(t0, t1, n_groups, k, 0.0)
             echo = [s["test_indices"].astype(float) for s in splits]
-            res = bt.run_cpcv(t0, t1, echo, n_groups=n_groups, test_groups=k, pct_embargo=0.0, **RUN)
+            res = bt.run_cpcv(
+                t0, t1, echo, n_groups=n_groups, test_groups=k, pct_embargo=0.0, **RUN
+            )
             assert bt.cpcv_path_count(n_groups, k) == comb(n_groups - 1, k - 1)
             assert len(res["splits"]) == comb(n_groups, k)
             assert len(res["path_distribution"]) == comb(n_groups - 1, k - 1)
+
+
+def test_cpcv_embargo_follows_each_test_block():
+    # Rust: cpcv_embargo_follows_each_test_block (backtesting_engine_reference.rs). 12 point
+    # labels in 6 groups of 2, k = 2, h = ceil(0.05 * 12) = 1; the embargo only follows a block.
+    #   split 0, groups (0, 1): test 0..4, one block; embargo 4. train = 5..12.
+    #   split 1, groups (0, 2): test {0, 1, 4, 5}; embargo 2 and 6. train = {3} + 7..12.
+    t0, t1 = point_labels(12)
+    splits = cv.cpcv_splits(t0, t1, 6, 2, 0.05)
+    echo = [s["test_indices"].astype(float) for s in splits]
+    res = bt.run_cpcv(t0, t1, echo, n_groups=6, test_groups=2, pct_embargo=0.05, **RUN)
+    first, second = res["splits"][0], res["splits"][1]
+    assert first["train_indices"] == list(range(5, 12))
+    assert first["embargo_count"] == 1
+    assert second["test_indices"] == [0, 1, 4, 5]
+    assert second["train_indices"] == [3, *range(7, 12)]
+    assert second["embargo_count"] == 2
 
 
 def test_cpcv_paths_follow_afml_assignment_and_cover_every_sample_once():
@@ -81,7 +99,9 @@ def test_cpcv_paths_follow_afml_assignment_and_cover_every_sample_once():
         want_sum = 0.0
         for g in range(n_groups):
             with_g = [s for s, pair in enumerate(pairs) if g in pair]
-            want_sum += sum(1000 * with_g[p] + idx for idx in range(g * per_group, (g + 1) * per_group))
+            want_sum += sum(
+                1000 * with_g[p] + idx for idx in range(g * per_group, (g + 1) * per_group)
+            )
         assert path["mean_return"] == pytest.approx(want_sum / n, abs=1e-9)
         grand_total += path["mean_return"] * n
     assert grand_total == pytest.approx(sum(r.sum() for r in returns), abs=1e-6)
@@ -94,10 +114,14 @@ def test_cpcv_enforces_purge_embargo_and_returns_path_distribution():
     # Rust: cpcv_enforces_purge_embargo_and_returns_path_distribution (backtesting_engine.rs)
     n = 30
     t0, t1 = minute_labels(n)
-    data_returns = np.array([(-1.0 if i % 3 == 0 else 1.0) * (0.001 + i * 0.0002) for i in range(n)])
+    data_returns = np.array(
+        [(-1.0 if i % 3 == 0 else 1.0) * (0.001 + i * 0.0002) for i in range(n)]
+    )
     splits = cv.cpcv_splits(t0, t1, 6, 2, 0.1)
     returns = [
-        data_returns[s["test_indices"]] + s["split_id"] * 2e-5 + np.arange(len(s["test_indices"])) * 1e-6
+        data_returns[s["test_indices"]]
+        + s["split_id"] * 2e-5
+        + np.arange(len(s["test_indices"])) * 1e-6
         for s in splits
     ]
     res = bt.run_cpcv(

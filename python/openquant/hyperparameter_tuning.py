@@ -18,7 +18,8 @@ test fold's weights, and evaluates candidates from :func:`expand_param_grid` or
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -133,10 +134,10 @@ def purged_search(
     if n_spans != len(x):
         raise ValueError(f"t0/t1 describe {n_spans} samples but X has {len(x)} rows")
 
-    trials = []
+    trials: list[dict[str, Any]] = []
     for params in param_sets:
         params = dict(params)
-        fold_scores = []
+        fold_scores: list[float] = []
         for train, test in splits:
             if len(train) == 0 or len(test) == 0:
                 raise ValueError("a purged fold has an empty training or test set")

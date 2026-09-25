@@ -14,7 +14,8 @@ positions, returns) into full paths, for statistics the engine does not compute.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -118,14 +119,15 @@ def assemble_cpcv_paths(
             if not 0 <= g < n_groups:
                 raise ValueError(f"split {split['split_id']} tests fold {g}, outside 0..{n_groups}")
             folds[g] = test if folds[g] is None else np.intersect1d(folds[g], test)
-    if any(f is None for f in folds):
+    fold_samples = [f for f in folds if f is not None]
+    if len(fold_samples) != n_groups:
         raise ValueError("every fold must be tested by at least one split")
-    n_samples = sum(len(f) for f in folds)
+    n_samples = sum(len(f) for f in fold_samples)
 
     out = np.empty((paths.shape[0], n_samples))
     for p, row in enumerate(paths):
         for g, s in enumerate(row):
             if not 0 <= s < len(splits) or g not in tuple(splits[s]["test_fold_ids"]):
                 raise ValueError(f"path {p} takes fold {g} from split {s}, which does not test it")
-            out[p, folds[g]] = values[s][np.searchsorted(tests[s], folds[g])]
+            out[p, fold_samples[g]] = values[s][np.searchsorted(tests[s], fold_samples[g])]
     return out

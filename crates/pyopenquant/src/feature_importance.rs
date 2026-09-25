@@ -151,7 +151,8 @@ fn fi_mean_decrease_impurity(
     n_splits,
     pct_embargo,
     scoring,
-    sample_weight=None
+    sample_weight=None,
+    seed=42
 ))]
 fn fi_mda_from_probabilities(
     y: Vec<f64>,
@@ -164,6 +165,7 @@ fn fi_mda_from_probabilities(
     pct_embargo: f64,
     scoring: &str,
     sample_weight: Option<Vec<f64>>,
+    seed: u64,
 ) -> PyResult<ImportanceMap> {
     let scoring = scoring_from(scoring)?;
     let (cv, n) = purged_kfold(t0, t1, n_splits, pct_embargo)?;
@@ -190,8 +192,10 @@ fn fi_mda_from_probabilities(
             queue.push(test.iter().map(|&i| column[i]).collect());
         }
     }
-    // The model never reads its features, so a one-column placeholder per sample suffices;
-    // it only needs one column per feature name.
+    // The model never reads its features, so a placeholder row per sample suffices; it only
+    // needs one column per feature name. For the same reason the permutation `seed` drives
+    // (Rust shuffles each placeholder column) cannot change the result: the caller's
+    // `permuted_proba` already holds the shuffled predictions.
     let x = vec![vec![0.0; feature_names.len()]; n];
     let mut replay = Replay::new(queue);
     let out = mean_decrease_accuracy(
@@ -202,6 +206,7 @@ fn fi_mda_from_probabilities(
         &splits,
         sample_weight.as_deref(),
         scoring,
+        seed,
     )
     .map_err(to_py_err)?;
     replay.finish()?;

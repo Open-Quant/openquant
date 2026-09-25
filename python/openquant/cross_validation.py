@@ -12,7 +12,8 @@ or plain integers such as bar positions; samples must be in time order.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -115,9 +116,7 @@ def purged_kfold_splits(
     ]
 
 
-def split_with_diagnostics(
-    t0: Any, t1: Any, n_splits: int, pct_embargo: float = 0.0
-) -> list[dict]:
+def split_with_diagnostics(t0: Any, t1: Any, n_splits: int, pct_embargo: float = 0.0) -> list[dict]:
     """The folds of :func:`purged_kfold_splits`, each with why every excluded sample left.
 
     Each dict has ``split_id``, ``train_indices``, ``test_indices``, ``test_ranges``
@@ -144,9 +143,7 @@ def cpcv_splits(
     s0, s1 = _label_spans(t0, t1)
     return [
         _split_dict(d)
-        for d in _cv.cpcv_splits(
-            s0, s1, int(n_splits), int(n_test_splits), float(pct_embargo)
-        )
+        for d in _cv.cpcv_splits(s0, s1, int(n_splits), int(n_test_splits), float(pct_embargo))
     ]
 
 

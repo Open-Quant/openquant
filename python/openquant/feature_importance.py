@@ -19,7 +19,8 @@ trees (MDI), in the order of ``feature_names``.
 from __future__ import annotations
 
 import copy
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -87,6 +88,13 @@ def mean_decrease_impurity(
     return _ordered(_fi.mean_decrease_impurity(rows.tolist(), names), names)
 
 
+def _seed(seed: int) -> int:
+    value = int(seed)
+    if value < 0:
+        raise ValueError(f"seed must be a non-negative integer, got {seed}")
+    return value
+
+
 def mda_from_probabilities(
     y: Any,
     t0: Any,
@@ -99,6 +107,7 @@ def mda_from_probabilities(
     scoring: str = "neg_log_loss",
     sample_weight: Any = None,
     feature_names: Sequence[str] | None = None,
+    seed: int = 42,
 ) -> dict[str, dict[str, float]]:
     """MDA (AFML Snippet 8.3) scored from out-of-sample probabilities of ``y == 1``.
 
@@ -108,7 +117,9 @@ def mda_from_probabilities(
     ``purged_kfold_splits(t0, t1, n_splits, pct_embargo)``; every sample is tested once.
     Per fold, a feature's importance is ``(base - permuted) / (1 - permuted)`` for accuracy
     and F1, and ``(base - permuted) / -permuted`` for negative log loss. ``sample_weight``
-    weights the scores.
+    weights the scores. ``seed`` is passed to the Rust ``mean_decrease_accuracy`` as its
+    permutation seed; the shuffling that matters happened when ``permuted_proba`` was
+    computed, so the result does not depend on it.
     """
     y_list = _vector(y, "y")
     s0, s1 = _label_spans(t0, t1)
@@ -127,6 +138,7 @@ def mda_from_probabilities(
         pct_embargo=float(pct_embargo),
         scoring=scoring,
         sample_weight=_weights(sample_weight),
+        seed=_seed(seed),
     )
     return _ordered(result, names)
 
@@ -201,7 +213,9 @@ def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
     return p
 
 
-def _prepare(X: Any, y: Any, sample_weight: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+def _prepare(
+    X: Any, y: Any, sample_weight: Any
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     x = np.asarray(X, dtype=np.float64)
     if x.ndim != 2:
         raise ValueError(f"X must have shape (n_samples, n_features), got {x.shape}")
@@ -226,18 +240,20 @@ def mean_decrease_accuracy(
     scoring: str = "neg_log_loss",
     sample_weight: Any = None,
     feature_names: Sequence[str] | None = None,
-    seed: int = 0,
+    seed: int = 42,
 ) -> dict[str, dict[str, float]]:
     """MDA (AFML Snippet 8.3) for a binary classifier with ``fit`` and ``predict_proba``.
 
     For each purged fold a copy of ``estimator`` (``sklearn.base.clone`` when scikit-learn is
     installed) is fitted on the training samples with their ``sample_weight``, then each
     feature column of the test fold is shuffled in turn with ``numpy.random.default_rng(seed)``.
-    Labels must be 0/1. See :func:`mda_from_probabilities` for the scoring.
+    ``seed`` defaults to 42, as in :func:`openquant.feature_diagnostics.mda_importance`, and is
+    also handed to the Rust ``mean_decrease_accuracy``. Labels must be 0/1. See
+    :func:`mda_from_probabilities` for the scoring.
     """
     x, yv, w = _prepare(X, y, sample_weight)
     names = _names(x.shape[1], feature_names)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(_seed(seed))
     base = np.empty(len(x))
     permuted = np.empty(x.shape)
     for train, test in purged_kfold_splits(t0, t1, n_splits, pct_embargo):
@@ -259,6 +275,7 @@ def mean_decrease_accuracy(
         scoring=scoring,
         sample_weight=w,
         feature_names=names,
+        seed=seed,
     )
 
 
