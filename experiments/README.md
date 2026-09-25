@@ -29,7 +29,12 @@ Each run writes a deterministic folder:
 - `signals.parquet` (signal timeline)
 - `weights.parquet` (portfolio weights)
 - `backtest.parquet` (equity/returns/position)
+- `equity_curve.svg` (equity line chart from `backtest.parquet`)
+- `drawdown.svg` (drawdown from the running peak, `equity / peak - 1`)
 - `decision.md` (promotion verdict and rationale)
+
+The two SVGs are fixed-size and written without a plotting library, so the same config and
+seed give byte-identical files.
 
 Grid runs additionally include:
 - `leaderboard.parquet` (ranked cross-run summary)

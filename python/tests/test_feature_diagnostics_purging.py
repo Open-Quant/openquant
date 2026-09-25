@@ -8,9 +8,8 @@ still claimed ``method == "purged_kfold"`` -- silent leakage.
 
 import random
 
-import pytest
-
 import openquant
+import pytest
 from openquant.feature_diagnostics import _build_intervals, _purged_kfold_splits
 
 

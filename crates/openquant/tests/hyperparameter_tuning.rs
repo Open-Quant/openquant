@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use chrono::NaiveDateTime;
 use openquant::cross_validation::SimpleClassifier;
 use openquant::hyperparameter_tuning::{
-    classification_score, grid_search, randomized_search, sample_log_uniform, HyperParamValue,
-    ParamSet, RandomParamDistribution, SearchData, SearchScoring,
+    classification_score, grid_search, randomized_search, sample_log_uniform, sample_param_sets,
+    HyperParamValue, ParamSet, RandomParamDistribution, SearchData, SearchScoring,
 };
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -174,4 +174,51 @@ fn test_scoring_layer_handles_imbalance_weighted_neg_log_loss_and_metrics() {
     assert!(balanced < accuracy);
     // Weighting minority class should penalize this classifier's cross-entropy.
     assert!(weighted_nll < unweighted_nll);
+}
+
+#[test]
+fn test_sample_param_sets_are_the_randomized_search_candidates() {
+    let n = 90usize;
+    let x: Vec<Vec<f64>> = (0..n).map(|i| vec![i as f64 / (n as f64 - 1.0)]).collect();
+    let y: Vec<f64> = x.iter().map(|v| if v[0] >= 0.65 { 1.0 } else { 0.0 }).collect();
+    let info_sets = make_series("2019-01-01 00:00:00", n, 1);
+
+    let mut param_space = BTreeMap::new();
+    param_space.insert(
+        "threshold".to_string(),
+        RandomParamDistribution::Uniform { low: 0.45, high: 0.85 },
+    );
+    param_space.insert(
+        "sharpness".to_string(),
+        RandomParamDistribution::LogUniform { low: 1e-1, high: 2e1 },
+    );
+
+    let draws = sample_param_sets(&param_space, 12, 42).unwrap();
+    let search = randomized_search(
+        ThresholdClassifier::from_params,
+        &param_space,
+        12,
+        42,
+        SearchData { x: &x, y: &y, sample_weight: None, samples_info_sets: &info_sets },
+        3,
+        0.01,
+        SearchScoring::BalancedAccuracy,
+    )
+    .unwrap();
+    let evaluated: Vec<ParamSet> = search.trials.into_iter().map(|t| t.params).collect();
+    assert_eq!(evaluated, draws);
+
+    // Pinned so the Python binding can assert the same draws
+    // (python/tests/test_core_hyperparameter_tuning.py).
+    let value = |i: usize, key: &str| draws[i][key].as_f64().unwrap();
+    assert_eq!(value(0, "sharpness"), 1.6278875156462431);
+    assert_eq!(value(0, "threshold"), 0.6670900839612576);
+    assert_eq!(value(1, "sharpness"), 2.914239794850492);
+    assert_eq!(value(1, "threshold"), 0.6123607032923106);
+
+    assert_eq!(
+        sample_param_sets(&BTreeMap::new(), 3, 0).unwrap_err(),
+        openquant::hyperparameter_tuning::TuningError::Empty("param_space")
+    );
+    assert!(sample_param_sets(&param_space, 0, 0).is_err());
 }

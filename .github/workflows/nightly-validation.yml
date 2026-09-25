@@ -1,19 +1,125 @@
 name: Nightly Validation
 
+# The full sweep that is too slow for every PR:
+#   - the whole Rust suite (lib, integration, doc tests) INCLUDING #[ignore]d
+#     tests such as the hour-long test_sadf_test. Tests ignored with a
+#     "FINDING:" reason are known, documented divergences from the AFML
+#     reference and are expected to fail until fixed, so they are skipped by
+#     name (scripts/ci/finding_skip_args.py prints the list into the log);
+#   - the core crate's fast tests on macOS and Windows;
+#   - the Python suite and notebook/experiment smokes on 3.11 and 3.13;
+#   - line coverage for Rust (cargo-llvm-cov) and Python (pytest-cov),
+#     reported in the job summary and as artifacts. Coverage is reported, not
+#     gated: there is no minimum.
 on:
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  slow-validation:
+  rust-full-suite:
     runs-on: ubuntu-latest
+    timeout-minutes: 150
     env:
-      CARGO_TERM_COLOR: always
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Full OpenQuant test sweep (including long SADF test)
-        run: cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
-      - name: Hotspot benchmark smoke check
-        run: cargo bench -p openquant --bench perf_hotspots --no-run
+      - name: List known-finding tests to skip
+        run: echo "FINDING_SKIPS=$(python3 scripts/ci/finding_skip_args.py)" >> "$GITHUB_ENV"
+      - name: Full Rust suite, including ignored tests (except known findings)
+        run: cargo test --workspace --all-features --no-fail-fast -- --include-ignored $FINDING_SKIPS
+      - name: Compile every benchmark target
+        run: cargo bench -p openquant --no-run
+
+  rust-other-os:
+    name: rust fast tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Core crate only. The PyO3 extension is built and tested on Linux
+      # only; there is no multi-OS wheel build yet (release slice).
+      - name: Core crate tests (fast)
+        run: cargo test -p openquant --lib --tests -- --skip test_sadf_test
+
+  rust-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add llvm-tools to the pinned toolchain
+        run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      # Default (non-ignored) tests only: instrumenting the hour-long SADF
+      # test would multiply its runtime for one function's coverage.
+      - name: Run tests with coverage
+        run: cargo llvm-cov -p openquant --no-report
+      - name: Coverage report
+        run: |
+          cargo llvm-cov report --lcov --output-path lcov.info
+          {
+            echo '### Rust line coverage (openquant, non-ignored tests)'
+            echo '```'
+            cargo llvm-cov report --summary-only
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage-lcov
+          path: lcov.info
+
+  python-full-suite:
+    name: python full suite (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - name: Create virtual environment + dev dependencies
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv sync --locked --group dev --no-install-project
+      - name: Build + install the openquant extension
+        run: uv run --no-sync maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+      - name: Python tests with coverage
+        run: |
+          uv run --no-sync pytest python/tests -q \
+            --cov=openquant --cov-report=term --cov-report=xml:coverage-python.xml \
+            | tee "$RUNNER_TEMP/pytest.txt"
+      - name: Coverage summary
+        run: |
+          {
+            echo '### Python line coverage (python/openquant, ${{ matrix.python-version }})'
+            echo '```'
+            sed -n '/coverage:/,/^TOTAL/p' "$RUNNER_TEMP/pytest.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-${{ matrix.python-version }}
+          path: coverage-python.xml
+      - name: Python notebook smoke (paired scripts)
+        run: uv run --no-sync python notebooks/python/scripts/smoke_all.py
+      - name: Experiment scaffold smoke
+        run: uv run --no-sync python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out "$RUNNER_TEMP/openquant-artifacts"
+      - name: Rust notebook-companion smoke
+        run: cargo run -p openquant --example research_notebook_smoke

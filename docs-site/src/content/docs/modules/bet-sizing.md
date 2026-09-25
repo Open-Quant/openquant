@@ -2,7 +2,7 @@
 title: "bet_sizing"
 description: "From a model's confidence, or a price forecast, to a position size: probability-based sizing, averaging of live bets, discretisation, dynamic limit prices and concurrency-based sizing."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -223,7 +223,8 @@ assert!(matches!(get_w(2.0, 0.9, "logistic"), Err(BetSizingError::InvalidFunctio
 - **A `step_size` of zero or less disables discretisation** rather than raising.
 - **`bet_size_dynamic` broadcasts.** Each of its four inputs must have length 1 or the common
   length; anything else is `BetSizingError::ShapeMismatch`.
-- **Whole seconds only from Python** ([#87](https://github.com/Open-Quant/openquant/issues/87)).
+- **Timestamps from Python are strings**, `"%Y-%m-%d %H:%M:%S"` with an optional fractional
+  second. Output times keep the fraction, written as `str(datetime)` writes it.
 
 ## Related modules
 

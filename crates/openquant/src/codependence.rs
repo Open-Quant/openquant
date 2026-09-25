@@ -1,17 +1,66 @@
+//! Codependence measures between two series: correlation-based distances, distance
+//! correlation, mutual information and variation of information.
+//!
+//! These follow López de Prado, *Machine Learning for Asset Managers* (2020), chapter 3, and
+//! are the distance layer under the hierarchical methods of AFML chapter 16 (see
+//! [`crate::hrp`], [`crate::hcaa`] and [`crate::onc`]).
+//!
+//! - [`angular_distance`], [`absolute_angular_distance`] and [`squared_angular_distance`]
+//!   turn a Pearson correlation `rho` into a metric on `[0, 1]`. The first treats
+//!   `rho = -1` as maximally distant (long-only books); the other two as identical
+//!   (long-short books).
+//! - [`distance_correlation`] (Székely et al., 2007) is zero only under independence.
+//! - [`get_mutual_info`] and [`variation_of_information_score`] (Meilă, 2007) are estimated
+//!   from equal-width histograms, with the bin count from
+//!   [`get_optimal_number_of_bins`] (Hacine-Gharbi et al., 2012) when none is given.
+//!
+//! All functions take two equal-length slices of paired observations and treat the pairs as
+//! exchangeable: pass returns or other stationary series, not trending price levels.
+//! Entropies use natural logarithms.
+//!
+//! ```
+//! use openquant::codependence::{
+//!     absolute_angular_distance, angular_distance, distance_correlation,
+//! };
+//!
+//! # fn main() -> Result<(), openquant::codependence::CodependenceError> {
+//! let x: Vec<f64> = (0..=200).map(|i| f64::from(i) / 100.0 - 1.0).collect();
+//! let mirrored: Vec<f64> = x.iter().map(|v| -v).collect();
+//! let squared: Vec<f64> = x.iter().map(|v| v * v).collect();
+//!
+//! // rho = -1: maximal angular distance, zero absolute angular distance.
+//! assert!((angular_distance(&x, &mirrored)? - 1.0).abs() < 1e-12);
+//! assert!(absolute_angular_distance(&x, &mirrored)?.abs() < 1e-7);
+//!
+//! // y = x^2 on a symmetric range is uncorrelated with x, and clearly dependent on it.
+//! assert!((angular_distance(&x, &squared)? - 0.5f64.sqrt()).abs() < 1e-3);
+//! assert!(distance_correlation(&x, &squared)? > 0.4);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
+
+/// Errors returned by the codependence measures.
 #[derive(Debug, thiserror::Error)]
 pub enum CodependenceError {
+    /// The two series have different lengths.
     #[error("the two series have different lengths")]
     InputLengthMismatch,
+    /// Too few observations for the measure.
     #[error("the series are too short")]
     InputTooShort,
+    /// The bin count is zero, or could not be computed (a `NaN` correlation).
     #[error("the number of bins must be positive")]
     InvalidBins,
+    /// A series is constant (zero variance or zero entropy) where the measure divides by it.
     #[error("a series has zero variance")]
     ZeroVariance,
+    /// A series is constant, so its distance variance is zero.
     #[error("a series has zero distance variance")]
     ZeroDistanceVariance,
 }
 
+/// Result type of this module.
 pub type CodependenceResult<T> = Result<T, CodependenceError>;
 
 fn corrcoef(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
@@ -162,21 +211,65 @@ fn entropy(counts: &[usize]) -> CodependenceResult<f64> {
     Ok(value)
 }
 
+/// Angular distance `sqrt((1 - rho) / 2)` from the Pearson correlation `rho` of `x` and `y`.
+///
+/// In `[0, 1]`: 0 for `rho = 1` and 1 for `rho = -1`. Suited to long-only portfolios, where a
+/// negatively correlated asset is a diversifier.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they have fewer than two observations.
+/// - [`CodependenceError::ZeroVariance`] if either series is constant.
 pub fn angular_distance(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     let corr_coef = corrcoef(x, y)?;
     Ok((0.5 * (1.0 - corr_coef)).sqrt())
 }
 
+/// Absolute angular distance `sqrt((1 - |rho|) / 2)` from the Pearson correlation of `x` and
+/// `y`.
+///
+/// In `[0, sqrt(1/2)]`, and 0 for `rho = +-1`: perfectly anti-correlated series are treated
+/// as identical, as suits long-short portfolios.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they have fewer than two observations.
+/// - [`CodependenceError::ZeroVariance`] if either series is constant.
 pub fn absolute_angular_distance(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     let corr_coef = corrcoef(x, y)?;
     Ok((0.5 * (1.0 - corr_coef.abs())).sqrt())
 }
 
+/// Squared angular distance `sqrt((1 - rho^2) / 2)` from the Pearson correlation of `x` and
+/// `y`.
+///
+/// Like [`absolute_angular_distance`], 0 for `rho = +-1`; it spreads out high correlations
+/// and compresses low ones.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they have fewer than two observations.
+/// - [`CodependenceError::ZeroVariance`] if either series is constant.
 pub fn squared_angular_distance(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     let corr_coef = corrcoef(x, y)?;
     Ok((0.5 * (1.0 - corr_coef.powi(2))).sqrt())
 }
 
+/// Distance correlation of `x` and `y` (Székely et al., 2007).
+///
+/// Double-centres the matrices of pairwise absolute differences within each series and
+/// returns `dCov(x, y) / sqrt(dVar(x) dVar(y))`, in `[0, 1]`, which is zero only when the
+/// series are independent. Builds two `n x n` matrices: memory is `O(n^2)` (about 16 MB at
+/// 1,000 observations).
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they have fewer than two observations.
+/// - [`CodependenceError::ZeroDistanceVariance`] if either series is constant.
 pub fn distance_correlation(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     if x.len() != y.len() {
         return Err(CodependenceError::InputLengthMismatch);
@@ -253,6 +346,29 @@ pub fn distance_correlation(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     Ok(d_cov_xy.sqrt() / denom)
 }
 
+/// Histogram bin count that minimises the bias of entropy estimates (Hacine-Gharbi et al.,
+/// 2012).
+///
+/// With `corr_coef = None` uses the univariate (marginal entropy) rule; with the sample
+/// correlation `rho` of two series uses the bivariate (joint entropy) rule
+/// `round(sqrt(1 + sqrt(1 + 24 N / (1 - rho^2))) / sqrt(2))`. A correlation within `1e-4` of
+/// `+-1` falls back to the univariate rule.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputTooShort`] if `num_obs` is zero.
+/// - [`CodependenceError::InvalidBins`] if the rule does not yield a positive count (a `NaN`
+///   correlation).
+///
+/// ```
+/// use openquant::codependence::get_optimal_number_of_bins;
+///
+/// # fn main() -> Result<(), openquant::codependence::CodependenceError> {
+/// assert_eq!(get_optimal_number_of_bins(1_000, None)?, 15);
+/// assert_eq!(get_optimal_number_of_bins(1_000, Some(0.9))?, 13);
+/// # Ok(())
+/// # }
+/// ```
 pub fn get_optimal_number_of_bins(
     num_obs: usize,
     corr_coef: Option<f64>,
@@ -284,6 +400,23 @@ pub fn get_optimal_number_of_bins(
     Ok(bins as usize)
 }
 
+/// Mutual information `I[X;Y] = H[X] + H[Y] - H[X,Y]` of `x` and `y`, estimated from an
+/// `n_bins x n_bins` equal-width histogram.
+///
+/// `n_bins = None` uses [`get_optimal_number_of_bins`] with the sample correlation. With
+/// `normalize = true` the result is divided by `min(H[X], H[Y])` and lies in `[0, 1]`. The
+/// histogram estimate is biased upward on small samples; compare values only at equal length
+/// and binning. Normalised mutual information is not a distance; use
+/// [`variation_of_information_score`] for clustering.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they are empty, or (with `n_bins = None`) have
+///   fewer than two observations.
+/// - [`CodependenceError::InvalidBins`] if `n_bins` is `Some(0)` or the bin rule fails.
+/// - [`CodependenceError::ZeroVariance`] if `n_bins = None` and a series is constant, or
+///   `normalize` is true and either marginal entropy is zero.
 pub fn get_mutual_info(
     x: &[f64],
     y: &[f64],
@@ -348,6 +481,22 @@ pub fn get_mutual_info(
     Ok(mutual_info)
 }
 
+/// Variation of information `VI[X;Y] = H[X] + H[Y] - 2 I[X;Y]` of `x` and `y` (Meilă, 2007),
+/// estimated from equal-width histograms.
+///
+/// A true metric: the uncertainty left in each variable once the other is known. With
+/// `normalize = true` it is divided by the joint entropy `H[X,Y]` and lies in `[0, 1]`, with 0
+/// meaning each variable determines the other. `n_bins = None` uses
+/// [`get_optimal_number_of_bins`] with the sample correlation.
+///
+/// # Errors
+///
+/// - [`CodependenceError::InputLengthMismatch`] if `x` and `y` differ in length.
+/// - [`CodependenceError::InputTooShort`] if they are empty, or (with `n_bins = None`) have
+///   fewer than two observations.
+/// - [`CodependenceError::InvalidBins`] if `n_bins` is `Some(0)` or the bin rule fails.
+/// - [`CodependenceError::ZeroVariance`] if `n_bins = None` and a series is constant, or
+///   `normalize` is true and the joint entropy is zero.
 pub fn variation_of_information_score(
     x: &[f64],
     y: &[f64],

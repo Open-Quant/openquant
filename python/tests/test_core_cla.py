@@ -1,5 +1,4 @@
 import pytest
-
 from openquant import cla
 
 MU = [0.1, 0.2]

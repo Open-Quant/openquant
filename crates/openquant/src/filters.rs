@@ -1,15 +1,52 @@
-//! Filters module (ported from mlfinlab).
+//! Event-sampling filters: the symmetric CUSUM filter (AFML §2.5.2.1, Snippet 2.4) and a
+//! rolling z-score filter ported from mlfinlab.
 //!
-//! Mirrors the Python implementations used in tests; behavior is kept intentionally similar
-//! (including rolling std with ddof=1).
+//! A filter decides which bars become events to label. Both filters take a slice of close
+//! **prices** (not returns), oldest first, and return either 0-based positions into that
+//! slice or the timestamps at those positions.
+//!
+//! - [`cusum_filter_indices`] accumulates log returns `ln(p_t / p_{t-1})` in separate upward
+//!   and downward accumulators floored at zero, and fires when either crosses the threshold
+//!   `h` (in log-return units). Only the side that fired is reset.
+//! - [`z_score_filter_indices`] fires when the price is at or above its rolling mean plus
+//!   `k` rolling sample standard deviations (ddof = 1, matching pandas). It is one-sided and
+//!   has no reset; it is not from AFML.
+//!
+//! Neither filter looks ahead: the decision at bar `t` uses only data up to `t`.
+//!
+//! ```
+//! use openquant::filters::{cusum_filter_indices, Threshold};
+//!
+//! # fn main() -> Result<(), openquant::filters::FilterError> {
+//! let close = vec![100.0, 100.4, 100.9, 101.3, 101.0, 100.2, 99.6, 99.9];
+//! // A 1% threshold: one upward event, then one downward.
+//! let events = cusum_filter_indices(&close, Threshold::Scalar(0.01))?;
+//! assert_eq!(events, vec![3, 5]);
+//! # Ok(())
+//! # }
+//! ```
+#![deny(missing_docs)]
 
 use chrono::NaiveDateTime;
 use std::fmt;
 
+/// Errors returned by the filters in this module.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FilterError {
-    MissingDynamicThreshold { index: usize, available: usize },
-    TimestampIndexOutOfBounds { index: usize, available: usize },
+    /// A [`Threshold::Dynamic`] vector has no value for bar `index`.
+    MissingDynamicThreshold {
+        /// Bar position that needed a threshold.
+        index: usize,
+        /// Length of the dynamic threshold vector.
+        available: usize,
+    },
+    /// An event position has no matching entry in the timestamp slice.
+    TimestampIndexOutOfBounds {
+        /// Event position (index into `close`).
+        index: usize,
+        /// Length of the timestamp slice.
+        available: usize,
+    },
 }
 
 impl fmt::Display for FilterError {
@@ -30,9 +67,13 @@ impl fmt::Display for FilterError {
 
 impl std::error::Error for FilterError {}
 
-/// Threshold type for CUSUM filter.
+/// CUSUM threshold `h`, in log-return units.
 pub enum Threshold {
+    /// One threshold for every bar.
     Scalar(f64),
+    /// One threshold per bar: bar `t` is compared with element `t` (element 0 is never read,
+    /// since the first return is at bar 1). Typically a multiple of a daily-volatility
+    /// estimate. Must be at least as long as the price series.
     Dynamic(Vec<f64>),
 }
 
@@ -46,7 +87,20 @@ fn threshold_at_checked(threshold: &Threshold, idx: usize) -> Result<f64, Filter
     }
 }
 
-/// CUSUM filter returning indices of events (0-based positions in the input).
+/// Symmetric CUSUM filter returning event positions (AFML Snippet 2.4).
+///
+/// For each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`:
+/// `S+ = max(0, S+ + r_t)`, `S- = min(0, S- + r_t)`. Bar `t` is an event when `S- < -h`
+/// (checked first) or `S+ > h`; the accumulator that fired is reset to zero. Returns 0-based
+/// positions into `close`, in increasing order. Fewer than two prices yield no events.
+///
+/// `close` must be positive prices, oldest first. Unlike AFML's snippet, which differences
+/// whatever series it is given, this always takes log returns.
+///
+/// # Errors
+///
+/// [`FilterError::MissingDynamicThreshold`] if `threshold` is [`Threshold::Dynamic`] and
+/// shorter than `close`.
 pub fn cusum_filter_indices(
     close: &[f64],
     threshold: Threshold,
@@ -80,7 +134,16 @@ pub fn cusum_filter_indices(
     Ok(events)
 }
 
-/// CUSUM filter returning timestamps of events.
+/// Symmetric CUSUM filter returning event timestamps.
+///
+/// Runs [`cusum_filter_indices`] and maps each event position to `timestamps[position]`.
+/// `timestamps` should be aligned with `close`.
+///
+/// # Errors
+///
+/// - [`FilterError::MissingDynamicThreshold`] as for [`cusum_filter_indices`].
+/// - [`FilterError::TimestampIndexOutOfBounds`] if an event falls beyond the end of
+///   `timestamps`.
 pub fn cusum_filter_timestamps(
     close: &[f64],
     timestamps: &[NaiveDateTime],
@@ -117,7 +180,16 @@ fn rolling_mean_std(window: &[f64]) -> (f64, f64) {
     (mean, var.sqrt())
 }
 
-/// Z-score filter returning indices of events.
+/// Rolling z-score filter returning event positions (ported from mlfinlab, not in AFML).
+///
+/// Bar `i` is an event when `close[i] >= mean + threshold * std`, where `mean` is the mean of
+/// the last `mean_window` prices and `std` the sample standard deviation (ddof = 1) of the
+/// last `std_window` prices, both windows including bar `i`. Evaluation starts at bar
+/// `max(mean_window, std_window) - 1`. Returns an empty vector if the series is empty, both
+/// windows are zero, or the series is shorter than the longer window.
+///
+/// The filter is one-sided (only upward excursions fire), works on price levels, and has no
+/// reset, so consecutive bars above the band are consecutive events.
 pub fn z_score_filter_indices(
     close: &[f64],
     mean_window: usize,
@@ -148,7 +220,14 @@ pub fn z_score_filter_indices(
     events
 }
 
-/// Z-score filter returning timestamps of events.
+/// Rolling z-score filter returning event timestamps.
+///
+/// Runs [`z_score_filter_indices`] and maps each event position to `timestamps[position]`.
+///
+/// # Errors
+///
+/// [`FilterError::TimestampIndexOutOfBounds`] if an event falls beyond the end of
+/// `timestamps`.
 pub fn z_score_filter_timestamps(
     close: &[f64],
     timestamps: &[NaiveDateTime],

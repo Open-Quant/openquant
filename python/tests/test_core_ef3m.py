@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import ef3m
 
 
@@ -51,7 +50,8 @@ def test_fit_m2n_single_loop_shape():
     moments = [0.7, 2.6, 0.4, 25.0, -59.8]
     out = ef3m.fit_m2n(moments, epsilon=1e-2, factor=5.0, n_runs=3, variant=2, max_iter=1000)
 
-    assert len(out) <= 1
+    # One row per run that found a better fit than the zero-parameter baseline.
+    assert len(out) <= 3
     for mu_1, mu_2, sigma_1, sigma_2, p_1, error in out:
         assert 0.0 <= p_1 <= 1.0
         assert sigma_1 > 0.0 and sigma_2 > 0.0
@@ -68,4 +68,3 @@ def test_ef3m_rejects_wrongly_typed_input():
 def test_centered_moment_too_few_moments_raises_value_error():
     with pytest.raises(ValueError):
         ef3m.centered_moment([0.7], 5)
-

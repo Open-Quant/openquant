@@ -1,9 +1,7 @@
 import csv
 
 import pytest
-
 from _core_fixtures import FIXTURES
-
 from openquant import hrp
 
 # Two tight pairs: (0, 1) correlate at 0.9 and (2, 3) at 0.8, the pairs at 0.1.
@@ -68,9 +66,7 @@ def test_hrp_on_price_fixture():
     # test_hrp_ordering_depends_on_the_data below.
     prices, names = _load_prices_and_names()
     for use_shrinkage in (False, True):
-        weights, order = hrp.allocate_hrp(
-            names, asset_prices=prices, use_shrinkage=use_shrinkage
-        )
+        weights, order = hrp.allocate_hrp(names, asset_prices=prices, use_shrinkage=use_shrinkage)
         assert len(weights) == len(names)
         assert all(w >= 0.0 for w in weights)
         assert abs(sum(weights) - 1.0) < 1e-6

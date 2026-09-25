@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import polars as pl
 
-from . import _core
-from . import adapters
+from . import _core, adapters
 
 
 def run_mid_frequency_pipeline(
@@ -20,7 +20,7 @@ def run_mid_frequency_pipeline(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run an end-to-end AFML-style research pipeline.
 
     Returns nested dictionaries with stage outputs:
@@ -53,7 +53,7 @@ def run_mid_frequency_pipeline_frames(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run the pipeline and enrich output with polars DataFrames."""
     out = run_mid_frequency_pipeline(
         timestamps=timestamps,
@@ -104,7 +104,7 @@ def run_mid_frequency_pipeline_frames(
     return out
 
 
-def summarize_pipeline(out: dict[str, object]) -> pl.DataFrame:
+def summarize_pipeline(out: dict[str, Any]) -> pl.DataFrame:
     """Tabular summary for quick notebook inspection."""
     risk = out["risk"]
     portfolio = out["portfolio"]

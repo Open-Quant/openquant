@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from openquant import synthetic_bt
 
 # StabilityCriteria::default() in crates/openquant/src/synthetic_backtesting.rs, passed
