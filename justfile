@@ -9,7 +9,7 @@ fmt:
     cargo fmt
 
 fmt-check:
-    cargo fmt -- --check
+    cargo fmt --all -- --check
 
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -26,6 +26,11 @@ test-fast:
 test-slow:
     cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
 
+# What nightly-validation.yml runs: everything, including ignored tests, except
+# tests ignored with a "FINDING:" reason (known, expected failures).
+test-nightly:
+    cargo test --workspace --all-features --no-fail-fast -- --include-ignored $(python3 scripts/ci/finding_skip_args.py)
+
 lint: fmt-check clippy
 
 bench:
@@ -37,12 +42,18 @@ bench-hotspots:
 bench-synthetic:
     cargo bench -p openquant --bench synthetic_ticker_pipeline
 
+bench-compile:
+    cargo bench -p openquant --no-run
+
 bench-all:
     cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
 
 bench-collect:
     python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
 
+# Compares against the committed reference numbers, which were measured on one
+# particular machine: only meaningful on comparable hardware. CI instead times
+# the PR base and head on the same runner (benchmark-regression.yml).
 bench-check:
     python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json
 
@@ -57,6 +68,11 @@ py-import-smoke:
 
 py-test:
     uv run --python .venv/bin/python pytest python/tests -q
+
+py-lint:
+    uv run --python .venv/bin/python ruff check python/
+    uv run --python .venv/bin/python ruff format --check python/
+    uv run --python .venv/bin/python mypy
 
 py-setup:
     uv venv --python 3.13 .venv

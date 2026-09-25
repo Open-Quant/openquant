@@ -1,8 +1,8 @@
 ---
 title: Prerequisites
 description: Toolchain OpenQuant requires, how to install it on each platform, and why each version floor exists.
-status: reviewed
-last_validated: '2026-08-30'
+status: authored
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -56,9 +56,10 @@ as its linker. Without it every Rust build fails at the link step with
 
 ### Windows
 
-Use WSL2 and follow the Debian/Ubuntu instructions. The CI matrix
-(`.github/workflows/`) runs `ubuntu-latest` only, so a native Windows
-build is unverified by this project.
+Use WSL2 and follow the Debian/Ubuntu instructions. The nightly workflow
+runs the core crate's tests on `windows-latest` and `macos-latest`, but
+the Python extension is built and tested on `ubuntu-latest` only, so a
+native Windows build of the bindings is unverified by this project.
 
 ### Verify
 
@@ -70,23 +71,19 @@ rustc --version && cargo --version && uv --version && git --version
 
 | Tool | Floor | Where it is declared | Why |
 |---|---|---|---|
-| Rust | stable | `dtolnay/rust-toolchain@stable` in every CI workflow | **No MSRV is declared anywhere in this repo** — there is no `rust-version` key in any `Cargo.toml` and no `rust-toolchain.toml`. Both crates are `edition = "2021"`, and `pyo3 0.23` / `polars 0.46` pull the real floor well above edition 2021's own 1.56. Treat "current stable" as the only supported answer, because that is the only one CI proves. |
-| Python | 3.9 minimum, **3.11 recommended** | `requires-python = ">=3.9"` in `pyproject.toml` | 3.9 is the floor the package metadata will enforce at install time. 3.11 is what `.github/workflows/python-bindings.yml` actually builds and tests against, so it is the version with evidence behind it. See the caveat below. |
+| Rust | the pinned toolchain | `rust-toolchain.toml` (`channel = "1.98.1"`) | rustup reads `rust-toolchain.toml` in the repository root, so local builds and every CI job use the same compiler and the same clippy lints. No `rust-version` (MSRV) key is declared in any `Cargo.toml`; the pinned version is the only one CI proves. |
+| Python | 3.11 minimum, **3.13 recommended** | `requires-python = ">=3.11"` in `pyproject.toml` | 3.11 is the floor the package metadata enforces at install time. The `python` jobs in `.github/workflows/ci.yml` build and test the extension on both 3.11 and 3.13 on every PR; 3.13 is what the `justfile` develops on. 3.12 is not tested. |
 | `uv` | any recent release | not pinned | Every `just py-*` recipe shells out to `uv`, and CI installs it via `astral-sh/setup-uv@v5`. It is the project's only supported way to create the Python environment. |
 | Node | 20 | `node-version: 20` in `.github/workflows/docs-pages.yml` | Docs site only. Astro 5 requires Node 18.17+; CI uses 20. |
 | Bun | latest | `oven-sh/setup-bun@v2` in `docs-pages.yml` | Docs site only, and **optional** — see below. |
 
-:::note[The repo disagrees with itself about the Python version]
-Three different Python versions are declared in-tree:
-
-- `pyproject.toml` — `requires-python = ">=3.9"`
-- `.github/workflows/python-bindings.yml` — `python-version: "3.11"`
+:::note[Which Python versions have evidence behind them]
+- `pyproject.toml` — `requires-python = ">=3.11"`
+- `.github/workflows/ci.yml`, `python` job — a matrix of `3.11` and `3.13`
 - `justfile`, recipe `py-setup` — `uv venv --python 3.13 .venv`
 
-Only 3.11 is exercised by CI. This page recommends 3.11 for that reason.
-3.13 was built successfully while writing this page, but 3.9 and 3.10 have
-not been tested by anyone here and the `>=3.9` claim should be treated as
-aspirational rather than verified.
+Both ends of the supported range are built and tested on every PR. 3.12
+sits between them and is expected to work, but nothing runs it.
 :::
 
 :::note[Bun is not required]

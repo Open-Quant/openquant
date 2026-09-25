@@ -1,8 +1,8 @@
 ---
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
-status: reviewed
-last_validated: '2026-08-30'
+status: authored
+last_authored: '2026-09-24'
 audience:
   - quant-dev
   - platform-engineering
@@ -112,8 +112,8 @@ uv venv --python 3.11 .venv
 uv sync --group dev
 ```
 
-or per-invocation, which is what `.github/workflows/python-bindings.yml`
-does:
+or per-invocation, which is what the `docs-checks` job in
+`.github/workflows/ci.yml` does:
 
 ```bash
 uv run --python .venv/bin/python --with maturin \

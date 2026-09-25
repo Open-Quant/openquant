@@ -47,16 +47,17 @@ unrelated project.
 
 ## Quick Start
 ```bash
-# Fast validation (default CI path)
+# Fast validation (what CI runs on every PR)
 cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 
-# Long-running SADF hotspot (explicit)
+# Long-running SADF hotspot (explicit; CI runs it nightly and on release tags)
 cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
 
 # Benchmarks
 cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
 
-# Collect + check benchmark thresholds
+# Collect + check benchmark thresholds against the committed baseline (machine-specific;
+# CI instead compares a PR's head with its base on the same runner)
 python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
 python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json
 ```

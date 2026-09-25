@@ -26,3 +26,8 @@ afml/
 .pytest_cache/
 .claude/worktrees/
 .playwright-mcp/
+
+# Coverage output (pytest-cov, cargo-llvm-cov)
+.coverage
+coverage-python.xml
+lcov.info
