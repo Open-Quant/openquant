@@ -54,11 +54,11 @@ def test_docs_page_example_values():
     def train_of(pct):
         return cv.purged_kfold_splits(t0, t1, 5, pct)[2][0].tolist()
 
-    purged_only = list(range(0, 13)) + list(range(27, 40))
     assert cv.purged_kfold_splits(t0, t1, 5, 0.0)[2][1].tolist() == list(range(16, 24))
-    assert train_of(0.0) == purged_only
-    assert train_of(0.07) == purged_only
-    assert train_of(0.15) == list(range(0, 10)) + list(range(30, 40))
+    assert train_of(0.0) == list(range(0, 13)) + list(range(27, 40))
+    # The embargo starts after the purge (at 27) and only after the fold (issue #134).
+    assert train_of(0.07) == list(range(0, 13)) + list(range(30, 40))
+    assert train_of(0.15) == list(range(0, 13)) + list(range(33, 40))
 
 
 def test_split_with_diagnostics_docs_example():
@@ -73,13 +73,14 @@ def test_split_with_diagnostics_docs_example():
     assert no_embargo["embargo_indices"].tolist() == []
 
     narrow = cv.split_with_diagnostics(t0, t1, 5, 0.07)[2]
-    assert narrow["embargo_indices"].tolist() == purged
-    assert narrow["train_indices"].tolist() == no_embargo["train_indices"].tolist()
+    assert narrow["purged_indices"].tolist() == purged
+    assert narrow["embargo_indices"].tolist() == [27, 28, 29]
+    assert narrow["train_indices"].tolist() == list(range(0, 13)) + list(range(30, 40))
 
     wide = cv.split_with_diagnostics(t0, t1, 5, 0.15)[2]
     assert wide["purged_indices"].tolist() == purged
-    assert wide["embargo_indices"].tolist() == list(range(10, 16)) + list(range(24, 30))
-    assert wide["train_indices"].tolist() == list(range(0, 10)) + list(range(30, 40))
+    assert wide["embargo_indices"].tolist() == list(range(27, 33))
+    assert wide["train_indices"].tolist() == list(range(0, 13)) + list(range(33, 40))
     assert wide["overlap_count_after_purge"] == 0
 
     assert len(cv.cpcv_splits(t0, t1, 5, 2, 0.15)) == 10
@@ -171,20 +172,21 @@ def test_no_train_index_overlaps_a_test_label_span():
 
 @pytest.mark.parametrize("pct_embargo", [0.01, 0.05, 0.1, 0.2])
 def test_embargo_is_honoured(pct_embargo):
-    # Point labels cannot overlap, so everything missing from training beyond the test fold is
-    # the embargo: ceil(pct * n) samples on each side of the fold, counted from its edges.
-    # Two-sided is the library's current behaviour (issue #134), and stricter than AFML.
+    # Point labels cannot overlap, so nothing is purged and everything missing from training
+    # beyond the test samples is the embargo: the ceil(pct * n) samples right after each test
+    # block, and none before it (AFML Snippet 7.3, issue #134).
     n = 100
     t = np.arange(n)
     width = ceil(pct_embargo * n)
     for train, test in cv.purged_kfold_splits(t, t, 4, pct_embargo):
-        start, stop = int(test[0]), int(test[-1]) + 1
-        blocked = set(range(max(0, start - width), min(n, stop + width)))
+        stop = int(test[-1]) + 1
+        blocked = set(test.tolist()) | set(range(stop, min(n, stop + width)))
         assert set(train.tolist()) == set(range(n)) - blocked
     for split in cv.cpcv_splits(t, t, 5, 2, pct_embargo):
-        train = set(split["train_indices"].tolist())
-        for start, stop in split["test_ranges"]:
-            assert not train & set(range(max(0, start - width), min(n, stop + width)))
+        blocked = set(split["test_indices"].tolist())
+        for _, stop in split["test_ranges"]:
+            blocked |= set(range(stop, min(n, stop + width)))
+        assert set(split["train_indices"].tolist()) == set(range(n)) - blocked
 
 
 def test_naive_kfold_leaks_but_purged_kfold_does_not():
@@ -290,3 +292,62 @@ def test_sklearn_cross_val_score_accepts_purged_splits():
         LogisticRegression(), {"C": [0.1, 1.0]}, cv=splits, scoring="neg_log_loss"
     ).fit(X, y)
     assert search.best_params_["C"] in (0.1, 1.0)
+
+
+# The embargo follows AFML Snippet 7.3 (issue #134).
+
+
+def test_embargo_follows_snippet_7_3_with_variable_length_labels():
+    # Rust: test_embargo_follows_snippet_7_3_with_variable_length_labels
+    # Sample i covers days [i, i + len]; fold 1's window ends on day 10, set by sample 5.
+    t0 = np.arange(12)
+    t1 = t0 + np.array([1, 4, 1, 2, 1, 5, 2, 1, 3, 1, 1, 1])
+    expected = [
+        ([8, 9, 10, 11], [4, 5], [6, 7]),
+        ([0, 2], [1, 3, 8, 9, 10], [11]),
+        ([0, 1, 2, 3, 4], [5, 6, 7], []),
+    ]
+    splits = cv.split_with_diagnostics(t0, t1, 3, 0.15)
+    for split, (train, purged, embargoed) in zip(splits, expected):
+        assert split["train_indices"].tolist() == train
+        assert split["purged_indices"].tolist() == purged
+        assert split["embargo_indices"].tolist() == embargoed
+
+
+def test_embargo_never_removes_samples_before_the_test_fold():
+    # Rust: test_embargo_never_removes_samples_before_the_test_fold, with numpy's generator.
+    rng = np.random.default_rng(134)
+    for _ in range(100):
+        n = int(rng.integers(4, 80))
+        n_splits = int(rng.integers(2, min(n, 8) + 1))
+        pct = float(rng.choice([0.01, 0.05, 0.15, 0.4]))
+        t0, t1 = random_spans(rng, n)
+        with_embargo = cv.split_with_diagnostics(t0, t1, n_splits, pct)
+        without = cv.split_with_diagnostics(t0, t1, n_splits, 0.0)
+        for a, b in zip(with_embargo, without):
+            start = int(a["test_indices"][0])
+            assert all(i > start for i in a["embargo_indices"].tolist())
+            assert a["train_indices"][a["train_indices"] < start].tolist() == (
+                b["train_indices"][b["train_indices"] < start].tolist()
+            )
+
+
+def test_embargo_starts_where_the_purge_ends():
+    # Rust: test_embargo_starts_where_the_purge_ends, with numpy's generator.
+    rng = np.random.default_rng(73)
+    for _ in range(100):
+        n = int(rng.integers(4, 80))
+        n_splits = int(rng.integers(2, min(n, 8) + 1))
+        pct = float(rng.choice([0.01, 0.05, 0.15, 0.4]))
+        width = ceil(pct * n)
+        t0, t1 = random_spans(rng, n)
+        for split in cv.split_with_diagnostics(t0, t1, n_splits, pct):
+            (_, stop), test = split["test_ranges"][0], split["test_indices"]
+            test_end = t1[test].max()
+            later = [i for i in range(stop, n) if t0[i] > test_end]
+            resume = later[0] if later else n
+            purged = set(split["purged_indices"].tolist())
+            assert set(range(stop, resume)) <= purged
+            expected = list(range(resume, min(n, resume + width)))
+            assert split["embargo_indices"].tolist() == expected
+            assert not purged & set(expected)

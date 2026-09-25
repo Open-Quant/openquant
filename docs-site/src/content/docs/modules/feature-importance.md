@@ -226,8 +226,8 @@ for name in ("f0", "f1", "f2"):
 
 ```text
 f0 0.882 -0.282 0.6
-f1 -0.042 -0.735 0.267
-f2 -0.024 -0.708 0.133
+f1 -0.038 -0.738 0.267
+f2 -0.027 -0.709 0.133
 ```
 
 The three columns are MDA, SFI and (from made-up per-tree importances) MDI. SFI is scored by
