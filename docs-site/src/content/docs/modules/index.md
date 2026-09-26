@@ -149,7 +149,7 @@ For the AFML chapter each module implements, see
 - [`labeling`](/modules/labeling/) — `triple_barrier_labels`, `triple_barrier_events`, `meta_labels`, `add_vertical_barrier`, `get_events`, `get_bins`, `drop_labels`
 - [`microstructural`](/modules/microstructural-features/) — `get_roll_measure`, `get_roll_impact`, `get_corwin_schultz_estimator`, `get_bekker_parkinson_vol`, `get_bar_based_kyle_lambda`, `get_bar_based_amihud_lambda`, `get_bar_based_hasbrouck_lambda`, `get_trades_based_kyle_lambda`, `get_trades_based_amihud_lambda`, `get_trades_based_hasbrouck_lambda`, `vwap`, `get_avg_tick_size`, `get_vpin`, `get_bvc_buy_volume`, `encode_tick_rule_array`, `quantile_mapping`, `sigma_mapping`, `encode_array`, `get_shannon_entropy`, `get_lempel_ziv_entropy`, `get_plug_in_entropy`, `get_konto_entropy`
 - [`onc`](/modules/onc/) — `get_onc_clusters`
-- [`pipeline`](/modules/pipeline/) — `run_mid_frequency_pipeline`, `run_mid_frequency_pipeline_frames`, `summarize_pipeline`
+- [`pipeline`](/modules/pipeline/) — `run_mid_frequency_pipeline`, `run_mid_frequency_pipeline_frames`, `summarize_pipeline`, `infer_periods_per_year`
 - [`portfolio`](/modules/portfolio-optimization/) — `allocate_inverse_variance`, `allocate_min_vol`, `allocate_max_sharpe`, `allocate_efficient_risk`, `allocate_with_solution`, `allocate_from_inputs`
 - [`research`](/modules/research/) — `make_synthetic_futures_dataset`, `run_flywheel_iteration`, `ResearchDataset`
 - [`risk`](/modules/risk-metrics/) — `calculate_value_at_risk`, `calculate_expected_shortfall`, `calculate_conditional_drawdown_risk`, `calculate_variance`, `calculate_value_at_risk_from_matrix`, `calculate_expected_shortfall_from_matrix`, `calculate_conditional_drawdown_risk_from_matrix`

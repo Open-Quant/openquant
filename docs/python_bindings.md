@@ -142,13 +142,19 @@ Input conventions:
 - `run_mid_frequency_pipeline(...)`
 - `run_mid_frequency_pipeline_frames(...)`
 - `summarize_pipeline(...)`
+- `infer_periods_per_year(timestamps)`
 
 `run_mid_frequency_pipeline` contract:
 - Inputs:
   - `timestamps`, `close`, `model_probabilities` (aligned 1:1)
   - `asset_prices` (`rows=time`, `cols=assets`)
   - optional `model_sides`, `asset_names`
-  - params: `cusum_threshold`, `num_classes`, `step_size`, `risk_free_rate`, `confidence_level`
+  - params: `cusum_threshold`, `num_classes`, `step_size`, `risk_free_rate` (annual), `confidence_level`,
+    `periods_per_year`
+- Annualisation: `periods_per_year` (bars a year) annualises `realized_sharpe` and the portfolio
+  figures. The Python default `None` derives it from the timestamps with `infer_periods_per_year`
+  (252 sessions of 390 minutes a year: daily bars 252, one-minute bars 252 × 390 = 98,280) and
+  returns the value used as `risk["periods_per_year"]`. `openquant._core` and Rust default to 252.
 - Outputs:
   - `events`: event indices/timestamps/probabilities/sides
   - `signals`: event signal + aligned timeline signal
@@ -160,14 +166,15 @@ Input conventions:
 `run_mid_frequency_pipeline_frames` adds notebook-ready polars frames for `signals`, `events`, `backtest`, and `weights`.
 
 ### `openquant.research` (flywheel iteration helpers)
-- `make_synthetic_futures_dataset(n_bars=..., seed=..., asset_names=...)`
+- `make_synthetic_futures_dataset(n_bars=..., seed=..., asset_names=...)` (one-minute bars;
+  `dataset.periods_per_year` is 98,280)
 - `run_flywheel_iteration(dataset, config=...)`
 - `run_flywheel_grid(dataset, configs, run_names=None)`
 - `research_run_manifest(config, dataset_meta=None)`
 
 `run_flywheel_iteration` extends pipeline output with:
 - cost model summary (turnover + vol/spread proxy),
-- net/gross return and net Sharpe,
+- net/gross return and net Sharpe (annualised with the dataset's `periods_per_year`),
 - promotion decision gates (statistical + economic).
 
 `run_flywheel_grid` executes multiple configs and returns:

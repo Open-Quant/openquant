@@ -36,11 +36,16 @@
 //!   reported, not traded, and its rows need not match `timestamps`.
 //! - **Units.** `risk_free_rate` is an **annual** rate everywhere, as in
 //!   [`crate::portfolio_optimization`]. `periods_per_year` is the number of bars a year, for
-//!   both `close` and the rows of `asset_prices` (252 for daily bars, the default; about
-//!   `252 * 390` for one-minute bars over a 6.5-hour session). It annualises
-//!   `realized_sharpe` and the portfolio's return, volatility and Sharpe ratio, and the
-//!   risk-free rate per bar is `risk_free_rate / periods_per_year`. If `asset_prices` is
-//!   sampled at a different frequency from `close`, resample it first.
+//!   both `close` and the rows of `asset_prices`. It annualises `realized_sharpe` and the
+//!   portfolio's return, volatility and Sharpe ratio, and the risk-free rate per bar is
+//!   `risk_free_rate / periods_per_year`. If `asset_prices` is sampled at a different
+//!   frequency from `close`, resample it first. The default, 252, is right for **daily bars
+//!   only**; for other bars set it, or derive it from the timestamps with
+//!   [`infer_periods_per_year`]. The convention is a US equity year of
+//!   [`TRADING_DAYS_PER_YEAR`] = 252 sessions of [`SESSION_MINUTES`] = 390 minutes (6.5
+//!   hours), so one-minute bars have `252 * 390 = 98,280` bars a year
+//!   ([`MINUTE_BARS_PER_YEAR`]) and five-minute bars 19,656. Using 252 for one-minute bars
+//!   understates every annualised Sharpe ratio and volatility by `sqrt(390) ≈ 19.7`.
 //! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
 //!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
@@ -124,6 +129,86 @@ use crate::filters::{cusum_filter_indices, Threshold};
 use crate::portfolio_optimization::allocate_max_sharpe;
 use crate::risk_metrics::{RiskMetrics, RiskMetricsError};
 
+/// Trading days (sessions) a year: the annualisation factor for daily bars and the default
+/// of [`ResearchPipelineConfig::periods_per_year`].
+pub const TRADING_DAYS_PER_YEAR: f64 = 252.0;
+
+/// Minutes in one trading session: a 6.5-hour US equity session, 09:30 to 16:00.
+pub const SESSION_MINUTES: f64 = 390.0;
+
+/// One-minute bars a year, `TRADING_DAYS_PER_YEAR * SESSION_MINUTES = 98,280`.
+pub const MINUTE_BARS_PER_YEAR: f64 = TRADING_DAYS_PER_YEAR * SESSION_MINUTES;
+
+/// Bars a year implied by the spacing of `timestamps`, for
+/// [`ResearchPipelineConfig::periods_per_year`].
+///
+/// Takes the median gap `Δ` between consecutive strictly increasing timestamps (gaps that are
+/// zero or negative are skipped, so ties and unordered pairs do not count) and maps it with the
+/// convention of the [module documentation](self#conventions):
+///
+/// - **intraday**, `Δ` under 20 hours: `252 * 390 / Δ_minutes` bars a year, i.e. a 390-minute
+///   session on 252 days (one-minute bars: 98,280; hourly: 1,638). Bars that trade around the
+///   clock (futures, crypto) keep this session convention; pass an explicit value instead if
+///   you want a 24-hour one.
+/// - **daily**, `Δ` from 20 hours to under 4 days (so weekends and holidays inside a daily
+///   series do not matter): 252.
+/// - **longer**, `Δ` of 4 days or more: `365.25 / Δ_days` (weekly bars: 52.2, monthly bars
+///   of 30.44 days: 12).
+///
+/// The median makes it robust to overnight and weekend gaps in intraday data and to the odd
+/// missing bar. For bars sampled on activity (tick, volume or dollar bars) it gives the
+/// typical bar rate, which is only an approximation; pass the value yourself when you know it.
+///
+/// Returns `None` when fewer than two timestamps strictly increase, i.e. there is no gap to
+/// measure.
+///
+/// # Example
+///
+/// ```
+/// use chrono::{Datelike, Duration, NaiveDate, Weekday};
+/// use openquant::pipeline::{infer_periods_per_year, MINUTE_BARS_PER_YEAR};
+///
+/// let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 30, 0).unwrap();
+/// let minutes: Vec<_> = (0..390).map(|i| open + Duration::minutes(i)).collect();
+/// assert_eq!(infer_periods_per_year(&minutes), Some(MINUTE_BARS_PER_YEAR));
+/// assert_eq!(MINUTE_BARS_PER_YEAR, 98_280.0);
+///
+/// // Weekdays only: the weekend gaps are outliers the median ignores.
+/// let days: Vec<_> = (0..14)
+///     .map(|d| open + Duration::days(d))
+///     .filter(|t| !matches!(t.weekday(), Weekday::Sat | Weekday::Sun))
+///     .collect();
+/// assert_eq!(infer_periods_per_year(&days), Some(252.0));
+///
+/// assert_eq!(infer_periods_per_year(&minutes[..1]), None);
+/// ```
+pub fn infer_periods_per_year(timestamps: &[NaiveDateTime]) -> Option<f64> {
+    let mut gaps: Vec<i64> = timestamps
+        .windows(2)
+        .map(|w| (w[1] - w[0]).num_milliseconds())
+        .filter(|&ms| ms > 0)
+        .collect();
+    if gaps.is_empty() {
+        return None;
+    }
+    gaps.sort_unstable();
+    let mid = gaps.len() / 2;
+    let median_ms = if gaps.len() % 2 == 1 {
+        gaps[mid] as f64
+    } else {
+        (gaps[mid - 1] as f64 + gaps[mid] as f64) / 2.0
+    };
+    let minutes = median_ms / 60_000.0;
+    let days = minutes / 1_440.0;
+    Some(if minutes < 20.0 * 60.0 {
+        MINUTE_BARS_PER_YEAR / minutes
+    } else if days < 4.0 {
+        TRADING_DAYS_PER_YEAR
+    } else {
+        365.25 / days
+    })
+}
+
 /// Parameters of [`run_mid_frequency_pipeline`].
 ///
 /// The [`Default`] is `cusum_threshold = 0.001`, `num_classes = 2`, `step_size = 0.1`,
@@ -148,7 +233,8 @@ pub struct ResearchPipelineConfig {
     pub confidence_level: f64,
     /// Bars per year of `close` and rows per year of `asset_prices`; annualises
     /// `realized_sharpe` and the portfolio stage. Must be finite and > 0. The default 252 is
-    /// right for daily bars only.
+    /// right for daily bars only: use [`MINUTE_BARS_PER_YEAR`] (98,280) for one-minute bars, or
+    /// [`infer_periods_per_year`] on the timestamps.
     pub periods_per_year: f64,
 }
 
@@ -160,7 +246,7 @@ impl Default for ResearchPipelineConfig {
             step_size: 0.1,
             risk_free_rate: 0.0,
             confidence_level: 0.05,
-            periods_per_year: 252.0,
+            periods_per_year: TRADING_DAYS_PER_YEAR,
         }
     }
 }
@@ -408,7 +494,7 @@ pub fn run_mid_frequency_pipeline(
     // hand it the risk-free rate in its units, then convert its annual figures back. With
     // `k = periods_per_year / 252`, returns scale by `k`, volatility and Sharpe by `sqrt(k)`,
     // and the weights do not move.
-    let scale = config.periods_per_year / 252.0;
+    let scale = config.periods_per_year / TRADING_DAYS_PER_YEAR;
     let portfolio_out =
         allocate_max_sharpe(input.asset_prices, config.risk_free_rate / scale, None, None)
             .map_err(|err| PipelineError::PortfolioAllocation(format!("{err:?}")))?;
@@ -659,6 +745,68 @@ mod tests {
         timestamps.swap(2, 3);
         timestamps[3] = timestamps[2];
         assert!(!run(&timestamps).leakage_checks.timestamps_increasing, "ties are not increasing");
+    }
+
+    #[test]
+    fn test_infer_periods_per_year_by_bar_spacing() {
+        let t0 = parse_ts("2024-01-02 09:30:00");
+        let spaced = |step: chrono::Duration, n: i32| -> Vec<NaiveDateTime> {
+            (0..n).map(|i| t0 + step * i).collect()
+        };
+        let minute = infer_periods_per_year(&spaced(chrono::Duration::minutes(1), 50));
+        assert_eq!(minute, Some(98_280.0));
+        let five = infer_periods_per_year(&spaced(chrono::Duration::minutes(5), 50));
+        assert_eq!(five, Some(19_656.0));
+        let hourly = infer_periods_per_year(&spaced(chrono::Duration::hours(1), 50));
+        assert_eq!(hourly, Some(1_638.0));
+        let daily = infer_periods_per_year(&spaced(chrono::Duration::days(1), 50));
+        assert_eq!(daily, Some(252.0));
+        let weekly = infer_periods_per_year(&spaced(chrono::Duration::weeks(1), 50)).unwrap();
+        assert!((weekly - 365.25 / 7.0).abs() < 1e-12);
+        // Two sessions of one-minute bars with an overnight gap: the median ignores it.
+        let mut two_sessions = spaced(chrono::Duration::minutes(1), 390);
+        let next_open = parse_ts("2024-01-03 09:30:00");
+        two_sessions.extend((0..390).map(|i| next_open + chrono::Duration::minutes(i)));
+        assert_eq!(infer_periods_per_year(&two_sessions), Some(MINUTE_BARS_PER_YEAR));
+        // Nothing to measure.
+        assert_eq!(infer_periods_per_year(&[]), None);
+        assert_eq!(infer_periods_per_year(&[t0, t0]), None);
+    }
+
+    #[test]
+    fn test_realized_sharpe_scales_with_periods_per_year() {
+        // #205: the same per-bar returns annualise with sqrt(periods_per_year).
+        let timestamps: Vec<NaiveDateTime> =
+            (0..6).map(|m| parse_ts("2024-01-02 09:30:00") + chrono::Duration::minutes(m)).collect();
+        let close = vec![100.0, 102.0, 101.0, 103.0, 102.5, 104.0];
+        let probs = vec![0.9; 6];
+        let asset_names = vec!["A".to_string()];
+        let asset_prices = DMatrix::from_row_slice(4, 1, &[100.0, 101.0, 100.5, 102.0]);
+        let run = |periods_per_year: f64| {
+            let input = ResearchPipelineInput {
+                timestamps: &timestamps,
+                close: &close,
+                model_probabilities: &probs,
+                model_sides: None,
+                asset_prices: &asset_prices,
+                asset_names: &asset_names,
+            };
+            let config = ResearchPipelineConfig {
+                cusum_threshold: 0.005,
+                periods_per_year,
+                ..ResearchPipelineConfig::default()
+            };
+            run_mid_frequency_pipeline(input, &config).expect("pipeline run should succeed")
+        };
+        let daily = run(TRADING_DAYS_PER_YEAR);
+        let minute = run(MINUTE_BARS_PER_YEAR);
+        let ratio = minute.risk.realized_sharpe / daily.risk.realized_sharpe;
+        assert!((ratio - SESSION_MINUTES.sqrt()).abs() < 1e-9, "ratio {ratio}");
+        let ratio = minute.portfolio.portfolio_sharpe / daily.portfolio.portfolio_sharpe;
+        assert!((ratio - SESSION_MINUTES.sqrt()).abs() < 1e-9, "ratio {ratio}");
+        let ratio = minute.portfolio.portfolio_return / daily.portfolio.portfolio_return;
+        assert!((ratio - SESSION_MINUTES).abs() < 1e-6, "ratio {ratio}");
+        assert_eq!(minute.portfolio.weights, daily.portfolio.weights);
     }
 
     #[test]

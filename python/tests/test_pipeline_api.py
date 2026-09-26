@@ -115,3 +115,53 @@ def test_pipeline_summary_frame():
     assert isinstance(summary, pl.DataFrame)
     assert summary.height == 1
     assert "portfolio_sharpe" in summary.columns
+
+
+def test_infer_periods_per_year_from_bar_spacing():
+    # #205: one-minute bars on a 390-minute session, 252 sessions a year.
+    minute = [f"2024-01-02 09:{m:02d}:00" for m in range(30, 60)]
+    assert openquant.pipeline.infer_periods_per_year(minute) == 98_280.0
+    assert openquant.pipeline.MINUTE_BARS_PER_YEAR == 98_280.0
+    daily = [f"2024-01-{d:02d} 16:00:00" for d in (2, 3, 4, 5, 8, 9, 10, 11, 12, 15)]
+    assert openquant.pipeline.infer_periods_per_year(daily) == 252.0
+    assert openquant.pipeline.infer_periods_per_year(minute[:1]) is None
+
+
+def test_pipeline_annualises_with_the_bar_frequency():
+    # #205: the toy input is one-minute bars, so the default derives 98,280 bars a year and
+    # every annualised figure is sqrt(390) (returns: 390) times the daily-bar convention.
+    timestamps, close, probabilities, sides, asset_prices, asset_names = _toy_pipeline_input()
+    kwargs = dict(
+        timestamps=timestamps,
+        close=close,
+        model_probabilities=probabilities,
+        model_sides=sides,
+        asset_prices=asset_prices,
+        asset_names=asset_names,
+        cusum_threshold=0.0005,
+    )
+    inferred = openquant.pipeline.run_mid_frequency_pipeline(**kwargs)
+    daily = openquant.pipeline.run_mid_frequency_pipeline(**kwargs, periods_per_year=252.0)
+    core = openquant._core.pipeline.run_mid_frequency_pipeline(
+        timestamps, close, probabilities, asset_prices, sides, asset_names, 0.0005
+    )
+
+    assert inferred["risk"]["periods_per_year"] == 98_280.0
+    assert daily["risk"]["periods_per_year"] == 252.0
+    assert core["risk"]["realized_sharpe"] == pytest.approx(daily["risk"]["realized_sharpe"])
+    root = 390.0**0.5
+    assert inferred["risk"]["realized_sharpe"] == pytest.approx(
+        daily["risk"]["realized_sharpe"] * root
+    )
+    assert inferred["portfolio"]["portfolio_sharpe"] == pytest.approx(
+        daily["portfolio"]["portfolio_sharpe"] * root
+    )
+    assert inferred["portfolio"]["portfolio_risk"] == pytest.approx(
+        daily["portfolio"]["portfolio_risk"] * root
+    )
+    assert inferred["portfolio"]["portfolio_return"] == pytest.approx(
+        daily["portfolio"]["portfolio_return"] * 390.0
+    )
+    assert inferred["portfolio"]["weights"] == pytest.approx(daily["portfolio"]["weights"])
+    # Tail-risk figures are per bar and do not depend on the factor.
+    assert inferred["risk"]["value_at_risk"] == daily["risk"]["value_at_risk"]

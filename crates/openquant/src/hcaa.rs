@@ -42,7 +42,9 @@
 //!   of `asset_names`. Covariance is `N x N` in the same order.
 //! - Returns derived from prices are simple returns `p_t / p_{t-1} - 1` (after optional
 //!   resampling). Estimated expected returns are **annualised** by 252 periods; covariance and
-//!   tail measures are per-period.
+//!   tail measures are per-period. The 252 assumes daily rows and is intentional: it is a
+//!   constant scale that cancels in the `"sharpe_ratio"` split `sr_L / (sr_L + sr_R)`, so the
+//!   weights are the same for intraday rows.
 //! - `confidence_level` is the **tail probability** (e.g. 0.05) for both tail metrics.
 //! - Expected shortfall and conditional drawdown are computed here (on each side's
 //!   inverse-variance portfolio), not by [`crate::risk_metrics`]. Expected shortfall is returned

@@ -7,6 +7,42 @@ import polars as pl
 
 from . import _core, adapters
 
+#: Trading days (sessions) a year: the annualisation factor for daily bars.
+TRADING_DAYS_PER_YEAR = 252.0
+#: Minutes in one trading session (a 6.5-hour US equity session, 09:30 to 16:00).
+SESSION_MINUTES = 390.0
+#: One-minute bars a year, ``TRADING_DAYS_PER_YEAR * SESSION_MINUTES`` = 98,280.
+MINUTE_BARS_PER_YEAR = TRADING_DAYS_PER_YEAR * SESSION_MINUTES
+
+
+def infer_periods_per_year(timestamps: Sequence[str]) -> float | None:
+    """Bars a year implied by the spacing of ``timestamps``.
+
+    Thin wrapper over ``openquant._core.pipeline.infer_periods_per_year``: the median gap
+    between consecutive strictly increasing timestamps is mapped with the convention of
+    252 sessions of 390 minutes a year. Intraday gaps give ``252 * 390 / gap_minutes``
+    (one-minute bars: 98,280); gaps from 20 hours to under 4 days give 252 (daily bars);
+    longer gaps give ``365.25 / gap_days``.
+
+    Parameters
+    ----------
+    timestamps : Sequence[str]
+        Bar timestamps as ``"%Y-%m-%d %H:%M:%S"`` strings, oldest first.
+
+    Returns
+    -------
+    float or None
+        Bars a year, or None when fewer than two timestamps strictly increase.
+    """
+    return _core.pipeline.infer_periods_per_year(list(timestamps))
+
+
+def _resolve_periods_per_year(timestamps: Sequence[str], periods_per_year: float | None) -> float:
+    if periods_per_year is not None:
+        return float(periods_per_year)
+    inferred = infer_periods_per_year(timestamps)
+    return TRADING_DAYS_PER_YEAR if inferred is None else inferred
+
 
 def run_mid_frequency_pipeline(
     timestamps: Sequence[str],
@@ -20,7 +56,7 @@ def run_mid_frequency_pipeline(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
-    periods_per_year: float = 252.0,
+    periods_per_year: float | None = None,
 ) -> dict[str, Any]:
     """Run an end-to-end AFML-style research pipeline.
 
@@ -29,17 +65,25 @@ def run_mid_frequency_pipeline(
 
     ``risk_free_rate`` is an annual rate for both the portfolio stage and
     ``realized_sharpe``. ``periods_per_year`` is the number of bars a year of ``close`` and
-    of the rows of ``asset_prices`` (252 for daily bars; about ``252 * 390`` for one-minute
-    bars); it annualises ``realized_sharpe`` and the portfolio's return, risk and Sharpe
-    ratio.
+    of the rows of ``asset_prices``; it annualises ``realized_sharpe`` and the portfolio's
+    return, risk and Sharpe ratio. With the default None it is derived from the spacing of
+    ``timestamps`` by `infer_periods_per_year` (252 for daily bars, 98,280 =
+    ``252 * 390`` for one-minute bars on a 6.5-hour session; 252 when there is no gap to
+    measure). Pass a number to override it, e.g. for bars that trade around the clock. The
+    value used is returned as ``out["risk"]["periods_per_year"]``.
+
+    Unlike this wrapper, ``openquant._core.pipeline.run_mid_frequency_pipeline`` (and the
+    Rust ``ResearchPipelineConfig``) default to 252 whatever the bar spacing.
 
     ``leakage_checks["timestamps_increasing"]`` and ``["event_indices_sorted"]`` are computed
     from the data. ``["inputs_aligned"]`` (always True) and ``["has_forward_look_bias"]``
     (always False) are deprecated constants: mismatched lengths raise instead, and the
     pipeline does not detect look-ahead in ``model_probabilities``.
     """
-    return _core.pipeline.run_mid_frequency_pipeline(
-        list(timestamps),
+    timestamps = list(timestamps)
+    ppy = _resolve_periods_per_year(timestamps, periods_per_year)
+    out = _core.pipeline.run_mid_frequency_pipeline(
+        timestamps,
         list(close),
         list(model_probabilities),
         [list(row) for row in asset_prices],
@@ -50,8 +94,10 @@ def run_mid_frequency_pipeline(
         step_size,
         risk_free_rate,
         confidence_level,
-        periods_per_year,
+        ppy,
     )
+    out["risk"]["periods_per_year"] = ppy
+    return out
 
 
 def run_mid_frequency_pipeline_frames(
@@ -66,9 +112,13 @@ def run_mid_frequency_pipeline_frames(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
-    periods_per_year: float = 252.0,
+    periods_per_year: float | None = None,
 ) -> dict[str, Any]:
-    """Run the pipeline and enrich output with polars DataFrames."""
+    """Run the pipeline and enrich output with polars DataFrames.
+
+    Takes the same parameters as `run_mid_frequency_pipeline`, including the default
+    ``periods_per_year=None`` that derives the annualisation factor from ``timestamps``.
+    """
     out = run_mid_frequency_pipeline(
         timestamps=timestamps,
         close=close,

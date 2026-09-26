@@ -1,5 +1,6 @@
 use openquant::pipeline::{
-    run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
+    infer_periods_per_year, run_mid_frequency_pipeline, ResearchPipelineConfig,
+    ResearchPipelineInput,
 };
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -56,9 +57,12 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 /// confidence_level : float, default 0.05
 ///     Lower-tail probability for VaR and expected shortfall, in `[0, 1]`.
 /// periods_per_year : float, default 252.0
-///     Bars a year of `close` and rows a year of `asset_prices` (252 for daily bars, about
-///     `252 * 390` for one-minute bars). Annualises `realized_sharpe` and the portfolio's
-///     return, risk and Sharpe ratio; must be finite and > 0.
+///     Bars a year of `close` and rows a year of `asset_prices`. Annualises
+///     `realized_sharpe` and the portfolio's return, risk and Sharpe ratio; must be finite
+///     and > 0. The default is right for daily bars only: one-minute bars on a 390-minute
+///     (6.5-hour) session have `252 * 390 = 98280` a year. `infer_periods_per_year` derives
+///     the value from the timestamps; `openquant.pipeline.run_mid_frequency_pipeline` does
+///     so by default.
 ///
 /// Returns
 /// -------
@@ -205,9 +209,42 @@ fn pipeline_run_mid_frequency_pipeline(
     Ok(root.into_pyobject(py).unwrap().into_any().unbind())
 }
 
+/// Bars a year implied by the spacing of `timestamps`, for `periods_per_year`.
+///
+/// Takes the median gap between consecutive strictly increasing timestamps (zero and
+/// negative gaps are skipped) and maps it with a US equity convention of 252 sessions of
+/// 390 minutes (6.5 hours) a year: a gap under 20 hours gives `252 * 390 / gap_minutes`
+/// (one-minute bars: 98280, five-minute: 19656, hourly: 1638); a gap from 20 hours to
+/// under 4 days gives 252 (daily bars, weekends and holidays included); a longer gap gives
+/// `365.25 / gap_days` (weekly: 52.18). Bars that trade around the clock keep the session
+/// convention; pass `periods_per_year` explicitly for a 24-hour one. For tick, volume or
+/// dollar bars the result is only the typical bar rate.
+///
+/// Parameters
+/// ----------
+/// timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is
+///     accepted), oldest first.
+///
+/// Returns
+/// -------
+/// float | None
+///     Bars a year, or None when fewer than two timestamps strictly increase.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp does not parse.
+#[pyfunction(name = "infer_periods_per_year")]
+fn pipeline_infer_periods_per_year(timestamps: Vec<String>) -> PyResult<Option<f64>> {
+    let timestamps = parse_naive_datetimes(timestamps)?;
+    Ok(infer_periods_per_year(&timestamps))
+}
+
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(py, "pipeline")?;
     m.add_function(wrap_pyfunction!(pipeline_run_mid_frequency_pipeline, &m)?)?;
+    m.add_function(wrap_pyfunction!(pipeline_infer_periods_per_year, &m)?)?;
     parent.add_submodule(&m)?;
     parent.add("pipeline", m)?;
     Ok(())
