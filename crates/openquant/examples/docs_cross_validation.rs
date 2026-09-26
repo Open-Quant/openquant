@@ -55,7 +55,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let x: Vec<Vec<f64>> = (0..40).map(|i| vec![i as f64]).collect();
     let y: Vec<f64> = (0..40).map(|i| f64::from(i % 4 == 0)).collect();
     let splits = PurgedKFold::new(5, info_sets(), 0.0)?.split(40)?;
-    let scores = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss);
+    let scores =
+        ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss)?;
     let mean = scores.iter().sum::<f64>() / scores.len() as f64;
     println!("neg log loss per fold: {scores:.4?}  mean {mean:.4}");
     Ok(())

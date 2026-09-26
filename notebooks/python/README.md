@@ -4,18 +4,23 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 
 ## Notebooks
 
-1. `01_event_labeling_and_pipeline.ipynb`
-2. `02_purged_cv_and_seq_bootstrap.ipynb`
-3. `03_feature_diagnostics.ipynb`
-4. `04_portfolio_construction.ipynb`
-5. `05_risk_overlays_and_reality_check.ipynb`
-6. `06_afml_real_data_end_to_end.ipynb` (full flywheel analysis on the SYNTHETIC `fetch` sample; pass your own `source=` for real data)
-7. `07_feature_engineering_discovery_loop.ipynb` (candidate feature generation + screening)
-8. `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
-9. `09_fracdiff_stationarity_memory.ipynb` (runbook #49: FFD d-sweep, ADF vs memory, checked against simulated series of known memory; SYNTHETIC by default, `OPENQUANT_RUNBOOK_SOURCE` for your own file)
-10. `10_hrp_vs_ivp_cla_oos.ipynb` (runbook, #51: HRP vs inverse-variance and CLA out of sample, AFML §16.6 Monte Carlo on SYNTHETIC data; `OPENQUANT_RUNBOOK_RUNS=10000` for the book's run count)
+- `01_event_labeling_and_pipeline.ipynb`
+- `02_purged_cv_and_seq_bootstrap.ipynb`
+- `03_feature_diagnostics.ipynb`
+- `04_portfolio_construction.ipynb`
+- `05_risk_overlays_and_reality_check.ipynb`
+- `07_feature_engineering_discovery_loop.ipynb` (candidate feature generation + screening)
+- `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
+- `09_fracdiff_stationarity_memory.ipynb` (runbook #49: FFD d-sweep, ADF vs memory, checked against simulated series of known memory; SYNTHETIC by default, `OPENQUANT_RUNBOOK_SOURCE` for your own file)
+- `10_hrp_vs_ivp_cla_oos.ipynb` (runbook, #51: HRP vs inverse-variance and CLA out of sample, AFML §16.6 Monte Carlo on SYNTHETIC data; `OPENQUANT_RUNBOOK_RUNS=10000` for the book's run count)
+- `11_meta_labeling_triple_barrier.ipynb` (runbook, #47: CUSUM events, triple-barrier meta-labels and a meta-model in purged k-fold, primary vs meta on precision, F1 and deflated Sharpe net of costs; SYNTHETIC paths with a planted signal plus the `fetch` sample as a no-signal control; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
+- `12_cpcv_deflated_sharpe.ipynb` (runbook, #48: CPCV backtest with PSR and the deflated Sharpe ratio; a no-signal control and a planted signal, SYNTHETIC; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
+- `13_bet_sizing_from_probabilities.ipynb` (runbook, #50: pre-registered test of runbook 11's post hoc finding; Snippet 10.1-10.3 probability sizing vs a flat 0.5 meta filter, with the number of classes, step size and averaging as registered trials, net of costs, deflated by a trial registry; SYNTHETIC planted-signal paths plus no-signal controls; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 
-Every notebook runs offline. Notebooks 06, 09 and 10 read market-shaped data through `openquant.data.fetch`, whose default
+Notebook 06 (a momentum heuristic with made-up probabilities, no cross-validation and no deflated
+Sharpe ratio) was removed in #47; notebook 11 replaces it.
+
+Every notebook runs offline. Notebooks 09 to 13 read market-shaped data through `openquant.data.fetch`, whose default
 source is the committed SYNTHETIC sample (`SYN_A` to `SYN_E`, see `DATA_SOURCES.md`); the others generate
 synthetic series in memory. None of the committed outputs describe a real market.
 
@@ -31,7 +36,7 @@ uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenqu
 
 ```bash
 just notebooks-run              # every NN_*.ipynb, in place, in a Jupyter kernel
-just notebooks-run --only 06    # one notebook
+just notebooks-run --only 11    # one notebook
 just notebooks-run --check      # execute to a temp dir; fail if the committed outputs are stale
 ```
 

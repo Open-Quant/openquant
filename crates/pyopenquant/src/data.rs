@@ -1,5 +1,5 @@
 use openquant::data_processing::{
-    align_calendar_columns, clean_ohlcv_columns, quality_report_columns,
+    align_calendar_columns, clean_ohlcv_columns, quality_report_columns, CalendarAlignmentReport,
 };
 use polars::prelude::DataFrame;
 use pyo3::prelude::*;
@@ -7,6 +7,24 @@ use pyo3::types::PyDict;
 use pyo3_polars::PyDataFrame;
 
 use crate::helpers::{build_ohlcv_columns, format_naive_datetime, report_to_pydict, to_py_err};
+
+/// `{"rows_removed_by_deduplication", "off_grid_bar_count", "off_grid_bars"}`, the last a
+/// list of `(symbol, ts_us)`.
+fn alignment_report_to_pydict(
+    py: Python<'_>,
+    report: CalendarAlignmentReport,
+) -> PyResult<PyObject> {
+    let off_grid: Vec<(String, i64)> = report
+        .off_grid_bars
+        .into_iter()
+        .map(|(symbol, ts)| (symbol, ts.and_utc().timestamp_micros()))
+        .collect();
+    let d = PyDict::new(py);
+    d.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
+    d.set_item("off_grid_bar_count", off_grid.len())?;
+    d.set_item("off_grid_bars", off_grid)?;
+    Ok(d.into_pyobject(py).unwrap().into_any().unbind())
+}
 
 /// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, quality_report)`.
 type CleanOhlcvColumns =
@@ -92,6 +110,7 @@ fn data_clean_ohlcv(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report.set_item("inferred_interval_us", report.inferred_interval_us)?;
     out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;
@@ -166,6 +185,7 @@ fn data_quality_report(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report.set_item("inferred_interval_us", report.inferred_interval_us)?;
     out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", 0)?;
@@ -215,9 +235,22 @@ fn data_quality_report(
 ///     If the column lists differ in length, `interval_seconds <= 0`, or a Polars
 ///     operation fails.
 #[pyfunction(name = "align_calendar")]
+#[pyo3(signature = (
+    timestamps_us,
+    symbols,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    adj_close,
+    interval_seconds,
+    return_report=false
+))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
 fn data_align_calendar(
+    py: Python<'_>,
     timestamps_us: Vec<i64>,
     symbols: Vec<String>,
     open: Vec<f64>,
@@ -227,11 +260,12 @@ fn data_align_calendar(
     volume: Vec<f64>,
     adj_close: Vec<f64>,
     interval_seconds: i64,
-) -> PyResult<AlignedOhlcvColumns> {
+    return_report: bool,
+) -> PyResult<PyObject> {
     let cols =
         build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
-    let out = align_calendar_columns(&cols, interval_seconds).map_err(to_py_err)?;
-    Ok((
+    let (out, report) = align_calendar_columns(&cols, interval_seconds).map_err(to_py_err)?;
+    let aligned: AlignedOhlcvColumns = (
         out.timestamps_us,
         out.symbols,
         out.open,
@@ -241,7 +275,13 @@ fn data_align_calendar(
         out.volume,
         out.adj_close,
         out.is_missing_bar,
-    ))
+    );
+    if return_report {
+        let report = alignment_report_to_pydict(py, report)?;
+        Ok((aligned, report).into_pyobject(py)?.into_any().unbind())
+    } else {
+        Ok(aligned.into_pyobject(py)?.into_any().unbind())
+    }
 }
 
 /// Sort an OHLCV DataFrame by `(symbol, ts_us)` and drop duplicate keys.
@@ -344,11 +384,23 @@ fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObjec
 ///     If `interval_seconds <= 0`, a required column is missing or has the wrong dtype, a
 ///     `symbol` or `ts_us` value is null, or a Polars operation fails.
 #[pyfunction(name = "align_calendar_df")]
-fn data_align_calendar_df(pydf: PyDataFrame, interval_seconds: i64) -> PyResult<PyDataFrame> {
+#[pyo3(signature = (pydf, interval_seconds, return_report=false))]
+fn data_align_calendar_df(
+    py: Python<'_>,
+    pydf: PyDataFrame,
+    interval_seconds: i64,
+    return_report: bool,
+) -> PyResult<PyObject> {
     let df: DataFrame = pydf.into();
-    let out_df =
+    let (out_df, report) =
         openquant::data_processing::align_calendar_df(&df, interval_seconds).map_err(to_py_err)?;
-    Ok(PyDataFrame(out_df))
+    let frame = PyDataFrame(out_df);
+    if return_report {
+        let report = alignment_report_to_pydict(py, report)?;
+        Ok((frame, report).into_pyobject(py)?.into_any().unbind())
+    } else {
+        Ok(frame.into_pyobject(py)?.into_any().unbind())
+    }
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

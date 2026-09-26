@@ -222,6 +222,7 @@ pub fn report_to_pydict(
     out_report.set_item("symbol_count", report.symbol_count)?;
     out_report.set_item("duplicate_key_count", report.duplicate_key_count)?;
     out_report.set_item("gap_interval_count", report.gap_interval_count)?;
+    out_report.set_item("inferred_interval_us", report.inferred_interval_us)?;
     out_report.set_item("ts_min", report.ts_min.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("ts_max", report.ts_max.map(|v| format_naive_datetime(&v)))?;
     out_report.set_item("rows_removed_by_deduplication", report.rows_removed_by_deduplication)?;

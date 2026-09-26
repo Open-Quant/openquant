@@ -2,7 +2,7 @@
 title: "evaluation"
 description: "Python research evaluation: probabilistic and deflated Sharpe ratios and minimum track record from a returns series, a trial registry that persists across runs, meta-labeling overlay metrics and the probability of strategy failure."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -88,6 +88,12 @@ write and replaced atomically, so a registry opened tomorrow, in another noteboo
 process, continues the same count. `registry.deflated_sharpe_ratio(returns)` then deflates
 with $N$ = the number of registered trials and $\sigma_{SR}$ = the population standard
 deviation of their Sharpe ratios.
+
+A configuration whose returns are constant — typically all zeros, because its filter took no
+bet — has no Sharpe ratio, but it was still tried. `record` stores it with Sharpe 0 (what a
+strategy with no excess return earns), skewness 0 and kurtosis 3, instead of raising. It
+counts towards $N$ and its 0 enters $\sigma_{SR}$, like any other trial. A caller that caught
+an error and skipped such configurations would undercount $N$ and deflate too weakly.
 
 ```python
 import random
@@ -215,9 +221,10 @@ target more often than not into one that almost never does, despite taking half 
 | `meta_label_metrics(meta_labels, meta_predictions, threshold=0.5)` | precision, recall, F1, accuracy, confusion counts, and `primary_*` for the primary model alone |
 | `strategy_failure_probability(bet_outcomes, years_elapsed, target_sharpe, investor_horizon_years, ...)` | the `strategy_risk` report plus `failure_probability` |
 
-Returns must hold at least three finite, non-constant values. `n_trials` must be an integer of
-at least 2, `alpha` must lie in $(0, 1)$, and a registry must hold two trials before it can
-deflate. Violations raise `ValueError` (or `TypeError` for non-numeric input) before anything
+Returns must hold at least three finite values and must not be constant, except in
+`TrialRegistry.record`, which records constant returns as Sharpe 0 (above). `n_trials` must
+be an integer of at least 2, `alpha` must lie in $(0, 1)$, and a registry must hold two
+trials before it can deflate. Violations raise `ValueError` (or `TypeError` for non-numeric input) before anything
 is computed.
 
 ## What to watch for

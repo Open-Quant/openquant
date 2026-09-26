@@ -253,7 +253,10 @@ fn test_value_error_for_non_date_index() {
         None,
         Some("cla_turning_points"),
     );
-    assert!(matches!(err, Err(ClaError::InvalidAssetPrices(_))));
+    let rows = prices.data.nrows();
+    assert_eq!(err, Err(ClaError::InvalidPriceIndex { rows, dates: 0 }));
+    // #168: the message used to say "Asset prices index must be datetime".
+    assert!(err.unwrap_err().to_string().contains("one date per row"));
 }
 
 #[test]
@@ -310,4 +313,55 @@ fn test_cla_with_input_as_returns_and_covariance() {
         assert_eq!(cleaned.len(), prices.data.ncols());
         assert_weights_basic(&cleaned, true);
     }
+}
+
+fn two_assets() -> (DMatrix<f64>, DMatrix<f64>) {
+    let mu = DMatrix::from_column_slice(2, 1, &[0.10, 0.05]);
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, 0.01]);
+    (mu, cov)
+}
+
+/// #168: bounds with no feasible portfolio were reported as `DimensionMismatch`.
+#[test]
+fn test_infeasible_bounds_are_reported_as_such() {
+    let (mu, cov) = two_assets();
+    for (bounds, why) in [
+        (WeightBounds::Tuple(0.6, 1.0), "the lower bounds sum to more than 1"),
+        (WeightBounds::Tuple(0.0, 0.4), "the upper bounds sum to less than 1"),
+        (WeightBounds::Lists(vec![0.0, f64::NAN], vec![1.0, 1.0]), "every bound must be finite"),
+    ] {
+        let mut cla = CLA::new(bounds, "mean");
+        let err = cla.allocate(None, Some(&mu), Some(&cov), None, None);
+        assert_eq!(err, Err(ClaError::InfeasibleBounds(why)));
+    }
+}
+
+/// #168: an asset whose lower bound exceeds its upper bound passed the old sum check. The
+/// walk then started from a portfolio outside the bounds, `_purge_num_err` removed every
+/// turning point, and `"max_sharpe"` panicked indexing `points[0]` of the empty frontier.
+#[test]
+fn test_lower_bound_above_upper_bound_is_an_error_not_a_panic() {
+    let (mu, cov) = two_assets();
+    for solution in ["cla_turning_points", "min_volatility", "max_sharpe", "efficient_frontier"] {
+        let mut cla = CLA::new(WeightBounds::Lists(vec![0.6, 0.0], vec![0.5, 1.0]), "mean");
+        let err = cla.allocate(None, Some(&mu), Some(&cov), None, Some(solution));
+        assert_eq!(
+            err,
+            Err(ClaError::InfeasibleBounds("a lower bound exceeds its upper bound")),
+            "{solution}"
+        );
+    }
+}
+
+/// #168: a singular covariance was reported as `InvalidAssetPrices`, even when no prices
+/// were given.
+#[test]
+fn test_singular_covariance_is_reported_as_such() {
+    let mu = DMatrix::from_column_slice(2, 1, &[0.05, 0.10]);
+    // Perfectly correlated, equal variance: singular once both assets are free.
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.04, 0.04, 0.04]);
+    let mut cla = CLA::default();
+    let err = cla.allocate(None, Some(&mu), Some(&cov), None, None);
+    assert_eq!(err, Err(ClaError::SingularCovariance));
+    assert_eq!(err.unwrap_err().to_string(), "covariance of the free assets is singular");
 }

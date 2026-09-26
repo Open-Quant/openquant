@@ -198,3 +198,24 @@ fn trajectory_path_limit_admits_exactly_max_paths() {
         Err(CombinatorialOptimizationError::EnumerationLimitExceeded { limit: 6 })
     ));
 }
+
+/// #184 item 5: `final inventory - terminal_inventory_target` was an unchecked `i64`
+/// subtraction: a panic in debug builds and a wrapped difference (here -1) in release.
+#[test]
+fn terminal_inventory_difference_does_not_overflow() {
+    let path = TradingTrajectoryPath { trades: vec![], inventory_path: vec![i64::MAX] };
+    let cfg = TradingTrajectoryObjectiveConfig {
+        expected_returns: vec![],
+        risk_aversion: 0.0,
+        impact_coefficients: vec![],
+        fixed_ticket_cost: 0.0,
+        terminal_inventory_target: i64::MIN,
+        terminal_inventory_penalty: 1e-40,
+    };
+    let value = std::panic::catch_unwind(|| evaluate_trading_path(&path, &cfg))
+        .expect("must not panic")
+        .expect("finite objective");
+    // The true difference is 2^64 - 1, so the penalty is 1e-40 * (2^64 - 1)^2.
+    let expected = -1e-40 * 2f64.powi(64).powi(2);
+    assert!((value / expected - 1.0).abs() < 1e-12, "{value} vs {expected}");
+}

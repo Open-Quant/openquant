@@ -1,4 +1,5 @@
 use openquant::ef3m::*;
+use openquant::util::InputError;
 
 #[test]
 fn test_m2n_constructor() {
@@ -21,7 +22,7 @@ fn test_get_moments() {
         + p2 * (3.0 * s2.powi(4) + 6.0 * s2 * s2 * u2 * u2 + u2.powi(4));
     let m5 = p1 * (15.0 * s1.powi(4) * u1 + 10.0 * s1 * s1 * u1.powi(3) + u1.powi(5))
         + p2 * (15.0 * s2.powi(4) * u2 + 10.0 * s2 * s2 * u2.powi(3) + u2.powi(5));
-    let test_params = vec![u1, u2, s1, s2, p1];
+    let test_params = [u1, u2, s1, s2, p1];
     let expected = vec![m1, m2, m3, m4, m5];
 
     let mut m2n = M2N::with_defaults(expected.clone());
@@ -42,24 +43,36 @@ fn test_get_moments() {
 // The other inputs are arbitrary; every expected value in this file is computed in the test.
 #[test]
 fn test_iter_4_checks_and_success() {
-    assert!(M2N::with_defaults(vec![1.0, 2.0, 3.0, 4.0, 5.0]).iter_4(3.0, 1.0).is_empty());
-    assert!(M2N::with_defaults(vec![2.0, 2.0, 3.0, 4.0, 5.0]).iter_4(1.0, 0.8).is_empty());
-    assert!(M2N::with_defaults(vec![1.5, 2.0, 3.0, 4.0, 5.0]).iter_4(2.0, 0.7).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 5.0]).iter_4(0.1, 0.5).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 5.0]).iter_4(0.1, 0.25).is_empty());
+    assert!(M2N::with_defaults(vec![1.0, 2.0, 3.0, 4.0, 5.0]).iter_4(3.0, 1.0).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![2.0, 2.0, 3.0, 4.0, 5.0]).iter_4(1.0, 0.8).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![1.5, 2.0, 3.0, 4.0, 5.0]).iter_4(2.0, 0.7).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 5.0]).iter_4(0.1, 0.5).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 5.0])
+        .iter_4(0.1, 0.25)
+        .unwrap()
+        .is_empty());
 
-    let ok = M2N::with_defaults(vec![0.7, 2.6, 0.4, 25.0, -59.8]).iter_4(1.0, 0.2);
+    let ok = M2N::with_defaults(vec![0.7, 2.6, 0.4, 25.0, -59.8]).iter_4(1.0, 0.2).unwrap();
     assert_eq!(ok.len(), 5);
 }
 
 #[test]
 fn test_iter_5_checks_and_success() {
-    assert!(M2N::with_defaults(vec![0.0; 5]).iter_5(0.0, 0.05).is_empty());
-    assert!(M2N::with_defaults(vec![0.0; 5]).iter_5(0.1, 0.05).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.0, 0.1, 0.0, 0.0]).iter_5(0.1, 0.2).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 0.0]).iter_5(0.1, 0.99999).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 0.0]).iter_5(0.1, 0.95).is_empty());
-    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.1, 0.0, 0.2]).iter_5(0.4, 0.95).is_empty());
+    assert!(M2N::with_defaults(vec![0.0; 5]).iter_5(0.0, 0.05).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![0.0; 5]).iter_5(0.1, 0.05).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.0, 0.1, 0.0, 0.0]).iter_5(0.1, 0.2).unwrap().is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 0.0])
+        .iter_5(0.1, 0.99999)
+        .unwrap()
+        .is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.0, 0.0, 0.0])
+        .iter_5(0.1, 0.95)
+        .unwrap()
+        .is_empty());
+    assert!(M2N::with_defaults(vec![0.0, 0.1, 0.1, 0.0, 0.2])
+        .iter_5(0.4, 0.95)
+        .unwrap()
+        .is_empty());
     assert!(M2N::with_defaults(vec![
         1.7486117351052706,
         12.30094642908807,
@@ -68,6 +81,7 @@ fn test_iter_5_checks_and_success() {
         1389.7073066865096
     ])
     .iter_5(8.927498436080297, -1910484717784700.2)
+    .unwrap()
     .is_empty());
     assert!(M2N::with_defaults(vec![
         1.7465392043495434,
@@ -77,10 +91,12 @@ fn test_iter_5_checks_and_success() {
         1403.0640473698527
     ])
     .iter_5(1.8733475857864539, 0.019291066689915537)
+    .unwrap()
     .is_empty());
 
     let ok = M2N::with_defaults(vec![0.7, 2.6, 0.4, 25.0, -59.8])
-        .iter_5(0.8642146104188053, 0.03296760034110158);
+        .iter_5(0.8642146104188053, 0.03296760034110158)
+        .unwrap();
     assert_eq!(ok.len(), 5);
 }
 
@@ -282,4 +298,54 @@ fn test_fit_row_error_describes_its_parameters() {
             assert!((error - row.error).abs() < 1e-9, "reported {}, actual {error}", row.error);
         }
     }
+}
+
+/// Runs `f` on a thread and fails the test if it has not finished within `secs` seconds (the
+/// thread is left running; the old code looped forever here).
+fn within<T: Send + 'static>(secs: u64, f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(secs)).expect("call did not return in time")
+}
+
+/// #184 item 7: `epsilon == 0` built a start grid of `usize::MAX` points and never returned;
+/// a negative or NaN epsilon silently gave an empty result. All are rejected now.
+#[test]
+fn single_fit_loop_rejects_non_positive_or_nan_epsilon() {
+    let moments = vec![-0.1, 2.675, 0.05, 13.65625, -2.0375];
+    for eps in [0.0, -1e-3, f64::NAN, f64::INFINITY] {
+        let m = moments.clone();
+        let err = within(10, move || M2N::new(m, eps, 5.0, 1, 2, 100_000, 1).single_fit_loop(None))
+            .unwrap_err();
+        assert!(matches!(err, InputError::OutOfRange { name: "epsilon", .. }), "{eps}: {err:?}");
+
+        let m = moments.clone();
+        let err = within(10, move || M2N::with_defaults(m).single_fit_loop(Some(eps))).unwrap_err();
+        assert!(
+            matches!(err, InputError::OutOfRange { name: "epsilon_override", .. }),
+            "{eps}: {err:?}"
+        );
+
+        let m = moments.clone();
+        let err = within(10, move || M2N::new(m, eps, 5.0, 2, 1, 100_000, 1).mp_fit()).unwrap_err();
+        assert!(matches!(err, InputError::OutOfRange { name: "epsilon", .. }), "{eps}: {err:?}");
+    }
+}
+
+/// #184 item 7: `iter_4`, `iter_5` and `fit` indexed `moments` without checking its length
+/// (and `get_moments` its parameters, which now take exactly five by type).
+#[test]
+fn short_moments_are_errors_not_panics() {
+    use std::panic::catch_unwind;
+    let three = || M2N::new(vec![0.1, 1.0, 0.0], 1e-3, 5.0, 1, 1, 100, 1);
+    let four = || M2N::new(vec![0.1, 1.0, 0.0, 3.0], 1e-3, 5.0, 1, 2, 100, 1);
+    let too_short = |len, min| InputError::TooShort { name: "moments", len, min };
+
+    assert_eq!(catch_unwind(|| three().iter_4(1.0, 0.5)).unwrap().unwrap_err(), too_short(3, 4));
+    assert_eq!(catch_unwind(|| four().iter_5(1.0, 0.5)).unwrap().unwrap_err(), too_short(4, 5));
+    assert!(four().iter_4(1.0, 0.5).is_ok());
+    assert_eq!(catch_unwind(|| three().fit(1.0)).unwrap().unwrap_err(), too_short(3, 4));
+    assert_eq!(catch_unwind(|| four().fit(1.0)).unwrap().unwrap_err(), too_short(4, 5));
 }

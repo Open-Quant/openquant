@@ -112,7 +112,7 @@ notebook-smoke:
 # Execute every notebooks/python/NN_*.ipynb in a Jupyter kernel (nbclient), in
 # place, and re-export docs-site/public/figures/notebooks/. Fails on any cell
 # error. Needs the extension built first (`just py-develop`). Extra arguments go
-# to the runner, e.g. `just notebooks-run --only 06` or `--check`.
+# to the runner, e.g. `just notebooks-run --only 11` or `--check`.
 notebooks-run *args:
     uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/run_notebooks.py {{args}}
 

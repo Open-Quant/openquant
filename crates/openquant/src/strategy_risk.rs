@@ -20,6 +20,13 @@
 //! payouts are per-bet returns in the same units; Sharpe ratios are annualised. Bets are
 //! assumed independent and identically distributed, so overlapping bets overstate `n`.
 //!
+//! Payouts need only `pi_plus > pi_minus`: the formulas are the mean over the standard
+//! deviation of a two-valued bet, which is defined whatever the signs. In §15.4 the payouts
+//! are the mean outcome above zero and the mean outcome at or below it, so there
+//! `pi_minus <= 0 < pi_plus` by construction. Target Sharpe ratios must be positive, and a
+//! strategy whose mean payoff is not positive cannot reach one at any frequency; the
+//! `implied_frequency_*` functions return [`StrategyRiskError::NoValidRoot`] for it.
+//!
 //! ```
 //! use openquant::strategy_risk::{
 //!     implied_frequency_symmetric, implied_precision_asymmetric, sharpe_asymmetric,
@@ -60,7 +67,8 @@ pub enum StrategyRiskError {
     NoValidRoot(&'static str),
 }
 
-/// Per-bet payouts of a binary strategy; `pi_plus` must exceed `pi_minus`.
+/// Per-bet payouts of a binary strategy; `pi_plus` must exceed `pi_minus`. Neither sign is
+/// required (see the [module docs](self)).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AsymmetricPayout {
     /// Return of a winning bet.
@@ -159,11 +167,16 @@ pub fn implied_precision_symmetric(
 /// Bets per year needed for a symmetric-payout strategy with `precision` to reach
 /// `target_sharpe`: `4 theta^2 p (1 - p) / (2p - 1)^2` (AFML §15.2).
 ///
+/// The formula squares the Sharpe ratio, so on its own it gives precision `0.5 - x` the
+/// frequency of `0.5 + x`. Below 0.5 the Sharpe ratio is negative at every frequency, so a
+/// positive target is unattainable and this returns an error instead.
+///
 /// # Errors
 ///
-/// [`StrategyRiskError::InvalidInput`] if `precision` is outside `[0, 1]` or within `1e-12`
-/// of 0.5, `target_sharpe` is not finite and positive, or the implied frequency is not
-/// positive (precision 0 or 1).
+/// - [`StrategyRiskError::InvalidInput`] if `precision` is outside `[0, 1]` or within
+///   `1e-12` of 0.5, `target_sharpe` is not finite and positive, or the implied frequency is
+///   not positive (precision 1).
+/// - [`StrategyRiskError::NoValidRoot`] if `precision` is below 0.5.
 pub fn implied_frequency_symmetric(
     precision: f64,
     target_sharpe: f64,
@@ -176,6 +189,11 @@ pub fn implied_frequency_symmetric(
     if edge.abs() < 1e-12 {
         return Err(StrategyRiskError::InvalidInput(
             "precision too close to 0.5 to imply finite frequency for positive target Sharpe",
+        ));
+    }
+    if edge < 0.0 {
+        return Err(StrategyRiskError::NoValidRoot(
+            "precision below 0.5 gives a negative Sharpe ratio at every frequency",
         ));
     }
     let n = target_sharpe * target_sharpe * 4.0 * precision * (1.0 - precision) / (edge * edge);
@@ -269,15 +287,18 @@ pub fn implied_precision_asymmetric(
 /// Bets per year needed for an asymmetric-payout strategy with `precision` to reach
 /// `target_sharpe`: `theta^2 d^2 p (1 - p) / (d p + pi_minus)^2` (AFML §15.3).
 ///
-/// A strategy whose mean payoff is negative gets a positive frequency from this formula even
-/// though its Sharpe ratio is negative; check the sign of the mean payoff first.
+/// The formula squares the Sharpe ratio, so on its own it gives a mean payoff `-mu` the
+/// frequency of `+mu`. When the mean payoff `d p + pi_minus` is negative the Sharpe ratio is
+/// negative at every frequency, so a positive target is unattainable and this returns an
+/// error instead (before #168 it returned that mirrored frequency).
 ///
 /// # Errors
 ///
 /// - [`StrategyRiskError::InvalidInput`] if `precision` is outside `[0, 1]`, `target_sharpe`
 ///   is not finite and positive, the payouts are invalid, or the implied frequency is not
 ///   positive (precision 0 or 1).
-/// - [`StrategyRiskError::NoValidRoot`] if the mean payoff is within `1e-12` of zero.
+/// - [`StrategyRiskError::NoValidRoot`] if the mean payoff is negative or within `1e-12` of
+///   zero.
 pub fn implied_frequency_asymmetric(
     precision: f64,
     target_sharpe: f64,
@@ -296,6 +317,11 @@ pub fn implied_frequency_asymmetric(
             "mean payoff is near zero; implied frequency is not finite",
         ));
     }
+    if mu < 0.0 {
+        return Err(StrategyRiskError::NoValidRoot(
+            "mean payoff is negative, so the Sharpe ratio is negative at every frequency",
+        ));
+    }
     let n = target_sharpe * target_sharpe * d * d * precision * (1.0 - precision) / (mu * mu);
     validate_positive("implied_frequency", n)?;
     Ok(n)
@@ -305,7 +331,7 @@ pub fn implied_frequency_asymmetric(
 /// 15.4–15.5).
 ///
 /// From a record of per-bet outcomes (`> 0` is a win; zero counts as a loss): estimates the
-/// payouts as the mean win and mean loss, the frequency as `len / years_elapsed`, and the
+/// payouts as the mean win and mean loss (so `pi_minus <= 0 < pi_plus`), the frequency as `len / years_elapsed`, and the
 /// required precision `p*` with [`implied_precision_asymmetric`]. It then bootstraps the
 /// precision `bootstrap_iterations` times from samples of
 /// `floor(frequency * investor_horizon_years)` bets (at least 1), drawn with replacement by a

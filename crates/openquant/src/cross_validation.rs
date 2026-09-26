@@ -110,6 +110,78 @@ pub enum CrossValidationError {
         /// The number of information sets.
         len: usize,
     },
+    /// An index in `splits` is not a row of `x` ([`ml_cross_val_score`]).
+    #[error("split index {index} is out of range for {n_rows} rows")]
+    SplitIndexOutOfRange {
+        /// The first out-of-range index found (each split's training indices are checked
+        /// before its test indices).
+        index: usize,
+        /// The number of rows of `x`.
+        n_rows: usize,
+    },
+    /// `y` or `sample_weight` does not have one entry per row of `x` ([`ml_cross_val_score`]).
+    #[error("{name} has {len} values, expected one per row of x ({expected})")]
+    LengthMismatch {
+        /// The argument whose length is wrong.
+        name: &'static str,
+        /// Its length.
+        len: usize,
+        /// The number of rows of `x`.
+        expected: usize,
+    },
+    /// The classifier returned the wrong number of predictions for a test fold
+    /// ([`ml_cross_val_score`]).
+    #[error("classifier returned {got} predictions for {expected} test rows")]
+    PredictionCountMismatch {
+        /// The number of test rows.
+        expected: usize,
+        /// The number of predictions returned.
+        got: usize,
+    },
+}
+
+/// Checks the inputs of a scoring loop over `splits`: `y` and `sample_weight` have one entry
+/// per row, and every split index is a row.
+pub(crate) fn check_score_inputs(
+    n_rows: usize,
+    y_len: usize,
+    sample_weight: Option<&[f64]>,
+    splits: &[(Vec<usize>, Vec<usize>)],
+) -> Result<(), CrossValidationError> {
+    if y_len != n_rows {
+        return Err(CrossValidationError::LengthMismatch {
+            name: "y",
+            len: y_len,
+            expected: n_rows,
+        });
+    }
+    if let Some(sw) = sample_weight {
+        if sw.len() != n_rows {
+            return Err(CrossValidationError::LengthMismatch {
+                name: "sample_weight",
+                len: sw.len(),
+                expected: n_rows,
+            });
+        }
+    }
+    for (train, test) in splits {
+        if let Some(&index) = train.iter().chain(test).find(|&&i| i >= n_rows) {
+            return Err(CrossValidationError::SplitIndexOutOfRange { index, n_rows });
+        }
+    }
+    Ok(())
+}
+
+/// Checks that a classifier returned one prediction per test row.
+pub(crate) fn check_prediction_count(
+    expected: usize,
+    got: usize,
+) -> Result<(), CrossValidationError> {
+    if expected == got {
+        Ok(())
+    } else {
+        Err(CrossValidationError::PredictionCountMismatch { expected, got })
+    }
 }
 
 /// Minimal binary classifier interface used by [`ml_cross_val_score`].
@@ -181,14 +253,17 @@ pub enum Scoring {
 /// Unlike Snippet 7.4, the weights are **not** passed to the metric: every test sample counts
 /// equally. If the weights matter, compute the weighted score from `splits` yourself.
 ///
-/// Nothing is validated and no `Result` is returned. A test set of length 0 scores `NaN` for
-/// [`Scoring::Accuracy`] and [`Scoring::NegLogLoss`] and `0.0` for [`Scoring::F1`]. If
-/// `predict_proba` returns fewer values than there are test rows, the missing rows are
-/// silently skipped but still counted in the Accuracy and NegLogLoss denominators.
+/// A test set of length 0 scores `NaN` for [`Scoring::Accuracy`] and [`Scoring::NegLogLoss`]
+/// and `0.0` for [`Scoring::F1`].
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if an index in `splits` is out of bounds for `x`, `y` or `sample_weight`.
+/// - [`CrossValidationError::LengthMismatch`] if `y` or `sample_weight` does not have one
+///   entry per row of `x`.
+/// - [`CrossValidationError::SplitIndexOutOfRange`] if an index in `splits` is not a row of
+///   `x` (checked for every split before any fitting).
+/// - [`CrossValidationError::PredictionCountMismatch`] if `predict_proba` does not return one
+///   value per test row.
 ///
 /// ```
 /// use chrono::{Duration, NaiveDate};
@@ -214,14 +289,14 @@ pub enum Scoring {
 /// let splits = PurgedKFold::new(5, info_sets, 0.0)?.split(40)?;
 ///
 /// // The base rate is always below 0.5, so every hard prediction is 0: 3/4 are right.
-/// let acc = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::Accuracy);
+/// let acc = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::Accuracy)?;
 /// assert_eq!(acc, vec![0.75; 5]);
 /// // With no positive predictions, F1 is 0.
-/// let f1 = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::F1);
+/// let f1 = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::F1)?;
 /// assert_eq!(f1, vec![0.0; 5]);
 ///
 /// // Log loss is close to the entropy of a p = 0.25 coin.
-/// let nll = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss);
+/// let nll = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss)?;
 /// let entropy = -(0.25 * 0.25f64.ln() + 0.75 * 0.75f64.ln());
 /// assert!(nll.iter().all(|s| (s + entropy).abs() < 0.002));
 /// # Ok(())
@@ -234,8 +309,9 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
     sample_weight: Option<&[f64]>,
     splits: &[(Vec<usize>, Vec<usize>)],
     scoring: Scoring,
-) -> Vec<f64> {
-    let mut scores = Vec::new();
+) -> Result<Vec<f64>, CrossValidationError> {
+    check_score_inputs(x.len(), y.len(), sample_weight, splits)?;
+    let mut scores = Vec::with_capacity(splits.len());
     for (train_idx, test_idx) in splits {
         let x_train: Vec<Vec<f64>> = train_idx.iter().map(|i| x[*i].clone()).collect();
         let y_train: Vec<f64> = train_idx.iter().map(|i| y[*i]).collect();
@@ -246,6 +322,7 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
         let x_test: Vec<Vec<f64>> = test_idx.iter().map(|i| x[*i].clone()).collect();
         let y_test: Vec<f64> = test_idx.iter().map(|i| y[*i]).collect();
         let probs = classifier.predict_proba(&x_test);
+        check_prediction_count(y_test.len(), probs.len())?;
         let preds: Vec<f64> = probs.iter().map(|p| if *p >= 0.5 { 1.0 } else { 0.0 }).collect();
 
         let score = match scoring {
@@ -292,7 +369,7 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
         };
         scores.push(score);
     }
-    scores
+    Ok(scores)
 }
 
 /// Purges training information sets that overlap any test window (AFML §7.4.1, Snippet 7.1).
