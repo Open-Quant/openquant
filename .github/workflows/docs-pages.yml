@@ -36,6 +36,12 @@ jobs:
         with:
           bun-version: latest
       - uses: dtolnay/rust-toolchain@stable
+      # Restore-only: reuses the cache ci.yml saves on main for the same build
+      # without adding another entry to the repository's cache budget.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+          save-if: false
       - name: Install docs dependencies
         run: bun install --frozen-lockfile
         working-directory: docs-site
