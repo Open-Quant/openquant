@@ -242,7 +242,9 @@ assert_eq!(report.stream_summaries[0].latest_hhi, Some(1.0));
   before that is never ranked, as the first three streams in the Rust example show.
 - **`vpin_cdf` is a probability, not a VPIN level.** Because ties count half, the largest value
   the CDF can take is $1 - 0.5/\texttt{cdf\_lookback}$ (0.995 for 100). A threshold above
-  that, or outside $(0, 1)$, could never fire and is rejected.
+  that, or outside $(0, 1)$, could never fire and is rejected. Likewise the HHI threshold must
+  be in $(0, 1]$, since the HHI never exceeds 1. The parallel runner checks the config once,
+  up front, and reports a bad one as `InvalidConfig`.
 - **Buy and sell volume are inputs.** VPIN needs every trade signed, and the chapter's
   best parameters use bulk volume classification over bars. This module classifies nothing;
   it trusts `buy_volume` and `sell_volume` as given. See
