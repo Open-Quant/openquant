@@ -262,10 +262,8 @@ pub fn get_yang_zhang_vol(
 
     // Two-pass sample variance of each window: the returns' means are small next to their
     // spread, and a running sum of squares would lose the digits the estimator needs.
-    let sample_var = |x: &[f64]| {
-        let mean = x.iter().sum::<f64>() / w;
-        x.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (w - 1.0)
-    };
+    // Each window holds `window >= 2` values, so the sample variance exists.
+    let sample_var = |x: &[f64]| super::stats::variance(x, 1).unwrap_or(f64::NAN);
 
     let mut out = vec![f64::NAN; n];
     // The first window with `window` overnight returns ends at bar `window`.

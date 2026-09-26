@@ -1,5 +1,5 @@
 {
-  "source": "AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) in numpy 2.5.3 on log(close) of tests/fixtures/structural_breaks/dollar_bar_sample.csv",
+  "source": "AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) in numpy 2.5.3 on log(close) of tests/fixtures/shared/dollar_bar_sample.csv",
   "n_bars": 1000,
   "chow": {
     "min_length": 10,

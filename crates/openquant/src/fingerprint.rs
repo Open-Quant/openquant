@@ -59,6 +59,7 @@
 //! # }
 //! ```
 
+use crate::util::stats::{quantile_sorted, QuantileMethod};
 use std::collections::BTreeMap;
 
 /// Errors returned by the fingerprint types.
@@ -323,7 +324,8 @@ fn get_feature_values(x: &[Vec<f64>], num_values: usize) -> Vec<Vec<f64>> {
         let mut col: Vec<f64> = x.iter().map(|r| r[j]).collect();
         col.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         for (k, q) in (0..num_values).map(|i| i as f64 / (num_values - 1) as f64).enumerate() {
-            out[j][k] = quantile_sorted(&col, q);
+            // `col` is non-empty: there is at least one row.
+            out[j][k] = quantile_sorted(&col, q, QuantileMethod::Linear).unwrap_or(f64::NAN);
         }
     }
     out
@@ -443,21 +445,6 @@ fn normalize_string_map(effect: &BTreeMap<String, f64>) -> BTreeMap<String, f64>
         return effect.keys().map(|k| (k.clone(), 0.0)).collect();
     }
     effect.iter().map(|(k, v)| (k.clone(), *v / sum)).collect()
-}
-
-fn quantile_sorted(sorted: &[f64], q: f64) -> f64 {
-    if sorted.len() == 1 {
-        return sorted[0];
-    }
-    let q = q.clamp(0.0, 1.0);
-    let pos = q * (sorted.len() - 1) as f64;
-    let lo = pos.floor() as usize;
-    let hi = pos.ceil() as usize;
-    if lo == hi {
-        sorted[lo]
-    } else {
-        sorted[lo] + (pos - lo as f64) * (sorted[hi] - sorted[lo])
-    }
 }
 
 fn ols_line(x: &[f64], y: &[f64]) -> (f64, f64) {

@@ -80,6 +80,7 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::util::qp::{solve_qp, QpError};
 use crate::util::resample::{freq_step, resample_prices};
+use crate::util::stats;
 use std::collections::HashMap;
 
 /// Errors returned by the allocation functions.
@@ -360,28 +361,9 @@ fn returns_and_means(
     Ok((expected, covariance(&returns) * freq))
 }
 
+/// Sample covariance ([`stats::covariance`]); a zero matrix with fewer than two rows.
 fn covariance(returns: &DMatrix<f64>) -> DMatrix<f64> {
-    let rows = returns.nrows();
-    let cols = returns.ncols();
-    if rows < 2 {
-        return DMatrix::<f64>::zeros(cols, cols);
-    }
-    let mut cov = DMatrix::<f64>::zeros(cols, cols);
-    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
-    for i in 0..cols {
-        for j in i..cols {
-            let mut s = 0.0;
-            for r in 0..rows {
-                let di = returns[(r, i)] - means[i];
-                let dj = returns[(r, j)] - means[j];
-                s += di * dj;
-            }
-            s /= (rows - 1) as f64;
-            cov[(i, j)] = s;
-            cov[(j, i)] = s;
-        }
-    }
-    cov
+    stats::covariance(returns).unwrap_or_else(|| DMatrix::zeros(returns.ncols(), returns.ncols()))
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {

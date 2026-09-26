@@ -21,9 +21,7 @@ def _assert_matches(actual, expected):
 
 
 def _load_ohlc():
-    return load_csv_columns(
-        "backtest_statistics/dollar_bar_sample.csv", ["open", "high", "low", "close"]
-    )
+    return load_csv_columns("shared/dollar_bar_sample.csv", ["open", "high", "low", "close"])
 
 
 def test_range_estimators_match_reference():

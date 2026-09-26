@@ -44,6 +44,7 @@
 //! # }
 //! ```
 
+use crate::util::stats::{self, QuantileMethod};
 use nalgebra::DMatrix;
 
 /// Errors returned by [`RiskMetrics`].
@@ -282,15 +283,7 @@ fn validate_confidence(confidence_level: f64) -> Result<(), RiskMetricsError> {
 
 fn quantile_higher(values: &[f64], q: f64) -> Result<f64, RiskMetricsError> {
     validate_confidence(q)?;
-    if values.is_empty() {
-        return Err(RiskMetricsError::EmptyInput);
-    }
-
-    let mut sorted = values.to_vec();
-    sorted.sort_by(|a, b| a.total_cmp(b));
-    let n = sorted.len();
-    let pos = (q * (n.saturating_sub(1) as f64)).ceil() as usize;
-    Ok(sorted[pos.min(n - 1)])
+    stats::quantile(values, q, QuantileMethod::Higher).ok_or(RiskMetricsError::EmptyInput)
 }
 
 fn first_col(m: &DMatrix<f64>) -> Result<Vec<f64>, RiskMetricsError> {

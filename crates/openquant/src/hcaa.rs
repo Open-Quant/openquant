@@ -81,6 +81,7 @@ use crate::util::linkage::{
     distance_of_distances, linkage_children, quasi_diagonalization, Linkage,
 };
 use crate::util::resample::{freq_step, resample_prices};
+use crate::util::stats::{self, QuantileMethod};
 use nalgebra::DMatrix;
 
 /// Errors returned by [`HierarchicalClusteringAssetAllocation::allocate`].
@@ -527,25 +528,7 @@ fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, HcaaError>
 }
 
 fn covariance(returns: &DMatrix<f64>) -> Result<DMatrix<f64>, HcaaError> {
-    let rows = returns.nrows();
-    let cols = returns.ncols();
-    if rows < 2 {
-        return Err(HcaaError::NoData);
-    }
-    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
-    let mut cov = DMatrix::zeros(cols, cols);
-    for i in 0..cols {
-        for j in i..cols {
-            let mut s = 0.0;
-            for r in 0..rows {
-                s += (returns[(r, i)] - means[i]) * (returns[(r, j)] - means[j]);
-            }
-            s /= (rows - 1) as f64;
-            cov[(i, j)] = s;
-            cov[(j, i)] = s;
-        }
-    }
-    Ok(cov)
+    stats::covariance(returns).ok_or(HcaaError::NoData)
 }
 
 fn mean_expected_returns(returns: &DMatrix<f64>) -> Vec<f64> {
@@ -651,14 +634,9 @@ fn cluster_sharpe(
     }
 }
 
-fn quantile(mut values: Vec<f64>, q: f64) -> f64 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    values.sort_by(f64::total_cmp);
-    let qn = q.clamp(0.0, 1.0);
-    let idx = ((values.len() - 1) as f64 * qn).round() as usize;
-    values[idx]
+/// Nearest-rank quantile ([`QuantileMethod::Nearest`]), 0 for no values.
+fn quantile(values: &[f64], q: f64) -> f64 {
+    stats::quantile(values, q, QuantileMethod::Nearest).unwrap_or(0.0)
 }
 
 fn cluster_expected_shortfall(
@@ -676,7 +654,7 @@ fn cluster_expected_shortfall(
         }
         portfolio_returns.push(v);
     }
-    let threshold = quantile(portfolio_returns.clone(), confidence_level);
+    let threshold = quantile(&portfolio_returns, confidence_level);
     let tail: Vec<f64> = portfolio_returns.into_iter().filter(|x| *x <= threshold).collect();
     if tail.is_empty() {
         return Ok(0.0);
@@ -710,7 +688,7 @@ fn cluster_conditional_drawdown(
         let dd = if peak > 0.0 { (peak - v) / peak } else { 0.0 };
         drawdowns.push(dd);
     }
-    let threshold = quantile(drawdowns.clone(), 1.0 - confidence_level);
+    let threshold = quantile(&drawdowns, 1.0 - confidence_level);
     let tail: Vec<f64> = drawdowns.into_iter().filter(|x| *x >= threshold).collect();
     if tail.is_empty() {
         return Ok(0.0);

@@ -580,28 +580,11 @@ fn pct_change(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, ClaError> {
 
 /// Sample covariance (ddof = 1) of a returns matrix with one row per observation and one
 /// column per asset. Fewer than two rows give a zero matrix.
+///
+/// This is [`crate::util::stats::covariance`] with the fewer-than-two-rows case mapped to zeros.
 pub fn covariance(returns: &DMatrix<f64>) -> DMatrix<f64> {
-    let rows = returns.nrows();
-    let cols = returns.ncols();
-    if rows < 2 {
-        return DMatrix::<f64>::zeros(cols, cols);
-    }
-    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
-    let mut cov = DMatrix::<f64>::zeros(cols, cols);
-    for i in 0..cols {
-        for j in i..cols {
-            let mut s = 0.0;
-            for r in 0..rows {
-                let di = returns[(r, i)] - means[i];
-                let dj = returns[(r, j)] - means[j];
-                s += di * dj;
-            }
-            s /= (rows - 1) as f64;
-            cov[(i, j)] = s;
-            cov[(j, i)] = s;
-        }
-    }
-    cov
+    crate::util::stats::covariance(returns)
+        .unwrap_or_else(|| DMatrix::zeros(returns.ncols(), returns.ncols()))
 }
 
 fn normalize_expected_returns(exp: &DMatrix<f64>) -> Result<DMatrix<f64>, ClaError> {

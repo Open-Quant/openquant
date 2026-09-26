@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).parent
-close = pd.read_csv(HERE.parent / "filters" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
+close = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
 
 
 def get_daily_vol(close, lookback=100):
@@ -26,7 +26,7 @@ vol = get_daily_vol(close, 100)
 fmt = "%Y-%m-%d %H:%M:%S.%f"
 picks = [0, 1, 2, 10, 100, len(vol) // 2, len(vol) - 1]
 out = {
-    "source": "AFML snippet 3.1 in pandas %s on tests/fixtures/filters/dollar_bar_sample.csv" % pd.__version__,
+    "source": "AFML snippet 3.1 in pandas %s on tests/fixtures/shared/dollar_bar_sample.csv" % pd.__version__,
     "lookback": 100,
     "n_bars": int(close.shape[0]),
     "n_values": int(vol.shape[0]),

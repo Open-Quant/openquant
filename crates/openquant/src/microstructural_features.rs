@@ -76,6 +76,7 @@
 //! ```
 
 use crate::util::input_error::same_length;
+use crate::util::stats::{self, quantile_sorted, QuantileMethod};
 use crate::util::InputError;
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
@@ -816,9 +817,8 @@ pub fn get_bvc_buy_volume(
         if slice.iter().any(|v| v.is_nan()) {
             continue;
         }
-        let mean = slice.iter().sum::<f64>() / window as f64;
-        let var = slice.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (window as f64 - 1.0);
-        rolling_std[i] = var.sqrt();
+        // `slice` has `window >= 2` values, so the sample deviation exists.
+        rolling_std[i] = stats::std_dev(slice, 1).unwrap_or(f64::NAN);
     }
     for i in 0..close.len() {
         if diff[i].is_nan() || rolling_std[i].is_nan() {
@@ -898,8 +898,9 @@ pub fn quantile_mapping(
     sorted.sort_by(f64::total_cmp);
     let mut out: Vec<(f64, char)> = Vec::new();
     for (q, letter) in linspace(0.01, 1.0, alphabet.len()).iter().zip(alphabet.iter()) {
-        let idx = ((*q) * (sorted.len() as f64 - 1.0)).round() as usize;
-        out.push((sorted[idx], *letter));
+        // `sorted` is non-empty (checked above).
+        let value = quantile_sorted(&sorted, *q, QuantileMethod::Nearest).unwrap_or(f64::NAN);
+        out.push((value, *letter));
     }
     Ok(out)
 }

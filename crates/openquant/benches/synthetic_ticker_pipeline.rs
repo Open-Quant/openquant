@@ -3,6 +3,7 @@ use nalgebra::DMatrix;
 use openquant::risk_metrics::RiskMetrics;
 use openquant::sampling::{get_ind_matrix, seq_bootstrap};
 use openquant::util::fast_ewma::ewma;
+use openquant::util::stats::covariance;
 
 fn synthetic_prices(n: usize) -> Vec<f64> {
     let mut out = Vec::with_capacity(n);
@@ -86,25 +87,12 @@ fn bench_end_to_end_ticker_pipeline(c: &mut Criterion) {
                 let _ = rm.calculate_conditional_drawdown_risk(&rets, 0.05).unwrap();
 
                 let n = rets.len().min(1000);
-                let mut cov = DMatrix::zeros(3, 3);
-                let mut cols =
-                    [Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n)];
-                for &r in rets.iter().take(n) {
-                    cols[0].push(r);
-                    cols[1].push((1.0 + r).ln());
-                    cols[2].push(r * r.signum());
-                }
-                let means: Vec<f64> =
-                    cols.iter().map(|v| v.iter().sum::<f64>() / v.len() as f64).collect();
-                for i in 0..3 {
-                    for j in 0..3 {
-                        let mut s = 0.0;
-                        for (a, b) in cols[i].iter().zip(&cols[j]) {
-                            s += (a - means[i]) * (b - means[j]);
-                        }
-                        cov[(i, j)] = s / (n - 1) as f64;
-                    }
-                }
+                let features = DMatrix::from_fn(n, 3, |r, c| match c {
+                    0 => rets[r],
+                    1 => (1.0 + rets[r]).ln(),
+                    _ => rets[r] * rets[r].signum(),
+                });
+                let cov = covariance(&features).unwrap();
                 let _ = rm.calculate_variance(&cov, &[0.4, 0.3, 0.3]).unwrap();
 
                 let sampled = seq_bootstrap(&ind, Some(200), None).unwrap();
