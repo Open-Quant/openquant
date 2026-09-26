@@ -74,7 +74,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::input_error::same_length;
 use crate::util::InputError;

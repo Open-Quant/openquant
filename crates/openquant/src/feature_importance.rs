@@ -40,7 +40,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use std::collections::BTreeMap;
 

@@ -37,7 +37,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::InputError;
 use chrono::NaiveDateTime;

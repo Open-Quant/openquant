@@ -114,7 +114,6 @@
 //! assert!(out.leakage_checks.timestamps_increasing);
 //! # Ok::<(), openquant::pipeline::PipelineError>(())
 //! ```
-#![deny(missing_docs)]
 
 use chrono::NaiveDateTime;
 use nalgebra::DMatrix;

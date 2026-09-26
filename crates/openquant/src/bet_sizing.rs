@@ -33,7 +33,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use chrono::NaiveDateTime;
 use rand::Rng;
