@@ -165,8 +165,8 @@ pub struct AlertThresholds {
     /// of its rolling history. It is a probability, not a raw VPIN level, and must be at most
     /// `1 - 0.5 / vpin.cdf_lookback`, the largest value the CDF can take.
     pub vpin_cdf: f64,
-    /// Threshold on the volume-share HHI (1 = one venue carries all the volume); finite and
-    /// > 0. Values above 1 are accepted but can never be reached.
+    /// Threshold on the volume-share HHI (1 = one venue carries all the volume), in `(0, 1]`.
+    /// The HHI never exceeds 1, so a higher threshold is rejected rather than never firing.
     pub hhi: f64,
 }
 
@@ -591,15 +591,17 @@ impl StreamingEarlyWarningEngine {
     ///
     /// [`StreamingHpcError::InvalidConfig`] if `thresholds.vpin_cdf` is not in `(0, 1)` or is
     /// above `1 - 0.5 / vpin.cdf_lookback` (the largest CDF value), `thresholds.hhi` is not
-    /// finite and > 0, or the [`VpinConfig`] or [`HhiConfig`] is invalid (as for
+    /// in `(0, 1]` (the HHI never exceeds 1, so a higher threshold could never trigger), or
+    /// the [`VpinConfig`] or [`HhiConfig`] is invalid (as for
     /// [`VpinState::new`] and [`HhiState::new`]).
     pub fn new(cfg: StreamingPipelineConfig) -> Result<Self, StreamingHpcError> {
         let vpin_cdf = cfg.thresholds.vpin_cdf;
         if !vpin_cdf.is_finite() || vpin_cdf <= 0.0 || vpin_cdf >= 1.0 {
             return Err(StreamingHpcError::InvalidConfig("thresholds.vpin_cdf must be in (0, 1)"));
         }
-        if !cfg.thresholds.hhi.is_finite() || cfg.thresholds.hhi <= 0.0 {
-            return Err(StreamingHpcError::InvalidConfig("thresholds.hhi must be finite and > 0"));
+        let hhi = cfg.thresholds.hhi;
+        if !(hhi > 0.0 && hhi <= 1.0) {
+            return Err(StreamingHpcError::InvalidConfig("thresholds.hhi must be in (0, 1]"));
         }
         let vpin_state = VpinState::new(cfg.vpin)?;
         // The largest CDF value is 1 - 0.5 / cdf_lookback; allow for rounding in that expression.
@@ -782,18 +784,22 @@ pub fn run_streaming_pipeline(
 ///
 /// # Errors
 ///
-/// [`StreamingHpcError::Parallel`] wrapping:
-/// - [`HpcParallelError::InvalidConfig`] if `parallel_cfg` is invalid;
-/// - [`HpcParallelError::CallbackFailed`] if any stream fails, including when `pipeline_cfg`
-///   is invalid (it is validated per stream, not up front) — the message carries the
-///   underlying [`StreamingHpcError`] as text;
-/// - [`HpcParallelError::WorkerPanic`] or [`HpcParallelError::ChannelClosed`] if a worker
-///   thread fails.
+/// - [`StreamingHpcError::InvalidConfig`] if `pipeline_cfg` is invalid (as for
+///   [`StreamingEarlyWarningEngine::new`]); it is checked once, before any stream runs.
+/// - [`StreamingHpcError::Parallel`] wrapping:
+///   - [`HpcParallelError::InvalidConfig`] if `parallel_cfg` is invalid;
+///   - [`HpcParallelError::CallbackFailed`] if a stream fails (for example an invalid event);
+///     the message carries the underlying [`StreamingHpcError`] as text;
+///   - [`HpcParallelError::WorkerPanic`] or [`HpcParallelError::ChannelClosed`] if a worker
+///     thread fails.
 pub fn run_streaming_pipeline_parallel(
     streams: &[Vec<StreamEvent>],
     pipeline_cfg: StreamingPipelineConfig,
     parallel_cfg: HpcParallelConfig,
 ) -> Result<ParallelStreamingReport, StreamingHpcError> {
+    // Validate the shared config once, so a bad config is reported as such rather than as
+    // every stream's callback failing.
+    StreamingEarlyWarningEngine::new(pipeline_cfg)?;
     let report: ParallelRunReport<Vec<StreamSummary>> =
         run_parallel(streams, parallel_cfg, |chunk| {
             let mut summaries = Vec::with_capacity(chunk.len());

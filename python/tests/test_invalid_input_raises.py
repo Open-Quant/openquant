@@ -59,7 +59,8 @@ def test_error_message_names_the_argument():
 
 def test_fit_m2n_default_variant_is_one_the_core_accepts():
     # The binding used to default to variant=4, which the core rejects; every error was then
-    # discarded and the default call returned [] for any input.
+    # discarded and the default call returned [] for any input. The default is now variant=2,
+    # the one the docs page recommends (#186).
     #
     # The fit starts from a random p_1 and about one run in twelve finds nothing better than its
     # starting error, so a single call may legitimately return []. Twenty empty runs in a row

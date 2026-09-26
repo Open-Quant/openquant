@@ -84,7 +84,7 @@ fn sw_get_weights_by_return(
 /// close_prices : list[float]
 ///     Close prices; only their count is checked.
 /// decay : float
-///     Decay parameter, meaningful in `(-1, 1]`; it is not validated.
+///     Decay parameter; must be in `(-1, 1]`.
 ///
 /// Returns
 /// -------

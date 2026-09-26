@@ -32,10 +32,12 @@
 //!   from bar `i + 1`. There is one strategy return per bar after the first, and the equity
 //!   curve starts at 1 and compounds them.
 //! - `asset_prices` is rows = observations (oldest first), columns = assets, in the order of
-//!   `asset_names`. The portfolio stage is independent of the backtest: its weights are
-//!   reported, not traded, and its rows need not match `timestamps`.
+//!   `asset_names`. The portfolio stage is independent of the backtest (its weights are
+//!   reported, not traded), but its rows are the same bars: `asset_prices` must have one row
+//!   per entry of `timestamps`.
 //! - **Units.** `risk_free_rate` is an **annual** rate everywhere, as in
 //!   [`crate::portfolio_optimization`]. `periods_per_year` is the number of bars a year, for
+<<<<<<< HEAD
 //!   both `close` and the rows of `asset_prices`. It annualises `realized_sharpe` and the
 //!   portfolio's return, volatility and Sharpe ratio, and the risk-free rate per bar is
 //!   `risk_free_rate / periods_per_year`. If `asset_prices` is sampled at a different
@@ -46,6 +48,13 @@
 //!   hours), so one-minute bars have `252 * 390 = 98,280` bars a year
 //!   ([`MINUTE_BARS_PER_YEAR`]) and five-minute bars 19,656. Using 252 for one-minute bars
 //!   understates every annualised Sharpe ratio and volatility by `sqrt(390) ≈ 19.7`.
+=======
+//!   both `close` and the rows of `asset_prices` (252 for daily bars, the default; about
+//!   `252 * 390` for one-minute bars over a 6.5-hour session). It annualises
+//!   `realized_sharpe` and the portfolio's return, volatility and Sharpe ratio, and the
+//!   risk-free rate per bar is `risk_free_rate / periods_per_year`. If `asset_prices` is
+//!   sampled at a different frequency from `close`, resample it onto the bars of `close` first.
+>>>>>>> origin/main
 //! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
 //!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
@@ -216,14 +225,13 @@ pub fn infer_periods_per_year(timestamps: &[NaiveDateTime]) -> Option<f64> {
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineConfig {
     /// CUSUM filter threshold `h` on cumulative log returns of `close` (AFML Snippet 2.4), e.g.
-    /// 0.001 for 0.1%. Must be > 0; a NaN or infinite threshold is not rejected and simply
-    /// produces no events ([`PipelineError::NoEvents`]).
+    /// 0.001 for 0.1%. Must be finite and > 0.
     pub cusum_threshold: f64,
     /// Number of classes `K` of the model behind `model_probabilities`; the bet size is 0 at
     /// probability `1/K` (AFML Snippet 10.1). Must be >= 2.
     pub num_classes: usize,
     /// Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]` (AFML Snippet
-    /// 10.3). A step <= 0 is not rejected and leaves the sizes unrounded.
+    /// 10.3). Must be finite and > 0.
     pub step_size: f64,
     /// **Annual** risk-free rate, used by the max-Sharpe allocation and by `realized_sharpe`
     /// (as `risk_free_rate / periods_per_year` per bar).
@@ -263,12 +271,12 @@ pub struct ResearchPipelineInput<'a> {
     /// Positive closing prices of the traded instrument, one per bar.
     pub close: &'a [f64],
     /// Probability of the predicted class at each bar, in `[0, 1]`, known at that bar's close.
-    /// Only the values at CUSUM events are used. The range is not validated.
+    /// Only the values at CUSUM events are used, but every entry must be in `[0, 1]`.
     pub model_probabilities: &'a [f64],
     /// Side of the prediction at each bar (typically `+1`/`-1`); `None` means always long.
     pub model_sides: Option<&'a [f64]>,
-    /// Prices for the portfolio stage: rows = observations (oldest first, at least 2),
-    /// columns = assets (at least 1). Not aligned with `timestamps`.
+    /// Prices for the portfolio stage: rows = bars (oldest first, at least 2), one row per
+    /// entry of `timestamps`; columns = assets (at least 1).
     pub asset_prices: &'a DMatrix<f64>,
     /// One name per column of `asset_prices`, copied to [`PortfolioStage::asset_names`].
     pub asset_names: &'a [String],
@@ -446,16 +454,20 @@ impl From<RiskMetricsError> for PipelineError {
 ///
 /// - [`PipelineError::EmptyInput`] if `timestamps`, `close` or `model_probabilities` is empty.
 /// - [`PipelineError::LengthMismatch`] if `close` and `timestamps`, `model_probabilities` and
-///   `close`, `model_sides` and `close`, or `asset_names` and the columns of `asset_prices`
-///   differ in length.
+///   `close`, `model_sides` and `close`, the rows of `asset_prices` and `timestamps`, or
+///   `asset_names` and the columns of `asset_prices` differ in length.
 /// - [`PipelineError::InvalidParameter`] if `asset_prices` has fewer than 2 rows or no
 ///   columns, `cusum_threshold <= 0`, `num_classes < 2`, `confidence_level` is outside
 ///   `[0, 1]` (NaN included), or `periods_per_year` is not finite and > 0.
 /// - [`PipelineError::NoEvents`] if the CUSUM filter selects no bar (including when `close` has
 ///   a single bar).
+/// - [`PipelineError::InvalidParameter`] also if a `model_probabilities` entry is outside
+///   `[0, 1]`, or `cusum_threshold` or `step_size` is `NaN`, infinite or `<= 0`.
 /// - [`PipelineError::PortfolioAllocation`] if the max-Sharpe optimisation on `asset_prices`
 ///   fails.
-/// - [`PipelineError::Risk`] is part of the signature but not reachable after validation.
+/// - [`PipelineError::Risk`] is part of the signature but not reachable after validation. It
+///   is kept so that a risk-metric failure would surface as a typed error, not a panic, should
+///   the validation above and the risk metrics' own checks ever drift apart.
 pub fn run_mid_frequency_pipeline(
     input: ResearchPipelineInput<'_>,
     config: &ResearchPipelineConfig,
@@ -594,6 +606,14 @@ fn validate_input(
     if input.asset_prices.nrows() < 2 {
         return Err(PipelineError::InvalidParameter("asset_prices rows must be >= 2"));
     }
+    if input.asset_prices.nrows() != input.timestamps.len() {
+        return Err(PipelineError::LengthMismatch(
+            "asset_prices.nrows",
+            input.asset_prices.nrows(),
+            "timestamps",
+            input.timestamps.len(),
+        ));
+    }
     if input.asset_prices.ncols() == 0 {
         return Err(PipelineError::InvalidParameter("asset_prices columns must be >= 1"));
     }
@@ -605,8 +625,16 @@ fn validate_input(
             input.asset_prices.ncols(),
         ));
     }
-    if config.cusum_threshold <= 0.0 {
-        return Err(PipelineError::InvalidParameter("cusum_threshold must be > 0"));
+    // Written as `!(x > 0)` so that NaN is rejected too; a NaN threshold used to find no
+    // event and surface as `NoEvents`.
+    if !(config.cusum_threshold > 0.0 && config.cusum_threshold.is_finite()) {
+        return Err(PipelineError::InvalidParameter("cusum_threshold must be finite and > 0"));
+    }
+    if !(config.step_size > 0.0 && config.step_size.is_finite()) {
+        return Err(PipelineError::InvalidParameter("step_size must be finite and > 0"));
+    }
+    if input.model_probabilities.iter().any(|p| !(0.0..=1.0).contains(p)) {
+        return Err(PipelineError::InvalidParameter("model_probabilities must be in [0, 1]"));
     }
     if config.num_classes < 2 {
         return Err(PipelineError::InvalidParameter("num_classes must be >= 2"));
@@ -723,7 +751,8 @@ mod tests {
         let close = vec![100.0, 102.0, 100.0, 102.0, 100.0, 102.0];
         let probs = vec![0.9; 6];
         let asset_names = vec!["A".to_string()];
-        let asset_prices = DMatrix::from_row_slice(3, 1, &[100.0, 101.0, 102.0]);
+        let asset_prices =
+            DMatrix::from_row_slice(6, 1, &[100.0, 101.0, 102.0, 101.5, 103.0, 104.0]);
         let run = |timestamps: &[NaiveDateTime]| {
             let input = ResearchPipelineInput {
                 timestamps,

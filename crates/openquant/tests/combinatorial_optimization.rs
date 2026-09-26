@@ -201,6 +201,56 @@ fn trajectory_path_limit_admits_exactly_max_paths() {
 
 /// #184 item 5: `final inventory - terminal_inventory_target` was an unchecked `i64`
 /// subtraction: a panic in debug builds and a wrapped difference (here -1) in release.
+/// #186 item 23: `evaluate_trading_path` checked only lengths. A negative impact coefficient
+/// paid the trader to trade, and an inventory path that is not the running sum of the trades
+/// was scored as given.
+#[test]
+fn evaluate_trading_path_rejects_bad_impact_and_inconsistent_inventory() {
+    let path = TradingTrajectoryPath { trades: vec![2, -1], inventory_path: vec![0, 2, 1] };
+    let cfg = TradingTrajectoryObjectiveConfig {
+        expected_returns: vec![0.01, 0.02],
+        risk_aversion: 0.001,
+        impact_coefficients: vec![0.001, 0.002],
+        fixed_ticket_cost: 0.005,
+        terminal_inventory_target: 0,
+        terminal_inventory_penalty: 0.01,
+    };
+    assert!(evaluate_trading_path(&path, &cfg).is_ok());
+
+    for bad in [-0.001, f64::NAN, f64::INFINITY] {
+        let cfg = TradingTrajectoryObjectiveConfig {
+            impact_coefficients: vec![0.001, bad],
+            ..cfg.clone()
+        };
+        assert_eq!(
+            evaluate_trading_path(&path, &cfg),
+            Err(CombinatorialOptimizationError::InvalidInput(
+                "impact_coefficients must be finite and >= 0"
+            )),
+            "{bad}"
+        );
+    }
+
+    // Buy 2 then sell 1 cannot end at 3.
+    let wrong = TradingTrajectoryPath { trades: vec![2, -1], inventory_path: vec![0, 2, 3] };
+    assert_eq!(
+        evaluate_trading_path(&wrong, &cfg),
+        Err(CombinatorialOptimizationError::InconsistentInventoryPath { step: 1 })
+    );
+    // A running sum that overflows i64 is inconsistent too, not a panic.
+    let overflow =
+        TradingTrajectoryPath { trades: vec![1], inventory_path: vec![i64::MAX, i64::MIN] };
+    let one_step = TradingTrajectoryObjectiveConfig {
+        expected_returns: vec![0.0],
+        impact_coefficients: vec![0.0],
+        ..cfg.clone()
+    };
+    assert_eq!(
+        evaluate_trading_path(&overflow, &one_step),
+        Err(CombinatorialOptimizationError::InconsistentInventoryPath { step: 0 })
+    );
+}
+
 #[test]
 fn terminal_inventory_difference_does_not_overflow() {
     let path = TradingTrajectoryPath { trades: vec![], inventory_path: vec![i64::MAX] };

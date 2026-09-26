@@ -416,8 +416,7 @@ pub fn aggregate_classification_vote(
 ///
 /// Returns `(probabilities, labels)`, where a label is 1 when the mean probability is
 /// `>= threshold`. The averaged probability is what bet sizing (AFML Chapter 10) wants as
-/// input. Only the *averaged* probabilities are range-checked: individual entries outside
-/// `[0, 1]` are accepted as long as their mean lies inside it.
+/// input. Every input probability must lie in `[0, 1]`, so the means do too.
 ///
 /// ```
 /// use openquant::ensemble_methods::aggregate_classification_probability_mean;
@@ -433,8 +432,8 @@ pub fn aggregate_classification_vote(
 ///
 /// # Errors
 ///
-/// - [`EnsembleError::Invalid`] if `threshold` is outside `[0, 1]` (or `NaN`), or if a mean
-///   probability is outside `[0, 1]` (or `NaN`).
+/// - [`EnsembleError::Invalid`] if `threshold` is outside `[0, 1]` (or `NaN`), or if any
+///   input probability is outside `[0, 1]` (or `NaN`).
 /// - Any error of [`aggregate_regression_mean`].
 pub fn aggregate_classification_probability_mean(
     per_model_probabilities: &[Vec<f64>],
@@ -444,7 +443,8 @@ pub fn aggregate_classification_probability_mean(
         return Err(EnsembleError::Invalid { name: "threshold", requirement: "in [0,1]" });
     }
     let probs = aggregate_regression_mean(per_model_probabilities)?;
-    if probs.iter().any(|p| !(0.0..=1.0).contains(p)) {
+    // Check every input, not only the means: 1.4 and -0.4 average to a valid 0.5.
+    if per_model_probabilities.iter().flatten().any(|p| !(0.0..=1.0).contains(p)) {
         return Err(EnsembleError::Invalid { name: "probabilities", requirement: "in [0,1]" });
     }
     let labels = probs.iter().map(|p| if *p >= threshold { 1 } else { 0 }).collect();
@@ -510,18 +510,17 @@ pub fn average_pairwise_prediction_correlation(
 ///
 /// # Errors
 ///
-/// [`EnsembleError::Invalid`] if `single_estimator_variance` is negative, if
-/// `average_correlation` is outside `[-1, 1]` (or `NaN`), or if `n_estimators == 0`. A `NaN`
-/// variance is not rejected and yields `NaN`.
+/// [`EnsembleError::Invalid`] if `single_estimator_variance` is negative, `NaN` or infinite,
+/// if `average_correlation` is outside `[-1, 1]` (or `NaN`), or if `n_estimators == 0`.
 pub fn bagging_ensemble_variance(
     single_estimator_variance: f64,
     average_correlation: f64,
     n_estimators: usize,
 ) -> Result<f64, EnsembleError> {
-    if single_estimator_variance < 0.0 {
+    if !(single_estimator_variance.is_finite() && single_estimator_variance >= 0.0) {
         return Err(EnsembleError::Invalid {
             name: "single_estimator_variance",
-            requirement: "non-negative",
+            requirement: "finite and non-negative",
         });
     }
     if !(-1.0..=1.0).contains(&average_correlation) {

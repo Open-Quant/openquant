@@ -216,11 +216,12 @@ pub trait SimpleClassifier {
     fn fit(&mut self, x: &[Vec<f64>], y: &[f64], sample_weight: Option<&[f64]>);
     /// Returns `P(y = 1)` for each row of `x`, one value per row, in order.
     fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64>;
-    /// Returns hard `0.0`/`1.0` predictions: `1.0` where [`SimpleClassifier::predict_proba`]
-    /// is at least 0.5.
+    /// Returns hard `0.0`/`1.0` predictions: by default `1.0` where
+    /// [`SimpleClassifier::predict_proba`] is at least 0.5.
     ///
-    /// [`ml_cross_val_score`] does not call this method; it thresholds `predict_proba` at 0.5
-    /// itself, so an override has no effect there.
+    /// Every scorer uses it for the hard-label scores (accuracy and F1): [`ml_cross_val_score`],
+    /// and through it single feature importance, and mean decrease accuracy. Override it to
+    /// change the decision rule; log loss always uses `predict_proba`.
     fn predict(&self, x: &[Vec<f64>]) -> Vec<f64> {
         self.predict_proba(x).into_iter().map(|p| if p >= 0.5 { 1.0 } else { 0.0 }).collect()
     }
@@ -228,7 +229,8 @@ pub trait SimpleClassifier {
 
 /// Scoring rule for [`ml_cross_val_score`]; every rule is higher-is-better.
 ///
-/// Hard predictions are `predict_proba >= 0.5`. Labels are expected to be `0.0` or `1.0`.
+/// Hard predictions come from [`SimpleClassifier::predict`] (by default `predict_proba >=
+/// 0.5`). Labels are expected to be `0.0` or `1.0`.
 /// AFML §7.5 and Chapter 9 recommend log loss for anything sized by probability.
 #[derive(Clone, Copy)]
 pub enum Scoring {
@@ -263,8 +265,8 @@ pub enum Scoring {
 ///   entry per row of `x`.
 /// - [`CrossValidationError::SplitIndexOutOfRange`] if an index in `splits` is not a row of
 ///   `x` (checked for every split before any fitting).
-/// - [`CrossValidationError::PredictionCountMismatch`] if `predict_proba` does not return one
-///   value per test row.
+/// - [`CrossValidationError::PredictionCountMismatch`] if `predict` (accuracy, F1) or
+///   `predict_proba` (log loss) does not return one value per test row.
 ///
 /// ```
 /// use chrono::{Duration, NaiveDate};
@@ -322,9 +324,13 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
         classifier.fit(&x_train, &y_train, sw_train.as_deref());
         let x_test: Vec<Vec<f64>> = test_idx.iter().map(|i| x[*i].clone()).collect();
         let y_test: Vec<f64> = test_idx.iter().map(|i| y[*i]).collect();
-        let probs = classifier.predict_proba(&x_test);
-        check_prediction_count(y_test.len(), probs.len())?;
-        let preds: Vec<f64> = probs.iter().map(|p| if *p >= 0.5 { 1.0 } else { 0.0 }).collect();
+        // Hard-label scores use `predict`, as mean decrease accuracy does, so an overridden
+        // decision rule is honoured; log loss needs the probabilities.
+        let (preds, probs) = match scoring {
+            Scoring::NegLogLoss => (Vec::new(), classifier.predict_proba(&x_test)),
+            Scoring::Accuracy | Scoring::F1 => (classifier.predict(&x_test), Vec::new()),
+        };
+        check_prediction_count(y_test.len(), preds.len().max(probs.len()))?;
 
         let score = match scoring {
             Scoring::Accuracy => {

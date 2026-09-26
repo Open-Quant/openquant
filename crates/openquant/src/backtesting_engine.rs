@@ -103,8 +103,10 @@ use std::collections::HashMap;
 /// Errors returned by the backtest runners.
 ///
 /// Several variants guard internal invariants of CPCV path construction and are not reachable
-/// through the public API; they say so. An error returned by the evaluator is passed through
-/// unchanged, whatever its variant.
+/// through the public API; they say so. They are kept deliberately: a bug in path construction
+/// then surfaces as a typed error instead of a panic or a silently wrong path, and removing
+/// public variants would break exhaustive matches for no gain. An error returned by the
+/// evaluator is passed through unchanged, whatever its variant.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum BacktestError {
     /// A failure reported by the caller's split evaluator, passed through verbatim.
