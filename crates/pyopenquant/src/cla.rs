@@ -86,7 +86,7 @@ fn cla_allocate(
     resample_by: Option<String>,
     solution: Option<String>,
     calculate_expected_returns: &str,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let lb = weight_bounds_lower.unwrap_or(0.0);
     let ub = weight_bounds_upper.unwrap_or(1.0);
     let wb = openquant::cla::WeightBounds::Tuple(lb, ub);

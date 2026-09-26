@@ -13,7 +13,7 @@ use crate::helpers::{build_ohlcv_columns, format_naive_datetime, report_to_pydic
 fn alignment_report_to_pydict(
     py: Python<'_>,
     report: CalendarAlignmentReport,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let off_grid: Vec<(String, i64)> = report
         .off_grid_bars
         .into_iter()
@@ -28,7 +28,7 @@ fn alignment_report_to_pydict(
 
 /// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, quality_report)`.
 type CleanOhlcvColumns =
-    (Vec<i64>, Vec<String>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, PyObject);
+    (Vec<i64>, Vec<String>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Py<PyAny>);
 
 /// `(timestamps_us, symbols, open, high, low, close, volume, adj_close, is_missing_bar)`.
 type AlignedOhlcvColumns = (
@@ -181,7 +181,7 @@ fn data_quality_report(
     close: Vec<f64>,
     volume: Vec<f64>,
     adj_close: Vec<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let cols =
         build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
     let report = quality_report_columns(&cols, 0).map_err(to_py_err)?;
@@ -271,7 +271,7 @@ fn data_align_calendar(
     adj_close: Vec<f64>,
     interval_seconds: i64,
     return_report: bool,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let cols =
         build_ohlcv_columns(timestamps_us, symbols, open, high, low, close, volume, adj_close)?;
     let (out, report) = align_calendar_columns(&cols, interval_seconds).map_err(to_py_err)?;
@@ -330,7 +330,7 @@ fn data_clean_ohlcv_df(
     py: Python<'_>,
     pydf: PyDataFrame,
     dedupe_keep_last: bool,
-) -> PyResult<(PyDataFrame, PyObject)> {
+) -> PyResult<(PyDataFrame, Py<PyAny>)> {
     let df: DataFrame = pydf.into();
     let (out_df, report) =
         openquant::data_processing::clean_ohlcv_df(&df, dedupe_keep_last).map_err(to_py_err)?;
@@ -366,7 +366,7 @@ fn data_clean_ohlcv_df(
 ///     If a required column is missing or has the wrong dtype, a `symbol` or `ts_us` value
 ///     is null, or a Polars operation fails.
 #[pyfunction(name = "quality_report_df")]
-fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObject> {
+fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<Py<PyAny>> {
     let df: DataFrame = pydf.into();
     let report = openquant::data_processing::quality_report_df(&df, 0).map_err(to_py_err)?;
     report_to_pydict(py, report)
@@ -411,7 +411,7 @@ fn data_align_calendar_df(
     pydf: PyDataFrame,
     interval_seconds: i64,
     return_report: bool,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let df: DataFrame = pydf.into();
     let (out_df, report) =
         openquant::data_processing::align_calendar_df(&df, interval_seconds).map_err(to_py_err)?;

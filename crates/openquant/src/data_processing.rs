@@ -461,7 +461,7 @@ pub fn align_calendar_df(
     };
     if cleaned.height() == 0 {
         let mut out = cleaned.clone();
-        out.with_column(Series::new("is_missing_bar".into(), Vec::<bool>::new()))
+        out.with_column(Column::new("is_missing_bar".into(), Vec::<bool>::new()))
             .map_err(|e| DataProcessingError::frame("failed to add is_missing_bar", e))?;
         return Ok((out, report));
     }
@@ -527,7 +527,7 @@ pub fn align_calendar_df(
         .column("open")
         .map_err(|e| DataProcessingError::frame("column lookup", e))?
         .is_null()
-        .into_series();
+        .into_column();
     missing.rename("is_missing_bar".into());
     out.with_column(missing)
         .map_err(|e| DataProcessingError::frame("failed to add is_missing_bar", e))?;
@@ -582,14 +582,14 @@ fn df_to_ohlcv_columns(df: &DataFrame) -> Result<OhlcvColumns, DataProcessingErr
         .map_err(|e| DataProcessingError::frame("missing ts_us", e))?
         .i64()
         .map_err(|e| DataProcessingError::frame("ts_us type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let symbols = df
         .column("symbol")
         .map_err(|e| DataProcessingError::frame("missing symbol", e))?
         .str()
         .map_err(|e| DataProcessingError::frame("symbol type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
     let open = df
@@ -597,42 +597,42 @@ fn df_to_ohlcv_columns(df: &DataFrame) -> Result<OhlcvColumns, DataProcessingErr
         .map_err(|e| DataProcessingError::frame("missing open", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("open type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let high = df
         .column("high")
         .map_err(|e| DataProcessingError::frame("missing high", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("high type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let low = df
         .column("low")
         .map_err(|e| DataProcessingError::frame("missing low", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("low type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let close = df
         .column("close")
         .map_err(|e| DataProcessingError::frame("missing close", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("close type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let volume = df
         .column("volume")
         .map_err(|e| DataProcessingError::frame("missing volume", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("volume type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let adj_close = df
         .column("adj_close")
         .map_err(|e| DataProcessingError::frame("missing adj_close", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("adj_close type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
 
     Ok(OhlcvColumns { timestamps_us, symbols, open, high, low, close, volume, adj_close })
@@ -688,14 +688,14 @@ pub fn align_calendar_columns(
         .map_err(|e| DataProcessingError::frame("missing ts_us", e))?
         .i64()
         .map_err(|e| DataProcessingError::frame("ts_us type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
     let symbols = out
         .column("symbol")
         .map_err(|e| DataProcessingError::frame("missing symbol", e))?
         .str()
         .map_err(|e| DataProcessingError::frame("symbol type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
 
@@ -704,49 +704,49 @@ pub fn align_calendar_columns(
         .map_err(|e| DataProcessingError::frame("missing open", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("open type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let high = out
         .column("high")
         .map_err(|e| DataProcessingError::frame("missing high", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("high type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let low = out
         .column("low")
         .map_err(|e| DataProcessingError::frame("missing low", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("low type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let close = out
         .column("close")
         .map_err(|e| DataProcessingError::frame("missing close", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("close type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let volume = out
         .column("volume")
         .map_err(|e| DataProcessingError::frame("missing volume", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("volume type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let adj_close = out
         .column("adj_close")
         .map_err(|e| DataProcessingError::frame("missing adj_close", e))?
         .f64()
         .map_err(|e| DataProcessingError::frame("adj_close type error", e))?
-        .into_iter()
+        .iter()
         .collect::<Vec<_>>();
     let is_missing_bar = out
         .column("is_missing_bar")
         .map_err(|e| DataProcessingError::frame("missing is_missing_bar", e))?
         .bool()
         .map_err(|e| DataProcessingError::frame("is_missing_bar type error", e))?
-        .into_no_null_iter()
+        .no_null_iter()
         .collect::<Vec<_>>();
 
     Ok((

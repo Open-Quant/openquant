@@ -20,7 +20,7 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["numpy>=1.26,<3", "polars>=1.0,<2", "pyarrow>=15,<26"]
+dependencies = ["numpy>=1.26,<3", "polars>=1.28.1,<2", "pyarrow>=15,<26"]
 
 [project.urls]
 Homepage = "https://open-quant.github.io/openquant/"
@@ -64,7 +64,7 @@ select = ["E4", "E7", "E9", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 # A bare `pytest` from the repository root runs the binding tests only, without walking
-# target/, vendor/ or docs-site/.
+# target/ or docs-site/.
 testpaths = ["python/tests"]
 
 [tool.mypy]

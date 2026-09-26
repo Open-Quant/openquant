@@ -18,9 +18,9 @@ crate-type = ["cdylib"]
 chrono = "0.4"
 nalgebra = "0.32"
 openquant = { path = "../openquant" }
-polars = { version = "0.46", default-features = false }
-pyo3 = { version = "0.23", features = ["extension-module"] }
-pyo3-polars = "0.20"
+polars = { version = "0.55", default-features = false }
+pyo3 = { version = "0.29", features = ["extension-module"] }
+pyo3-polars = "0.28"
 rand = "0.8"
 
 [package.metadata.maturin]

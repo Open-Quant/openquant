@@ -42,7 +42,7 @@ fn onc_get_onc_clusters(
     py: Python<'_>,
     corr_mat: Vec<Vec<f64>>,
     repeat: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let m = matrix_from_rows(corr_mat)?;
     let result = openquant::onc::get_onc_clusters(&m, repeat).map_err(to_py_err)?;
 

@@ -276,7 +276,7 @@ fn sr_estimate_strategy_failure_probability(
     bootstrap_iterations: usize,
     seed: u64,
     kde_bandwidth: Option<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let cfg = openquant::strategy_risk::StrategyRiskConfig {
         years_elapsed,
         target_sharpe,

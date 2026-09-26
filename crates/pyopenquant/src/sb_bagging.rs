@@ -85,7 +85,7 @@ fn sb_fit_predict_classifier(
     max_features: f64,
     random_state: u64,
     sample_weight: Option<Vec<f64>>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let x_mat = matrix_from_rows(x)?;
 
     let mut clf =
@@ -182,7 +182,7 @@ fn sb_fit_predict_regressor(
     max_features: f64,
     random_state: u64,
     sample_weight: Option<Vec<f64>>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let x_mat = matrix_from_rows(x)?;
 
     let mut reg =
