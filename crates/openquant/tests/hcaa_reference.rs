@@ -1,20 +1,24 @@
 //! Value tests for `hcaa`. Expected numbers are closed forms worked out in the comments from the
 //! definition of each allocation metric, or `tests/fixtures/hcaa/reference.json`, written by
 //! `tests/fixtures/hcaa/generate.py` (numpy/scipy only, no openquant or mlfinlab) for both
-//! distances the library offers; none of them was read off the library's output.
+//! distances and all four linkages the library offers; none of them was read off the library's output.
 //!
 //! The pre-existing `tests/hcaa.rs` only asserts "non-negative and sums to one"; see
 //! `docs/test-sensitivity-audit.md`.
 //!
-//! What the library implements (and what these tests therefore pin): single-linkage clustering
-//! on the correlation distance (pairwise by default, or the distance between its columns), leaf order by quasi-diagonalisation, then weight handed down the
+//! What the library implements (and what these tests therefore pin): hierarchical clustering
+//! (Ward by default, or single, complete or average linkage) on the correlation distance
+//! (pairwise by default, or the distance between its columns), leaf order by
+//! quasi-diagonalisation, then weight handed down the
 //! dendrogram, each of the top `optimal_num_clusters - 1` merges splitting it between its two
 //! children by the chosen metric, with inverse-variance weights inside a side when its risk is
 //! measured and inside each cluster below the cut (equal weights for `equal_weighting`).
 
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
-use openquant::hcaa::{HcaaDistance, HcaaError, HierarchicalClusteringAssetAllocation};
+use openquant::hcaa::{
+    HcaaDistance, HcaaError, HcaaLinkage, HierarchicalClusteringAssetAllocation,
+};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde::Deserialize;
@@ -165,8 +169,8 @@ fn two_assets_conditional_drawdown_closed_form() {
 }
 
 /// Four assets in two tight pairs: corr(0,1) = 0.9, corr(2,3) = 0.8, every cross pair 0.1.
-/// Single linkage merges (0,1), then (2,3), then the two pairs, so the leaf order is 0,1,2,3 and
-/// the first bisection is {0,1} | {2,3}.
+/// Every linkage merges (0,1), then (2,3), then the two pairs (each pair is closer than any
+/// cross pair), so the leaf order is 0,1,2,3 and the first bisection is {0,1} | {2,3}.
 ///
 /// With s = (0.2, 0.3, 0.1, 0.4):
 ///   inside {0,1}: inverse-variance weights u = (1/0.04, 1/0.09) / (1/0.04 + 1/0.09)
@@ -284,8 +288,9 @@ fn allocate_cov_k(
 }
 
 /// Five assets: {0,1,2} (corr(0,1) = 0.9, corr(0,2) = corr(1,2) = 0.7) and {3,4} (corr 0.5), no
-/// correlation across. Single linkage merges (0,1), then 2 into it, then (3,4), then the two
-/// groups, so the leaf order is 2,0,1,3,4 and the tree's top split is {2,0,1} | {3,4}. The
+/// correlation across. With d = sqrt(2 (1 - rho)): d01 = 0.447, d02 = d12 = 0.775, d34 = 1,
+/// cross pairs 1.414. The default (Ward) merges (0,1), then 2 into it (Ward distance
+/// sqrt((2 * 0.6 + 2 * 0.6 - 0.2) / 3) = 0.856 < 1), then (3,4), then the two groups, so the leaf order is 2,0,1,3,4 and the tree's top split is {2,0,1} | {3,4}. The
 /// midpoint of the leaf list is {2,0} | {1,3,4} instead.
 ///   along the tree:   {2,0,1} 1/2 -> 2: 1/4, {0,1}: 1/8 each;  {3,4} 1/2 -> 1/4 each
 ///   at the midpoint:  {2,0} 1/2 -> 1/4 each;  {1,3,4} 1/2 -> 1: 1/4, {3,4}: 1/8 each  (#108)
@@ -363,7 +368,7 @@ fn optimal_num_clusters_must_be_between_one_and_the_number_of_assets() {
     }
 }
 
-/// One distance's tree and weights in `tests/fixtures/hcaa/reference.json`.
+/// One distance-and-linkage tree and its weights in `tests/fixtures/hcaa/reference.json`.
 #[derive(Deserialize)]
 struct Variant {
     link: Vec<[usize; 2]>,
@@ -375,18 +380,32 @@ struct Variant {
 #[derive(Deserialize)]
 struct Case {
     cov: Option<Vec<Vec<f64>>>,
-    correlation: Variant,
-    distance_of_distances: Variant,
+    /// linkage name -> tree.
+    correlation: HashMap<String, Variant>,
+    distance_of_distances: HashMap<String, Variant>,
 }
 
 impl Case {
-    fn variant(&self, distance: HcaaDistance) -> &Variant {
-        match distance {
+    fn variant(&self, distance: HcaaDistance, linkage: HcaaLinkage) -> &Variant {
+        let by_linkage = match distance {
             HcaaDistance::Correlation => &self.correlation,
             HcaaDistance::DistanceOfDistances => &self.distance_of_distances,
-        }
+        };
+        &by_linkage[linkage_name(linkage)]
     }
 }
+
+fn linkage_name(linkage: HcaaLinkage) -> &'static str {
+    match linkage {
+        HcaaLinkage::Single => "single",
+        HcaaLinkage::Complete => "complete",
+        HcaaLinkage::Average => "average",
+        HcaaLinkage::Ward => "ward",
+    }
+}
+
+const LINKAGES: [HcaaLinkage; 4] =
+    [HcaaLinkage::Single, HcaaLinkage::Complete, HcaaLinkage::Average, HcaaLinkage::Ward];
 
 fn reference() -> HashMap<String, Case> {
     let path =
@@ -407,56 +426,74 @@ const REF_TOL: f64 = 1e-10;
 fn assert_matches_reference(
     case: &Case,
     what: &str,
-    run: impl Fn(HcaaDistance, &str, Option<usize>) -> HierarchicalClusteringAssetAllocation,
+    run: impl Fn(
+        HcaaDistance,
+        HcaaLinkage,
+        &str,
+        Option<usize>,
+    ) -> HierarchicalClusteringAssetAllocation,
 ) {
     for distance in DISTANCES {
-        let want = case.variant(distance);
-        assert_eq!(want.weights.len(), 3, "{what}: metrics in the fixture");
-        for (metric, cuts) in &want.weights {
-            assert_eq!(cuts.len(), 3, "{what}: cuts in the fixture");
-            for (cut, weights) in cuts {
-                let k = if cut == "none" { None } else { Some(cut.parse().unwrap()) };
-                let got = run(distance, metric, k);
-                let label = format!("{what} {distance:?} {metric} k={cut}");
-                assert_eq!(got.clusters, want.link, "{label}: tree");
-                assert_eq!(got.ordered_indices, want.order, "{label}: leaf order");
-                assert_close(&got.weights, weights, REF_TOL, &label);
+        for linkage in LINKAGES {
+            let want = case.variant(distance, linkage);
+            assert_eq!(want.weights.len(), 3, "{what}: metrics in the fixture");
+            for (metric, cuts) in &want.weights {
+                assert_eq!(cuts.len(), 3, "{what}: cuts in the fixture");
+                for (cut, weights) in cuts {
+                    let k = if cut == "none" { None } else { Some(cut.parse().unwrap()) };
+                    let got = run(distance, linkage, metric, k);
+                    let label = format!("{what} {distance:?} {linkage:?} {metric} k={cut}");
+                    assert_eq!(got.clusters, want.link, "{label}: tree");
+                    assert_eq!(got.ordered_indices, want.order, "{label}: leaf order");
+                    assert_close(&got.weights, weights, REF_TOL, &label);
+                }
             }
         }
     }
 }
 
 #[test]
-fn both_distances_match_independent_reference_on_price_fixture() {
+fn every_tree_matches_independent_reference_on_price_fixture() {
     let (prices, names) = load_prices_and_names();
     let reference = reference();
-    assert_matches_reference(&reference["stock_prices"], "stock_prices", |distance, metric, k| {
-        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean").with_distance(distance);
+    let case = &reference["stock_prices"];
+    assert_matches_reference(case, "stock_prices", |distance, linkage, metric, k| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean")
+            .with_distance(distance)
+            .with_linkage(linkage);
         hcaa.allocate(&names, Some(&prices), None, None, None, metric, 0.05, k, None).unwrap();
         hcaa
     });
 }
 
 #[test]
-fn both_distances_match_independent_reference_on_random_covariance() {
+fn every_tree_matches_independent_reference_on_random_covariance() {
     let reference = reference();
     let case = &reference["random_cov_8"];
     let rows = case.cov.as_ref().unwrap();
     let cov = DMatrix::from_fn(rows.len(), rows.len(), |i, j| rows[i][j]);
-    assert_matches_reference(case, "random_cov_8", |distance, metric, k| {
+    assert_matches_reference(case, "random_cov_8", |distance, linkage, metric, k| {
         let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");
         hcaa.distance = distance;
+        hcaa.linkage = linkage;
         hcaa.allocate(&names(cov.nrows()), None, None, Some(&cov), None, metric, 0.05, k, None)
             .unwrap();
         hcaa
     });
 }
 
-/// The option changes the answer: on both fixtures the two trees differ, and so do the weights.
+/// The option changes the answer: on both fixtures the two trees differ (for every linkage),
+/// and so do the weights.
 #[test]
 fn the_two_distances_build_different_trees_on_the_fixtures() {
     for (key, case) in reference() {
-        assert_ne!(case.correlation.link, case.distance_of_distances.link, "{key}");
+        for linkage in LINKAGES {
+            assert_ne!(
+                case.variant(HcaaDistance::Correlation, linkage).link,
+                case.variant(HcaaDistance::DistanceOfDistances, linkage).link,
+                "{key} {linkage:?}"
+            );
+        }
     }
     let (prices, names) = load_prices_and_names();
     let run = |distance| {
@@ -507,5 +544,98 @@ fn default_distance_and_parsing() {
     assert_eq!(
         "euclidean".parse::<HcaaDistance>(),
         Err(HcaaError::UnknownDistance("euclidean".to_string()))
+    );
+}
+
+/// The linkage changes the answer too: on the price fixture, for both distances, the four
+/// linkages build four different trees (on the 8-asset case every linkage differs from single,
+/// but complete and average happen to agree on the distance of distances), and Ward's weights
+/// differ from single linkage's.
+#[test]
+fn the_four_linkages_build_different_trees_on_the_fixtures() {
+    for (key, case) in reference() {
+        for distance in DISTANCES {
+            for (i, a) in LINKAGES.iter().enumerate() {
+                for b in &LINKAGES[i + 1..] {
+                    if key != "stock_prices" && *a != HcaaLinkage::Single {
+                        continue;
+                    }
+                    assert_ne!(
+                        case.variant(distance, *a).link,
+                        case.variant(distance, *b).link,
+                        "{key} {distance:?} {a:?} vs {b:?}"
+                    );
+                }
+            }
+        }
+    }
+    let (prices, names) = load_prices_and_names();
+    let run = |linkage| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean").with_linkage(linkage);
+        hcaa.allocate(
+            &names,
+            Some(&prices),
+            None,
+            None,
+            None,
+            "minimum_variance",
+            0.05,
+            None,
+            None,
+        )
+        .unwrap();
+        hcaa.weights
+    };
+    let (single, ward) = (run(HcaaLinkage::Single), run(HcaaLinkage::Ward));
+    let gap = single.iter().zip(&ward).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    assert!(gap > 1e-3, "weights barely move between the linkages (max gap {gap})");
+}
+
+/// Four assets with (unscaled) distances d01 = 1, d02 = 2, d12 = 2.2, d23 = 2.05 and
+/// d03 = d13 = 2.6. Every linkage first merges (0, 1) at 1. The distance from {0, 1} to 2 is
+/// then, by each Lance-Williams update:
+///   single   min(2, 2.2)                           = 2
+///   complete max(2, 2.2)                           = 2.2
+///   average  (2 + 2.2) / 2                         = 2.1
+///   ward     sqrt((2 * 4 + 2 * 4.84 - 1 * 1) / 3)  = 2.358
+/// and from {0, 1} to 3 it is at least 2.6. Against d23 = 2.05, single linkage next merges 2
+/// into {0, 1} (node 4) and the other three merge (2, 3). Correlations are chosen so that
+/// d = sqrt(2 (1 - rho)) is these distances divided by 1.3; a common scale changes no tree.
+#[test]
+fn linkage_update_decides_the_second_merge() {
+    let raw = |i: usize, j: usize| -> f64 {
+        match (i.min(j), i.max(j)) {
+            (a, b) if a == b => 0.0,
+            (0, 1) => 1.0,
+            (0, 2) => 2.0,
+            (1, 2) => 2.2,
+            (2, 3) => 2.05,
+            _ => 2.6,
+        }
+    };
+    let cov = DMatrix::from_fn(4, 4, |i, j| 1.0 - (raw(i, j) / 1.3).powi(2) / 2.0);
+    let run = |linkage| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean").with_linkage(linkage);
+        hcaa.allocate(&names(4), None, None, Some(&cov), None, "equal_weighting", 0.05, None, None)
+            .unwrap();
+        hcaa.clusters
+    };
+    assert_eq!(run(HcaaLinkage::Single), vec![[0, 1], [2, 4], [3, 5]]);
+    for linkage in [HcaaLinkage::Complete, HcaaLinkage::Average, HcaaLinkage::Ward] {
+        assert_eq!(run(linkage), vec![[0, 1], [2, 3], [4, 5]], "{linkage:?}");
+    }
+}
+
+#[test]
+fn default_linkage_and_parsing() {
+    assert_eq!(HcaaLinkage::default(), HcaaLinkage::Ward);
+    assert_eq!(HierarchicalClusteringAssetAllocation::new("mean").linkage, HcaaLinkage::Ward);
+    assert_eq!("WARD".parse(), Ok(HcaaLinkage::Ward));
+    assert_eq!("Average".parse(), Ok(HcaaLinkage::Average));
+    assert_eq!("complete".parse(), Ok(HcaaLinkage::Complete));
+    assert_eq!("single".parse(), Ok(HcaaLinkage::Single));
+    assert_eq!(
+        "centroid".parse::<HcaaLinkage>(),
+        Err(HcaaError::UnknownLinkage("centroid".to_string()))
     );
 }

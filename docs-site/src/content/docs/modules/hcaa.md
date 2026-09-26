@@ -13,11 +13,13 @@ afml_chapter:
 citation:
   - "Raffinot, T. (2017). Hierarchical clustering-based asset allocation. Journal of Portfolio Management 44(2), 89–99."
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 16, §16.4 From Geometric to Hierarchical Relationships."
+  - "Ward, J. H. (1963). Hierarchical grouping to optimize an objective function. Journal of the American Statistical Association 58(301), 236–244."
   - "Tibshirani, R., Walther, G. and Hastie, T. (2001). Estimating the number of clusters in a data set via the gap statistic. Journal of the Royal Statistical Society B 63(2), 411–423."
 rust_api:
   - "HierarchicalClusteringAssetAllocation"
   - "HcaaError"
   - "HcaaDistance"
+  - "HcaaLinkage"
 python_api:
   - "hcaa.allocate_hcaa"
 sidebar:
@@ -42,9 +44,10 @@ the leaf list was halved at its midpoint, as HRP does.
 
 ## The metrics
 
-The tree is single linkage on the correlation distance $d_{ij}=\sqrt{2(1-\rho_{ij})}$, by
-default on $d$ itself as pairwise distances: the tree of HRP's `distance="correlation"`
-option, not of HRP's default (see [which distance is clustered](#which-distance-is-clustered)).
+The tree is built with Ward linkage (see [which linkage](#which-linkage)) on the correlation
+distance $d_{ij}=\sqrt{2(1-\rho_{ij})}$, by default on $d$ itself as pairwise distances (see
+[which distance is clustered](#which-distance-is-clustered)). It is not HRP's tree, which is
+single linkage on the distance of distances.
 Weight starts at the root and is handed down it. At each of the top $k-1$ merges, where $k$ is `optimal_num_clusters`, the
 node's weight is split between its two children, the left scaled by $\alpha$ and the right by
 $1-\alpha$. Below that cut each subtree is one cluster, and its weight is shared equally among
@@ -134,13 +137,13 @@ split. Standard deviation is usually the more sensible default.
 
 The last two lines show the cut. With three clusters, each group gets the weight the two top
 splits give it, bonds a half and the others a quarter, shared equally inside. With no cut the
-splits continue inside each group, which depends on the order in which single linkage happened
-to merge three nearly identical assets, and the weights inside a group come out unequal.
+splits continue inside each group, which depends on the order in which the tree happened to
+merge three nearly identical assets, and the weights inside a group come out unequal.
 
 ## Which distance is clustered
 
 `distance=` (Python) or `HcaaDistance` (Rust, set with `with_distance` or the `distance` field)
-chooses the matrix the single-linkage tree is built on. The options are the same as
+chooses the matrix the tree is built on. The options are the same as
 [HRP's](/modules/hrp/#which-distance-is-clustered); the default is not.
 
 | `distance=` (Python) | `HcaaDistance::` (Rust) | Tree built on |
@@ -152,12 +155,15 @@ chooses the matrix the single-linkage tree is built on. The options are the same
 from, calls `linkage(squareform(d))`, which clusters on $d$ itself. Raffinot's method builds
 on Mantegna's (1999) correlation tree, which is built on $d$ directly. Implementations disagree, though: the R package
 HierPortfolios clusters its HCAA on $\tilde d$, and the paper's full text was not available to
-check which it prescribes. The measurement below agrees with the choice: on the book's Monte Carlo the
-pairwise tree gives HCAA lower out-of-sample variance, unlike HRP.
+check which it prescribes. Under single linkage the book's Monte Carlo agrees with the choice:
+the pairwise tree gives HCAA lower out-of-sample variance, unlike HRP. Under Ward, the default
+linkage, the two matrices give nearly the same results (see [which linkage](#which-linkage)).
 
 AFML §16.5 Monte Carlo (Snippets 16.4 and 16.5: 10 assets, 260-day window, monthly rebalance,
 10,000 runs, seeds `[51, k]`, the generator and backtest of the
-[HRP runbook](/runbooks/hrp-vs-ivp-cla-oos/)), SYNTHETIC data, HCAA with `"minimum_variance"`:
+[HRP runbook](/runbooks/hrp-vs-ivp-cla-oos/)), SYNTHETIC data, HCAA with `"minimum_variance"`
+and **single** linkage (the default before
+[#197](https://github.com/Open-Quant/openquant/issues/197)):
 
 | | $d$ (default) | $\tilde d$ | $d$, 5 clusters | $\tilde d$, 5 clusters |
 | --- | ---: | ---: | ---: | ---: |
@@ -184,6 +190,89 @@ variance at 4 significant digits.
 In this simulation every HCAA variant with `"minimum_variance"` has lower OOS variance than
 HRP. That is one synthetic design with five independent assets and five noisy copies, where the
 tree's own branches are the right split and HRP's midpoint split of the leaf list is not.
+
+## Which linkage
+
+The tree repeatedly merges the two closest clusters. `linkage=` (Python) or `HcaaLinkage`
+(Rust, set with `with_linkage` or the `linkage` field) says how the distance between two
+clusters is measured from the distances between their assets. The updates are scipy's
+`linkage(method=...)`, and every combination with `distance=` is pinned against scipy.
+
+| `linkage=` (Python) | `HcaaLinkage::` (Rust) | Distance between clusters $A$ and $B$ |
+| --- | --- | --- |
+| `"ward"` (default) | `Ward` (default) | the increase in within-cluster sum of squares from merging them, $\sqrt{2\lvert A\rvert\lvert B\rvert/(\lvert A\rvert+\lvert B\rvert)}\,\lVert c_A-c_B\rVert$ for centroids $c$ |
+| `"average"` | `Average` | the mean of $d_{ab}$ over $a\in A$, $b\in B$ |
+| `"complete"` | `Complete` | the largest $d_{ab}$ |
+| `"single"` | `Single` | the smallest $d_{ab}$ (HRP's linkage, and this module's before #197) |
+
+**What Ward means here.** Ward's criterion is defined for points in Euclidean space, and
+scipy's `method="ward"` (R's `ward.D2`) applies its update to whatever distances it is given.
+Both matrices this module clusters are genuinely Euclidean. $d_{ij}=\sqrt{2(1-\rho_{ij})}$ is
+the distance between the two assets' return series after each is demeaned and scaled to unit
+length (factor the correlation matrix as $XX^\top$ and the rows of $X$ are such points), and
+$\tilde d$ is the Euclidean distance between the columns of $d$. So Ward here is Ward's
+minimum-variance method on actual points, not an approximation; the fixture generator checks
+this by running scipy's Ward on the points $X$ and getting the same tree. This is what
+mlfinlab's HCAA does (`linkage(squareform(d), method="ward")`) for $d$, and what R
+HierPortfolios' HCAA does (`hclust(dist(D), "ward.D2")`) for $\tilde d$.
+
+**Why Ward is the default.** Ward is the linkage of the published method and of every HCAA
+reference implementation we could read: mlfinlab's `hcaa.py` (`linkage="ward"`, passed to
+scipy), R HierPortfolios' `HCAA_Portfolio` (`linkage = "ward"`, run as `ward.D2`) and
+jduarte00's implementation. It builds compact clusters of similar size. Single linkage
+"chains": assets join a growing cluster one at a time, so the tree is deep and lopsided and
+the top splits isolate one asset against the rest, which under `"equal_weighting"` or
+`"minimum_standard_deviation"` can hand that one asset a large share of the capital. Before
+[#197](https://github.com/Open-Quant/openquant/issues/197) this module used single linkage.
+**Pass `linkage="single"` to reproduce results from before #197.**
+
+**The trade-off depends on the universe.**
+
+- **Block-clustered universes** (assets in a few groups of related exposures): Ward's mean
+  out-of-sample variance is 6–45% lower than single linkage's, with lower drawdown and a 2–4×
+  higher effective number of assets.
+- **AFML's Snippet 16.4 design** (independent assets plus noisy near-duplicates): single
+  linkage has about 3% (`"minimum_variance"`) to 28% (`"minimum_standard_deviation"`) lower
+  out-of-sample variance. Ward isolates the largest group of near-duplicates at the root and,
+  under `"equal_weighting"` or `"minimum_standard_deviation"`, gives that group about half the
+  capital.
+- **Complete linkage** is close to Ward throughout.
+
+If your universe contains many near-copies of one exposure (share classes, several trackers of
+one index), deduplicate it, use `"minimum_variance"`, or pass `linkage="complete"` or
+`linkage="single"`.
+
+**The AFML design in detail.** The table below is the book's Monte Carlo from the section above
+(SYNTHETIC, 10,000 runs, seeds `[51, k]`). It is the design most favourable to single linkage:
+its true tree is a few tight pairs and singletons, which single linkage recovers well and Ward's
+preference for balanced clusters does not. Mean OOS variance ×1e4, with turnover per rebalance
+in brackets:
+
+| `allocation_metric`, cut | distance | single | complete | average | **ward** (default) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| minimum variance, no cut | $d$ (default) | **3.049** (0.107) | 3.060 (0.103) | 3.057 (0.104) | 3.141 (0.086) |
+| minimum variance, no cut | $\tilde d$ | 3.154 (0.087) | **3.140** (0.086) | 3.144 (0.085) | 3.145 (**0.085**) |
+| minimum variance, 5 clusters | $d$ | **3.275** (0.110) | 3.284 (0.106) | 3.285 (0.107) | 3.356 (0.076) |
+| minimum variance, 5 clusters | $\tilde d$ | 3.364 (0.077) | **3.345** (0.076) | 3.356 (0.075) | 3.357 (**0.074**) |
+| minimum standard deviation, no cut | $d$ | 3.757 (0.208) | **3.648** (0.174) | 3.694 (0.184) | 4.792 (0.123) |
+| minimum standard deviation, no cut | $\tilde d$ | 5.025 (0.126) | 4.910 (0.126) | 5.010 (0.120) | 5.046 (**0.117**) |
+
+For reference: HRP 3.592 ($\tilde d$, its default) and 3.812 ($d$), CLA 5.098, IVP 4.955.
+The single-linkage column reproduces the table above exactly.
+
+- **With `"minimum_variance"`, Ward costs about 3% of variance and saves about 20% of turnover.**
+  On $d$ its mean OOS variance is 3.0% above single linkage's (paired mean log ratio +0.068,
+  t = 32; Ward lower in 34% of runs), and its turnover is 0.086 against 0.107. Against IVP
+  (1.578×, Ward lower in 91% of runs) and CLA (1.623×) it is still far ahead, and it stays below
+  HRP (HRP $\tilde d$ / HCAA = 1.144).
+- **With `"minimum_standard_deviation"` the cost is large here.** Ward on $d$ gives 4.792, 28%
+  above single linkage's 3.757 and only slightly better than IVP (4.955), because about half
+  the capital goes to the near-duplicates Ward isolates at the root. Its turnover is 41% lower
+  (0.123 against 0.208).
+- **Under Ward the choice of distance hardly matters** (3.141 against 3.145, 4.792 against
+  5.046): Ward's balanced tree on $d$ looks like the tree on $\tilde d$.
+- **Effective number of assets** rises from 6.78 (single, $d$) to 7.07 (Ward); IVP's is 8.26.
+- The 10 bps cost model changes no variance at 4 significant digits.
 
 ## From Rust
 
@@ -242,13 +331,18 @@ assert!(matches!(
 - **`"sharpe_ratio"` brings back the problem HRP was built to avoid.** It depends on expected
   returns, the least reliable input in portfolio construction, and a mean of daily returns is
   a very noisy estimate of one.
-- **The default tree is not HRP's.** HCAA clusters on pairwise distances by default and HRP on
-  distances between columns of the distance matrix. Pass `distance="distance_of_distances"`
-  for HRP's tree; on the Monte Carlo above it lowers turnover and raises variance.
+- **The default tree is not HRP's.** HCAA uses Ward linkage on pairwise distances by default;
+  HRP uses single linkage on distances between columns of the distance matrix. Pass
+  `linkage="single", distance="distance_of_distances"` for HRP's tree.
+- **The default linkage changed from single to Ward**
+  ([#197](https://github.com/Open-Quant/openquant/issues/197)). Weights and leaf order change
+  for most inputs; pass `linkage="single"` (`HcaaLinkage::Single`) to reproduce earlier
+  results. Ward does better on block-clustered universes; on universes full of near-copies of
+  one exposure single linkage can do better (see [which linkage](#which-linkage)).
 - **Results differ from [HRP](/modules/hrp/) even with `"minimum_variance"`.** HRP halves the
   ordered leaf list at its midpoint, which can cut across a branch of the tree; this module
   splits only at the tree's own branches. They agree when every branch happens to divide
-  the list in half and both use the same tree (the same `distance=`).
+  the list in half and both use the same tree (the same `distance=`, and `linkage="single"`).
 
 ## Related modules
 

@@ -19,12 +19,13 @@ def allocate_hcaa(
     resample_by: str | None = None,
     calculate_expected_returns: str = "mean",
     distance: str | None = None,
+    linkage: str | None = None,
 ) -> tuple[list[float], list[int]]:
     """Hierarchical Clustering-based Asset Allocation weights (Raffinot, 2017).
 
-    Builds a single-linkage tree from the correlation distance `d = sqrt(2 (1 - rho))` (AFML
-    section 16.4, Snippets 16.1-16.2; see `distance`) and splits weight down it from the
-    root. At each of the top `optimal_num_clusters - 1` merges the left child receives a
+    Builds a hierarchical tree (Ward linkage by default; see `linkage`) from the correlation
+    distance `d = sqrt(2 (1 - rho))` (AFML section 16.4, Snippets 16.1-16.2; see `distance`)
+    and splits weight down it from the root. At each of the top `optimal_num_clusters - 1` merges the left child receives a
     share `alpha` set by `allocation_metric`, each side scored as its inverse-variance
     portfolio: `"minimum_variance"`, `"minimum_standard_deviation"`, `"expected_shortfall"`
     and `"conditional_drawdown_risk"` give `1 - risk_L / (risk_L + risk_R)`;
@@ -74,6 +75,17 @@ def allocate_hcaa(
         None; cluster on `d` itself, Mantegna's correlation distance, as Raffinot and
         mlfinlab do) or `"distance_of_distances"` (the Euclidean distance between columns
         of `d`, as AFML Snippet 16.4 and the HRP default compute).
+    linkage : str | None, default None
+        How the distance between clusters is measured when the tree is built
+        (case-insensitive), as scipy's `linkage(method=...)`: `"ward"` (the default when
+        None; Ward's minimum-variance criterion, R's `ward.D2`, the default of mlfinlab's and
+        R HierPortfolios' HCAA), `"average"` (mean pairwise distance), `"complete"` (largest
+        pairwise distance) or `"single"` (smallest pairwise distance; HRP's tree, and this
+        function's tree before the default changed to Ward). Ward builds compact,
+        similar-sized clusters; if the universe holds many near-copies of one exposure (share
+        classes, several trackers of one index), Ward can give that group about half the
+        capital under `"equal_weighting"` or `"minimum_standard_deviation"`: deduplicate it,
+        use `"minimum_variance"`, or pass `linkage="complete"` or `"single"`.
 
     Returns
     -------
@@ -84,7 +96,8 @@ def allocate_hcaa(
     Raises
     ------
     ValueError
-        If `distance` is not `"correlation"` or `"distance_of_distances"`, a matrix is empty
+        If `distance` is not `"correlation"` or `"distance_of_distances"`, `linkage` is not
+        `"single"`, `"complete"`, `"average"` or `"ward"`, a matrix is empty
         or ragged, or the core rejects the input (e.g. no prices, returns or covariance
         given, empty `asset_names`, too few rows, a zero price, a non-positive covariance
         diagonal, an unknown `allocation_metric` or `calculate_expected_returns`, mismatched
