@@ -11,7 +11,9 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// portfolio down to the minimum-variance portfolio, then returns the requested `solution`.
 /// Supply either `asset_prices` (expected returns and covariance are estimated from their
 /// simple returns, annualised with `252 / step` periods per year) or both
-/// `expected_returns` and `covariance_matrix` (used as given, not annualised). If every
+/// `expected_returns` and `covariance_matrix` (used as given, not annualised). The 252
+/// assumes daily rows; for intraday rows the figures are per 252 rows, but the weights do
+/// not depend on that constant. If every
 /// expected return is identical, `1e-5` is added to the last one so the walk has a starting
 /// asset.
 ///

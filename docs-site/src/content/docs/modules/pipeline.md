@@ -11,6 +11,7 @@ module: "pipeline"
 api_surface: "both"
 rust_api:
   - "run_mid_frequency_pipeline"
+  - "infer_periods_per_year"
   - "ResearchPipelineConfig"
   - "ResearchPipelineInput"
   - "ResearchPipelineOutput"
@@ -19,6 +20,7 @@ python_api:
   - "pipeline.run_mid_frequency_pipeline"
   - "pipeline.run_mid_frequency_pipeline_frames"
   - "pipeline.summarize_pipeline"
+  - "pipeline.infer_periods_per_year"
 sidebar:
   badge: Module
 ---
@@ -45,7 +47,7 @@ Use this when you want to run a complete AFML workflow without manually chaining
 | `num_classes` | `int` | Number of label classes for bet sizing | 2 |
 | `step_size` | `float` | Bet size discretization step | 0.1 |
 | `risk_free_rate` | `float` | Annual risk-free rate, for both the max-Sharpe allocation and realized_sharpe | 0.0 |
-| `periods_per_year` | `float` | Bars per year of close and rows per year of asset_prices; annualises realized_sharpe and the portfolio figures | 252.0 |
+| `periods_per_year` | `float | None` | Bars per year of close and rows per year of asset_prices; annualises realized_sharpe and the portfolio figures. None (Python) derives it from the timestamps: 252 for daily bars, 98,280 for one-minute bars | None (Python), 252.0 (Rust) |
 | `confidence_level` | `float` | Confidence level for VaR/ES | 0.05 |
 
 ## Usage Examples
@@ -82,7 +84,7 @@ print(summary)
 
 - Reading has_forward_look_bias as a test: it is a deprecated constant (always false). The pipeline cannot see look-ahead inside model_probabilities; fit them on data available at each bar's close.
 - Unordered timestamps do not stop the run; check leakage_checks.timestamps_increasing.
-- Leaving periods_per_year at 252 for intraday bars: realized_sharpe and the portfolio figures are then annual in units of 252 bars, not calendar years.
+- Setting periods_per_year to 252 for intraday bars: realized_sharpe and the portfolio figures are then per 252 bars, not per year, and understated by sqrt(390) ≈ 19.7 for one-minute bars.
 - Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.
 
 ## Risk Notes and Caveats
@@ -90,6 +92,7 @@ print(summary)
 - Mismatched input lengths are an error. leakage_checks reports two computed ordering checks, timestamps_increasing and event_indices_sorted; inputs_aligned (always true) and has_forward_look_bias (always false) are deprecated constants.
 - run_mid_frequency_pipeline_frames and summarize_pipeline are Python-only helpers over the Rust run_mid_frequency_pipeline.
 - run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output.
+- Annualisation convention: 252 sessions a year of 390 minutes (6.5 hours), so one-minute bars have 252 × 390 = 98,280 bars a year (MINUTE_BARS_PER_YEAR). The Python wrappers derive periods_per_year from the timestamps by default (infer_periods_per_year) and report it as risk["periods_per_year"]; the Rust ResearchPipelineConfig and openquant._core default to 252.
 - summarize_pipeline extracts key metrics into a single-row DataFrame for notebook display.
 
 ## Related Modules

@@ -36,7 +36,8 @@ def allocate_hcaa(
     (`"equal_weighting"`) or by inverse variance (every other metric). Raffinot's
     gap-statistic choice of the cluster count is not implemented: None means no cut. Returns
     from prices are simple returns; estimated expected returns are annualised by 252
-    periods, while covariance and tail measures are per-period.
+    periods, while covariance and tail measures are per-period. The 252 assumes daily rows;
+    it cancels in the `"sharpe_ratio"` split, so intraday rows give the same weights.
 
     Parameters
     ----------

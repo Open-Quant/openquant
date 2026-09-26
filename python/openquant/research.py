@@ -35,6 +35,11 @@ class ResearchDataset:
         One row per bar, one column per asset, in `asset_names` order.
     asset_names : list[str]
         Asset names; the first is the primary instrument.
+    periods_per_year : float or None, default None
+        Bars a year, used to annualise Sharpe ratios and volatility. None derives it from
+        the spacing of `timestamps` (`openquant.pipeline.infer_periods_per_year`).
+        `make_synthetic_futures_dataset` sets it to 98,280 (one-minute bars, 390 a session,
+        252 sessions a year).
     """
 
     timestamps: list[str]
@@ -43,6 +48,7 @@ class ResearchDataset:
     model_sides: list[float]
     asset_prices: list[list[float]]
     asset_names: list[str]
+    periods_per_year: float | None = None
 
 
 def research_run_manifest(
@@ -70,6 +76,11 @@ def make_synthetic_futures_dataset(
 
     The first asset is treated as the primary traded instrument (e.g., crude oil),
     while the other assets provide cross-asset context for allocation/risk.
+
+    The bars are **one minute** apart, starting 2024-01-01 09:30:00, so the dataset's
+    `periods_per_year` is `openquant.pipeline.MINUTE_BARS_PER_YEAR` (98,280 = 390 bars a
+    6.5-hour session times 252 sessions); every annualised figure the research loop reports
+    on it uses that factor, not the daily 252.
     """
     if n_bars < 32:
         raise ValueError("n_bars must be >= 32")
@@ -119,6 +130,7 @@ def make_synthetic_futures_dataset(
         model_sides=model_sides,
         asset_prices=asset_prices,
         asset_names=asset_names,
+        periods_per_year=pipeline.MINUTE_BARS_PER_YEAR,
     )
 
 
@@ -134,17 +146,24 @@ def run_flywheel_iteration(
     cost and Sharpe figures are heuristics for comparing configurations, not a cost model:
 
     - `turnover` is the sum of absolute position changes between bars.
-    - `realized_vol` is the sample standard deviation of per-bar strategy returns times
-      `sqrt(252)`.
+    - `periods_per_year` is `config["periods_per_year"]` if given, else
+      `dataset.periods_per_year`, else derived from `dataset.timestamps`
+      (`openquant.pipeline.infer_periods_per_year`). It is passed to the pipeline, so it
+      also annualises `risk["realized_sharpe"]` and the portfolio stage.
+    - `bar_vol` is the sample standard deviation of the per-bar strategy returns, and
+      `realized_vol` is `bar_vol * sqrt(periods_per_year)`.
     - `cost_per_turn` is `(commission_bps + spread_bps) * 1e-4 + slippage_vol_mult *
-      realized_vol * 1e-3`, and the estimated total cost is `turnover * cost_per_turn`.
+      bar_vol * sqrt(252) * 1e-3`, and the estimated total cost is `turnover *
+      cost_per_turn`. The slippage term scales with the per-bar volatility and does not
+      depend on `periods_per_year`: it is the formula the loop has always used (on daily
+      bars it equals `slippage_vol_mult * realized_vol * 1e-3`).
     - `gross_total_return` is the final equity minus 1.0; `net_total_return` subtracts the
       estimated total cost.
     - `net_sharpe` is the Sharpe ratio of the per-bar returns net of costs: each bar's
       strategy return minus `abs(position change into that bar) * cost_per_turn` (the first
       bar pays nothing), so the per-bar costs add up to the estimated total cost. It is the
       mean over the sample standard deviation of those net returns, times
-      `sqrt(252 * 390 / n_bars)`, and 0 when the deviation is 0.
+      `sqrt(periods_per_year)`, and 0 when the deviation is 0.
 
     Parameters
     ----------
@@ -152,10 +171,11 @@ def run_flywheel_iteration(
         Pipeline inputs.
     config : dict[str, Any] or None, default None
         Overrides for the defaults: `cusum_threshold` (0.001), `num_classes` (2),
-        `step_size` (0.1), `risk_free_rate` (0.0) and `confidence_level` (0.05), passed to
-        the pipeline; `commission_bps` (1.5), `spread_bps` (2.0) and `slippage_vol_mult`
-        (8.0) for the cost estimate; `min_net_sharpe` (0.30) and `min_realized_sharpe`
-        (0.25) for promotion. Unknown keys are ignored.
+        `step_size` (0.1), `risk_free_rate` (0.0, annual), `confidence_level` (0.05) and
+        `periods_per_year` (None: from the dataset, see above), passed to the pipeline;
+        `commission_bps` (1.5), `spread_bps` (2.0) and `slippage_vol_mult` (8.0) for the
+        cost estimate; `min_net_sharpe` (0.30) and `min_realized_sharpe` (0.25) for
+        promotion. Unknown keys are ignored.
 
     Returns
     -------
@@ -163,8 +183,9 @@ def run_flywheel_iteration(
         The pipeline output (`events`, `signals`, `portfolio`, `risk`, `backtest`,
         `leakage_checks`, `frames`) plus:
 
-        - `costs`: `turnover`, `realized_vol`, `cost_per_turn`, `estimated_total_cost`,
-          `gross_total_return`, `net_total_return` and `net_sharpe`.
+        - `costs`: `turnover`, `periods_per_year`, `bar_vol`, `realized_vol`,
+          `cost_per_turn`, `estimated_total_cost`, `gross_total_return`, `net_total_return`
+          and `net_sharpe`.
         - `promotion`: booleans `passed_realized_sharpe` (pipeline realized Sharpe
           `>= min_realized_sharpe`), `passed_net_sharpe`, `passed_alignment_guard`,
           `passed_event_order_guard` and `promote_candidate` (all of them).
@@ -172,7 +193,7 @@ def run_flywheel_iteration(
           `turnover`, `realized_vol`, `estimated_cost`, `gross_total_return`,
           `net_total_return` and `net_sharpe` added.
     """
-    cfg = {
+    cfg: dict[str, Any] = {
         "cusum_threshold": 0.001,
         "num_classes": 2,
         "step_size": 0.1,
@@ -183,9 +204,17 @@ def run_flywheel_iteration(
         "slippage_vol_mult": 8.0,
         "min_net_sharpe": 0.30,
         "min_realized_sharpe": 0.25,
+        "periods_per_year": None,
     }
     if config:
         cfg.update(config)
+    periods_per_year = cfg["periods_per_year"]
+    if periods_per_year is None:
+        periods_per_year = dataset.periods_per_year
+    if periods_per_year is None:
+        inferred = pipeline.infer_periods_per_year(dataset.timestamps)
+        periods_per_year = pipeline.TRADING_DAYS_PER_YEAR if inferred is None else inferred
+    periods_per_year = float(periods_per_year)
 
     out = pipeline.run_mid_frequency_pipeline_frames(
         timestamps=dataset.timestamps,
@@ -199,6 +228,7 @@ def run_flywheel_iteration(
         step_size=float(cfg["step_size"]),
         risk_free_rate=float(cfg["risk_free_rate"]),
         confidence_level=float(cfg["confidence_level"]),
+        periods_per_year=periods_per_year,
     )
 
     backtest = out["frames"]["backtest"]
@@ -206,11 +236,12 @@ def run_flywheel_iteration(
     positions = backtest["position"].to_list()
 
     turnover = _turnover(positions)
-    realized_vol = _annualized_vol(strategy_returns)
+    bar_vol = _std(strategy_returns)
+    realized_vol = bar_vol * periods_per_year**0.5
     cost_per_turn = (
         float(cfg["commission_bps"]) * 1e-4
         + float(cfg["spread_bps"]) * 1e-4
-        + float(cfg["slippage_vol_mult"]) * realized_vol * 1e-3
+        + float(cfg["slippage_vol_mult"]) * bar_vol * pipeline.TRADING_DAYS_PER_YEAR**0.5 * 1e-3
     )
     total_cost = turnover * cost_per_turn
     gross_total_return = backtest["equity"][-1] - 1.0
@@ -222,7 +253,7 @@ def run_flywheel_iteration(
         for i, r in enumerate(strategy_returns)
     ]
     bars = len(net_returns)
-    annualizer = (252.0 * 390.0 / max(bars, 1)) ** 0.5
+    annualizer = periods_per_year**0.5
     mean_r = sum(net_returns) / max(bars, 1)
     std_r = _std(net_returns)
     net_sharpe = (mean_r / std_r) * annualizer if std_r > 0 else 0.0
@@ -247,6 +278,8 @@ def run_flywheel_iteration(
 
     out["costs"] = {
         "turnover": turnover,
+        "periods_per_year": periods_per_year,
+        "bar_vol": bar_vol,
         "realized_vol": realized_vol,
         "cost_per_turn": cost_per_turn,
         "estimated_total_cost": total_cost,
@@ -324,8 +357,3 @@ def _std(values: list[float]) -> float:
     mean_v = sum(values) / len(values)
     var = sum((v - mean_v) ** 2 for v in values) / (len(values) - 1)
     return var**0.5
-
-
-def _annualized_vol(values: list[float]) -> float:
-    std = _std(values)
-    return std * (252.0**0.5)
