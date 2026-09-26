@@ -110,6 +110,12 @@ uv run --python .venv/bin/python python experiments/run_pipeline.py --config exp
 cargo run -p openquant --example research_notebook_smoke
 ```
 
+Every notebook under `notebooks/python/` follows the notebook contract
+(`docs-site/src/content/docs/workflows/research-notebook-contract.md`): a runbook's sections run
+Setup, Hypothesis, Data, Method, Results, Analysis, Promotion decision, Self-review checklist and
+Reproducibility, an API tour makes no claims, and both end with an `nbrepro.footer(...)` cell.
+`just notebooks-lint` checks it (CI runs it in `python-lint`).
+
 ## Tests and fixtures
 
 A test is only useful if it fails when the code is wrong. `docs/test-sensitivity-audit.md`
