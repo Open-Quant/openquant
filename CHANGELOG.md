@@ -137,6 +137,7 @@ file disagree).
 
 ### CI, build and tooling
 
+- The workspace is migrated to Rust edition 2024 ([#200](https://github.com/Open-Quant/openquant/pull/200))
 - Rust caching, parallel lint and test jobs, release-mode parallel notebooks, a docs-only skip ([#198](https://github.com/Open-Quant/openquant/pull/198))
 - CI gates what it claims to gate (#41) ([#130](https://github.com/Open-Quant/openquant/pull/130))
 - Remaining local tooling ignored and the last stale doc lines fixed ([#123](https://github.com/Open-Quant/openquant/pull/123))
