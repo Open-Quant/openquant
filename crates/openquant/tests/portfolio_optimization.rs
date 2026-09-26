@@ -399,3 +399,47 @@ fn inverted_or_nan_bounds_are_rejected_not_panicking() {
         }
     }
 }
+
+/// #186 item 18: `ReturnsMethod::Exponential { span: 0 }` gave `alpha = 2`, so the weights
+/// `(1 - alpha)^k` alternated in sign and the "expected return" was meaningless. It is now
+/// rejected, while `span = 1` (all weight on the newest return) still works.
+#[test]
+fn exponential_span_zero_is_rejected() {
+    let prices =
+        DMatrix::from_row_slice(4, 2, &[100.0, 100.0, 101.0, 99.0, 103.0, 100.0, 102.0, 102.0]);
+    let zero = ReturnsMethod::Exponential { span: 0 };
+    assert_eq!(
+        compute_expected_and_covariance(&prices, zero, None).unwrap_err(),
+        AllocError::InvalidSpan { span: 0 }
+    );
+    let opts = AllocationOptions { returns_method: zero, ..AllocationOptions::default() };
+    assert_eq!(
+        allocate_with_solution(&prices, "min_volatility", &opts).unwrap_err(),
+        AllocError::InvalidSpan { span: 0 }
+    );
+    let (mu, _) =
+        compute_expected_and_covariance(&prices, ReturnsMethod::Exponential { span: 1 }, None)
+            .unwrap();
+    assert!((mu[0] - (102.0 / 103.0 - 1.0) * 252.0).abs() < 1e-9);
+    assert!((mu[1] - (102.0 / 100.0 - 1.0) * 252.0).abs() < 1e-9);
+}
+
+/// #186 item 19: `inverse_variance` rejected only an exact-zero variance, so a negative
+/// variance produced a negative weight and a `NaN` one a `NaN` weight.
+#[test]
+fn inverse_variance_rejects_negative_and_non_finite_variances() {
+    let mu = [0.05, 0.08];
+    for bad in [-0.04, f64::NAN, f64::INFINITY] {
+        let cov = DMatrix::from_row_slice(2, 2, &[0.04, 0.0, 0.0, bad]);
+        let opts = AllocationOptions::default();
+        let err = allocate_from_inputs(&mu, &cov, "inverse_variance", &opts).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AllocError::InvalidVariance { asset: 1, variance }
+                    if variance.to_bits() == bad.to_bits()
+            ),
+            "{bad}: {err:?}"
+        );
+    }
+}
