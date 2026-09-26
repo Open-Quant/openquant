@@ -7,6 +7,10 @@ on:
       - "docs-site/**"
       - "docs/**"
       - "README.md"
+      # The site publishes rustdoc (/api/rust/) and a Python reference built from these.
+      - "crates/**"
+      - "python/**"
+      - "Cargo.*"
       - ".github/workflows/docs-pages.yml"
   workflow_dispatch:
 
@@ -31,11 +35,17 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install docs dependencies
         run: bun install --frozen-lockfile
         working-directory: docs-site
       - name: Build Astro docs
         run: bun run build
+        working-directory: docs-site
+      # cargo doc -p openquant --no-deps into dist/api/rust/. Before check:links, which
+      # then proves every rustdoc link on the module pages points at a real page.
+      - name: Build and stage rustdoc
+        run: bun run stage:rustdoc
         working-directory: docs-site
       - name: Check internal links
         run: bun run check:links

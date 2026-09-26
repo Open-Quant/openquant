@@ -6,6 +6,95 @@ use pyo3::types::PyDict;
 
 use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datetimes, to_py_err};
 
+/// Run the events, signals, portfolio, risk and backtest research pipeline in one call.
+///
+/// Chains existing modules on one instrument: (1) the symmetric CUSUM filter on `close`
+/// selects events (AFML Snippet 2.4); (2) the model probability and side at each event
+/// become a bet size `2 Phi(z) - 1` (AFML Snippet 10.1), rounded to multiples of
+/// `step_size` (Snippet 10.3) and held on every bar until the next event; (3) max-Sharpe
+/// mean-variance weights of `asset_prices` are computed (Markowitz, not AFML); (4)
+/// historical VaR, expected shortfall and conditional drawdown at risk of the strategy are
+/// computed, plus a Sharpe ratio annualised with `periods_per_year` (AFML section 14.7.1); (5) the equity curve,
+/// drawdowns and time under water are built (AFML Snippet 14.4). No labelling or model
+/// fitting happens here; probabilities and sides are inputs, one per bar.
+///
+/// The signal is applied with a one-bar lag: the strategy return over bar `i` is
+/// `signal[i - 1] * (close[i] / close[i - 1] - 1)`. The portfolio stage is independent of
+/// the backtest (its weights are reported, not traded). `risk_free_rate` is an annual rate
+/// in both the allocation and `realized_sharpe` (which subtracts
+/// `risk_free_rate / periods_per_year` per bar). `confidence_level` is the lower-tail probability for VaR and
+/// expected shortfall (0.05 = worst 5% of per-bar returns); CDaR uses
+/// `1 - confidence_level`.
+///
+/// Parameters
+/// ----------
+/// timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is
+///     accepted), oldest first. Their order is not enforced;
+///     `leakage_checks["timestamps_increasing"]` reports it.
+/// close : list[float]
+///     Positive closing prices of the traded instrument, one per bar.
+/// model_probabilities : list[float]
+///     Probability of the predicted class at each bar, in `[0, 1]`, known at that bar's
+///     close. Only values at CUSUM events are used; the range is not validated.
+/// asset_prices : list[list[float]]
+///     Prices for the portfolio stage, one inner list per observation (oldest first, at
+///     least 2 rows) and one column per asset. Need not align with `timestamps`.
+/// model_sides : list[float] | None, default None
+///     Side of the prediction at each bar (typically +1/-1); None means always long.
+/// asset_names : list[str] | None, default None
+///     One name per column of `asset_prices`; defaults to `asset_0`, `asset_1`, ...
+/// cusum_threshold : float, default 0.001
+///     CUSUM threshold on cumulative log returns of `close`; must be > 0.
+/// num_classes : int, default 2
+///     Number of classes of the model behind `model_probabilities`; must be >= 2.
+/// step_size : float, default 0.1
+///     Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]`; a step
+///     <= 0 leaves the sizes unrounded.
+/// risk_free_rate : float, default 0.0
+///     Annual risk-free rate, for the max-Sharpe allocation and for `realized_sharpe`.
+/// confidence_level : float, default 0.05
+///     Lower-tail probability for VaR and expected shortfall, in `[0, 1]`.
+/// periods_per_year : float, default 252.0
+///     Bars a year of `close` and rows a year of `asset_prices` (252 for daily bars, about
+///     `252 * 390` for one-minute bars). Annualises `realized_sharpe` and the portfolio's
+///     return, risk and Sharpe ratio; must be finite and > 0.
+///
+/// Returns
+/// -------
+/// dict[str, Any]
+///     A dict of stage dicts:
+///
+///     - `events`: `indices` (0-based bar positions of the CUSUM events), `timestamps`,
+///       `probabilities` and `sides` (1.0 when no sides were given) at those events.
+///     - `signals`: `timestamps` (the input bar timestamps), `values` (bet size on every
+///       bar, 0 before the first event) and `event_signal` (discretised bet size in
+///       `[-1, 1]` per event).
+///     - `portfolio`: `asset_names`, `weights` (sum to 1), `portfolio_risk`,
+///       `portfolio_return` and `portfolio_sharpe` (all annualised).
+///     - `risk`: `value_at_risk` (signed per-bar return, negative is a loss),
+///       `expected_shortfall` (mean of returns strictly below VaR, NaN when none are),
+///       `conditional_drawdown_risk` (in equity units) and `realized_sharpe`
+///       (annualised with `periods_per_year`).
+///     - `backtest`: `timestamps`, `strategy_returns` (one shorter than `close`),
+///       `equity_curve` (starts at 1), `drawdowns` and `time_under_water_years` (one per
+///       drawdown, in 365.25-day years).
+///     - `leakage_checks`: booleans `timestamps_increasing` (the timestamps strictly
+///       increase) and `event_indices_sorted`, computed from the data, plus the deprecated
+///       constants `inputs_aligned` (always True: mismatched lengths raise) and
+///       `has_forward_look_bias` (always False: the pipeline does not detect look-ahead in
+///       the caller's probabilities or sides).
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp does not parse; `asset_prices` is empty or ragged; `timestamps`,
+///     `close` or `model_probabilities` is empty; `close` differs in length from
+///     `timestamps`, `model_probabilities` or `model_sides`, or `asset_names` from the
+///     number of assets; `asset_prices` has fewer than 2 rows, `cusum_threshold <= 0`,
+///     `num_classes < 2`, `confidence_level` is outside `[0, 1]` or `periods_per_year` is
+///     not finite and > 0; the CUSUM filter
+///     finds no event; or the max-Sharpe optimisation fails.
 #[pyfunction(name = "run_mid_frequency_pipeline")]
 #[pyo3(signature = (
     timestamps,

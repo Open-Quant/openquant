@@ -15,6 +15,10 @@ rust_api:
   - "ResearchPipelineInput"
   - "ResearchPipelineOutput"
   - "LeakageChecks"
+python_api:
+  - "pipeline.run_mid_frequency_pipeline"
+  - "pipeline.run_mid_frequency_pipeline_frames"
+  - "pipeline.summarize_pipeline"
 sidebar:
   badge: Module
 ---
@@ -80,22 +84,6 @@ print(summary)
 - Unordered timestamps do not stop the run; check leakage_checks.timestamps_increasing.
 - Leaving periods_per_year at 252 for intraday bars: realized_sharpe and the portfolio figures are then annual in units of 252 bars, not calendar years.
 - Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.
-
-## API Reference
-
-### Python API
-
-- `pipeline.run_mid_frequency_pipeline`
-- `pipeline.run_mid_frequency_pipeline_frames`
-- `pipeline.summarize_pipeline`
-
-### Rust API
-
-- `run_mid_frequency_pipeline`
-- `ResearchPipelineConfig`
-- `ResearchPipelineInput`
-- `ResearchPipelineOutput`
-- `LeakageChecks`
 
 ## Risk Notes and Caveats
 

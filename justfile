@@ -78,6 +78,18 @@ py-lint:
     uv run --python .venv/bin/python ruff format --check python/
     uv run --python .venv/bin/python mypy
 
+# Regenerate the API reference artefacts after changing a binding: the .pyi stubs (from the
+# Rust source), the rustdoc/API inventory, and the docs site's Python reference (from the
+# built extension, so run py-develop first).
+py-api-docs:
+    uv run --python .venv/bin/python python scripts/generate_python_stubs.py
+    uv run --python .venv/bin/python python scripts/generate_api_inventory.py
+    uv run --python .venv/bin/python python scripts/generate_python_api_reference.py
+
+# Check the stubs against the built extension (names, parameters, defaults).
+py-stubtest:
+    uv run --python .venv/bin/python python -m mypy.stubtest openquant._core
+
 py-setup:
     uv venv --python 3.13 .venv
     uv sync --group dev

@@ -3,7 +3,7 @@ title: "adapters"
 description: "Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -15,6 +15,15 @@ rust_api:
   - "to_polars_backtest_frame"
   - "to_polars_weights_frame"
   - "SignalStreamBuffer"
+python_api:
+  - "adapters.to_polars_signal_frame"
+  - "adapters.to_polars_event_frame"
+  - "adapters.to_polars_backtest_frame"
+  - "adapters.to_polars_weights_frame"
+  - "adapters.to_polars_indicator_matrix"
+  - "adapters.to_polars_frontier_frame"
+  - "adapters.SignalStreamBuffer"
+  - "adapters.to_pandas"
 sidebar:
   badge: Module
 ---
@@ -58,27 +67,6 @@ buf.append(timestamps=["2024-01-02T09:32:00"], signal=[0.1])
 buf.append(timestamps=["2024-01-02T09:33:00"], signal=[-0.2])
 all_signals = buf.frame()  # concat into single DataFrame
 ```
-
-## API Reference
-
-### Python API
-
-- `adapters.to_polars_signal_frame`
-- `adapters.to_polars_event_frame`
-- `adapters.to_polars_backtest_frame`
-- `adapters.to_polars_weights_frame`
-- `adapters.to_polars_indicator_matrix`
-- `adapters.to_polars_frontier_frame`
-- `adapters.SignalStreamBuffer`
-- `adapters.to_pandas`
-
-### Key Functions
-
-- `to_polars_signal_frame`
-- `to_polars_event_frame`
-- `to_polars_backtest_frame`
-- `to_polars_weights_frame`
-- `SignalStreamBuffer`
 
 ## Risk Notes and Caveats
 

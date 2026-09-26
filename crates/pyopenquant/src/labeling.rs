@@ -11,6 +11,40 @@ type EventRow = (String, Option<String>, f64, Option<f64>, f64, f64);
 /// Python-facing label row: `(timestamp, ret, trgt, bin, side)`.
 type BinRow = (String, f64, f64, i8, Option<f64>);
 
+/// Vertical (time) barriers: the first bar at or after each event time plus an offset.
+///
+/// AFML Snippet 3.4. The offset is `num_days + num_hours + num_minutes + num_seconds`. An
+/// event too close to the end of the series to have such a bar gets no row at all (no
+/// shortened barrier). `close_prices` is only checked for length. The result can be passed as
+/// `vertical_barrier_times` to the other labeling functions.
+///
+/// Parameters
+/// ----------
+/// t_events : list[str]
+///     Event timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
+/// close_timestamps : list[str]
+///     Bar timestamps in the same format, in increasing order.
+/// close_prices : list[float]
+///     Close price of each bar (same length as `close_timestamps`).
+/// num_days : int, default 0
+///     Days in the offset.
+/// num_hours : int, default 0
+///     Hours in the offset.
+/// num_minutes : int, default 0
+///     Minutes in the offset.
+/// num_seconds : int, default 0
+///     Seconds in the offset.
+///
+/// Returns
+/// -------
+/// list[tuple[str, str]]
+///     `(event, barrier)` timestamp pairs, in `t_events` order.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If all four offsets are zero, the timestamps and prices differ in length, or a
+///     timestamp does not parse.
 #[pyfunction(name = "add_vertical_barrier")]
 #[pyo3(signature = (
     t_events,
@@ -53,6 +87,54 @@ fn labeling_add_vertical_barrier(
         .collect())
 }
 
+/// Triple-barrier events: resolve each event's end time `t1`.
+///
+/// AFML Snippets 3.3 and 3.6. An event at bar `t0` with target `trgt` (a volatility estimate
+/// known at `t0`, e.g. from `get_daily_vol`) ends at the first bar whose side-signed simple
+/// return from `t0` goes strictly beyond `pt * trgt` or `-sl * trgt` (only closes are checked),
+/// or at its vertical barrier if that is earlier. With no vertical barrier and no touch, `t1`
+/// is None; that includes an event on the last bar.
+///
+/// Events, targets, sides and vertical barriers are joined to the bars by exact timestamp.
+/// An event is dropped silently when its timestamp is not a bar, its target is missing, NaN or
+/// not above `min_ret`, or (when `side_prediction` is given) it has no side.
+///
+/// Parameters
+/// ----------
+/// close_timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted),
+///     in increasing order.
+/// close_prices : list[float]
+///     Close price of each bar.
+/// t_events : list[str]
+///     Event start timestamps, in the same format.
+/// target_timestamps : list[str]
+///     Timestamps of the target series.
+/// target_values : list[float]
+///     Target return at each target timestamp (the unit of the horizontal barriers).
+/// pt : float, default 1.0
+///     Profit-taking multiple of the target; 0 disables the barrier.
+/// sl : float, default 1.0
+///     Stop-loss multiple of the target; 0 disables the barrier.
+/// min_ret : float, default 0.0
+///     Events whose target is not above this are dropped.
+/// vertical_barrier_times : list[tuple[str, str]] | None, default None
+///     `(event, barrier)` pairs, e.g. from `add_vertical_barrier`; events without one have no
+///     time limit.
+/// side_prediction : list[tuple[str, float]] | None, default None
+///     `(timestamp, side)` pairs from a primary model (`+1` long, `-1` short) for
+///     meta-labeling. When given, events without a side are dropped.
+///
+/// Returns
+/// -------
+/// list[tuple[str, str | None, float, float | None, float, float]]
+///     One `(t0, t1, trgt, side, pt, sl)` row per kept event, in `t_events` order.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp list and its value list differ in length, or a timestamp does not
+///     parse.
 #[pyfunction(name = "triple_barrier_events")]
 #[pyo3(signature = (
     close_timestamps,
@@ -107,6 +189,47 @@ fn labeling_triple_barrier_events(
         .collect())
 }
 
+/// Triple-barrier labels: the sign of the return from `t0` to the resolved `t1`.
+///
+/// AFML Snippets 3.2 and 3.5. Builds events as `triple_barrier_events` (without a side) and
+/// labels each by the simple return `close[t1] / close[t0] - 1`: 1 if positive, -1 if
+/// negative, 0 only for an exactly zero return. A vertical-barrier exit is labelled by the
+/// sign of the return there, not 0. Events whose `t1` is None (unresolved) are skipped.
+///
+/// Parameters
+/// ----------
+/// close_timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted),
+///     in increasing order.
+/// close_prices : list[float]
+///     Close price of each bar.
+/// t_events : list[str]
+///     Event start timestamps, in the same format.
+/// target_timestamps : list[str]
+///     Timestamps of the target series.
+/// target_values : list[float]
+///     Target return at each target timestamp (the unit of the horizontal barriers).
+/// pt : float, default 1.0
+///     Profit-taking multiple of the target; 0 disables the barrier.
+/// sl : float, default 1.0
+///     Stop-loss multiple of the target; 0 disables the barrier.
+/// min_ret : float, default 0.0
+///     Events whose target is not above this (or is NaN) are dropped.
+/// vertical_barrier_times : list[tuple[str, str]] | None, default None
+///     `(event, barrier)` pairs, e.g. from `add_vertical_barrier`; events without one have no
+///     time limit.
+///
+/// Returns
+/// -------
+/// list[tuple[str, float, float, int, float | None]]
+///     One `(t0, ret, trgt, bin, side)` row per resolved event; `bin` is -1, 0 or 1 and
+///     `side` is always None.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp list and its value list differ in length, or a timestamp does not
+///     parse.
 #[pyfunction(name = "triple_barrier_labels")]
 #[pyo3(signature = (
     close_timestamps,
@@ -150,6 +273,49 @@ fn labeling_triple_barrier_labels(
         .collect())
 }
 
+/// Meta-labels: whether a primary model's side would have made money on each event.
+///
+/// AFML 3.6, Snippets 3.6 and 3.7. Builds events as `triple_barrier_events` with the given
+/// sides (the barriers are applied to the side-signed return) and labels each event 1 if the
+/// side-signed return from `t0` to `t1` is positive and 0 otherwise. Events without a side, or
+/// whose `t1` is None (unresolved), are dropped.
+///
+/// Parameters
+/// ----------
+/// close_timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted),
+///     in increasing order.
+/// close_prices : list[float]
+///     Close price of each bar.
+/// t_events : list[str]
+///     Event start timestamps, in the same format.
+/// target_timestamps : list[str]
+///     Timestamps of the target series.
+/// target_values : list[float]
+///     Target return at each target timestamp (the unit of the horizontal barriers).
+/// side_prediction : list[tuple[str, float]]
+///     `(timestamp, side)` pairs from the primary model (`+1` long, `-1` short).
+/// pt : float, default 1.0
+///     Profit-taking multiple of the target; 0 disables the barrier.
+/// sl : float, default 1.0
+///     Stop-loss multiple of the target; 0 disables the barrier.
+/// min_ret : float, default 0.0
+///     Events whose target is not above this (or is NaN) are dropped.
+/// vertical_barrier_times : list[tuple[str, str]] | None, default None
+///     `(event, barrier)` pairs, e.g. from `add_vertical_barrier`; events without one have no
+///     time limit.
+///
+/// Returns
+/// -------
+/// list[tuple[str, float, float, int, float | None]]
+///     One `(t0, ret, trgt, bin, side)` row per resolved event; `ret` is the side-signed
+///     return and `bin` is 0 or 1.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp list and its value list differ in length, or a timestamp does not
+///     parse.
 #[pyfunction(name = "meta_labels")]
 #[pyo3(signature = (
     close_timestamps,
@@ -195,6 +361,48 @@ fn labeling_meta_labels(
         .collect())
 }
 
+/// mlfinlab-compatible form of `triple_barrier_events` (AFML Snippet 3.6's `getEvents`).
+///
+/// Same behaviour as `triple_barrier_events`, with the barrier multiples passed as one
+/// `pt_sl` pair and `min_ret` required. `num_threads` is ignored; it is kept so mlfinlab call
+/// sites port unchanged.
+///
+/// Parameters
+/// ----------
+/// close_timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted),
+///     in increasing order.
+/// close_prices : list[float]
+///     Close price of each bar.
+/// t_events : list[str]
+///     Event start timestamps, in the same format.
+/// pt_sl : tuple[float, float]
+///     `(profit-taking, stop-loss)` multiples of the target; 0 disables that barrier.
+/// target_timestamps : list[str]
+///     Timestamps of the target series.
+/// target_values : list[float]
+///     Target return at each target timestamp.
+/// min_ret : float
+///     Events whose target is not above this (or is NaN) are dropped.
+/// num_threads : int, default 1
+///     Ignored.
+/// vertical_barrier_times : list[tuple[str, str]] | None, default None
+///     `(event, barrier)` pairs, e.g. from `add_vertical_barrier`; events without one have no
+///     time limit.
+/// side_prediction : list[tuple[str, float]] | None, default None
+///     `(timestamp, side)` pairs from a primary model for meta-labeling; when given, events
+///     without a side are dropped.
+///
+/// Returns
+/// -------
+/// list[tuple[str, str | None, float, float | None, float, float]]
+///     One `(t0, t1, trgt, side, pt, sl)` row per kept event, in `t_events` order.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a timestamp list and its value list differ in length, or a timestamp does not
+///     parse.
 #[pyfunction(name = "get_events")]
 #[pyo3(signature = (
     close_timestamps,
@@ -266,6 +474,33 @@ fn labeling_get_events(
         .collect())
 }
 
+/// mlfinlab-compatible labelling of resolved events (AFML Snippet 3.7's `getBins`).
+///
+/// Labels each event by the return from `t0` to `t1`, multiplied by the side when there is
+/// one. Without a side the label is the sign of the return (-1, 0 or 1); with a side it is 1
+/// if the side-signed return is positive and 0 otherwise (meta-label). Events whose `t1` is
+/// None, or whose `t0` or `t1` is not a bar, are skipped.
+///
+/// Parameters
+/// ----------
+/// events : list[tuple[str, str | None, float, float | None, float, float]]
+///     `(t0, t1, trgt, side, pt, sl)` rows, as returned by `get_events` or
+///     `triple_barrier_events`.
+/// close_timestamps : list[str]
+///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
+/// close_prices : list[float]
+///     Close price of each bar.
+///
+/// Returns
+/// -------
+/// list[tuple[str, float, float, int, float | None]]
+///     One `(t0, ret, trgt, bin, side)` row per labelled event; `ret` is side-signed.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If the timestamps and prices differ in length, or a timestamp (in `events` or
+///     `close_timestamps`) does not parse.
 #[pyfunction(name = "get_bins")]
 fn labeling_get_bins(
     events: Vec<EventRow>,
@@ -291,6 +526,23 @@ fn labeling_get_bins(
         .collect())
 }
 
+/// Drop under-represented labels.
+///
+/// AFML Snippet 3.8. Repeatedly removes every row of the rarest label while its share of the
+/// rows is at most `min_pct` and at least three distinct labels remain. Rows whose timestamp
+/// does not parse are dropped silently rather than raising.
+///
+/// Parameters
+/// ----------
+/// events : list[tuple[str, float, float, int, float | None]]
+///     `(t0, ret, trgt, bin, side)` rows, as returned by `get_bins`.
+/// min_pct : float
+///     Minimum share of the rows a label must have to be kept, e.g. 0.05.
+///
+/// Returns
+/// -------
+/// list[tuple[str, float, float, int, float | None]]
+///     The remaining rows, in input order.
 #[pyfunction(name = "drop_labels")]
 fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> Vec<BinRow> {
     let parsed: Vec<(chrono::NaiveDateTime, f64, f64, i8, Option<f64>)> = events

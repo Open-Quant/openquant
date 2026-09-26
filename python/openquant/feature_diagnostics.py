@@ -328,6 +328,44 @@ def mdi_importance(
     n_estimators: int = 32,
     seed: int = 42,
 ) -> dict[str, Any]:
+    """Estimate feature importance from bootstrapped logistic-regression coefficients.
+
+    Named after mean decrease impurity (AFML section 8.3.1), but no trees are grown: for
+    each of `n_estimators` bootstrap resamples, an L2-penalized (ridge 1e-3) logistic
+    regression is fitted by Newton's method and the absolute coefficients are normalized to
+    sum to 1. The importance is the mean of those shares across resamples. It is in-sample,
+    and the coefficients are on the raw feature scale, so standardize features first or
+    larger-scaled features get smaller shares.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]]
+        Feature matrix, one row per sample; must be non-empty and rectangular.
+    y : Sequence[float]
+        Binary label per sample, 0.0 or 1.0.
+    feature_names : Sequence[str] or None, default None
+        Feature names; defaults to `f0`, `f1`, ...
+    sample_weight : Sequence[float] or None, default None
+        Optional weight per sample, used in fitting and scoring.
+    n_estimators : int, default 32
+        Number of bootstrap resamples; at least 2.
+    seed : int, default 42
+        Seed for the bootstrap draws.
+
+    Returns
+    -------
+    dict[str, Any]
+        `method` (`"mdi"`), `table` (polars.DataFrame with columns `feature`, `mean`, `std`
+        and `stderr` across resamples, sorted by `mean` descending), `records` (`table` as a
+        list of dicts), `viz_payload` (`openquant.viz.prepare_feature_importance_payload` of
+        `mean` with `stderr` error bars) and `meta` (`n_estimators`, `seed`).
+
+    Raises
+    ------
+    ValueError
+        If `X` is empty or not rectangular, a length does not match the rows of `X`, or
+        `n_estimators < 2`.
+    """
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -414,6 +452,66 @@ def mda_importance(
     allow_unpurged: bool = False,
     seed: int = 42,
 ) -> dict[str, Any]:
+    """Estimate out-of-sample permutation feature importance (MDA, AFML section 8.3.2).
+
+    For each fold a model is fitted on the training rows and scored on the test rows; then
+    each feature's test column is shuffled once (seeded) and the test rows rescored. As in
+    AFML Snippet 8.3, a feature's fold importance is `(base - permuted) / -permuted` for
+    `neg_log_loss` and `(base - permuted) / (1 - permuted)` for `accuracy` and `f1`;
+    non-finite values become 0.0.
+
+    Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
+    samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
+    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
+    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
+    tree ensemble AFML uses.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]]
+        Feature matrix, one row per sample; must be non-empty and rectangular.
+    y : Sequence[float]
+        Binary label per sample, 0.0 or 1.0.
+    feature_names : Sequence[str] or None, default None
+        Feature names; defaults to `f0`, `f1`, ...
+    sample_weight : Sequence[float] or None, default None
+        Optional weight per sample, used in fitting and scoring.
+    event_end_indices : Sequence[int] or None, default None
+        Row index at which each sample's label is resolved (must be `>=` the sample's own
+        index; values past the last row are clipped). Required unless `allow_unpurged`.
+    n_splits : int, default 5
+        Number of contiguous folds (2 to the number of samples).
+    pct_embargo : float, default 0.01
+        Fraction of samples, rounded up, embargoed on each side of every test fold; in
+        `[0, 1)`.
+    scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
+        Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
+    allow_unpurged : bool, default False
+        Accept `event_end_indices=None`, giving embargo-only splits that leak label
+        information across folds.
+    seed : int, default 42
+        Seed for the permutations.
+
+    Returns
+    -------
+    dict[str, Any]
+        `method` (`"mda"`),
+        `table` (polars.DataFrame with columns `feature`, `mean`, `std` and `stderr`
+        across folds, sorted by `mean` descending), `records` (`table` as a list of dicts),
+        `viz_payload` (`openquant.viz.prepare_feature_importance_payload` of `mean` with
+        `stderr` error bars) and `cv`
+        (`method` `"purged_kfold"` or `"kfold_embargo_only"`, `purged`, `n_splits`,
+        `pct_embargo`, `fold_count`, `scoring`, `seed` and `mean_base_score`, the
+        unpermuted score averaged over folds).
+
+    Raises
+    ------
+    ValueError
+        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        `event_end_indices` is None without `allow_unpurged` or has an entry below its row
+        index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
+        training set, or `scoring` is not supported.
+    """
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -481,6 +579,62 @@ def sfi_importance(
     scoring: str = "neg_log_loss",
     allow_unpurged: bool = False,
 ) -> dict[str, Any]:
+    """Score each feature on its own out of sample (single feature importance, AFML 8.4.1).
+
+    For every feature and fold, a model using only that feature is fitted on the training
+    rows and scored on the test rows (AFML Snippet 8.4). The importance is the raw score, so
+    with `neg_log_loss` it is negative and higher is better. Being one feature at a time, it
+    does not suffer MDA's substitution effect but ignores joint effects.
+
+    Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
+    samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
+    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
+    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
+    tree ensemble AFML uses.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]]
+        Feature matrix, one row per sample; must be non-empty and rectangular.
+    y : Sequence[float]
+        Binary label per sample, 0.0 or 1.0.
+    feature_names : Sequence[str] or None, default None
+        Feature names; defaults to `f0`, `f1`, ...
+    sample_weight : Sequence[float] or None, default None
+        Optional weight per sample, used in fitting and scoring.
+    event_end_indices : Sequence[int] or None, default None
+        Row index at which each sample's label is resolved (must be `>=` the sample's own
+        index; values past the last row are clipped). Required unless `allow_unpurged`.
+    n_splits : int, default 5
+        Number of contiguous folds (2 to the number of samples).
+    pct_embargo : float, default 0.01
+        Fraction of samples, rounded up, embargoed on each side of every test fold; in
+        `[0, 1)`.
+    scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
+        Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
+    allow_unpurged : bool, default False
+        Accept `event_end_indices=None`, giving embargo-only splits that leak label
+        information across folds.
+
+    Returns
+    -------
+    dict[str, Any]
+        `method` (`"sfi"`),
+        `table` (polars.DataFrame with columns `feature`, `mean`, `std` and `stderr`
+        across folds, sorted by `mean` descending), `records` (`table` as a list of dicts),
+        `viz_payload` (`openquant.viz.prepare_feature_importance_payload` of `mean` with
+        `stderr` error bars) and `cv`
+        (`method` `"purged_kfold"` or `"kfold_embargo_only"`, `purged`, `n_splits`,
+        `pct_embargo`, `fold_count` and `scoring`).
+
+    Raises
+    ------
+    ValueError
+        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        `event_end_indices` is None without `allow_unpurged` or has an entry below its row
+        index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
+        training set, or `scoring` is not supported.
+    """
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)
@@ -565,6 +719,36 @@ def orthogonalize_features_pca(
     X: Sequence[Sequence[float]],
     variance_threshold: float = 0.95,
 ) -> dict[str, Any]:
+    """Project standardized features onto their leading principal components (AFML 8.4.2).
+
+    Each column is standardized with its mean and sample standard deviation (a constant
+    column is divided by 1). Eigenpairs of the resulting correlation matrix are found by
+    power iteration with deflation, stopping at the first eigenvalue `<= 1e-12`; the
+    fewest leading components whose explained-variance ratios reach `variance_threshold`
+    are kept. Component signs are arbitrary.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]]
+        Feature matrix, one row per sample; must be non-empty and rectangular.
+    variance_threshold : float, default 0.95
+        Cumulative explained-variance ratio to reach, in `(0, 1]`.
+
+    Returns
+    -------
+    dict[str, Any]
+        `transformed` (list of rows of component scores), `table` (polars.DataFrame of the
+        scores with columns `pc1`, `pc2`, ...), `records` (`table` as a list of dicts),
+        `components` (kept eigenvectors, one list per component, in feature order),
+        `explained_variance_ratio` (per kept component), `mean` and `std` (per feature, as
+        used for standardizing).
+
+    Raises
+    ------
+    ValueError
+        If `variance_threshold` is not in `(0, 1]`, `X` is empty or not rectangular, or
+        every eigenvalue is zero.
+    """
     if variance_threshold <= 0.0 or variance_threshold > 1.0:
         raise ValueError("variance_threshold must be in (0, 1]")
 
@@ -662,6 +846,68 @@ def substitution_effect_report(
     allow_unpurged: bool = False,
     seed: int = 42,
 ) -> dict[str, Any]:
+    """Flag correlated feature pairs whose MDA importance is diluted by substitution.
+
+    AFML section 8.2: when two features carry the same information, permuting either alone
+    barely hurts the model, so MDA understates both. This runs `mda_importance` as a
+    baseline, then for every pair with `abs(corr) >= corr_threshold` (Pearson correlation
+    over all rows) permutes the two columns jointly in each fold. `dilution_ratio` is the
+    pair's joint importance over the sum of their baseline MDA means, and a ratio above
+    1.15 flags substitution risk. With `orthogonalize=True` it also reruns MDA on the
+    principal components (`orthogonalize_features_pca` at a fixed 0.95 variance threshold),
+    which AFML recommends as a remedy.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]]
+        Feature matrix, one row per sample; must be non-empty and rectangular.
+    y : Sequence[float]
+        Binary label per sample, 0.0 or 1.0.
+    feature_names : Sequence[str] or None, default None
+        Feature names; defaults to `f0`, `f1`, ...
+    sample_weight : Sequence[float] or None, default None
+        Optional weight per sample, used in fitting and scoring.
+    event_end_indices : Sequence[int] or None, default None
+        Row index at which each sample's label is resolved (must be `>=` the sample's own
+        index; values past the last row are clipped). Required unless `allow_unpurged`.
+    n_splits : int, default 5
+        Number of contiguous folds (2 to the number of samples).
+    pct_embargo : float, default 0.01
+        Fraction of samples, rounded up, embargoed on each side of every test fold; in
+        `[0, 1)`.
+    scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
+        Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
+    allow_unpurged : bool, default False
+        Accept `event_end_indices=None`, giving embargo-only splits that leak label
+        information across folds.
+    corr_threshold : float, default 0.9
+        Minimum absolute correlation for a pair to be tested.
+    orthogonalize : bool, default True
+        Also compute MDA on principal components.
+    seed : int, default 42
+        Seed for the permutations.
+
+    Returns
+    -------
+    dict[str, Any]
+        `baseline_mda` (the `mda_importance` result), `pairs` (polars.DataFrame with columns
+        `feature_a`, `feature_b`, `corr`, `single_sum`, `group_importance`,
+        `dilution_ratio` and `flag_substitution_risk`, one row per tested pair) and
+        `pair_records` (`pairs` as a list of dicts). With `orthogonalize=True`, also
+        `orthogonalized` (`pca`: the `orthogonalize_features_pca` result, `mda`: MDA on the
+        components, `max_abs_corr_before` and `max_abs_corr_after`: largest absolute
+        off-diagonal correlation of the raw features and of the components) and
+        `comparison_viz_payload` (grouped bars of raw against orthogonalized MDA means).
+
+    Raises
+    ------
+    ValueError
+        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        `event_end_indices` is None without `allow_unpurged` or has an entry below its row
+        index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
+        training set, or `scoring` is not supported; also if `orthogonalize` is True and
+        every feature is constant.
+    """
     x = _as_matrix(X)
     yv = _as_vector(y, len(x))
     names = _feature_names(len(x[0]), feature_names)

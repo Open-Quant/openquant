@@ -427,7 +427,8 @@ export const moduleDocs: ModuleDoc[] = [
     subject: "Data Ingestion and Quality",
     summary: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.",
     whyItExists: "Provides a consistent entrypoint for market data ingestion with automatic column normalization, deduplication, and quality diagnostics.",
-    keyApis: ["load_ohlcv", "clean_ohlcv", "align_calendar", "data_quality_report"],
+    // The Rust functions behind the Python ones (openquant::data_processing).
+    keyApis: ["clean_ohlcv_df", "quality_report_df", "align_calendar_df", "DataQualityReport"],
     formulas: [],
     examples: [
       {
@@ -536,7 +537,7 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
     ],
     relatedModules: ["data-structures", "research"],
     apiSurface: "both",
-    pythonApis: ["data.fetch", "data.dataset_hash", "data.record_dataset_hash", "data.quality_failures", "data.default_cache_dir", "data.DataSource", "data.LocalSampleSource", "data.LocalFileSource", "data.CallableSource", "data.CacheMissError", "data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report", "data.clean_ohlcv_df", "data.quality_report_df", "data.align_calendar_df"],
+    pythonApis: ["data.fetch", "data.dataset_hash", "data.record_dataset_hash", "data.quality_failures", "data.default_cache_dir", "data.DataSource", "data.LocalSampleSource", "data.LocalFileSource", "data.CallableSource", "data.CacheMissError", "data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report"],
   },
   {
     slug: "evaluation",

@@ -3,6 +3,7 @@ import starlight from '@astrojs/starlight';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
+import { remarkApiReference } from './scripts/remark-api-reference.mjs';
 import { monographDark, monographLight } from './src/styles/code-themes.mjs';
 
 export default defineConfig({
@@ -10,7 +11,8 @@ export default defineConfig({
   base: '/openquant',
   output: 'static',
   markdown: {
-    remarkPlugins: [remarkMath, remarkBaseUrl({ base: '/openquant' })],
+    // remarkApiReference must run before remarkBaseUrl: its links are base-relative.
+    remarkPlugins: [remarkMath, remarkApiReference(), remarkBaseUrl({ base: '/openquant' })],
     rehypePlugins: [rehypeKatex],
   },
   integrations: [
@@ -229,6 +231,10 @@ export default defineConfig({
           items: [
             { slug: 'module-reference/by-afml-chapter' },
             { slug: 'examples/catalog' },
+            // Generated: from the built extension (scripts/generate_python_api_reference.py)
+            // and from `cargo doc`, staged into dist/api/rust/ by scripts/stage-rustdoc.mjs.
+            { label: 'Python API', link: '/api/python/' },
+            { label: 'Rust API (rustdoc)', link: '/api/rust/openquant/' },
           ],
         },
         {

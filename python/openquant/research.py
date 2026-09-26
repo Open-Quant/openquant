@@ -15,6 +15,28 @@ from . import pipeline
 
 @dataclass(frozen=True)
 class ResearchDataset:
+    """Inputs for one research-flywheel run, as parallel per-bar lists.
+
+    Built by `make_synthetic_futures_dataset` and consumed by `run_flywheel_iteration` and
+    `run_flywheel_grid`, which pass the fields to
+    `openquant.pipeline.run_mid_frequency_pipeline_frames`.
+
+    Attributes
+    ----------
+    timestamps : list[str]
+        Bar timestamps as `"%Y-%m-%d %H:%M:%S"` strings.
+    close : list[float]
+        Close price of the primary traded instrument per bar.
+    model_probabilities : list[float]
+        Model probability per bar.
+    model_sides : list[float]
+        Model side per bar (+1.0 or -1.0).
+    asset_prices : list[list[float]]
+        One row per bar, one column per asset, in `asset_names` order.
+    asset_names : list[str]
+        Asset names; the first is the primary instrument.
+    """
+
     timestamps: list[str]
     close: list[float]
     model_probabilities: list[float]
@@ -105,6 +127,49 @@ def run_flywheel_iteration(
     *,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Run the mid-frequency pipeline once and add cost estimates and promotion checks.
+
+    Runs `openquant.pipeline.run_mid_frequency_pipeline_frames` on `dataset`, then
+    estimates trading costs from the backtest frame and evaluates promotion gates. These
+    cost and Sharpe figures are heuristics for comparing configurations, not a cost model:
+
+    - `turnover` is the sum of absolute position changes between bars.
+    - `realized_vol` is the sample standard deviation of per-bar strategy returns times
+      `sqrt(252)`.
+    - `cost_per_turn` is `(commission_bps + spread_bps) * 1e-4 + slippage_vol_mult *
+      realized_vol * 1e-3`, and the estimated total cost is `turnover * cost_per_turn`.
+    - `gross_total_return` is the final equity minus 1.0; `net_total_return` subtracts the
+      estimated total cost.
+    - `net_sharpe` is the mean over the sample standard deviation of the per-bar returns,
+      times `sqrt(252 * 390 / n_bars)`. Despite the name it uses the gross returns; costs
+      are not deducted from it.
+
+    Parameters
+    ----------
+    dataset : ResearchDataset
+        Pipeline inputs.
+    config : dict[str, Any] or None, default None
+        Overrides for the defaults: `cusum_threshold` (0.001), `num_classes` (2),
+        `step_size` (0.1), `risk_free_rate` (0.0) and `confidence_level` (0.05), passed to
+        the pipeline; `commission_bps` (1.5), `spread_bps` (2.0) and `slippage_vol_mult`
+        (8.0) for the cost estimate; `min_net_sharpe` (0.30) and `min_realized_sharpe`
+        (0.25) for promotion. Unknown keys are ignored.
+
+    Returns
+    -------
+    dict[str, Any]
+        The pipeline output (`events`, `signals`, `portfolio`, `risk`, `backtest`,
+        `leakage_checks`, `frames`) plus:
+
+        - `costs`: `turnover`, `realized_vol`, `cost_per_turn`, `estimated_total_cost`,
+          `gross_total_return`, `net_total_return` and `net_sharpe`.
+        - `promotion`: booleans `passed_realized_sharpe` (pipeline realized Sharpe
+          `>= min_realized_sharpe`), `passed_net_sharpe`, `passed_alignment_guard`,
+          `passed_event_order_guard` and `promote_candidate` (all of them).
+        - `summary`: the one-row `openquant.pipeline.summarize_pipeline` frame with columns
+          `turnover`, `realized_vol`, `estimated_cost`, `gross_total_return`,
+          `net_total_return` and `net_sharpe` added.
+    """
     cfg = {
         "cusum_threshold": 0.001,
         "num_classes": 2,

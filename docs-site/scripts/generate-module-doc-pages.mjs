@@ -160,25 +160,9 @@ for (const doc of moduleDocs.filter(isGenerated)) {
   }
 
   // --- API Reference ---
-  const apiParts = [];
-  if (doc.pythonApis && doc.pythonApis.length) {
-    apiParts.push(
-      `### Python API\n\n${doc.pythonApis.map((api) => `- \`${api}\``).join('\n')}`
-    );
-  }
-  if (doc.keyApis.length) {
-    const label = doc.apiSurface === 'python-only' ? 'Key Functions' : 'Rust API';
-    apiParts.push(
-      `### ${label}\n\n${doc.keyApis.map((api) => `- \`${api}\``).join('\n')}`
-    );
-  }
-  if (apiParts.length) {
-    sections.push(`## API Reference\n\n${apiParts.join('\n\n')}`);
-  } else {
-    sections.push(
-      `## Key Public APIs\n\n${doc.keyApis.map((api) => `- \`${api}\``).join('\n')}`
-    );
-  }
+  // Not emitted here. scripts/remark-api-reference.mjs appends the section to every module
+  // page at build time from the `rust_api` / `python_api` frontmatter, with each name linked
+  // to its rustdoc page or Python reference entry. A bare list written here would duplicate it.
 
   // --- Risk Notes and Caveats ---
   // These were emitted twice on every page: once as the `risk_notes` frontmatter
@@ -219,7 +203,7 @@ audience:
 module: ${q(doc.module)}
 ${doc.apiSurface ? `api_surface: ${q(doc.apiSurface)}\n` : ''}${chapterNote}rust_api:
 ${toYamlList(doc.keyApis)}
-sidebar:
+${doc.pythonApis && doc.pythonApis.length ? `python_api:\n${toYamlList(doc.pythonApis)}\n` : ''}sidebar:
   badge: Module
 ---
 

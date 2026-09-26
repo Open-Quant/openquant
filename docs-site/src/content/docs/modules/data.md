@@ -10,10 +10,25 @@ audience:
 module: "data"
 api_surface: "both"
 rust_api:
-  - "load_ohlcv"
-  - "clean_ohlcv"
-  - "align_calendar"
-  - "data_quality_report"
+  - "clean_ohlcv_df"
+  - "quality_report_df"
+  - "align_calendar_df"
+  - "DataQualityReport"
+python_api:
+  - "data.fetch"
+  - "data.dataset_hash"
+  - "data.record_dataset_hash"
+  - "data.quality_failures"
+  - "data.default_cache_dir"
+  - "data.DataSource"
+  - "data.LocalSampleSource"
+  - "data.LocalFileSource"
+  - "data.CallableSource"
+  - "data.CacheMissError"
+  - "data.load_ohlcv"
+  - "data.clean_ohlcv"
+  - "data.align_calendar"
+  - "data.data_quality_report"
 sidebar:
   badge: Module
 ---
@@ -126,35 +141,6 @@ quality = data_quality_report(df)
 - Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.
 - Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.
 - Using align_calendar with bars that are not on the grid. Each symbol's grid starts at its first bar and steps by `interval`, so a bar stamped off that grid (a daily bar at a different time of day, an irregular intraday print) is not in the output. `align_calendar(df, interval=..., return_report=True)` returns `(aligned, report)` with those bars in `report["off_grid_bars"]` and their number in `report["off_grid_bar_count"]`; without `return_report` a `UserWarning` says how many were dropped. The `_core.data.align_calendar` and `align_calendar_df` bindings take the same `return_report` flag.
-
-## API Reference
-
-### Python API
-
-- `data.fetch`
-- `data.dataset_hash`
-- `data.record_dataset_hash`
-- `data.quality_failures`
-- `data.default_cache_dir`
-- `data.DataSource`
-- `data.LocalSampleSource`
-- `data.LocalFileSource`
-- `data.CallableSource`
-- `data.CacheMissError`
-- `data.load_ohlcv`
-- `data.clean_ohlcv`
-- `data.align_calendar`
-- `data.data_quality_report`
-- `data.clean_ohlcv_df`
-- `data.quality_report_df`
-- `data.align_calendar_df`
-
-### Rust API
-
-- `load_ohlcv`
-- `clean_ohlcv`
-- `align_calendar`
-- `data_quality_report`
 
 ## Risk Notes and Caveats
 
