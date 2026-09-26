@@ -257,6 +257,41 @@ def test_registry_dsr_uses_the_registry_count(tmp_path):
     )
 
 
+def test_registry_records_constant_returns_as_sharpe_zero(tmp_path):
+    # A configuration that took no bet earns zero every period. It was still tried, so it
+    # must count: raising would leave callers to skip it and deflate too weakly.
+    path = tmp_path / "trials.json"
+    n, sr, *_ = _hand_moments(RETURNS)
+    mean = sum(RETURNS) / n
+    sd = math.sqrt(sum((x - mean) ** 2 for x in RETURNS) / (n - 1))
+    reg = ev.TrialRegistry(path)
+    for i, target in enumerate(OTHER_TRIALS):
+        reg.record({"variant": i}, [r - mean + target * sd for r in RETURNS])
+    reg.record({"variant": "chosen"}, RETURNS)
+    no_bets = reg.record({"variant": "no bets"}, [0.0] * n)
+    flat = reg.record({"variant": "flat"}, [0.001] * n)
+
+    for trial in (no_bets, flat):
+        assert (trial.sharpe, trial.skewness, trial.kurtosis, trial.n_obs) == (0.0, 0.0, 3.0, n)
+    reloaded = ev.TrialRegistry(path)
+    assert reloaded.n_trials == 10
+    assert [t.sharpe for t in reloaded.trials[-2:]] == [0.0, 0.0]
+
+    # The DSR deflates by all ten trials, the two zeros included in the dispersion.
+    all_sharpes = OTHER_TRIALS + [sr, 0.0, 0.0]
+    assert reloaded.sharpe_std() == pytest.approx(_pop_std(all_sharpes), abs=1e-12)
+    assert reloaded.deflated_sharpe_ratio(RETURNS) == pytest.approx(
+        _hand_psr(RETURNS, _hand_sr0(_pop_std(all_sharpes), 10)), abs=1e-9
+    )
+    assert reloaded.deflated_sharpe_ratio(RETURNS) == pytest.approx(
+        ev.deflated_sharpe_ratio(RETURNS, trial_sharpes=all_sharpes), abs=1e-12
+    )
+
+    # Evaluating constant returns themselves still has no Sharpe ratio to deflate.
+    with pytest.raises(ValueError, match="constant"):
+        reloaded.deflated_sharpe_ratio([0.0] * n)
+
+
 def test_registry_needs_two_trials_to_deflate(tmp_path):
     reg = ev.TrialRegistry(tmp_path / "trials.json")
     with pytest.raises(ValueError, match="at least 2"):

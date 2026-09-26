@@ -1,7 +1,9 @@
 import math
 
+import numpy as np
 import pytest
 from openquant import sampling, sb_bagging
+from openquant.cross_validation import purged_kfold_splits
 
 N_SAMPLES = 240
 
@@ -125,3 +127,107 @@ def test_sb_classifier_all_features():
     x, y, _, ind_mat = _synthetic_dataset()
     out = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=10, random_state=1)
     assert _accuracy(out["predictions"], y) >= 0.55
+
+
+# --- the model object: fit on some rows, predict on others (issue #187) -------------------
+
+SPAN = 6
+
+
+def _labels(rows):
+    """Spans of the labels at `rows` (each spans the next SPAN bars) and their ind_mat."""
+    spans = [(r, min(r + SPAN, N_SAMPLES - 1)) for r in rows]
+    return spans, sampling.get_ind_matrix(spans, list(range(N_SAMPLES)))
+
+
+def _proba_ok(proba, n_rows):
+    arr = np.asarray(proba, dtype=float)
+    assert arr.shape == (n_rows, 2)
+    assert ((arr >= 0.0) & (arr <= 1.0)).all()
+    np.testing.assert_allclose(arr.sum(axis=1), 1.0, atol=1e-12)
+    return arr
+
+
+def test_classifier_predicts_held_out_rows():
+    # Mirrors crates/openquant/tests/sb_bagging.rs::test_sb_classifier, through Python.
+    x, y, _, _ = _synthetic_dataset()
+    split = int(N_SAMPLES * 0.6)
+    _, ind_train = _labels(range(split))
+    model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(
+        n_estimators=100, oob_score=True, random_state=1
+    )
+    assert model.fit(x[:split], y[:split], ind_train) is model
+    assert model.n_features_in_ == 8 and model.classes_ == [0, 1]
+    assert len(model.estimators_samples_) == 100
+    assert math.isfinite(model.oob_score_)
+
+    predictions = model.predict(x[split:])
+    assert _accuracy(predictions, y[split:]) >= 0.55
+    proba = _proba_ok(model.predict_proba(x[split:]), N_SAMPLES - split)
+    # The probability is the share of 100 votes, and predict is its majority.
+    np.testing.assert_allclose(proba[:, 1] * 100, np.round(proba[:, 1] * 100), atol=1e-9)
+    assert predictions == [int(p >= 0.5) for p in proba[:, 1]]
+
+
+def test_classifier_is_reproducible_with_a_seed():
+    x, y, _, ind_mat = _synthetic_dataset()
+    proba = [
+        sb_bagging.SequentiallyBootstrappedBaggingClassifier(n_estimators=15, random_state=s)
+        .fit(x, y, ind_mat)
+        .predict_proba(x)
+        for s in (4, 4, 5)
+    ]
+    assert proba[0] == proba[1]
+    assert proba[0] != proba[2]
+
+
+def test_classifier_matches_fit_predict_sb_classifier():
+    x, y, _, ind_mat = _synthetic_dataset()
+    old = sb_bagging.fit_predict_sb_classifier(x, y, ind_mat, n_estimators=12, random_state=9)
+    model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(
+        n_estimators=12, random_state=9, oob_score=True
+    ).fit(x, y, ind_mat)
+    assert model.predict(x) == old["predictions"]
+    assert model.oob_score_ == old["oob_score"]
+
+
+def test_classifier_out_of_fold_with_purged_kfold():
+    x, y, _, _ = _synthetic_dataset()
+    x_arr, y_arr = np.asarray(x), np.asarray(y)
+    spans, ind_mat = _labels(range(N_SAMPLES))
+    t0 = [s for s, _ in spans]
+    t1 = [e for _, e in spans]
+    ind_arr = np.asarray(ind_mat)
+
+    oof = np.full((N_SAMPLES, 2), np.nan)
+    splits = purged_kfold_splits(t0, t1, n_splits=4, pct_embargo=0.01)
+    for train, test in splits:
+        # The training labels' columns of the indicator matrix: one per training row.
+        model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(
+            n_estimators=25, random_state=11
+        ).fit(x_arr[train].tolist(), y_arr[train].tolist(), ind_arr[:, train].tolist())
+        oof[test] = model.predict_proba(x_arr[test].tolist())
+
+    covered = np.concatenate([test for _, test in splits])
+    assert sorted(covered.tolist()) == list(range(N_SAMPLES))  # every row scored exactly once
+    _proba_ok(oof, N_SAMPLES)
+    assert _accuracy((oof[:, 1] >= 0.5).astype(int).tolist(), y) >= 0.55
+
+
+def test_classifier_validates_prediction_inputs():
+    x, y, _, ind_mat = _synthetic_dataset()
+    model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(n_estimators=3)
+    assert model.n_features_in_ is None and model.oob_score_ is None
+    with pytest.raises(ValueError, match="not fitted"):
+        model.predict(x)
+    with pytest.raises(ValueError, match="not fitted"):
+        model.predict_proba(x)
+    model.fit(x, y, ind_mat)
+    with pytest.raises(ValueError, match="2 feature columns but the model was fitted on 8"):
+        model.predict_proba([row[:2] for row in x])
+    with pytest.raises(ValueError, match="disagree on the number of samples"):
+        model.fit(x[:-5], y[:-5], ind_mat)
+    # A failed fit leaves the model unfitted rather than half-fitted.
+    with pytest.raises(ValueError, match="not fitted"):
+        model.predict(x)
+    assert "n_estimators=3" in repr(model)
