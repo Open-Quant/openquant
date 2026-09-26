@@ -62,10 +62,14 @@ variance, and:
 | `"equal_weighting"` | one half, always |
 
 The first four give less to the riskier side. `"sharpe_ratio"` gives *more* to the better
-side and needs expected returns: pass `expected_asset_returns`, or prices, from which they
-are estimated as a mean or (`calculate_expected_returns = "exponential"`) an exponentially
-weighted mean of returns. When the two Sharpe ratios do not give a share between 0 and 1 —
-one of them is negative — that split falls back to minimum variance.
+side and needs expected returns: pass `expected_asset_returns`, or a return history
+(`asset_returns` or prices), from which they are estimated as a mean or
+(`calculate_expected_returns = "exponential"`) an exponentially weighted mean of returns,
+annualised by 252. Only a covariance matrix is not enough and raises
+`MissingExpectedReturnsForSharpe`. The share of two Sharpe ratios means something only when
+neither is negative: with both negative it still lands between 0 and 1 but favours the
+*worse* side (−1 against −3 would give the better side a quarter). So whenever either
+Sharpe ratio is negative, or both are 0, that split falls back to minimum variance.
 
 The two tail metrics need the return history and raise `MissingReturnsForTailRisk` if only a
 covariance matrix was supplied. `confidence_level` is the tail probability, 0.05 by default
@@ -227,8 +231,9 @@ assert!(matches!(
 - **Expected shortfall and conditional drawdown are computed here, not in
   [`risk-metrics`](/modules/risk-metrics/).** Both are historical estimates from the half's
   inverse-variance portfolio. The drawdown measure builds a wealth curve from the returns and
-  averages the worst drawdowns, which is the correct construction; it is unrelated to the
-  `risk_metrics` function of the same name, which has a known defect.
+  averages the worst drawdowns. `risk_metrics`' function of the same name does the same from
+  a wealth curve you pass it, but takes the upper-tail level (0.95) where this module takes
+  the tail probability (0.05).
 - **The Python default metric is `"equal_weighting"`**, which is the least useful of the six
   for the reason above. Pass `allocation_metric` explicitly.
 - **Tail metrics on short histories are noisy.** A 5% tail of 750 days is 38 observations,

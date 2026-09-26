@@ -2,7 +2,7 @@
 title: Quickstart
 description: Install OpenQuant and get one real result out of it.
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -65,8 +65,8 @@ from openquant.research import make_synthetic_futures_dataset, run_flywheel_iter
 # four instruments. No market data feed required.
 dataset = make_synthetic_futures_dataset(n_bars=192, seed=7)
 
-# One full AFML iteration: events -> labels -> sizing -> backtest ->
-# portfolio -> risk, then trading costs and promotion gates.
+# One full AFML iteration: events -> sizing -> backtest -> portfolio ->
+# risk, then trading costs and promotion gates.
 result = run_flywheel_iteration(dataset)
 
 print("leakage checks:")
@@ -95,6 +95,7 @@ dataset is seeded, so you should see the same numbers:
 ```text
 leakage checks:
   inputs_aligned           True
+  timestamps_increasing    True
   event_indices_sorted     True
   has_forward_look_bias    False
 
@@ -107,6 +108,7 @@ summary:
   expected_shortfall            -0.000312
   conditional_drawdown_risk      0.002713
   inputs_aligned                 1.000000
+  timestamps_increasing          1.000000
   event_indices_sorted           1.000000
   has_forward_look_bias          0.000000
   turnover                       3.600000
@@ -132,17 +134,20 @@ trust the wrong thing.
 ## What you just ran
 
 `run_flywheel_iteration` executed the full AFML loop: CUSUM event
-sampling, triple-barrier labeling, probability-to-position sizing, a
-backtest, portfolio allocation and risk metrics — then charged the result
+sampling, probability-to-position sizing, a backtest, portfolio
+allocation and risk metrics — then charged the result
 for commission, spread and slippage, and applied promotion gates.
 
 Three things in that output are worth understanding now, because they are
 the habits the rest of the library is built around.
 
-**The leakage checks come first.** `inputs_aligned` and
-`event_indices_sorted` are the pipeline asserting it was handed coherent
-inputs. Two of the four `promotion` gates are these checks, not
-performance thresholds. A candidate cannot be promoted on returns alone.
+**The ordering checks come first.** `timestamps_increasing` and
+`event_indices_sorted` are computed from the data; two of the four
+`promotion` gates are these checks, not performance thresholds, so a
+candidate cannot be promoted on returns alone. `inputs_aligned` and
+`has_forward_look_bias` are deprecated constants: mismatched input lengths
+raise an error instead, and the pipeline cannot see look-ahead inside the
+model probabilities you hand it. That part is your job.
 
 **Gross and net are different numbers.** `gross_total_return` is
 -0.000197; `net_total_return` is -0.001511. The gap is `estimated_cost`,

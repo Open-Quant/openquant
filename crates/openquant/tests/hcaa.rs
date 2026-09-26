@@ -123,12 +123,35 @@ fn test_value_error_for_unknown_returns() {
 }
 
 #[test]
-fn test_value_error_for_sharpe_ratio_without_prices_or_expected() {
+fn test_sharpe_ratio_estimates_expected_returns_from_asset_returns() {
+    // #185 item 13: returns alone are enough to estimate expected returns; the answer matches
+    // the one from the prices those returns came from.
     let (prices, names) = load_prices_and_names();
     let returns = returns_from_prices(&prices);
+    for method in ["mean", "exponential"] {
+        let mut from_returns = HierarchicalClusteringAssetAllocation::new(method);
+        from_returns
+            .allocate(&names, None, Some(&returns), None, None, "sharpe_ratio", 0.05, Some(5), None)
+            .unwrap();
+        let mut from_prices = HierarchicalClusteringAssetAllocation::new(method);
+        from_prices
+            .allocate(&names, Some(&prices), None, None, None, "sharpe_ratio", 0.05, Some(5), None)
+            .unwrap();
+        assert_basic_weights(&from_returns.weights, names.len());
+        for (a, b) in from_returns.weights.iter().zip(&from_prices.weights) {
+            assert!((a - b).abs() < 1e-12, "{method}: {a} vs {b}");
+        }
+    }
+}
+
+#[test]
+fn test_value_error_for_sharpe_ratio_with_only_a_covariance() {
+    let (prices, names) = load_prices_and_names();
+    let returns = returns_from_prices(&prices);
+    let cov = returns.transpose() * &returns / (returns.nrows() as f64 - 1.0);
     let mut hcaa = HierarchicalClusteringAssetAllocation::default();
     let err = hcaa
-        .allocate(&names, None, Some(&returns), None, None, "sharpe_ratio", 0.05, Some(5), None)
+        .allocate(&names, None, None, Some(&cov), None, "sharpe_ratio", 0.05, Some(5), None)
         .unwrap_err();
     assert_eq!(err, HcaaError::MissingExpectedReturnsForSharpe);
 }

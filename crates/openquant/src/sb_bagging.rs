@@ -85,6 +85,15 @@ pub enum SbBaggingError {
     /// successful `fit`.
     #[error("input must not be empty")]
     EmptyInput,
+    /// `x` has a different number of columns from the matrix the model was fitted on, at
+    /// prediction time or in a `warm_start` fit that adds estimators to a fitted model.
+    #[error("x has {found} feature columns but the model was fitted on {expected}")]
+    FeatureCountMismatch {
+        /// Number of columns of the matrix the fitted estimators were trained on.
+        expected: usize,
+        /// Number of columns of the `x` that was passed.
+        found: usize,
+    },
     /// `y`, `sample_weight` or the rows of `ind_mat` do not match `x.nrows()`, or `ind_mat`
     /// is empty.
     #[error("inputs disagree on the number of samples")]
@@ -267,6 +276,52 @@ fn bag_weights(samples: &[usize], sample_weight: Option<&[f64]>) -> Vec<f64> {
     }
 }
 
+/// Seed of the random stream for a `fit` that starts with `n_fitted` estimators already
+/// fitted: `random_state + n_fitted`, wrapping around modulo 2^64. Wrapping only changes
+/// seeds that would overflow `u64`, so every seed that fits is unchanged.
+fn fit_seed(random_state: u64, n_fitted: usize) -> u64 {
+    random_state.wrapping_add(n_fitted as u64)
+}
+
+/// Number of estimators a `fit` must add to reach `n_estimators`, after the column count of
+/// `x` has been checked against the estimators kept by `warm_start`. Records the column
+/// count the model is now fitted on in `n_features_in`.
+fn estimators_to_add(
+    n_estimators: usize,
+    n_fitted: usize,
+    n_features_in: &mut usize,
+    x: &DMatrix<f64>,
+) -> Result<usize, SbBaggingError> {
+    if n_fitted > 0 && x.ncols() != *n_features_in {
+        return Err(SbBaggingError::FeatureCountMismatch {
+            expected: *n_features_in,
+            found: x.ncols(),
+        });
+    }
+    let n_more = n_estimators.checked_sub(n_fitted).ok_or(SbBaggingError::DecreasingEstimators)?;
+    *n_features_in = x.ncols();
+    Ok(n_more)
+}
+
+/// Checks that the model is fitted and that `x` has the column count it was fitted on, so
+/// every estimator's feature index is a valid column of `x`.
+fn check_predict_input(
+    n_fitted: usize,
+    n_features_in: usize,
+    x: &DMatrix<f64>,
+) -> Result<(), SbBaggingError> {
+    if n_fitted == 0 {
+        return Err(SbBaggingError::EmptyInput);
+    }
+    if x.ncols() != n_features_in {
+        return Err(SbBaggingError::FeatureCountMismatch {
+            expected: n_features_in,
+            found: x.ncols(),
+        });
+    }
+    Ok(())
+}
+
 /// `in_bag[e][row]` is true when estimator `e` drew `row`.
 fn in_bag_masks(estimators_samples: &[Vec<usize>], n_rows: usize) -> Vec<Vec<bool>> {
     estimators_samples
@@ -308,7 +363,7 @@ pub struct SequentiallyBootstrappedBaggingClassifier {
     #[deprecated(note = "ignored: the classifier logs nothing")]
     pub verbose: usize,
     /// Seed of the random stream; a `fit` seeds its stream with `random_state` plus the
-    /// number of estimators already fitted.
+    /// number of estimators already fitted, wrapping around at `u64::MAX`.
     pub random_state: u64,
     /// Whether `fit` accepts a `sample_weight` (default `true`).
     pub supports_sample_weight: bool,
@@ -320,6 +375,8 @@ pub struct SequentiallyBootstrappedBaggingClassifier {
     /// `None` if `oob_score` is off or every row was drawn by every estimator.
     pub oob_score_value: Option<f64>,
     estimators: Vec<ClassifierEstimator>,
+    /// Column count of the `x` the estimators were fitted on (meaningful once fitted).
+    n_features_in: usize,
 }
 
 impl SequentiallyBootstrappedBaggingClassifier {
@@ -339,6 +396,7 @@ impl SequentiallyBootstrappedBaggingClassifier {
             estimators_samples: Vec::new(),
             oob_score_value: None,
             estimators: Vec::new(),
+            n_features_in: 0,
         }
     }
 
@@ -367,11 +425,8 @@ impl SequentiallyBootstrappedBaggingClassifier {
     ///   if `max_samples` or `max_features` does not resolve to a valid count.
     /// - [`SbBaggingError::DecreasingEstimators`] if, with `warm_start`, `n_estimators` is
     ///   below the number already fitted.
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, on integer overflow when `warm_start` adds estimators to a model
-    /// whose `random_state` plus the number of fitted estimators exceeds `u64::MAX`.
+    /// - [`SbBaggingError::FeatureCountMismatch`] if, with `warm_start`, the model is already
+    ///   fitted and `x` has a different number of columns from the matrix it was fitted on.
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -395,17 +450,19 @@ impl SequentiallyBootstrappedBaggingClassifier {
             self.estimators_samples.clear();
         }
 
-        let n_more = self.n_estimators as isize - self.estimators.len() as isize;
-        if n_more < 0 {
-            return Err(SbBaggingError::DecreasingEstimators);
-        }
+        let n_more = estimators_to_add(
+            self.n_estimators,
+            self.estimators.len(),
+            &mut self.n_features_in,
+            x,
+        )?;
         if n_more == 0 {
             return Ok(());
         }
 
-        let mut rng = StdRng::seed_from_u64(self.random_state + self.estimators.len() as u64);
+        let mut rng = StdRng::seed_from_u64(fit_seed(self.random_state, self.estimators.len()));
 
-        for _ in 0..(n_more as usize) {
+        for _ in 0..n_more {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
             let samples = seq_bootstrap_with_rng(ind_mat, Some(max_samples), None, &mut rng)
@@ -479,16 +536,11 @@ impl SequentiallyBootstrappedBaggingClassifier {
     ///
     /// # Errors
     ///
-    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
-    ///
-    /// # Panics
-    ///
-    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
-    /// example, fewer columns than the training matrix); `x` is not validated.
+    /// - [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    /// - [`SbBaggingError::FeatureCountMismatch`] if `x` does not have the same number of
+    ///   columns as the matrix the model was fitted on.
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<u8>, SbBaggingError> {
-        if self.estimators.is_empty() {
-            return Err(SbBaggingError::EmptyInput);
-        }
+        check_predict_input(self.estimators.len(), self.n_features_in, x)?;
         let mut out = vec![0u8; x.nrows()];
         for (r, pred) in out.iter_mut().enumerate() {
             let votes = self.estimators.iter().filter(|est| est.predicts_one(x, r)).count();
@@ -506,16 +558,11 @@ impl SequentiallyBootstrappedBaggingClassifier {
     ///
     /// # Errors
     ///
-    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
-    ///
-    /// # Panics
-    ///
-    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
-    /// example, fewer columns than the training matrix); `x` is not validated.
+    /// - [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    /// - [`SbBaggingError::FeatureCountMismatch`] if `x` does not have the same number of
+    ///   columns as the matrix the model was fitted on.
     pub fn predict_proba(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
-        if self.estimators.is_empty() {
-            return Err(SbBaggingError::EmptyInput);
-        }
+        check_predict_input(self.estimators.len(), self.n_features_in, x)?;
         let n = self.estimators.len() as f64;
         Ok((0..x.nrows())
             .map(|r| self.estimators.iter().filter(|est| est.predicts_one(x, r)).count() as f64 / n)
@@ -572,7 +619,7 @@ pub struct SequentiallyBootstrappedBaggingRegressor {
     /// (default `false`). Cannot be combined with `oob_score`.
     pub warm_start: bool,
     /// Seed of the random stream; a `fit` seeds its stream with `random_state` plus the
-    /// number of estimators already fitted.
+    /// number of estimators already fitted, wrapping around at `u64::MAX`.
     pub random_state: u64,
     /// Whether `fit` accepts a `sample_weight` (default `true`).
     pub supports_sample_weight: bool,
@@ -585,6 +632,8 @@ pub struct SequentiallyBootstrappedBaggingRegressor {
     /// by every estimator.
     pub oob_score_value: Option<f64>,
     estimators: Vec<RegressorEstimator>,
+    /// Column count of the `x` the estimators were fitted on (meaningful once fitted).
+    n_features_in: usize,
 }
 
 impl SequentiallyBootstrappedBaggingRegressor {
@@ -602,6 +651,7 @@ impl SequentiallyBootstrappedBaggingRegressor {
             estimators_samples: Vec::new(),
             oob_score_value: None,
             estimators: Vec::new(),
+            n_features_in: 0,
         }
     }
 
@@ -614,11 +664,6 @@ impl SequentiallyBootstrappedBaggingRegressor {
     /// # Errors
     ///
     /// The same as [`SequentiallyBootstrappedBaggingClassifier::fit`].
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, on integer overflow when `warm_start` adds estimators to a model
-    /// whose `random_state` plus the number of fitted estimators exceeds `u64::MAX`.
     pub fn fit(
         &mut self,
         x: &DMatrix<f64>,
@@ -642,17 +687,19 @@ impl SequentiallyBootstrappedBaggingRegressor {
             self.estimators_samples.clear();
         }
 
-        let n_more = self.n_estimators as isize - self.estimators.len() as isize;
-        if n_more < 0 {
-            return Err(SbBaggingError::DecreasingEstimators);
-        }
+        let n_more = estimators_to_add(
+            self.n_estimators,
+            self.estimators.len(),
+            &mut self.n_features_in,
+            x,
+        )?;
         if n_more == 0 {
             return Ok(());
         }
 
-        let mut rng = StdRng::seed_from_u64(self.random_state + self.estimators.len() as u64);
+        let mut rng = StdRng::seed_from_u64(fit_seed(self.random_state, self.estimators.len()));
 
-        for _ in 0..(n_more as usize) {
+        for _ in 0..n_more {
             let features =
                 sampled_features(&mut rng, x.ncols(), max_features, self.bootstrap_features);
             let samples = seq_bootstrap_with_rng(ind_mat, Some(max_samples), None, &mut rng)
@@ -715,16 +762,11 @@ impl SequentiallyBootstrappedBaggingRegressor {
     ///
     /// # Errors
     ///
-    /// [`SbBaggingError::EmptyInput`] if the model has not been fitted.
-    ///
-    /// # Panics
-    ///
-    /// If `x` has fewer columns than a feature index some estimator was fitted on (for
-    /// example, fewer columns than the training matrix); `x` is not validated.
+    /// - [`SbBaggingError::EmptyInput`] if the model has not been fitted.
+    /// - [`SbBaggingError::FeatureCountMismatch`] if `x` does not have the same number of
+    ///   columns as the matrix the model was fitted on.
     pub fn predict(&self, x: &DMatrix<f64>) -> Result<Vec<f64>, SbBaggingError> {
-        if self.estimators.is_empty() {
-            return Err(SbBaggingError::EmptyInput);
-        }
+        check_predict_input(self.estimators.len(), self.n_features_in, x)?;
         let mut out = vec![0.0; x.nrows()];
         for (r, pred) in out.iter_mut().enumerate() {
             let s: f64 = self.estimators.iter().map(|est| est.predict_row(x, r)).sum();

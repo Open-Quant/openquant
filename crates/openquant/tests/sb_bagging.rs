@@ -446,3 +446,90 @@ fn test_predict_proba_is_the_vote_share_and_agrees_with_predict() {
     let votes: Vec<f64> = clf.predict(&x_test).unwrap().into_iter().map(f64::from).collect();
     assert_eq!(single, votes);
 }
+
+/// Runs `f`, failing the test with `what` if it panics (the pre-#184 behaviour).
+fn no_panic<T>(what: &str, f: impl FnOnce() -> T) -> T {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .unwrap_or_else(|_| panic!("{what} panicked"))
+}
+
+#[test]
+fn test_predict_with_wrong_column_count_is_an_error_not_a_panic() {
+    let (x, y_clf, y_reg, ind) = synthetic_dataset();
+    let narrow = x.columns(0, 1).into_owned();
+    let wide = x.clone().insert_column(x.ncols(), 0.0);
+    let mismatch = |found| SbBaggingError::FeatureCountMismatch { expected: x.ncols(), found };
+
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(4);
+    clf.max_samples = MaxSamples::Float(0.3);
+    assert_eq!(clf.predict(&narrow), Err(SbBaggingError::EmptyInput));
+    clf.fit(&x, &y_clf, &ind, None).unwrap();
+    let mut reg = SequentiallyBootstrappedBaggingRegressor::new(4);
+    reg.max_samples = MaxSamples::Float(0.3);
+    assert_eq!(reg.predict(&narrow), Err(SbBaggingError::EmptyInput));
+    reg.fit(&x, &y_reg, &ind, None).unwrap();
+
+    for bad in [&narrow, &wide] {
+        let found = bad.ncols();
+        // Before the fix, a narrower `x` indexed out of bounds and panicked, and a wider one
+        // was silently accepted.
+        assert_eq!(no_panic("classifier predict", || clf.predict(bad)), Err(mismatch(found)));
+        assert_eq!(no_panic("predict_proba", || clf.predict_proba(bad)), Err(mismatch(found)));
+        assert_eq!(no_panic("regressor predict", || reg.predict(bad)), Err(mismatch(found)));
+    }
+    assert_eq!(clf.predict(&x).unwrap().len(), x.nrows());
+    assert_eq!(reg.predict(&x).unwrap().len(), x.nrows());
+
+    // A warm-start fit may not add estimators trained on a different column count, and the
+    // failed fit leaves the model as it was.
+    clf.warm_start = true;
+    clf.n_estimators += 2;
+    assert_eq!(clf.fit(&narrow, &y_clf, &ind, None), Err(mismatch(1)));
+    assert_eq!(clf.estimators_samples.len(), 10);
+    reg.warm_start = true;
+    reg.n_estimators += 2;
+    assert_eq!(reg.fit(&narrow, &y_reg, &ind, None), Err(mismatch(1)));
+    assert_eq!(reg.estimators_samples.len(), 10);
+
+    // Without warm_start, a refit on a new column count replaces the model.
+    clf.warm_start = false;
+    clf.fit(&narrow, &y_clf, &ind, None).unwrap();
+    assert_eq!(clf.predict(&narrow).unwrap().len(), x.nrows());
+    assert_eq!(
+        clf.predict(&x),
+        Err(SbBaggingError::FeatureCountMismatch { expected: 1, found: x.ncols() })
+    );
+}
+
+#[test]
+fn test_warm_start_seed_is_random_state_plus_fitted_count_wrapping() {
+    let (x, y_clf, y_reg, ind) = synthetic_dataset();
+
+    // A warm-start fit that starts with `k` fitted estimators seeds its stream with
+    // `random_state + k`, so its new estimators match a fresh fit with that seed. Near
+    // `u64::MAX` the sum wraps; before the fix it overflowed (a panic in debug builds).
+    for (random_state, fresh_seed) in [(5u64, 7u64), (u64::MAX - 1, 0), (u64::MAX, 1)] {
+        let mut warm = SequentiallyBootstrappedBaggingClassifier::new(random_state);
+        warm.max_samples = MaxSamples::Float(0.2);
+        warm.warm_start = true;
+        warm.n_estimators = 2;
+        warm.fit(&x, &y_clf, &ind, None).unwrap();
+        warm.n_estimators = 5;
+        no_panic("warm-start fit", || warm.fit(&x, &y_clf, &ind, None)).unwrap();
+
+        let mut fresh = SequentiallyBootstrappedBaggingClassifier::new(fresh_seed);
+        fresh.max_samples = MaxSamples::Float(0.2);
+        fresh.n_estimators = 3;
+        fresh.fit(&x, &y_clf, &ind, None).unwrap();
+        assert_eq!(warm.estimators_samples[2..], fresh.estimators_samples[..], "{random_state}");
+    }
+
+    let mut reg = SequentiallyBootstrappedBaggingRegressor::new(u64::MAX);
+    reg.max_samples = MaxSamples::Float(0.2);
+    reg.warm_start = true;
+    reg.n_estimators = 1;
+    reg.fit(&x, &y_reg, &ind, None).unwrap();
+    reg.n_estimators = 3;
+    no_panic("warm-start fit", || reg.fit(&x, &y_reg, &ind, None)).unwrap();
+    assert_eq!(reg.estimators_samples.len(), 3);
+}

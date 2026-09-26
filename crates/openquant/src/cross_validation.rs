@@ -241,7 +241,8 @@ pub enum Scoring {
     /// `[1e-15, 1 - 1e-15]`. Always `<= 0`.
     NegLogLoss,
     /// F1 score of the positive class (label `> 0.5`); `0.0` when precision and recall are
-    /// both 0, including when there are no positive predictions.
+    /// both 0, including when there are no positive predictions. `NaN` on an empty test set,
+    /// like the other rules.
     F1,
 }
 
@@ -255,8 +256,8 @@ pub enum Scoring {
 /// Unlike Snippet 7.4, the weights are **not** passed to the metric: every test sample counts
 /// equally. If the weights matter, compute the weighted score from `splits` yourself.
 ///
-/// A test set of length 0 scores `NaN` for [`Scoring::Accuracy`] and [`Scoring::NegLogLoss`]
-/// and `0.0` for [`Scoring::F1`].
+/// A test set of length 0 scores `NaN` under every rule, so an empty fold can't pass for a
+/// real score of 0 in an average; `f64::is_nan` finds it.
 ///
 /// # Errors
 ///
@@ -349,6 +350,7 @@ pub fn ml_cross_val_score<C: SimpleClassifier>(
                 }
                 -(loss / y_test.len() as f64)
             }
+            Scoring::F1 if y_test.is_empty() => f64::NAN,
             Scoring::F1 => {
                 let mut tp = 0.0;
                 let mut fp = 0.0;
