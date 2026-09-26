@@ -30,13 +30,13 @@ only `cargo`.
 | `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Time and throughput of `openquant.data` loading (CSV and Parquet), cleaning, calendar alignment and quality reporting at 200k rows × 4 symbols. The committed results are on the [Performance](/project/performance/) page. |
 | `python/tests/` | `just py-test` | 46 test modules, many of which double as usage examples — `test_pipeline_api.py` and `test_bindings_contract.py` are the two worth reading first. |
 
-The twelve notebooks under `notebooks/python/` are numbered in reading
+The thirteen notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
-`13_bet_sizing_from_probabilities.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 13 are
+`14_fracdiff_features_classifier.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 14 are
 research runbooks, listed under [Runbooks](#runbooks) below and in the [research gallery](/runbooks/); 01 to 08 are
 API tours that claim nothing (see the [notebook contract](/workflows/research-notebook-contract/)). They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
-All of them run on synthetic data: `09` to `13` read the SYNTHETIC `SYN_A`..`SYN_E`
+All of them run on synthetic data: `09` to `14` read the SYNTHETIC `SYN_A`..`SYN_E`
 sample through `openquant.data.fetch`, and run on real data only when you pass your own source.
 
 ### Figures from the executed notebooks
@@ -73,6 +73,10 @@ decision on one page:
   `13_bet_sizing_from_probabilities.ipynb`, the pre-registered test of runbook 11's post hoc
   finding: AFML Snippets 10.1-10.3 probability sizing against a flat 0.5 meta filter, with every
   sizing choice registered as a trial, on SYNTHETIC planted-signal paths and no-signal controls.
+- [Fracdiff features against returns in a classifier](/runbooks/fracdiff-features-classifier/) —
+  `14_fracdiff_features_classifier.ipynb`, runbook 09's open question: FFD features against
+  returns and integer differences as purged-CV classifier inputs, net of costs, deflated by a
+  trial registry, on SYNTHETIC paths with a planted signal and no-signal controls.
 
 ## Worked example: cleaning a messy OHLCV file
 

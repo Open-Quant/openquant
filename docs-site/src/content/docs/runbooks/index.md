@@ -28,6 +28,7 @@ A runbook is a notebook that states a falsifiable hypothesis before it is run, t
 | 11 | [Triple-barrier labeling and meta-labeling (SYNTHETIC data)](/runbooks/meta-labeling-triple-barrier/) | 3 | Promote the procedure, not a strategy and not the F1 claim |
 | 12 | [CPCV backtest with PSR and the deflated Sharpe ratio (SYNTHETIC data)](/runbooks/cpcv-deflated-sharpe/) | 3 | Promote the evaluation protocol, not a strategy |
 | 13 | [Bet sizing from predicted probabilities (SYNTHETIC data)](/runbooks/bet-sizing-from-probabilities/) | 3 | Promote probability sizing as the default sizing stage after a meta-model that has shown skill. Promote no strategy |
+| 14 | [Fracdiff features against returns in a purged-CV classifier, net of costs (SYNTHETIC data)](/runbooks/fracdiff-features-classifier/) | 3 | Do not promote |
 
 ## 09 · Fractional differentiation, stationarity versus memory (SYNTHETIC data)
 
@@ -370,6 +371,77 @@ Not promoted:
 This decision describes the procedure on synthetic series. It says nothing about any real
 instrument. Run the notebook on your own data (see the top cell) and read the control tables next
 to your own.
+
+</details>
+
+## 14 · Fracdiff features against returns in a purged-CV classifier, net of costs (SYNTHETIC data)
+
+[Runbook page](/runbooks/fracdiff-features-classifier/) · [notebook `14_fracdiff_features_classifier.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/14_fracdiff_features_classifier.ipynb)
+
+### Hypothesis
+
+- **H1 (prediction).** FFD's out-of-fold AUC is higher than returns'.
+- **H2 (net of costs).** FFD's annualised Sharpe ratio net of 5 bps per unit turnover is higher
+  than returns'.
+- **H3 (against integer differences).** FFD's out-of-fold AUC is higher than the integer
+  differences'.
+- **H4 (evidence on one path).** On the headline path, FFD's deflated Sharpe ratio, deflated by
+  every configuration recorded in the trial registry, is at least 0.95.
+
+<img class="dark:sl-hidden" src="/figures/notebooks/nb14-inputs-light.svg" alt="Left: rebased log close of the simulated planted-signal path over 2,000 bars with its hidden mean-reverting mispricing. Right: rebased log closes of the five synthetic sample symbols used as the no-signal control." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb14-inputs-dark.svg" alt="Left: rebased log close of the simulated planted-signal path over 2,000 bars with its hidden mean-reverting mispricing. Right: rebased log closes of the five synthetic sample symbols used as the no-signal control." />
+
+<img class="dark:sl-hidden" src="/figures/notebooks/nb14-headline-equity-light.svg" alt="Cumulative net log return on the planted-signal path for the classifier on returns, on integer differences, on FFD features with d chosen per fold, and on the hidden mispricing (oracle)." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb14-headline-equity-dark.svg" alt="Cumulative net log return on the planted-signal path for the classifier on returns, on integer differences, on FFD features with d chosen per fold, and on the hidden mispricing (oracle)." />
+
+<img class="dark:sl-hidden" src="/figures/notebooks/nb14-monte-carlo-light.svg" alt="Mean out-of-fold AUC and mean net Sharpe ratio over 30 simulated paths for each feature set (returns, integer differences, level, FFD at d 0.2 to 0.8, FFD with d chosen per fold, oracle) at three signal strengths, with 95 percent intervals." />
+<img class="light:sl-hidden" src="/figures/notebooks/nb14-monte-carlo-dark.svg" alt="Mean out-of-fold AUC and mean net Sharpe ratio over 30 simulated paths for each feature set (returns, integer differences, level, FFD at d 0.2 to 0.8, FFD with d chosen per fold, oracle) at three signal strengths, with 95 percent intervals." />
+
+### Result
+
+As printed by the notebook's Analysis section:
+
+```text
+headline path: AUC returns 0.505, int_diff 0.487, FFD 0.530 (oracle 0.572); net Sharpe (ann.) 0.22, 0.13, 0.60 (oracle 0.83)
+H1 ffd_dstar - returns: auc: s_m=0.008 mean diff +0.0395, t = 7.44 -> supported; null s_m=0: t = 4.63 -> control fails
+H2 ffd_dstar - returns: sharpe_net_ann: s_m=0.008 mean diff +0.4724, t = 6.06 -> supported; null s_m=0: t = 3.35 -> control fails
+H3 ffd_dstar - int_diff: auc: s_m=0.008 mean diff +0.0295, t = 4.68 -> supported; null s_m=0: t = 2.90 -> control fails
+H4 (headline-path DSR >= 0.95): rejected (DSR 0.779)
+control (SYNTHETIC): highest DSR of 8 trials 0.863 -> passes (no false discovery)
+pre-registered decision rule: do not promote
+```
+
+### Promotion decision
+
+**Decision: do not promote.** FFD features with $d$ chosen per training fold do not become the
+default classifier input over returns (or over integer differences).
+
+<details>
+<summary>The rest of the decision</summary>
+
+They pass H1-H3 on the planted signal, but the pre-registered null control fails: in purged
+k-fold CV they beat returns by most of the same margin on random walks. The post hoc
+walk-forward run shows why: purged k-fold flatters any feature that carries the price level and
+handicaps returns. Where the signal is real, walk-forward still finds FFD ahead of returns net of
+costs, but that comparison was not pre-registered, and FFD there did no better than the raw log
+price.
+
+What later runbooks should do instead:
+
+- **Evaluate memory-bearing features walk-forward** (or with CPCV *and* a null run through the
+  same splits). Purged k-fold removes label overlap, not a model's knowledge of where the price
+  went after the test fold, and on the `SYN_*` random walks it gave the level a net Sharpe ratio
+  of 1.85.
+- **Judge on net returns against a null run**, not on pooled out-of-fold AUC, which stayed
+  biased toward memory features even walk-forward.
+- **Compare FFD with the level, not only with returns.** With $d$ chosen by the ADF rule, FFD
+  was the level in all but name here.
+- **Next runbook (candidate, pre-register it):** walk-forward FFD vs returns vs level, net Sharpe
+  ratio, with the zero-signal null through the same splits, on real data.
+
+The decision describes the **procedure** on synthetic series. It says nothing about FFD features
+on any real instrument. Run the notebook on your own data (see the top cell) and read the control
+tables next to your own.
 
 </details>
 
