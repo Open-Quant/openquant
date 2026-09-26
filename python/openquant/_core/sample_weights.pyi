@@ -73,7 +73,7 @@ def get_weights_by_time_decay(
     close_prices : list[float]
         Close prices; only their count is checked.
     decay : float
-        Decay parameter, meaningful in `(-1, 1]`; it is not validated.
+        Decay parameter; must be in `(-1, 1]`.
 
     Returns
     -------

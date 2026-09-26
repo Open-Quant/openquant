@@ -31,8 +31,7 @@ __all__ = [
 def encode_array(array: Sequence[float], encoding: Sequence[tuple[float, str]]) -> str:
     """Encode each value as the letter of the nearest codebook value (AFML §18.5).
 
-    Ties go to the first codebook entry. Values with no nearest entry (`NaN`s, or any value
-    when the codebook is empty) are skipped, so the string can be shorter than `array`.
+    Ties go to the first codebook entry. The message has exactly one letter per value.
 
     Parameters
     ----------
@@ -45,7 +44,12 @@ def encode_array(array: Sequence[float], encoding: Sequence[tuple[float, str]]) 
     Returns
     -------
     str
-        The encoded message.
+        The encoded message, as long as `array`.
+
+    Raises
+    ------
+    ValueError
+        If `array` contains `NaN`, or the codebook is empty or has a `NaN` value.
     """
 
 def encode_tick_rule_array(arr: Sequence[int]) -> str:
@@ -222,8 +226,7 @@ def get_bvc_buy_volume(
     AFML §19.5.2 (Easley, López de Prado and O'Hara, 2012). Each bar's buy volume is
     `V_t * Phi(dp_t / sigma)`, where `dp_t` is the close-to-close change, `sigma` the sample
     standard deviation of the last `window` changes (including the current one, floored at
-    `1e-12`) and `Phi` the standard normal CDF. `window = 0` is not rejected but degenerates to
-    the `1e-12` floor, so pass `window >= 2`.
+    `1e-12`) and `Phi` the standard normal CDF.
 
     Parameters
     ----------
@@ -232,18 +235,17 @@ def get_bvc_buy_volume(
     volume : list[float]
         Total volume of each bar, aligned with `close`.
     window : int
-        Number of price changes in the rolling standard deviation.
+        Number of price changes in the rolling standard deviation; at least 2.
 
     Returns
     -------
     list[float]
-        Estimated buy volume per bar; `NaN` before index `window`, and everywhere when
-        `window == 1`.
+        Estimated buy volume per bar; `NaN` before index `window`.
 
     Raises
     ------
     ValueError
-        If `volume` and `close` differ in length.
+        If `volume` and `close` differ in length, or `window < 2`.
     """
 
 def get_corwin_schultz_estimator(
@@ -287,9 +289,10 @@ def get_konto_entropy(message: str, window: int) -> float:
     AFML §18.4, Snippets 18.3-18.4. For each point `i`, `L_i` is one plus the length of the
     longest substring starting at `i` that also starts within the preceding look-back window;
     the estimate is the mean of `log2(n + 1) / L_i`. With `window == 0` the window expands
-    (`n = i`, points `1..=len/2`); otherwise the points run from `w` to `len - w` with
-    `w = min(window, len // 2)`, while the look-back and the `log2(window + 1)` numerator use
-    the unclamped `window`. Quadratic or worse in the message length.
+    (`n = i`, points `1..=len/2`); otherwise the window is clamped to
+    `w = min(window, len // 2)` as in Snippet 18.4, and `w` sets the points (`w` to
+    `len - w`), the look-back and the `log2(w + 1)` numerator. Quadratic or worse in the
+    message length.
 
     Parameters
     ----------
@@ -574,9 +577,8 @@ def sigma_mapping(array: Sequence[float], step: float) -> list[tuple[float, str]
     """Build a fixed-width codebook for `encode_array` (AFML §18.5).
 
     The codebook values are `min, min + step, ...`, strictly below `max(array)`, lettered
-    `chr(0), chr(1), ...` (control characters first). `NaN`s in `array` are ignored when taking
-    the minimum and maximum. An empty array, or one whose values are all equal, gives an empty
-    codebook.
+    `chr(0), chr(1), ...` (control characters first). An array whose values are all equal gives
+    the one entry `(min, chr(0))`; the codebook is never empty.
 
     Parameters
     ----------
@@ -594,7 +596,8 @@ def sigma_mapping(array: Sequence[float], step: float) -> list[tuple[float, str]
     Raises
     ------
     ValueError
-        If `step <= 0`, or more than 256 letters would be needed.
+        If `step` is not a positive finite number, `array` is empty or contains `NaN`, or
+        more than 256 letters would be needed.
     """
 
 def vwap(dollar_volume: Sequence[float], volume: Sequence[float]) -> float:

@@ -14,7 +14,7 @@
 //!    ([`crate::portfolio_optimization::allocate_max_sharpe`]; Markowitz, 1952, not AFML).
 //! 4. **Risk** — historical VaR and expected shortfall of the strategy's per-bar returns and
 //!    conditional drawdown at risk of its equity curve ([`crate::risk_metrics::RiskMetrics`]),
-//!    plus the annualised Sharpe ratio (AFML §14.7.1).
+//!    plus the Sharpe ratio annualised with `periods_per_year` (AFML §14.7.1).
 //! 5. **Backtest** — the equity curve, drawdowns and time under water (AFML Snippet 14.4;
 //!    [`crate::backtest_statistics::drawdown_and_time_under_water`]).
 //!
@@ -32,20 +32,28 @@
 //!   from bar `i + 1`. There is one strategy return per bar after the first, and the equity
 //!   curve starts at 1 and compounds them.
 //! - `asset_prices` is rows = observations (oldest first), columns = assets, in the order of
-//!   `asset_names`. Its expected returns and covariance are annualised with 252 periods a
-//!   year, so `risk_free_rate` is an annual rate there. The portfolio stage is independent of
-//!   the backtest: its weights are reported, not traded, and its rows need not match
-//!   `timestamps`.
+//!   `asset_names`. The portfolio stage is independent of the backtest (its weights are
+//!   reported, not traded), but its rows are the same bars: `asset_prices` must have one row
+//!   per entry of `timestamps`.
+//! - **Units.** `risk_free_rate` is an **annual** rate everywhere, as in
+//!   [`crate::portfolio_optimization`]. `periods_per_year` is the number of bars a year, for
+//!   both `close` and the rows of `asset_prices` (252 for daily bars, the default; about
+//!   `252 * 390` for one-minute bars over a 6.5-hour session). It annualises
+//!   `realized_sharpe` and the portfolio's return, volatility and Sharpe ratio, and the
+//!   risk-free rate per bar is `risk_free_rate / periods_per_year`. If `asset_prices` is
+//!   sampled at a different frequency from `close`, resample it onto the bars of `close` first.
 //! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
 //!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
-//! - `realized_sharpe` annualises per-bar returns with 252 bars a year, whatever the bar
-//!   spacing, and subtracts `risk_free_rate` per bar.
-//! - The [`LeakageChecks`] are structural, not tests of the data: misaligned inputs are
-//!   rejected with an error rather than flagged, CUSUM events are always in increasing order,
-//!   and `has_forward_look_bias` is always `false` because the one-bar lag above is built in.
-//!   Whether `model_probabilities` themselves were fitted without look-ahead is the caller's
-//!   responsibility.
+//! - `realized_sharpe` is `sqrt(periods_per_year) * (mean - risk_free_rate / periods_per_year)
+//!   / std` of the per-bar strategy returns (sample standard deviation).
+//! - [`LeakageChecks`] computes two things from the data: whether `timestamps` strictly
+//!   increase and whether the event positions do. Misaligned lengths are rejected with an
+//!   error rather than flagged. The pipeline does **not** detect look-ahead: the one-bar lag
+//!   above is built in, and whether `model_probabilities` were fitted without look-ahead is
+//!   the caller's responsibility. The fields `inputs_aligned` and `has_forward_look_bias`
+//!   are deprecated constants (`true` and `false`) kept for compatibility; they test
+//!   nothing.
 //!
 //! # Example
 //!
@@ -99,11 +107,11 @@
 //! // The 5% "higher" quantile of [-0.02, 0, 0.02, 0.02] is 0; the returns below it average -0.02.
 //! assert!(out.risk.value_at_risk.abs() < 1e-12);
 //! assert!((out.risk.expected_shortfall + 0.02).abs() < 1e-12);
-//! // Mean 0.005, sample std 0.01915: 0.2611 per bar, 4.145 annualised with 252 bars.
+//! // Mean 0.005, sample std 0.01915: 0.2611 per bar, 4.145 annualised with the default 252.
 //! assert!((out.risk.realized_sharpe - 4.1451).abs() < 1e-4);
 //! // A single asset takes the whole portfolio.
 //! assert!((out.portfolio.weights[0] - 1.0).abs() < 1e-9);
-//! assert!(!out.leakage_checks.has_forward_look_bias);
+//! assert!(out.leakage_checks.timestamps_increasing);
 //! # Ok::<(), openquant::pipeline::PipelineError>(())
 //! ```
 #![deny(missing_docs)]
@@ -120,26 +128,28 @@ use crate::risk_metrics::{RiskMetrics, RiskMetricsError};
 /// Parameters of [`run_mid_frequency_pipeline`].
 ///
 /// The [`Default`] is `cusum_threshold = 0.001`, `num_classes = 2`, `step_size = 0.1`,
-/// `risk_free_rate = 0.0`, `confidence_level = 0.05`.
+/// `risk_free_rate = 0.0`, `confidence_level = 0.05`, `periods_per_year = 252.0`.
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineConfig {
     /// CUSUM filter threshold `h` on cumulative log returns of `close` (AFML Snippet 2.4), e.g.
-    /// 0.001 for 0.1%. Must be > 0; a NaN or infinite threshold is not rejected and simply
-    /// produces no events ([`PipelineError::NoEvents`]).
+    /// 0.001 for 0.1%. Must be finite and > 0.
     pub cusum_threshold: f64,
     /// Number of classes `K` of the model behind `model_probabilities`; the bet size is 0 at
     /// probability `1/K` (AFML Snippet 10.1). Must be >= 2.
     pub num_classes: usize,
     /// Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]` (AFML Snippet
-    /// 10.3). A step <= 0 is not rejected and leaves the sizes unrounded.
+    /// 10.3). Must be finite and > 0.
     pub step_size: f64,
-    /// Risk-free rate used twice, in two units: as an **annual** rate by the max-Sharpe
-    /// allocation (whose returns are annualised with 252 periods) and as a **per-bar** rate by
-    /// `realized_sharpe`. Only 0 (the default) means the same thing in both.
+    /// **Annual** risk-free rate, used by the max-Sharpe allocation and by `realized_sharpe`
+    /// (as `risk_free_rate / periods_per_year` per bar).
     pub risk_free_rate: f64,
     /// Lower-tail probability for VaR and expected shortfall, in `[0, 1]` (0.05 = worst 5% of
     /// per-bar returns). CDaR uses `1 - confidence_level`.
     pub confidence_level: f64,
+    /// Bars per year of `close` and rows per year of `asset_prices`; annualises
+    /// `realized_sharpe` and the portfolio stage. Must be finite and > 0. The default 252 is
+    /// right for daily bars only.
+    pub periods_per_year: f64,
 }
 
 impl Default for ResearchPipelineConfig {
@@ -150,6 +160,7 @@ impl Default for ResearchPipelineConfig {
             step_size: 0.1,
             risk_free_rate: 0.0,
             confidence_level: 0.05,
+            periods_per_year: 252.0,
         }
     }
 }
@@ -161,17 +172,17 @@ impl Default for ResearchPipelineConfig {
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineInput<'a> {
     /// Bar timestamps in increasing order; used for event timestamps and time under water.
-    /// Their order is not checked.
+    /// Their order is not enforced; [`LeakageChecks::timestamps_increasing`] reports it.
     pub timestamps: &'a [NaiveDateTime],
     /// Positive closing prices of the traded instrument, one per bar.
     pub close: &'a [f64],
     /// Probability of the predicted class at each bar, in `[0, 1]`, known at that bar's close.
-    /// Only the values at CUSUM events are used. The range is not validated.
+    /// Only the values at CUSUM events are used, but every entry must be in `[0, 1]`.
     pub model_probabilities: &'a [f64],
     /// Side of the prediction at each bar (typically `+1`/`-1`); `None` means always long.
     pub model_sides: Option<&'a [f64]>,
-    /// Prices for the portfolio stage: rows = observations (oldest first, at least 2),
-    /// columns = assets (at least 1). Not aligned with `timestamps`.
+    /// Prices for the portfolio stage: rows = bars (oldest first, at least 2), one row per
+    /// entry of `timestamps`; columns = assets (at least 1).
     pub asset_prices: &'a DMatrix<f64>,
     /// One name per column of `asset_prices`, copied to [`PortfolioStage::asset_names`].
     pub asset_names: &'a [String],
@@ -201,7 +212,7 @@ pub struct SignalStage {
     pub timeline_signal: Vec<f64>,
 }
 
-/// Max-Sharpe mean-variance allocation of `asset_prices` (annualised with 252 periods).
+/// Max-Sharpe mean-variance allocation of `asset_prices`, annualised with `periods_per_year`.
 ///
 /// Reported only: these weights are not used by the backtest.
 #[derive(Debug, Clone)]
@@ -229,8 +240,9 @@ pub struct RiskStage {
     /// Conditional drawdown at risk of the equity curve at level `1 - confidence_level`, in
     /// equity units (the curve starts at 1).
     pub conditional_drawdown_risk: f64,
-    /// Sharpe ratio of the per-bar returns annualised with 252 bars a year (AFML §14.7.1);
-    /// NaN with fewer than two returns, infinite or NaN when they are constant.
+    /// Sharpe ratio of the per-bar returns net of `risk_free_rate / periods_per_year`,
+    /// annualised with `periods_per_year` (AFML §14.7.1); NaN with fewer than two returns,
+    /// infinite or NaN when they are constant.
     pub realized_sharpe: f64,
 }
 
@@ -252,19 +264,33 @@ pub struct BacktestStage {
     pub time_under_water_years: Vec<f64>,
 }
 
-/// Structural leakage guards of the run.
+/// Ordering checks of the run.
 ///
-/// These describe the pipeline's construction rather than test the data: an output only
-/// exists when the inputs passed validation, so the flags take fixed values in practice.
+/// `timestamps_increasing` and `event_indices_sorted` are computed from the data. Nothing here
+/// detects look-ahead in `model_probabilities` or `model_sides`; see the
+/// [module conventions](self#conventions).
 #[derive(Debug, Clone)]
 pub struct LeakageChecks {
-    /// Always `true`: misaligned inputs are rejected with [`PipelineError::LengthMismatch`]
-    /// instead of producing an output.
+    /// Deprecated constant, always `true`: an output only exists when the input lengths
+    /// agree (a mismatch is [`PipelineError::LengthMismatch`]), so this tests nothing. Read
+    /// [`LeakageChecks::timestamps_increasing`] for the check on the data.
+    #[deprecated(
+        since = "0.1.0",
+        note = "always true; misaligned lengths are an error. Use `timestamps_increasing`."
+    )]
     pub inputs_aligned: bool,
+    /// Whether `timestamps` strictly increase. The run does not reject unordered timestamps,
+    /// but time under water and event timestamps are meaningless when this is `false`.
+    pub timestamps_increasing: bool,
     /// Whether the event positions are non-decreasing; always `true` for CUSUM events.
     pub event_indices_sorted: bool,
-    /// Always `false`: signals are applied with a one-bar lag. It does not detect look-ahead
-    /// in the caller's `model_probabilities` or `model_sides`.
+    /// Deprecated constant, always `false`. The pipeline does not detect look-ahead: the
+    /// one-bar lag is built in, and look-ahead in the caller's `model_probabilities` or
+    /// `model_sides` is invisible to it.
+    #[deprecated(
+        since = "0.1.0",
+        note = "always false; the pipeline does not detect look-ahead in its inputs."
+    )]
     pub has_forward_look_bias: bool,
 }
 
@@ -281,7 +307,7 @@ pub struct ResearchPipelineOutput {
     pub risk: RiskStage,
     /// Strategy returns, equity curve, drawdowns and time under water.
     pub backtest: BacktestStage,
-    /// Structural leakage guards.
+    /// Ordering checks on the timestamps and events.
     pub leakage_checks: LeakageChecks,
 }
 
@@ -334,16 +360,20 @@ impl From<RiskMetricsError> for PipelineError {
 ///
 /// - [`PipelineError::EmptyInput`] if `timestamps`, `close` or `model_probabilities` is empty.
 /// - [`PipelineError::LengthMismatch`] if `close` and `timestamps`, `model_probabilities` and
-///   `close`, `model_sides` and `close`, or `asset_names` and the columns of `asset_prices`
-///   differ in length.
+///   `close`, `model_sides` and `close`, the rows of `asset_prices` and `timestamps`, or
+///   `asset_names` and the columns of `asset_prices` differ in length.
 /// - [`PipelineError::InvalidParameter`] if `asset_prices` has fewer than 2 rows or no
-///   columns, `cusum_threshold <= 0`, `num_classes < 2`, or `confidence_level` is outside
-///   `[0, 1]` (NaN included).
+///   columns, `cusum_threshold <= 0`, `num_classes < 2`, `confidence_level` is outside
+///   `[0, 1]` (NaN included), or `periods_per_year` is not finite and > 0.
 /// - [`PipelineError::NoEvents`] if the CUSUM filter selects no bar (including when `close` has
 ///   a single bar).
+/// - [`PipelineError::InvalidParameter`] also if a `model_probabilities` entry is outside
+///   `[0, 1]`, or `cusum_threshold` or `step_size` is `NaN`, infinite or `<= 0`.
 /// - [`PipelineError::PortfolioAllocation`] if the max-Sharpe optimisation on `asset_prices`
 ///   fails.
-/// - [`PipelineError::Risk`] is part of the signature but not reachable after validation.
+/// - [`PipelineError::Risk`] is part of the signature but not reachable after validation. It
+///   is kept so that a risk-metric failure would surface as a typed error, not a panic, should
+///   the validation above and the risk metrics' own checks ever drift apart.
 pub fn run_mid_frequency_pipeline(
     input: ResearchPipelineInput<'_>,
     config: &ResearchPipelineConfig,
@@ -378,14 +408,20 @@ pub fn run_mid_frequency_pipeline(
 
     let signals = SignalStage { event_signal, timeline_signal: timeline_signal.clone() };
 
-    let portfolio_out = allocate_max_sharpe(input.asset_prices, config.risk_free_rate, None, None)
-        .map_err(|err| PipelineError::PortfolioAllocation(format!("{err:?}")))?;
+    // `allocate_max_sharpe` annualises with 252 periods a year. Rescale to `periods_per_year`:
+    // hand it the risk-free rate in its units, then convert its annual figures back. With
+    // `k = periods_per_year / 252`, returns scale by `k`, volatility and Sharpe by `sqrt(k)`,
+    // and the weights do not move.
+    let scale = config.periods_per_year / 252.0;
+    let portfolio_out =
+        allocate_max_sharpe(input.asset_prices, config.risk_free_rate / scale, None, None)
+            .map_err(|err| PipelineError::PortfolioAllocation(format!("{err:?}")))?;
     let portfolio = PortfolioStage {
         asset_names: input.asset_names.to_vec(),
         weights: portfolio_out.weights,
-        portfolio_risk: portfolio_out.portfolio_risk,
-        portfolio_return: portfolio_out.portfolio_return,
-        portfolio_sharpe: portfolio_out.portfolio_sharpe,
+        portfolio_risk: portfolio_out.portfolio_risk * scale.sqrt(),
+        portfolio_return: portfolio_out.portfolio_return * scale,
+        portfolio_sharpe: portfolio_out.portfolio_sharpe * scale.sqrt(),
     };
 
     let (strategy_returns, equity_curve) =
@@ -400,7 +436,11 @@ pub fn run_mid_frequency_pipeline(
     let conditional_drawdown_risk = risk_metrics
         .calculate_conditional_drawdown_risk(&equity_curve, 1.0 - config.confidence_level)?;
     let realized_sharpe = if strategy_returns.len() > 1 {
-        sharpe_ratio(&strategy_returns, 252.0, config.risk_free_rate)
+        sharpe_ratio(
+            &strategy_returns,
+            config.periods_per_year,
+            config.risk_free_rate / config.periods_per_year,
+        )
     } else {
         f64::NAN
     };
@@ -418,8 +458,11 @@ pub fn run_mid_frequency_pipeline(
         drawdowns,
         time_under_water_years,
     };
+    // The two deprecated fields are constants kept for compatibility (#185).
+    #[allow(deprecated)]
     let leakage_checks = LeakageChecks {
         inputs_aligned: true,
+        timestamps_increasing: input.timestamps.windows(2).all(|w| w[0] < w[1]),
         event_indices_sorted: event_indices.windows(2).all(|w| w[0] <= w[1]),
         has_forward_look_bias: false,
     };
@@ -469,6 +512,14 @@ fn validate_input(
     if input.asset_prices.nrows() < 2 {
         return Err(PipelineError::InvalidParameter("asset_prices rows must be >= 2"));
     }
+    if input.asset_prices.nrows() != input.timestamps.len() {
+        return Err(PipelineError::LengthMismatch(
+            "asset_prices.nrows",
+            input.asset_prices.nrows(),
+            "timestamps",
+            input.timestamps.len(),
+        ));
+    }
     if input.asset_prices.ncols() == 0 {
         return Err(PipelineError::InvalidParameter("asset_prices columns must be >= 1"));
     }
@@ -480,14 +531,25 @@ fn validate_input(
             input.asset_prices.ncols(),
         ));
     }
-    if config.cusum_threshold <= 0.0 {
-        return Err(PipelineError::InvalidParameter("cusum_threshold must be > 0"));
+    // Written as `!(x > 0)` so that NaN is rejected too; a NaN threshold used to find no
+    // event and surface as `NoEvents`.
+    if !(config.cusum_threshold > 0.0 && config.cusum_threshold.is_finite()) {
+        return Err(PipelineError::InvalidParameter("cusum_threshold must be finite and > 0"));
+    }
+    if !(config.step_size > 0.0 && config.step_size.is_finite()) {
+        return Err(PipelineError::InvalidParameter("step_size must be finite and > 0"));
+    }
+    if input.model_probabilities.iter().any(|p| !(0.0..=1.0).contains(p)) {
+        return Err(PipelineError::InvalidParameter("model_probabilities must be in [0, 1]"));
     }
     if config.num_classes < 2 {
         return Err(PipelineError::InvalidParameter("num_classes must be >= 2"));
     }
     if !(0.0..=1.0).contains(&config.confidence_level) {
         return Err(PipelineError::InvalidParameter("confidence_level must be in [0, 1]"));
+    }
+    if !(config.periods_per_year.is_finite() && config.periods_per_year > 0.0) {
+        return Err(PipelineError::InvalidParameter("periods_per_year must be finite and > 0"));
     }
     Ok(())
 }
@@ -584,6 +646,40 @@ mod tests {
         assert_eq!(out.portfolio.weights.len(), asset_names.len());
         let total_weight: f64 = out.portfolio.weights.iter().sum();
         assert!((total_weight - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_leakage_checks_report_unordered_timestamps() {
+        // #185 item 11: the ordering flag is computed from the data, not a constant.
+        let mut timestamps: Vec<NaiveDateTime> = (0..6)
+            .map(|m| parse_ts("2024-01-01 09:30:00") + chrono::Duration::minutes(m))
+            .collect();
+        let close = vec![100.0, 102.0, 100.0, 102.0, 100.0, 102.0];
+        let probs = vec![0.9; 6];
+        let asset_names = vec!["A".to_string()];
+        let asset_prices =
+            DMatrix::from_row_slice(6, 1, &[100.0, 101.0, 102.0, 101.5, 103.0, 104.0]);
+        let run = |timestamps: &[NaiveDateTime]| {
+            let input = ResearchPipelineInput {
+                timestamps,
+                close: &close,
+                model_probabilities: &probs,
+                model_sides: None,
+                asset_prices: &asset_prices,
+                asset_names: &asset_names,
+            };
+            let config = ResearchPipelineConfig {
+                cusum_threshold: 0.01,
+                ..ResearchPipelineConfig::default()
+            };
+            run_mid_frequency_pipeline(input, &config).expect("pipeline run should succeed")
+        };
+        assert!(run(&timestamps).leakage_checks.timestamps_increasing);
+        timestamps.swap(2, 3);
+        assert!(!run(&timestamps).leakage_checks.timestamps_increasing);
+        timestamps.swap(2, 3);
+        timestamps[3] = timestamps[2];
+        assert!(!run(&timestamps).leakage_checks.timestamps_increasing, "ties are not increasing");
     }
 
     #[test]

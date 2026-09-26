@@ -231,7 +231,7 @@ def run_flywheel_iteration(
         "passed_realized_sharpe": out["risk"]["realized_sharpe"]
         >= float(cfg["min_realized_sharpe"]),
         "passed_net_sharpe": net_sharpe >= float(cfg["min_net_sharpe"]),
-        "passed_alignment_guard": bool(out["leakage_checks"]["inputs_aligned"]),
+        "passed_alignment_guard": bool(out["leakage_checks"]["timestamps_increasing"]),
         "passed_event_order_guard": bool(out["leakage_checks"]["event_indices_sorted"]),
     }
     promotion["promote_candidate"] = bool(all(promotion.values()))

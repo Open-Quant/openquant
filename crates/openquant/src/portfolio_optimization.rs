@@ -133,6 +133,24 @@ pub enum AllocError {
     /// or a degenerate maximum-Sharpe solution (`1'y` not positive).
     #[error("result is NaN: {0}")]
     NaNResult(&'static str),
+    /// [`ReturnsMethod::Exponential`] was given `span = 0`, which makes the decay
+    /// `alpha = 2 / (span + 1) = 2` and the weights alternate in sign. The span must be at
+    /// least 1.
+    #[error("exponential returns span must be >= 1, got {span}")]
+    InvalidSpan {
+        /// The span supplied.
+        span: usize,
+    },
+    /// Asset `asset`'s variance (its covariance diagonal entry) is negative, `NaN` or infinite,
+    /// so its inverse-variance weight would be meaningless (a negative variance gives a
+    /// negative weight). Checked by `"inverse_variance"`.
+    #[error("invalid variance for asset {asset}: {variance}")]
+    InvalidVariance {
+        /// Column index of the asset.
+        asset: usize,
+        /// Its covariance diagonal entry.
+        variance: f64,
+    },
 }
 
 /// How expected returns are estimated from a price history.
@@ -144,8 +162,8 @@ pub enum ReturnsMethod {
     /// Exponentially weighted mean of the per-period simple returns, newest weighted most, with
     /// decay `alpha = 2 / (span + 1)`, annualised.
     Exponential {
-        /// Span of the exponential weighting, in periods (after resampling). Not validated:
-        /// `span = 0` gives `alpha = 2` and alternating-sign weights.
+        /// Span of the exponential weighting, in periods (after resampling); at least 1.
+        /// `span = 0` is rejected with [`AllocError::InvalidSpan`].
         span: usize,
     },
 }
@@ -272,6 +290,7 @@ fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, AllocError
 ///
 /// # Errors
 ///
+/// - [`AllocError::InvalidSpan`] for [`ReturnsMethod::Exponential`] with `span = 0`.
 /// - [`AllocError::NoData`] if fewer than two price rows remain after resampling.
 /// - [`AllocError::NaNResult`] if a price used as a return denominator is zero.
 ///
@@ -301,6 +320,9 @@ fn returns_and_means(
     prices: &DMatrix<f64>,
     opts: &AllocationOptions,
 ) -> Result<(Vec<f64>, DMatrix<f64>), AllocError> {
+    if let ReturnsMethod::Exponential { span: 0 } = opts.returns_method {
+        return Err(AllocError::InvalidSpan { span: 0 });
+    }
     let step = freq_step(opts.resample_by);
     let sampled_prices = resample_prices(prices, step);
     let returns = returns_from_prices(&sampled_prices)?;
@@ -459,6 +481,11 @@ fn project_to_bounds(weights: &mut [f64], bounds: &[(f64, f64)]) -> Result<(), A
 fn inverse_variance(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
     check_bounds_feasible(bounds)?;
     let diag = cov.diagonal();
+    if let Some((asset, &variance)) =
+        diag.iter().enumerate().find(|(_, v)| !v.is_finite() || **v < 0.0)
+    {
+        return Err(AllocError::InvalidVariance { asset, variance });
+    }
     if diag.iter().any(|v| *v == 0.0) {
         return Err(AllocError::OptimizationFailed("covariance contained zero on diagonal"));
     }
@@ -501,10 +528,9 @@ fn qp_failure(err: QpError) -> AllocError {
 /// unconstrained closed form shorts assets, and clamping it afterwards is not the long-only
 /// optimum.
 fn solve_min_vol(cov: &DMatrix<f64>, bounds: &[(f64, f64)]) -> Result<Vec<f64>, AllocError> {
+    // An empty asset set is already rejected by `check_bounds_feasible` (its bounds sum to 0),
+    // so there is no separate `NoData` case here.
     check_bounds_feasible(bounds)?;
-    if cov.nrows() == 0 {
-        return Err(AllocError::NoData);
-    }
     let (a, lower, upper) = budget_and_box(bounds);
     solve_qp(cov, &a, &lower, &upper).map_err(qp_failure)
 }
@@ -762,6 +788,8 @@ pub fn allocate_efficient_risk_with(
 ///   unreachable `target_return`) or does not converge, the problem is malformed (reported as
 ///   "covariance is not positive definite"), no asset beats `risk_free_rate` (`"max_sharpe"`), or a covariance diagonal entry
 ///   is zero (`"inverse_variance"`).
+/// - [`AllocError::InvalidVariance`] if a covariance diagonal entry is negative, `NaN` or
+///   infinite (`"inverse_variance"`).
 /// - [`AllocError::NaNResult`] if the portfolio risk is not finite or the maximum-Sharpe
 ///   solution is degenerate.
 ///
@@ -825,6 +853,7 @@ pub fn allocate_from_inputs(
 ///
 /// # Errors
 ///
+/// - [`AllocError::InvalidSpan`] for [`ReturnsMethod::Exponential`] with `span = 0`.
 /// - [`AllocError::NoData`] if fewer than two price rows remain after resampling.
 /// - [`AllocError::NaNResult`] if a price used as a return denominator is zero.
 /// - Otherwise as [`allocate_from_inputs`].

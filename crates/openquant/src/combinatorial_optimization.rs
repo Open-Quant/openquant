@@ -18,8 +18,9 @@
 //!   [`evaluate_trading_path`] is a ready-made, non-convex objective (linear impact plus a
 //!   fixed ticket cost per trade), in the spirit of Garleanu and Pedersen (2013) and
 //!   Rosenberg et al. (2016); it is not the chapter's square-root cost.
-//! - [`SolverAdapter`], [`solve_with_adapter`] and [`compare_exact_and_adapter`] let a
-//!   heuristic or external solver be scored against the exact answer on instances small
+//! - [`SolverAdapter`] and [`solve_with_adapter`] run a heuristic or external solver on a box
+//!   of any size (`max_enumeration` does not apply) and check its answer;
+//!   [`compare_exact_and_adapter`] scores one against the exact answer on instances small
 //!   enough to enumerate.
 //!
 //! Conventions: decisions, trades and inventories are integers (units or lots). Candidates
@@ -89,6 +90,13 @@ pub enum CombinatorialOptimizationError {
         /// The length supplied.
         found: usize,
     },
+    /// A path given to [`evaluate_trading_path`] is not self-consistent:
+    /// `inventory_path[step + 1]` is not `inventory_path[step] + trades[step]` (or that sum
+    /// overflows `i64`).
+    InconsistentInventoryPath {
+        /// The first trade index at which the inventory does not follow the trades.
+        step: usize,
+    },
     /// The objective returned a NaN or infinite value; the search is aborted.
     ObjectiveNotFinite,
     /// The schema has no variables, or no trading steps.
@@ -100,6 +108,9 @@ pub enum CombinatorialOptimizationError {
     },
     /// No candidate satisfies the constraints (for example an unreachable terminal inventory).
     NoFeasibleSolution,
+    /// A [`SolverAdapter`] returned a result that fails [`solve_with_adapter`]'s checks; the
+    /// message names the check.
+    InvalidAdapterResult(&'static str),
 }
 
 impl Display for CombinatorialOptimizationError {
@@ -109,12 +120,17 @@ impl Display for CombinatorialOptimizationError {
             Self::DecisionLengthMismatch { expected, found } => {
                 write!(f, "decision length mismatch: expected {expected}, found {found}")
             }
+            Self::InconsistentInventoryPath { step } => write!(
+                f,
+                "inventory_path is not the running sum of trades: step {step} does not add up"
+            ),
             Self::ObjectiveNotFinite => write!(f, "objective evaluation returned non-finite value"),
             Self::EmptyDomain => write!(f, "decision domain is empty"),
             Self::EnumerationLimitExceeded { limit } => {
                 write!(f, "enumeration limit exceeded: more than {limit} candidates")
             }
             Self::NoFeasibleSolution => write!(f, "no feasible solution found"),
+            Self::InvalidAdapterResult(msg) => write!(f, "invalid adapter result: {msg}"),
         }
     }
 }
@@ -184,13 +200,14 @@ pub struct DecisionSchema {
     pub variables: Vec<IntegerVariable>,
     /// Hard cap for exact finite-set enumeration.
     ///
-    /// Counts every point in the box, feasible or not. It is also enforced by
-    /// [`solve_with_adapter`], which validates the schema before calling the adapter.
+    /// Counts every point in the box, feasible or not. Enforced by [`solve_exact`] (and so by
+    /// [`compare_exact_and_adapter`]); [`solve_with_adapter`] ignores it.
     pub max_enumeration: usize,
 }
 
 impl DecisionSchema {
-    /// Checks the schema and that its box has at most `max_enumeration` points.
+    /// Checks the schema and that its box has at most `max_enumeration` points: everything
+    /// [`solve_exact`] needs.
     ///
     /// # Errors
     ///
@@ -200,16 +217,11 @@ impl DecisionSchema {
     /// - [`CombinatorialOptimizationError::EnumerationLimitExceeded`] if the box has more
     ///   than `max_enumeration` points.
     pub fn validate(&self) -> Result<(), CombinatorialOptimizationError> {
-        if self.variables.is_empty() {
-            return Err(CombinatorialOptimizationError::EmptyDomain);
-        }
+        self.validate_variables()?;
         if self.max_enumeration == 0 {
             return Err(CombinatorialOptimizationError::InvalidInput(
                 "max_enumeration must be > 0",
             ));
-        }
-        for var in &self.variables {
-            var.validate()?;
         }
         let size = self.decision_space_size()?;
         if size > self.max_enumeration {
@@ -218,6 +230,49 @@ impl DecisionSchema {
             });
         }
         Ok(())
+    }
+
+    /// Checks the variables alone: at least one, each with `step > 0` and `lower <= upper`. The
+    /// box may be of any size, so this is the check for a [`SolverAdapter`], which does not
+    /// enumerate; `max_enumeration` is not read.
+    ///
+    /// # Errors
+    ///
+    /// - [`CombinatorialOptimizationError::EmptyDomain`] if `variables` is empty.
+    /// - [`CombinatorialOptimizationError::InvalidInput`] if a variable has `step <= 0` or
+    ///   `lower > upper`.
+    pub fn validate_variables(&self) -> Result<(), CombinatorialOptimizationError> {
+        if self.variables.is_empty() {
+            return Err(CombinatorialOptimizationError::EmptyDomain);
+        }
+        for var in &self.variables {
+            var.validate()?;
+        }
+        Ok(())
+    }
+
+    /// Whether `decision` is a point of the box: one value per variable, each on its grid
+    /// (`lower <= v <= upper` and `v - lower` a multiple of `step`).
+    ///
+    /// ```
+    /// use openquant::combinatorial_optimization::{DecisionSchema, IntegerVariable};
+    ///
+    /// let schema = DecisionSchema {
+    ///     variables: vec![IntegerVariable { lower: 0, upper: 10, step: 3 }],
+    ///     max_enumeration: 1,
+    /// };
+    /// assert!(schema.contains(&[9]));
+    /// assert!(!schema.contains(&[10])); // off the grid
+    /// assert!(!schema.contains(&[9, 0])); // wrong length
+    /// ```
+    pub fn contains(&self, decision: &[i64]) -> bool {
+        decision.len() == self.variables.len()
+            && self.variables.iter().zip(decision).all(|(var, &v)| {
+                var.step > 0
+                    && var.lower <= v
+                    && v <= var.upper
+                    && (i128::from(v) - i128::from(var.lower)) % i128::from(var.step) == 0
+            })
     }
 
     /// Number of points in the box: the product of each variable's grid size.
@@ -289,9 +344,10 @@ pub trait IntegerObjective {
 pub trait SolverAdapter {
     /// Searches `schema` for a good decision under `objective`.
     ///
-    /// The result is returned as is: neither [`solve_with_adapter`] nor
-    /// [`compare_exact_and_adapter`] checks that `best_decision` lies in the box, has the
-    /// right length, or that `best_objective` is finite or matches the decision.
+    /// Called directly, the result is whatever the implementation returns. Through
+    /// [`solve_with_adapter`] (and so [`compare_exact_and_adapter`]) it is checked: the
+    /// decision must be a point of the box and `best_objective` must match the objective at
+    /// that decision.
     ///
     /// # Errors
     ///
@@ -309,12 +365,14 @@ pub trait SolverAdapter {
 pub struct AdapterComparison {
     /// The global optimum from [`solve_exact`].
     pub exact: OptimizationResult,
-    /// The adapter's result, unchanged.
+    /// The adapter's result, as checked by [`solve_with_adapter`].
     pub adapter: OptimizationResult,
-    /// Non-negative gap in objective space relative to the exact optimum.
+    /// How far short of the exact optimum the adapter fell, in objective units:
+    /// `exact - adapter` when maximising and `adapter - exact` when minimising.
     ///
-    /// `exact - adapter` when maximising and `adapter - exact` when minimising, floored at 0,
-    /// so an adapter reporting a better-than-optimal value also shows a gap of 0.
+    /// Not floored. It is `>= 0` because [`solve_with_adapter`] has checked that the adapter's
+    /// decision is in the box and its value is the objective there, and the exact optimum is
+    /// the best value over the whole box; 0 means the adapter found an optimum.
     pub objective_gap_vs_exact: f64,
 }
 
@@ -347,6 +405,9 @@ pub fn solve_exact(
         .copied()
         .map(IntegerVariable::values)
         .collect::<Result<Vec<_>, _>>()?;
+    // Defensive: `validate` already rejects `lower > upper`, so every grid holds at least
+    // `lower`, and the non-empty box below always yields a best decision. `EmptyDomain` and
+    // `NoFeasibleSolution` stay (both are reachable elsewhere) instead of an `expect`.
     if values.iter().any(Vec::is_empty) {
         return Err(CombinatorialOptimizationError::EmptyDomain);
     }
@@ -373,27 +434,54 @@ pub fn solve_exact(
     Ok(OptimizationResult { best_decision, best_objective, evaluated_candidates: evaluated })
 }
 
-/// Validates `schema` and runs `adapter` on it.
+/// Runs `adapter` on `schema` and checks its answer.
 ///
-/// The schema is checked with [`DecisionSchema::validate`] first, so the box must also fit
-/// within `max_enumeration` even though the adapter does not enumerate it.
+/// The schema is checked with [`DecisionSchema::validate_variables`], so the box may be of
+/// any size: `max_enumeration` is an enumeration cap and does not apply to a solver that
+/// does not enumerate. The adapter's result is then checked: `best_decision` must be a point
+/// of the box ([`DecisionSchema::contains`]), and `best_objective` must equal the objective
+/// re-evaluated at `best_decision` to within `1e-9` relative (at least `1e-9` absolute). The
+/// returned `best_objective` is that re-evaluated value; `evaluated_candidates` is the
+/// adapter's own count.
 ///
 /// # Errors
 ///
-/// - Any error of [`DecisionSchema::validate`], including
-///   [`CombinatorialOptimizationError::EnumerationLimitExceeded`].
+/// - Any error of [`DecisionSchema::validate_variables`].
 /// - Any error returned by [`SolverAdapter::solve`], unchanged.
+/// - [`CombinatorialOptimizationError::InvalidAdapterResult`] if the decision is not a point
+///   of the box, or the reported objective does not match the re-evaluated one.
+/// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the objective at the decision
+///   is not finite, or an error of [`IntegerObjective::evaluate`], unchanged.
 pub fn solve_with_adapter(
     schema: &DecisionSchema,
     objective: &dyn IntegerObjective,
     adapter: &dyn SolverAdapter,
 ) -> Result<OptimizationResult, CombinatorialOptimizationError> {
-    schema.validate()?;
-    adapter.solve(schema, objective)
+    schema.validate_variables()?;
+    let mut result = adapter.solve(schema, objective)?;
+    if !schema.contains(&result.best_decision) {
+        return Err(CombinatorialOptimizationError::InvalidAdapterResult(
+            "best_decision is not a point of the schema's box",
+        ));
+    }
+    let value = objective.evaluate(&result.best_decision)?;
+    if !value.is_finite() {
+        return Err(CombinatorialOptimizationError::ObjectiveNotFinite);
+    }
+    let tolerance = 1e-9 * value.abs().max(1.0);
+    let error = (result.best_objective - value).abs();
+    // A NaN report gives a NaN error, which must be rejected too.
+    if error.is_nan() || error > tolerance {
+        return Err(CombinatorialOptimizationError::InvalidAdapterResult(
+            "best_objective does not match the objective at best_decision",
+        ));
+    }
+    result.best_objective = value;
+    Ok(result)
 }
 
 /// Runs [`solve_exact`] and `adapter` on the same problem and reports how far short of the
-/// exact optimum the adapter fell.
+/// exact optimum the adapter fell. The box must fit `max_enumeration`, since it is enumerated.
 ///
 /// # Errors
 ///
@@ -450,8 +538,8 @@ pub fn compare_exact_and_adapter(
     let exact = solve_exact(schema, objective)?;
     let adapter_result = solve_with_adapter(schema, objective, adapter)?;
     let gap = match objective.sense() {
-        ObjectiveSense::Maximize => (exact.best_objective - adapter_result.best_objective).max(0.0),
-        ObjectiveSense::Minimize => (adapter_result.best_objective - exact.best_objective).max(0.0),
+        ObjectiveSense::Maximize => exact.best_objective - adapter_result.best_objective,
+        ObjectiveSense::Minimize => adapter_result.best_objective - exact.best_objective,
     };
     Ok(AdapterComparison { exact, adapter: adapter_result, objective_gap_vs_exact: gap })
 }
@@ -767,6 +855,7 @@ pub fn solve_trading_trajectory_exact(
             best_value = value;
         }
     }
+    // Defensive: `enumerate_trading_paths` never returns an empty list, so a best path exists.
     let idx = best_idx.ok_or(CombinatorialOptimizationError::NoFeasibleSolution)?;
     Ok(TrajectoryOptimizationResult {
         best_path: paths[idx].clone(),
@@ -790,16 +879,20 @@ pub fn solve_trading_trajectory_exact(
 /// is what makes the problem non-convex. Impact is linear in `|dq_t|`, not the square-root
 /// cost of AFML §21.3.
 ///
-/// Only the lengths of `path` are checked: `inventory_path` is taken as given and is not
-/// checked to be the running sum of `trades`.
+/// `path` must be self-consistent: `inventory_path[0]` is the starting inventory and each
+/// later entry is the previous one plus that step's trade, as [`enumerate_trading_paths`]
+/// builds them.
 ///
 /// # Errors
 ///
 /// - [`CombinatorialOptimizationError::InvalidInput`] if `inventory_path.len() !=
-///   trades.len() + 1`, or `risk_aversion`, `fixed_ticket_cost` or
-///   `terminal_inventory_penalty` is negative or non-finite.
+///   trades.len() + 1`, or `risk_aversion`, `fixed_ticket_cost`,
+///   `terminal_inventory_penalty` or an entry of `impact_coefficients` is negative or
+///   non-finite.
 /// - [`CombinatorialOptimizationError::DecisionLengthMismatch`] if `expected_returns` or
 ///   `impact_coefficients` does not have one entry per trade.
+/// - [`CombinatorialOptimizationError::InconsistentInventoryPath`] if `inventory_path` is not
+///   the running sum of `trades`.
 /// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the result is NaN or infinite.
 ///
 /// `final inventory - terminal_inventory_target` is formed in `i128`, so it cannot overflow
@@ -857,6 +950,18 @@ pub fn evaluate_trading_path(
         return Err(CombinatorialOptimizationError::InvalidInput(
             "risk/cost coefficients must be finite and >= 0",
         ));
+    }
+    // A negative impact coefficient would pay the trader to trade.
+    if cfg.impact_coefficients.iter().any(|c| !(c.is_finite() && *c >= 0.0)) {
+        return Err(CombinatorialOptimizationError::InvalidInput(
+            "impact_coefficients must be finite and >= 0",
+        ));
+    }
+    for step in 0..path.horizon() {
+        let expected = path.inventory_path[step].checked_add(path.trades[step]);
+        if expected != Some(path.inventory_path[step + 1]) {
+            return Err(CombinatorialOptimizationError::InconsistentInventoryPath { step });
+        }
     }
 
     let mut objective = 0.0;

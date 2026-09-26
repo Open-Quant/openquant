@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+last_generated: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -60,7 +60,7 @@ For the AFML chapter each module implements, see
 ### Research Workflows
 
 - [`evaluation`](/modules/evaluation/) — PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.
-- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
+- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.
 - [`research`](/modules/research/) — Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates.
 - [`viz`](/modules/viz/) — Visualization payload builders for feature importance, drawdown, regime, frontier, and cluster charts.
 
@@ -111,7 +111,7 @@ For the AFML chapter each module implements, see
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
-- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
+- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.

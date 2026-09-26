@@ -2,7 +2,7 @@
 title: "microstructural_features"
 description: "Spread, price-impact, order-flow and entropy features estimated from bars or from trades."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -183,7 +183,10 @@ investigating. The route has two steps.
 **Encode** the series as a string. `encode_tick_rule_array` maps tick signs to letters
 (`1 → a`, `−1 → b`, `0 → c`). For returns or volumes, `quantile_mapping(values, n_letters)`
 builds a codebook with equally populated bins and `sigma_mapping(values, step)` one with bins
-of fixed width; `encode_array` applies either.
+of fixed width; `encode_array` applies either, one letter per value. Both mappings reject an
+empty array and `NaN` values, `sigma_mapping` rejects a step that is not a positive finite
+number, and `encode_array` raises on a `NaN` value or an empty codebook rather than dropping
+anything, so the message is always as long as the input.
 
 **Estimate** the entropy of the string, in bits per symbol:
 
@@ -192,7 +195,7 @@ of fixed width; `encode_array` applies either.
 | `get_shannon_entropy(msg)` | $-\sum p\log_2 p$ over single symbols; ignores order entirely |
 | `get_plug_in_entropy(msg, w)` | Shannon entropy of overlapping words of length `w`, divided by `w` |
 | `get_lempel_ziv_entropy(msg)` | size of the Lempel–Ziv dictionary divided by message length; lower means more repetition |
-| `get_konto_entropy(msg, window)` | Kontoyiannis' estimator from longest-match lengths; `window = 0` uses an expanding window |
+| `get_konto_entropy(msg, window)` | Kontoyiannis' estimator from longest-match lengths; `window = 0` uses an expanding window, and a fixed window is clamped to half the message length (Snippet 18.4) |
 
 Only the last three can see *structure*. The string `abababab…` has a Shannon entropy of
 exactly 1 bit, the same as a fair coin, because it has as many `a`s as `b`s; its plug-in
@@ -225,9 +228,12 @@ assert_eq!(get_plug_in_entropy("abababab", 2)?, 0.5);
 assert_eq!(get_lempel_ziv_entropy("abababab"), 0.5);
 ```
 
-`MicrostructuralFeaturesGenerator::new_from_csv(path, tick_counts, volume_encoding,
+`MicrostructuralFeaturesGenerator::new_from_csv(path, tick_num_series, volume_encoding,
 pct_encoding)` streams a three-column trades file — timestamp, price, volume — and emits the
-trades-based features and entropies for bars of the given tick counts. It is Rust-only.
+trades-based features and entropies per bar. `tick_num_series` holds the **cumulative** trade
+numbers (1-based) at which bars close, such as the tick numbers of volume or dollar bars built
+from the same file — `[100, 250, 400]`, not per-bar counts like `[100, 150, 150]`. It is
+Rust-only.
 
 ## What to watch for
 

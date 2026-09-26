@@ -22,8 +22,8 @@
 //! [`M2N::single_fit_loop`]). Fits are random and unseeded (the starting `p_1` comes from
 //! the thread-local RNG); use several runs and [`most_likely_parameters`], and check that
 //! the runs agree on which component is which, since the labels can come back swapped. The
-//! five modes need not come from the same run, nor reproduce the moments. Despite
-//! `num_workers`, [`M2N::mp_fit`] is serial.
+//! five modes need not come from the same run, nor reproduce the moments. [`M2N::mp_fit`] is
+//! serial; the deprecated `num_workers` field is ignored.
 //!
 //! ```
 //! use openquant::ef3m::{centered_moment, M2N};
@@ -67,9 +67,10 @@ pub struct M2N {
     pub n_runs: usize,
     /// `1` to fit four moments ([`M2N::iter_4`]) or `2` to fit five ([`M2N::iter_5`]).
     pub variant: usize,
-    /// Maximum iterations of one attempt in [`M2N::fit`].
+    /// Maximum iterations of one attempt in [`M2N::fit`]; `0` runs none.
     pub max_iter: usize,
-    /// Unused: kept for API compatibility; [`M2N::mp_fit`] runs serially.
+    /// Ignored: [`M2N::mp_fit`] runs serially. Kept only so existing code still compiles.
+    #[deprecated(note = "ignored: M2N::mp_fit runs serially")]
     pub num_workers: isize,
     /// Scratch: the moments implied by the last iterate of [`M2N::fit`] (or by
     /// [`M2N::get_moments`] with `return_result = false`).
@@ -120,6 +121,7 @@ fn round_to_5(x: f64) -> f64 {
 impl M2N {
     /// Creates a fitter; see the field docs for each argument. Nothing is validated here:
     /// [`M2N::single_fit_loop`] and [`M2N::mp_fit`] check `moments` and `variant`.
+    /// `num_workers` is ignored ([`M2N::mp_fit`] runs serially).
     ///
     /// `parameters` starts at zeros and `error` at the sum of squared `moments`.
     pub fn new(
@@ -132,6 +134,7 @@ impl M2N {
         num_workers: isize,
     ) -> Self {
         let error = moments.iter().map(|m| m * m).sum();
+        #[allow(deprecated)]
         Self {
             moments,
             epsilon,
@@ -147,11 +150,9 @@ impl M2N {
     }
 
     /// Creates a fitter with the defaults `epsilon = 1e-5`, `factor = 5`, `n_runs = 1`,
-    /// `variant = 1` (four moments), `max_iter = 100_000` and `num_workers = -1`.
-    ///
-    /// Note the default variant is 1, although variant 2 is the more accurate one.
+    /// `variant = 2` (five moments, the more accurate variant) and `max_iter = 100_000`.
     pub fn with_defaults(moments: Vec<f64>) -> Self {
-        Self::new(moments, 1e-5, 5.0, 1, 1, 100_000, -1)
+        Self::new(moments, 1e-5, 5.0, 1, 2, 100_000, -1)
     }
 
     /// The first five raw moments `E[x^k]`, `k = 1..=5`, of the mixture with the given
@@ -341,8 +342,8 @@ impl M2N {
     /// One EF3M attempt from the starting `mu_2` and a random starting `p_1` in `[0, 1)`.
     ///
     /// Iterates [`M2N::iter_4`] or [`M2N::iter_5`] (by [`M2N::variant`]) until `p_1` moves by
-    /// less than [`M2N::epsilon`], a step is inadmissible, or more than [`M2N::max_iter`]
-    /// iterations have run. Whenever an iterate's squared moment error (over the first five
+    /// less than [`M2N::epsilon`], a step is inadmissible, or [`M2N::max_iter`] iterations
+    /// have run. Whenever an iterate's squared moment error (over the first five
     /// target moments) beats
     /// [`M2N::error`], it replaces [`M2N::parameters`] and [`M2N::error`], so they always
     /// hold the best iterate seen across calls, not the last one. The attempt runs on
@@ -356,7 +357,7 @@ impl M2N {
     ///   or five (variant 2).
     ///
     /// Inadmissible steps and hitting `max_iter` end the attempt with `Ok(())`.
-    pub fn fit(&mut self, mut mu_2: f64) -> Result<(), InputError> {
+    pub fn fit(&mut self, mu_2: f64) -> Result<(), InputError> {
         match self.variant {
             1 => self.require_moments(4)?,
             2 => self.require_moments(5)?,
@@ -368,13 +369,18 @@ impl M2N {
                 })
             }
         }
-        let mut rng = rand::thread_rng();
-        let mut p_1 = rng.gen_range(0.0..1.0);
-        let mut num_iter = 0usize;
+        let p_1 = rand::thread_rng().gen_range(0.0..1.0);
+        self.iterate_from(mu_2, p_1);
+        Ok(())
+    }
 
-        loop {
+    /// The iteration of [`M2N::fit`] from a given start; `moments` and `variant` must already
+    /// have been checked. Returns the number of iterations run, at most `max_iter`.
+    fn iterate_from(&mut self, mut mu_2: f64, mut p_1: f64) -> usize {
+        let mut num_iter = 0usize;
+        while num_iter < self.max_iter {
             num_iter += 1;
-            // Lengths and variant were checked above.
+            // Lengths and variant were checked by the caller.
             let step = if self.variant == 1 {
                 self.iter_4_unchecked(mu_2, p_1)
             } else {
@@ -382,7 +388,7 @@ impl M2N {
             };
             let Ok(parameters) = <[f64; 5]>::try_from(step) else {
                 // An inadmissible step (the empty vector) ends the attempt.
-                return Ok(());
+                break;
             };
             let _ = self.get_moments(&parameters, false);
             let error: f64 = self
@@ -401,13 +407,10 @@ impl M2N {
             if (p_1 - parameters[4]).abs() < self.epsilon {
                 break;
             }
-            if num_iter > self.max_iter {
-                return Ok(());
-            }
             p_1 = parameters[4];
             mu_2 = parameters[1];
         }
-        Ok(())
+        num_iter
     }
 
     /// `moments` must hold at least `min` entries.
@@ -568,8 +571,8 @@ impl M2N {
     /// Runs [`M2N::single_fit_loop`] [`M2N::n_runs`] times, each on a fresh copy of `self`,
     /// and concatenates the rows (at most one per run). `self` is not modified.
     ///
-    /// The runs execute serially whatever [`M2N::num_workers`] says. Summarise the rows with
-    /// [`most_likely_parameters`].
+    /// The runs execute serially (the deprecated `num_workers` field is ignored). Summarise the
+    /// rows with [`most_likely_parameters`].
     ///
     /// # Errors
     ///
@@ -753,4 +756,30 @@ pub fn most_likely_parameters(
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::M2N;
+
+    /// #186 item 25: `fit` ran `max_iter + 1` iterations (and one with `max_iter = 0`).
+    #[test]
+    fn fit_runs_at_most_max_iter_iterations() {
+        let truth = [-1.0, 2.0, 1.0, 0.5, 0.7];
+        let moments = M2N::with_defaults(vec![]).get_moments(&truth, true).unwrap();
+        for variant in [1, 2] {
+            for max_iter in [0, 1, 3] {
+                // Started at the truth, a fixed point, every step is admissible; with
+                // epsilon = 0 the convergence test never passes, so only max_iter stops it.
+                let mut m2n = M2N::new(moments.clone(), 0.0, 5.0, 1, variant, max_iter, 1);
+                assert_eq!(m2n.iterate_from(2.0, 0.7), max_iter, "variant {variant}");
+            }
+        }
+    }
+
+    /// #186 item 25: the defaults use variant 2, the one the docs page recommends.
+    #[test]
+    fn defaults_use_the_five_moment_variant() {
+        assert_eq!(M2N::with_defaults(vec![]).variant, 2);
+    }
 }

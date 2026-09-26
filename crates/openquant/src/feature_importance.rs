@@ -302,8 +302,10 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
 ///
 /// For each feature, `clf` is fitted and scored with
 /// [`ml_cross_val_score`] on the one-column matrix over `splits`. The value is the **raw** cross-validated score, not a ratio: for negative
-/// log loss compare it with `-ln 2 ≈ -0.693`, a coin flip. `sample_weight` is passed to `fit`
-/// only; test folds are scored unweighted. The standard error is the population deviation
+/// log loss compare it with `-ln 2 ≈ -0.693`, a coin flip. As in
+/// [`mean_decrease_accuracy`], accuracy and F1 use [`SimpleClassifier::predict`] and log loss
+/// uses [`SimpleClassifier::predict_proba`]. `sample_weight` is passed to `fit` only; test
+/// folds are scored unweighted. The standard error is the population deviation
 /// (ddof 0) over `sqrt(n_folds)`.
 ///
 /// # Errors

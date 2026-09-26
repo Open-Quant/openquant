@@ -41,7 +41,7 @@ def fit_m2n(
     epsilon: float = 1e-5,
     factor: float = 5.0,
     n_runs: int = 1,
-    variant: int = 1,
+    variant: int = 2,
     max_iter: int = 100000,
 ) -> list[tuple[float, float, float, float, float, float]]:
     """Fit a mixture of two Gaussians to five raw moments with EF3M.
@@ -66,10 +66,10 @@ def fit_m2n(
         Width of the `mu_2` start grid in standard deviations.
     n_runs : int, default 1
         Number of independent searches, run serially.
-    variant : int, default 1
-        `1` to fit four moments or `2` to fit five.
+    variant : int, default 2
+        `1` to fit four moments or `2` to fit five (the default, and the more accurate).
     max_iter : int, default 100000
-        Maximum iterations of one attempt from one start.
+        Maximum iterations of one attempt from one start; 0 runs none.
 
     Returns
     -------

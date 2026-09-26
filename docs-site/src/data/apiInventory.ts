@@ -174,6 +174,7 @@ export const apiInventory = {
     ],
     "openquant::combinatorial_optimization": [
       "compare_exact_and_adapter",
+      "contains",
       "decision_space_size",
       "enumerate_trading_paths",
       "evaluate_trading_path",
@@ -181,7 +182,8 @@ export const apiInventory = {
       "solve_exact",
       "solve_trading_trajectory_exact",
       "solve_with_adapter",
-      "validate"
+      "validate",
+      "validate_variables"
     ],
     "openquant::cross_validation": [
       "count_train_test_overlaps",
@@ -649,8 +651,10 @@ export const apiInventory = {
       "AdapterComparison": "struct",
       "CombinatorialOptimizationError": "enum",
       "DecisionSchema": "struct",
+      "DecisionSchema::contains": "method",
       "DecisionSchema::decision_space_size": "method",
       "DecisionSchema::validate": "method",
+      "DecisionSchema::validate_variables": "method",
       "IntegerObjective": "trait",
       "IntegerVariable": "struct",
       "ObjectiveSense": "enum",

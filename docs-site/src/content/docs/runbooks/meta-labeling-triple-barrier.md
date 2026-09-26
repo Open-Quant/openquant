@@ -2,7 +2,7 @@
 title: "Runbook: triple-barrier labeling and meta-labeling"
 description: "Does a meta-labeling model improve the precision, F1 and deflated Sharpe ratio of a primary model with a known, weak edge? CUSUM events, triple-barrier meta-labels, purged k-fold and a trial registry, on SYNTHETIC paths with a planted signal and a no-signal control."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
 afml_chapter:
@@ -70,7 +70,7 @@ Each is tested one-sided at 5%, paired over 30 simulated paths at $\kappa = 0.25
 | H1 | Meta's precision is higher than primary's | **supported**: 0.543 → 0.565, $t$ = 4.2 (walk-forward: +0.018, $t$ = 4.3) |
 | H2 | Meta's F1 is higher than primary's (AFML §3.6) | **rejected**: 0.704 → 0.621, $t$ = −11 |
 | H3 | Meta's net Sharpe ratio is higher than primary's | **supported**: 0.18 → 0.32 annualised, $t$ = 2.7 |
-| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.924 |
+| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.924 (0.862 with the 2 post hoc bagging trials) |
 
 ## Method
 
@@ -78,8 +78,7 @@ Per series, following the book:
 
 1. **Daily volatility.** `volatility.get_daily_vol` (Snippet 3.1).
 2. **Events.** A CUSUM filter whose threshold is 2 × the volatility known the day before (Snippet
-   2.4). It is written in numpy because `filters.cusum_filter_*` takes only a scalar threshold from
-   Python, and it is checked against `cusum_filter_indices`.
+   2.4): `filters.cusum_filter_indices` with one threshold per bar.
 3. **Primary side.** The crossover's side at the event bar.
 4. **Meta-labels.** Triple barrier at ±1.5 × volatility with a 14-day vertical barrier, using
    `labeling.add_vertical_barrier`, `triple_barrier_events` and `get_bins` (Snippets 3.2-3.7).
@@ -95,8 +94,8 @@ Per series, following the book:
    `evaluation.probabilistic_sharpe_ratio` the PSR. The DSR is deflated by every configuration
    recorded in an `evaluation.TrialRegistry`.
 
-**Trial count.** 10 configurations on the headline path, all in the registry, and the DSR deflates
-by all 10:
+**Trial count.** 10 pre-registered configurations on the headline path, all in the registry, and
+H4's DSR deflates by all 10:
 
 - the CUSUM multiples 1.0 (the first prototype) and 2.0;
 - the primary model;
@@ -104,7 +103,11 @@ by all 10:
   volatility ratio alone;
 - the headline rule run walk-forward.
 
-The Monte Carlo paths describe the method and are not trials.
+Two more were added after the pre-registered run (#187): the headline rule and probability sizing
+with sequential-bootstrap bagging as the meta-model. They are recorded in the registry as well, so
+it holds 12 trials, and H4 is also reported deflated by all 12. A configuration that takes no bet
+(one on the control) is recorded by `TrialRegistry.record` with a Sharpe ratio of 0, so it still
+counts. The Monte Carlo paths describe the method and are not trials.
 
 ## Results (SYNTHETIC)
 
@@ -140,7 +143,28 @@ The Monte Carlo paths describe the method and are not trials.
 
 - The crossover has no edge: precision 0.449, net Sharpe ratio −0.60.
 - The meta-model rejects 88% of its bets.
-- Meta's DSR is 0.001 over the same 10-configuration grid. There is no false discovery.
+- Meta's DSR is 0.001 over the same 10-configuration grid, and over all 12. There is no false
+  discovery.
+
+**Post hoc: sequential-bootstrap bagging as the meta-model** (#187, added after the pre-registered
+run; a comparison, not a test). `sb_bagging.SequentiallyBootstrappedBaggingClassifier` (20
+mean-threshold stumps, each on a sequential bootstrap sample of 20% of the training events,
+weighted by uniqueness) is fitted on the same purged folds and features. Its probability is the
+share of stumps voting 1. DSRs are over all 12 registered trials.
+
+| Data | Meta-model | Rule | Bets | Precision | Net Sharpe (ann.) | DSR |
+|---|---|---|---:|---:|---:|---:|
+| Headline path | logistic | binary@0.5 | 508 | 0.614 | 0.78 | 0.862 |
+| Headline path | logistic | sized | 508 | 0.614 | 1.28 | 1.000 |
+| Headline path | bagging | binary@0.5 | 334 | 0.680 | 1.14 | 0.996 |
+| Headline path | bagging | sized | 279 | 0.710 | 1.44 | 1.000 |
+| `SYN_*` control | logistic | binary@0.5 | 37 | 0.297 | −1.50 | 0.001 |
+| `SYN_*` control | bagging | binary@0.5 | 180 | 0.456 | −0.76 | 0.028 |
+
+On the headline path the two models' probabilities correlate at 0.83 and agree on 74% of take/skip
+decisions; bagging is more selective and more precise. On the control it keeps more of the losing
+bets but finds nothing. This is one path: bagging is not in the Monte Carlo, because the sequential
+draw rescans the indicator matrix for every sampled event.
 
 ## What it means
 
@@ -152,16 +176,23 @@ The Monte Carlo paths describe the method and are not trials.
   its F1 is $2b/(1+b)$ at base rate $b$. A filter that gives up 30% of recall for 2 points of
   precision lowers F1 even while it raises the Sharpe ratio.
 - **One path is not enough.** On the headline path, 19 years of a 0.78 Sharpe ratio still has a
-  DSR of 0.924 once 10 tried configurations are counted.
+  DSR of 0.924 once 10 tried configurations are counted, and 0.862 once the 2 post hoc bagging
+  trials are counted too.
 - **Precision comparisons are biased against meta when there is nothing to find.** On the
   zero-signal generator, meta's precision is *lower* than primary's ($t$ = −3.7). This is not a
   leak: a test that replaces the test fold with noise leaves every fitted model bit-identical. It
   is how leave-fold-out CV behaves. A fold with a high win rate leaves a training set with a low
   one, so the model takes fewer of that fold's bets; the correlation is −0.76. So read a precision
   gain against a null run, not against zero.
-- **Post hoc: probability sizing did best.** Snippet 10.1 sizing had the best Sharpe ratio on the
-  headline path (1.28, DSR 1.000) and in the Monte Carlo (+0.36, $t$ = 6.1). It also lost more
-  under the null. It was not pre-registered, so it is the candidate for the next study.
+- **Post hoc: probability sizing did best.** Snippet 10.1 sizing had the best Sharpe ratio of the
+  pre-registered configurations on the headline path (1.28, DSR 1.000) and in the Monte Carlo
+  (+0.36, $t$ = 6.1). It also lost more under the null. It was not pre-registered, so it is the
+  candidate for the next study.
+- **Post hoc: bagging looked better on one path.** Sequential-bootstrap bagging raised precision to
+  0.680 and the net Sharpe ratio to 1.14 (1.44 sized, the best of all 12 trials) on the headline
+  path, and found nothing on the control. One path and two configurations picked after the fact
+  make it a candidate for a pre-registered comparison across paths, not a finding. No
+  pre-registered outcome changes.
 
 ## Decision
 
@@ -173,7 +204,8 @@ should use this stage:
 - every configuration in a `TrialRegistry`.
 
 They should judge it on precision and the deflated Sharpe ratio, and compare against a null run
-through the same CV. None of this is a claim about any real instrument.
+through the same CV. Sequential-bootstrap bagging is not promoted over the logistic model: it was
+compared on one path, post hoc. None of this is a claim about any real instrument.
 
 ## Checks
 
@@ -184,10 +216,6 @@ The notebook asserts all four:
    change.
 3. Purged folds have zero train/test overlaps, and no embargoed event is trained on.
 4. A fold's fitted model is bit-identical when its test fold is replaced with noise.
-
-**Not covered:** sequential-bootstrap bagging (issue #47's scope). From Python,
-`sb_bagging.fit_predict_sb_classifier` returns predictions only for its own training rows, so it
-cannot produce out-of-fold probabilities.
 
 ## Run it on your own data
 
