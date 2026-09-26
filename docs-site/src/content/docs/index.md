@@ -17,7 +17,7 @@ hero:
       link: /openquant/modules/
       variant: minimal
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -62,7 +62,7 @@ for _ in range(499):
 events = filters.cusum_filter_timestamps(close, times, 0.004)
 
 # AFML ch. 3: barriers at +/-0.5%, and a vertical barrier 30 minutes out.
-vertical = labeling.add_vertical_barrier(events, times, close, num_minutes=30)
+vertical = labeling.add_vertical_barrier(events, times, num_minutes=30)
 labels = labeling.triple_barrier_labels(
     times, close, events, events, [0.005] * len(events),
     pt=1.0, sl=1.0, vertical_barrier_times=vertical,

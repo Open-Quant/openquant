@@ -2,7 +2,7 @@
 title: "labeling"
 description: "Triple-barrier labels and meta-labels: what happened after each event, measured in units of that moment's volatility."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -106,7 +106,7 @@ vol_stamps, vol_values = [t for t, _ in vol], [v for _, v in vol]
 events = filters.cusum_filter_timestamps(close, stamps, 0.02)
 
 # 3. How long to wait: a vertical barrier two days after each event.
-vertical = labeling.add_vertical_barrier(events, stamps, close, num_days=2)
+vertical = labeling.add_vertical_barrier(events, stamps, num_days=2)
 
 # 4. Barriers at 1.5 daily vols either side; ignore events whose target is under 0.5%.
 found = labeling.get_events(stamps, close, events, (1.5, 1.5), vol_stamps, vol_values, 0.005,

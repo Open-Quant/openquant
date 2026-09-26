@@ -21,7 +21,7 @@ def mda_from_probabilities(
     pct_embargo: float,
     scoring: str,
     sample_weight: Sequence[float] | None = None,
-    seed: int = 42,
+    seed: int | None = None,
 ) -> dict[str, tuple[float, float]]:
     """Mean decrease accuracy (MDA) from out-of-sample probabilities you computed (AFML 8.3).
 
@@ -65,9 +65,10 @@ def mda_from_probabilities(
         and F1 threshold the probabilities at 0.5. Keyword-only.
     sample_weight : list[float] | None, default None
         Weight per sample, applied to the test-fold scores. Keyword-only.
-    seed : int, default 42
-        Accepted for signature parity with the Rust MDA. It has no effect: the shuffles are
-        already in `permuted_proba`. Keyword-only.
+    seed : int | None, default None
+        Deprecated: passing it emits a `DeprecationWarning`. It cannot affect the result, since
+        the shuffles already happened when `permuted_proba` was computed; seed those instead.
+        Keyword-only.
 
     Returns
     -------
@@ -141,7 +142,8 @@ def sfi_from_probabilities(
     indices and predict the test indices; `proba[j]` holds those out-of-sample probabilities,
     one per sample. The value per feature is the raw cross-validated score, not a ratio: for
     `"neg_log_loss"` compare it with `-ln 2` (about -0.693), a coin flip. The standard error is
-    the population deviation (ddof 0) over folds divided by `sqrt(n_splits)`.
+    the population deviation (ddof 0) over folds divided by `sqrt(n_splits)`. Test-fold scores
+    are weighted by `sample_weight`, as for `mda_from_probabilities` and AFML's `cvScore`.
 
     Parameters
     ----------
@@ -165,9 +167,8 @@ def sfi_from_probabilities(
         One of `"neg_log_loss"`, `"accuracy"` or `"f1"` (F1 of the positive class). Accuracy
         and F1 threshold the probabilities at 0.5. Keyword-only.
     sample_weight : list[float] | None, default None
-        Weight per sample. Its length is checked, but it does not affect the result: the Rust
-        SFI passes weights only to model fitting (which happened on your side) and scores the
-        test folds unweighted. Keyword-only.
+        Weight per sample, applied to the test-fold scores (weighted accuracy, weighted mean
+        log loss, F1 from weighted counts). Weight the fit on your side as well. Keyword-only.
 
     Returns
     -------

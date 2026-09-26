@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import pytest
 from openquant import synthetic_bt
@@ -15,22 +16,51 @@ DEFAULT_CRITERIA = dict(
 
 def _ou_paths(phi, intercept, equilibrium, sigma, initial_price, n_paths, horizon, seed):
     return synthetic_bt.generate_ou_paths(
-        phi, intercept, equilibrium, sigma, 0.0, True, initial_price, n_paths, horizon, seed
+        phi,
+        intercept,
+        equilibrium,
+        sigma,
+        initial_price=initial_price,
+        n_paths=n_paths,
+        horizon=horizon,
+        seed=seed,
     )
 
 
 def test_generate_ou_paths_is_seeded_and_reproducible():
     # Mirrors crates/openquant/tests/synthetic_backtesting.rs::
     # test_generate_ou_paths_is_seeded_and_reproducible
-    args = (0.85, 15.0, 100.0, 1.25, 0.9, True, 98.0, 16, 64)
-    p1 = synthetic_bt.generate_ou_paths(*args, 42)
-    p2 = synthetic_bt.generate_ou_paths(*args, 42)
-    p3 = synthetic_bt.generate_ou_paths(*args, 43)
+    args = (0.85, 15.0, 100.0, 1.25, 98.0, 16, 64)
+    p1 = _ou_paths(*args, 42)
+    p2 = _ou_paths(*args, 42)
+    p3 = _ou_paths(*args, 43)
 
     assert p1 == p2
     assert p1 != p3
     assert len(p1) == 16
     assert all(len(path) == 64 and path[0] == 98.0 for path in p1)
+
+
+def test_generate_ou_paths_r_squared_and_stationary_are_deprecated():
+    # Issue #194: both were silently ignored. They are fit diagnostics, not process
+    # parameters, so passing them now warns; the paths are unchanged.
+    kw = dict(initial_price=98.0, n_paths=4, horizon=16, seed=42)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        new = synthetic_bt.generate_ou_paths(0.85, 15.0, 100.0, 1.25, **kw)
+
+    for extra in ({"r_squared": 0.9}, {"stationary": True}):
+        with pytest.warns(DeprecationWarning, match="r_squared and stationary are deprecated"):
+            assert synthetic_bt.generate_ou_paths(0.85, 15.0, 100.0, 1.25, **extra, **kw) == new
+    # The old all-positional call still works, with the warning.
+    with pytest.warns(DeprecationWarning):
+        old = synthetic_bt.generate_ou_paths(0.85, 15.0, 100.0, 1.25, 0.1, False, 98.0, 4, 16, 42)
+    assert old == new
+
+    # So does splatting a calibration result.
+    fit = synthetic_bt.calibrate_ou_params(new[0])
+    with pytest.warns(DeprecationWarning):
+        synthetic_bt.generate_ou_paths(**fit, **kw)
 
 
 def test_generate_ou_paths_without_noise_is_the_ar1_recursion():
@@ -139,3 +169,16 @@ def test_synthetic_bt_rejects_invalid_inputs():
         synthetic_bt.evaluate_rule_on_paths([[0.0, 1.0]], -1.0, 1.0, 2, 1.0)
     with pytest.raises(ValueError, match="response_surface cannot be empty"):
         synthetic_bt.detect_no_stable_optimum([], 0.99, *DEFAULT_CRITERIA.values())
+
+
+def test_run_synthetic_otr_workflow_documented_default_call():
+    # Issue #194: the default stop-loss grid was negative, so calling the workflow without
+    # grids always raised ValueError. Both default grids are now 0.25, 0.5, ..., 5.0.
+    historical = _ou_paths(0.75, 0.5, 2.0, 1.0, 0.0, 1, 300, 9)[0]
+    result = synthetic_bt.run_synthetic_otr_workflow(historical)
+
+    widths = [0.25 * i for i in range(1, 21)]
+    surface = result["response_surface"]
+    assert len(surface) == 400
+    assert sorted({p["stop_loss"] for p in surface}) == pytest.approx(widths)
+    assert sorted({p["profit_taking"] for p in surface}) == pytest.approx(widths)

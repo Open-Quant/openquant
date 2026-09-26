@@ -86,7 +86,7 @@ stage 3  leakage checks: {'inputs_aligned': True, 'timestamps_increasing': True,
 stage 4  realized_sharpe -0.3277   VaR(5%) -0.000201   ES(5%) -0.000330
 stage 4  weights {'CL': 0.237, 'NG': 0.313, 'RB': 0.215, 'GC': 0.234}   portfolio_sharpe 1.8291
 stage 4  turnover 9.40   cost 0.003441
-stage 4  gross -0.001254 -> net -0.004695   net_sharpe -0.2951
+stage 4  gross -0.001254 -> net -0.004695   net_sharpe -1.0885
 stage 4  promotion gates:
            passed_realized_sharpe     False
            passed_net_sharpe          False

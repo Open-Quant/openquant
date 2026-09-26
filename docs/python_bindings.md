@@ -82,8 +82,9 @@ Notes:
 - `triple_barrier_events(...)`
 - `triple_barrier_labels(...)`
 - `meta_labels(...)`
-- `add_vertical_barrier(t_events, close_timestamps, close_prices, num_days=0, num_hours=0, num_minutes=0, num_seconds=0)`
-  (at least one offset must be non-zero)
+- `add_vertical_barrier(t_events, close_timestamps, close_prices=None, num_days=0, num_hours=0, num_minutes=0, num_seconds=0)`
+  (at least one offset must be non-zero; pass the offsets by keyword. `close_prices` is
+  deprecated: it has no effect and passing it emits a `DeprecationWarning`)
 
 Input conventions:
 - `close_timestamps`: list of `%Y-%m-%d %H:%M:%S` strings (fractional seconds allowed)

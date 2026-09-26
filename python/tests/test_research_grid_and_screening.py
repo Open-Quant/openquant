@@ -60,6 +60,33 @@ def test_flywheel_derives_periods_per_year_from_timestamps_when_unset():
     assert out["costs"]["periods_per_year"] == pytest.approx(252.0 * 390.0 / 60.0)
 
 
+def test_net_sharpe_deducts_costs():
+    # Issue #194: net_sharpe was the Sharpe ratio of the gross returns. Each bar is now
+    # charged abs(position change into it) * cost_per_turn.
+    ds = openquant.research.make_synthetic_futures_dataset(n_bars=160, seed=21)
+    free = {"commission_bps": 0.0, "spread_bps": 0.0, "slippage_vol_mult": 0.0}
+    gross = openquant.research.run_flywheel_iteration(ds, config=free)
+    costly = openquant.research.run_flywheel_iteration(ds, config={"commission_bps": 50.0})
+
+    bt = costly["frames"]["backtest"]
+    r, pos = bt["returns"].to_list(), bt["position"].to_list()
+    costs = costly["costs"]
+    assert costs["turnover"] > 0
+    charges = [0.0] + [abs(b - a) * costs["cost_per_turn"] for a, b in zip(pos, pos[1:])]
+    assert sum(charges) == pytest.approx(costs["estimated_total_cost"], rel=1e-12)
+    net = pl.Series([x - c for x, c in zip(r, charges)])
+    want = net.mean() / net.std() * 98_280.0**0.5
+    assert costs["net_sharpe"] == pytest.approx(want, rel=1e-12)
+    assert costly["summary"]["net_sharpe"][0] == costs["net_sharpe"]
+
+    # With no costs it is the gross Sharpe ratio; costs lower it.
+    g = bt["returns"]
+    assert gross["costs"]["net_sharpe"] == pytest.approx(
+        g.mean() / g.std() * 98_280.0**0.5, rel=1e-12
+    )
+    assert costs["net_sharpe"] < gross["costs"]["net_sharpe"]
+
+
 def test_feature_screen_report_flags_missing_constant_and_correlation():
     frame = pl.DataFrame(
         {

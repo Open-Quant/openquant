@@ -34,7 +34,7 @@ def main():
     stamps, close = series()
     vol = [(t, v) for t, v in volatility.get_daily_vol(stamps, close, 100) if not math.isnan(v)]
     events = filters.cusum_filter_timestamps(close, stamps, 0.02)
-    vertical = labeling.add_vertical_barrier(events, stamps, close, 2, 0, 0, 0)
+    vertical = labeling.add_vertical_barrier(events, stamps, num_days=2)
     found = labeling.get_events(
         stamps, close, events, (WIDTH, WIDTH), [t for t, _ in vol], [v for _, v in vol], 0.005,
         vertical_barrier_times=vertical,

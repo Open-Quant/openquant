@@ -159,9 +159,11 @@ def run_flywheel_iteration(
       bars it equals `slippage_vol_mult * realized_vol * 1e-3`).
     - `gross_total_return` is the final equity minus 1.0; `net_total_return` subtracts the
       estimated total cost.
-    - `net_sharpe` is the mean over the sample standard deviation of the per-bar returns,
-      times `sqrt(periods_per_year)`. Despite the name it uses the gross returns; costs
-      are not deducted from it.
+    - `net_sharpe` is the Sharpe ratio of the per-bar returns net of costs: each bar's
+      strategy return minus `abs(position change into that bar) * cost_per_turn` (the first
+      bar pays nothing), so the per-bar costs add up to the estimated total cost. It is the
+      mean over the sample standard deviation of those net returns, times
+      `sqrt(periods_per_year)`, and 0 when the deviation is 0.
 
     Parameters
     ----------
@@ -245,10 +247,15 @@ def run_flywheel_iteration(
     gross_total_return = backtest["equity"][-1] - 1.0
     net_total_return = gross_total_return - total_cost
 
-    bars = len(strategy_returns)
+    # Charge each bar for the position change into it, so the charges sum to total_cost.
+    net_returns = [
+        r - (abs(positions[i] - positions[i - 1]) * cost_per_turn if i > 0 else 0.0)
+        for i, r in enumerate(strategy_returns)
+    ]
+    bars = len(net_returns)
     annualizer = periods_per_year**0.5
-    mean_r = sum(strategy_returns) / max(bars, 1)
-    std_r = _std(strategy_returns)
+    mean_r = sum(net_returns) / max(bars, 1)
+    std_r = _std(net_returns)
     net_sharpe = (mean_r / std_r) * annualizer if std_r > 0 else 0.0
 
     promotion = {

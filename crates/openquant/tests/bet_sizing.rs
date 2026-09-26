@@ -313,20 +313,50 @@ fn test_confirm_and_cast_to_df_checked_shape_mismatch_error() {
 #[test]
 fn test_cdf_mixture_and_single_above_zero() {
     let fit = [0.0, 1.0, 1.0, 2.0, 0.5];
-    let cdf = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.5);
+    let cdf = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.5).unwrap();
     assert!(cdf > 0.0 && cdf < 1.0);
-    let b = single_bet_size_mixed(0.5, &fit);
+    let b = single_bet_size_mixed(0.5, &fit).unwrap();
     assert!((-1.0..=1.0).contains(&b));
 }
 
 #[test]
 fn test_single_bet_size_mixed_below_zero() {
     let fit = [-1.0, 4.0, 2.0, 1.5, 0.4];
-    let c0 = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.0);
-    let cm = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], -4.0);
+    let c0 = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.0).unwrap();
+    let cm = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], -4.0).unwrap();
     let expected = (cm - c0) / c0;
-    let got = single_bet_size_mixed(-4.0, &fit);
+    let got = single_bet_size_mixed(-4.0, &fit).unwrap();
     assert!((expected - got).abs() < 1e-12);
+}
+
+/// Issue #194: a NaN mean used to panic inside `Normal::new(..).unwrap()`.
+#[test]
+fn test_mixture_functions_reject_non_finite_inputs() {
+    fn is_nan_input(err: BetSizingError, want: &str) -> bool {
+        matches!(err, BetSizingError::NonFinite { name, value } if name == want && value.is_nan())
+    }
+    let fit = [0.0, 1.0, 1.0, 2.0, 0.5];
+    assert!(is_nan_input(cdf_mixture(f64::NAN, 1.0, 1.0, 2.0, 0.5, 0.0).unwrap_err(), "mu1"));
+    assert!(is_nan_input(cdf_mixture(0.0, f64::NAN, 1.0, 2.0, 0.5, 0.0).unwrap_err(), "mu2"));
+    assert!(is_nan_input(cdf_mixture(0.0, 1.0, 1.0, f64::NAN, 0.5, 0.0).unwrap_err(), "sigma2"));
+    assert!(is_nan_input(cdf_mixture(0.0, 1.0, 1.0, 2.0, f64::NAN, 0.0).unwrap_err(), "p1"));
+    assert!(is_nan_input(cdf_mixture(0.0, 1.0, 1.0, 2.0, 0.5, f64::NAN).unwrap_err(), "x"));
+    assert_eq!(
+        cdf_mixture(f64::INFINITY, 1.0, 1.0, 2.0, 0.5, 0.0).unwrap_err(),
+        BetSizingError::NonFinite { name: "mu1", value: f64::INFINITY }
+    );
+    // An infinite evaluation point is a valid CDF argument.
+    assert_eq!(cdf_mixture(0.0, 1.0, 1.0, 2.0, 0.5, f64::INFINITY).unwrap(), 1.0);
+
+    assert!(is_nan_input(single_bet_size_mixed(f64::NAN, &fit).unwrap_err(), "c"));
+    let bad_fit = [f64::NAN, 1.0, 1.0, 2.0, 0.5];
+    assert!(is_nan_input(single_bet_size_mixed(0.5, &bad_fit).unwrap_err(), "mu1"));
+
+    let d = dates(2, "2000-01-01", 1);
+    let t1 = vec![(d[0], d[1]), (d[1], d[1] + Duration::days(1))];
+    assert!(is_nan_input(bet_size_reserve(&t1, &[1.0, -1.0], &bad_fit).unwrap_err(), "mu1"));
+    let err = bet_size_reserve_with_fit(&t1, &[1.0, -1.0], &bad_fit).unwrap_err();
+    assert_eq!(err.to_string(), "input 'mu1' must be finite, got NaN");
 }
 
 #[test]
@@ -379,7 +409,7 @@ fn test_bet_size_reserve_matches_reference() {
         assert_eq!(*c_t, want_c[i], "row {i} c_t");
         // The mixture CDF is statrs here and scipy there; they differ by ~3e-11.
         assert!((bet - want_bet[i]).abs() < 1e-9, "row {i}: bet {bet}, reference {}", want_bet[i]);
-        assert!((single_bet_size_mixed(*c_t, &fit) - bet).abs() < 1e-15);
+        assert!((single_bet_size_mixed(*c_t, &fit).unwrap() - bet).abs() < 1e-15);
     }
 }
 
