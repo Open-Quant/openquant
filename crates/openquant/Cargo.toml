@@ -17,7 +17,7 @@ chrono = "0.4"
 itertools = "0.13"
 rand = { version = "0.8", features = ["std"] }
 statrs = "0.16"
-rand_distr = "0.4"
+rand_distr = "0.6"
 nalgebra = "0.32"
 csv = "1"
 polars = { version = "0.46", default-features = false, features = ["strings", "lazy"] }
