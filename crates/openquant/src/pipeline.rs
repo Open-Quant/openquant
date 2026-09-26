@@ -336,11 +336,12 @@ impl From<RiskMetricsError> for PipelineError {
 ///   `close`, `model_sides` and `close`, the rows of `asset_prices` and `timestamps`, or
 ///   `asset_names` and the columns of `asset_prices` differ in length.
 /// - [`PipelineError::InvalidParameter`] if `asset_prices` has fewer than 2 rows or no
-///   columns, a `model_probabilities` entry is outside `[0, 1]`, `cusum_threshold` or
-///   `step_size` is not finite and `> 0`, `num_classes < 2`, or `confidence_level` is outside
-///   `[0, 1]` (NaN included everywhere).
+///   columns, `cusum_threshold <= 0`, `num_classes < 2`, or `confidence_level` is outside
+///   `[0, 1]` (NaN included).
 /// - [`PipelineError::NoEvents`] if the CUSUM filter selects no bar (including when `close` has
 ///   a single bar).
+/// - [`PipelineError::InvalidParameter`] also if a `model_probabilities` entry is outside
+///   `[0, 1]`, or `cusum_threshold` or `step_size` is `NaN`, infinite or `<= 0`.
 /// - [`PipelineError::PortfolioAllocation`] if the max-Sharpe optimisation on `asset_prices`
 ///   fails.
 /// - [`PipelineError::Risk`] is part of the signature but not reachable after validation. It

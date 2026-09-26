@@ -81,13 +81,14 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 /// Raises
 /// ------
 /// ValueError
-///     If a timestamp does not parse; `asset_prices` is empty or ragged; `timestamps`,
+///     If a value is outside the range given under Parameters (a probability outside
+///     `[0, 1]`, `cusum_threshold` or `step_size` not finite and > 0, or `asset_prices`
+///     without one row per timestamp); a timestamp does not parse; `asset_prices` is empty
+///     or ragged; `timestamps`,
 ///     `close` or `model_probabilities` is empty; `close` differs in length from
-///     `timestamps`, `model_probabilities` or `model_sides`, `asset_prices` has a row count
-///     other than `len(timestamps)`, or `asset_names` differs from the number of assets;
-///     `asset_prices` has fewer than 2 rows, a probability is outside `[0, 1]`,
-///     `cusum_threshold` or `step_size` is not finite and > 0, `num_classes < 2` or
-///     `confidence_level` is outside `[0, 1]`; the CUSUM filter
+///     `timestamps`, `model_probabilities` or `model_sides`, or `asset_names` from the
+///     number of assets; `asset_prices` has fewer than 2 rows, `cusum_threshold <= 0`,
+///     `num_classes < 2` or `confidence_level` is outside `[0, 1]`; the CUSUM filter
 ///     finds no event; or the max-Sharpe optimisation fails.
 #[pyfunction(name = "run_mid_frequency_pipeline")]
 #[pyo3(signature = (
