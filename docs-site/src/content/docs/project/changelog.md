@@ -30,7 +30,7 @@ file disagree).
 
 ### Added
 
-- Docs: a research gallery generated from the executed runbooks, a performance page generated from `benchmarks/`, and this changelog on the site; the governance stubs folded into one page (#55)
+- Docs: a research gallery generated from the executed runbooks, a performance page generated from `benchmarks/`, and this changelog on the site; the governance stubs folded into one page (#55) ([#207](https://github.com/Open-Quant/openquant/pull/207))
 - `hcaa`: linkage option (single, complete, average, ward), Ward by default (#197) ([#203](https://github.com/Open-Quant/openquant/pull/203))
 - Runbooks 11 and 13: a sequential-bootstrap bagging comparison, and the workarounds for #187 removed ([#199](https://github.com/Open-Quant/openquant/pull/199))
 - `hcaa`: `distance` option shared with HRP, pairwise default kept (#188) ([#195](https://github.com/Open-Quant/openquant/pull/195))
