@@ -28,11 +28,12 @@ Runbooks:
 - `11_meta_labeling_triple_barrier.ipynb` (runbook, #47: CUSUM events, triple-barrier meta-labels and a meta-model in purged k-fold, primary vs meta on precision, F1 and deflated Sharpe net of costs; SYNTHETIC paths with a planted signal plus the `fetch` sample as a no-signal control; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 - `12_cpcv_deflated_sharpe.ipynb` (runbook, #48: CPCV backtest with PSR and the deflated Sharpe ratio; a no-signal control and a planted signal, SYNTHETIC; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 - `13_bet_sizing_from_probabilities.ipynb` (runbook, #50: pre-registered test of runbook 11's post hoc finding; Snippet 10.1-10.3 probability sizing vs a flat 0.5 meta filter, with the number of classes, step size and averaging as registered trials, net of costs, deflated by a trial registry; SYNTHETIC planted-signal paths plus no-signal controls; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
+- `14_fracdiff_features_classifier.ipynb` (runbook, #209: runbook 09's open question; FFD features with d chosen per training fold vs returns, integer differences and the level as inputs of a purged-CV classifier, net of costs, every feature set a registered trial; SYNTHETIC planted-signal paths plus no-signal controls, with a post hoc walk-forward check; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 
 Notebook 06 (a momentum heuristic with made-up probabilities, no cross-validation and no deflated
 Sharpe ratio) was removed in #47; notebook 11 replaces it.
 
-Every notebook runs offline. Notebooks 09 to 13 read market-shaped data through `openquant.data.fetch`, whose default
+Every notebook runs offline. Notebooks 09 to 14 read market-shaped data through `openquant.data.fetch`, whose default
 source is the committed SYNTHETIC sample (`SYN_A` to `SYN_E`, see `DATA_SOURCES.md`); the others generate
 synthetic series in memory. None of the committed outputs describe a real market.
 
