@@ -20,11 +20,18 @@ def run_mid_frequency_pipeline(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
+    periods_per_year: float = 252.0,
 ) -> dict[str, Any]:
     """Run an end-to-end AFML-style research pipeline.
 
     Returns nested dictionaries with stage outputs:
     events, signals, portfolio, risk, backtest, leakage_checks.
+
+    ``risk_free_rate`` is an annual rate for both the portfolio stage and
+    ``realized_sharpe``. ``periods_per_year`` is the number of bars a year of ``close`` and
+    of the rows of ``asset_prices`` (252 for daily bars; about ``252 * 390`` for one-minute
+    bars); it annualises ``realized_sharpe`` and the portfolio's return, risk and Sharpe
+    ratio.
 
     ``leakage_checks["timestamps_increasing"]`` and ``["event_indices_sorted"]`` are computed
     from the data. ``["inputs_aligned"]`` (always True) and ``["has_forward_look_bias"]``
@@ -43,6 +50,7 @@ def run_mid_frequency_pipeline(
         step_size,
         risk_free_rate,
         confidence_level,
+        periods_per_year,
     )
 
 
@@ -58,6 +66,7 @@ def run_mid_frequency_pipeline_frames(
     step_size: float = 0.1,
     risk_free_rate: float = 0.0,
     confidence_level: float = 0.05,
+    periods_per_year: float = 252.0,
 ) -> dict[str, Any]:
     """Run the pipeline and enrich output with polars DataFrames."""
     out = run_mid_frequency_pipeline(
@@ -72,6 +81,7 @@ def run_mid_frequency_pipeline_frames(
         step_size=step_size,
         risk_free_rate=risk_free_rate,
         confidence_level=confidence_level,
+        periods_per_year=periods_per_year,
     )
 
     signals = out["signals"]

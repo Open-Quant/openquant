@@ -18,7 +18,8 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
     num_classes=2,
     step_size=0.1,
     risk_free_rate=0.0,
-    confidence_level=0.05
+    confidence_level=0.05,
+    periods_per_year=252.0
 ))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -35,6 +36,7 @@ fn pipeline_run_mid_frequency_pipeline(
     step_size: f64,
     risk_free_rate: f64,
     confidence_level: f64,
+    periods_per_year: f64,
 ) -> PyResult<PyObject> {
     let timestamps = parse_naive_datetimes(timestamps)?;
     let asset_prices = matrix_from_rows(asset_prices)?;
@@ -57,6 +59,7 @@ fn pipeline_run_mid_frequency_pipeline(
         step_size,
         risk_free_rate,
         confidence_level,
+        periods_per_year,
     };
     let out = run_mid_frequency_pipeline(input, &config).map_err(to_py_err)?;
 

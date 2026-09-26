@@ -176,7 +176,8 @@ The parameters worth knowing:
 | `cusum_threshold` | `0.001` | Event rate. Lower gives more events and more overlap. |
 | `num_classes` | `2` | The null probability `get_signal` tests against, `1/num_classes`. |
 | `step_size` | `0.1` | Position quantisation. Larger suppresses churn at the cost of tracking. |
-| `risk_free_rate` | `0.0` | Sharpe numerator offset. |
+| `risk_free_rate` | `0.0` | Annual rate, subtracted in both the allocation and `realized_sharpe` (as `risk_free_rate / periods_per_year` per bar). |
+| `periods_per_year` | `252.0` | Bars a year. Annualises `realized_sharpe` and the portfolio figures; `run_flywheel_iteration` keeps 252 on its one-minute bars, so its Sharpe ratios are annual in units of 252 bars. |
 | `confidence_level` | `0.05` | Tail level for VaR, ES and CDaR. |
 
 ### Stage 4 — costs, and the promotion decision

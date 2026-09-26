@@ -14,7 +14,7 @@
 //!    ([`crate::portfolio_optimization::allocate_max_sharpe`]; Markowitz, 1952, not AFML).
 //! 4. **Risk** — historical VaR and expected shortfall of the strategy's per-bar returns and
 //!    conditional drawdown at risk of its equity curve ([`crate::risk_metrics::RiskMetrics`]),
-//!    plus the annualised Sharpe ratio (AFML §14.7.1).
+//!    plus the Sharpe ratio annualised with `periods_per_year` (AFML §14.7.1).
 //! 5. **Backtest** — the equity curve, drawdowns and time under water (AFML Snippet 14.4;
 //!    [`crate::backtest_statistics::drawdown_and_time_under_water`]).
 //!
@@ -32,15 +32,20 @@
 //!   from bar `i + 1`. There is one strategy return per bar after the first, and the equity
 //!   curve starts at 1 and compounds them.
 //! - `asset_prices` is rows = observations (oldest first), columns = assets, in the order of
-//!   `asset_names`. Its expected returns and covariance are annualised with 252 periods a
-//!   year, so `risk_free_rate` is an annual rate there. The portfolio stage is independent of
-//!   the backtest: its weights are reported, not traded, and its rows need not match
-//!   `timestamps`.
+//!   `asset_names`. The portfolio stage is independent of the backtest: its weights are
+//!   reported, not traded, and its rows need not match `timestamps`.
+//! - **Units.** `risk_free_rate` is an **annual** rate everywhere, as in
+//!   [`crate::portfolio_optimization`]. `periods_per_year` is the number of bars a year, for
+//!   both `close` and the rows of `asset_prices` (252 for daily bars, the default; about
+//!   `252 * 390` for one-minute bars over a 6.5-hour session). It annualises
+//!   `realized_sharpe` and the portfolio's return, volatility and Sharpe ratio, and the
+//!   risk-free rate per bar is `risk_free_rate / periods_per_year`. If `asset_prices` is
+//!   sampled at a different frequency from `close`, resample it first.
 //! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
 //!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
-//! - `realized_sharpe` annualises per-bar returns with 252 bars a year, whatever the bar
-//!   spacing, and subtracts `risk_free_rate` per bar.
+//! - `realized_sharpe` is `sqrt(periods_per_year) * (mean - risk_free_rate / periods_per_year)
+//!   / std` of the per-bar strategy returns (sample standard deviation).
 //! - [`LeakageChecks`] computes two things from the data: whether `timestamps` strictly
 //!   increase and whether the event positions do. Misaligned lengths are rejected with an
 //!   error rather than flagged. The pipeline does **not** detect look-ahead: the one-bar lag
@@ -101,7 +106,7 @@
 //! // The 5% "higher" quantile of [-0.02, 0, 0.02, 0.02] is 0; the returns below it average -0.02.
 //! assert!(out.risk.value_at_risk.abs() < 1e-12);
 //! assert!((out.risk.expected_shortfall + 0.02).abs() < 1e-12);
-//! // Mean 0.005, sample std 0.01915: 0.2611 per bar, 4.145 annualised with 252 bars.
+//! // Mean 0.005, sample std 0.01915: 0.2611 per bar, 4.145 annualised with the default 252.
 //! assert!((out.risk.realized_sharpe - 4.1451).abs() < 1e-4);
 //! // A single asset takes the whole portfolio.
 //! assert!((out.portfolio.weights[0] - 1.0).abs() < 1e-9);
@@ -122,7 +127,7 @@ use crate::risk_metrics::{RiskMetrics, RiskMetricsError};
 /// Parameters of [`run_mid_frequency_pipeline`].
 ///
 /// The [`Default`] is `cusum_threshold = 0.001`, `num_classes = 2`, `step_size = 0.1`,
-/// `risk_free_rate = 0.0`, `confidence_level = 0.05`.
+/// `risk_free_rate = 0.0`, `confidence_level = 0.05`, `periods_per_year = 252.0`.
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineConfig {
     /// CUSUM filter threshold `h` on cumulative log returns of `close` (AFML Snippet 2.4), e.g.
@@ -135,13 +140,16 @@ pub struct ResearchPipelineConfig {
     /// Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]` (AFML Snippet
     /// 10.3). A step <= 0 is not rejected and leaves the sizes unrounded.
     pub step_size: f64,
-    /// Risk-free rate used twice, in two units: as an **annual** rate by the max-Sharpe
-    /// allocation (whose returns are annualised with 252 periods) and as a **per-bar** rate by
-    /// `realized_sharpe`. Only 0 (the default) means the same thing in both.
+    /// **Annual** risk-free rate, used by the max-Sharpe allocation and by `realized_sharpe`
+    /// (as `risk_free_rate / periods_per_year` per bar).
     pub risk_free_rate: f64,
     /// Lower-tail probability for VaR and expected shortfall, in `[0, 1]` (0.05 = worst 5% of
     /// per-bar returns). CDaR uses `1 - confidence_level`.
     pub confidence_level: f64,
+    /// Bars per year of `close` and rows per year of `asset_prices`; annualises
+    /// `realized_sharpe` and the portfolio stage. Must be finite and > 0. The default 252 is
+    /// right for daily bars only.
+    pub periods_per_year: f64,
 }
 
 impl Default for ResearchPipelineConfig {
@@ -152,6 +160,7 @@ impl Default for ResearchPipelineConfig {
             step_size: 0.1,
             risk_free_rate: 0.0,
             confidence_level: 0.05,
+            periods_per_year: 252.0,
         }
     }
 }
@@ -203,7 +212,7 @@ pub struct SignalStage {
     pub timeline_signal: Vec<f64>,
 }
 
-/// Max-Sharpe mean-variance allocation of `asset_prices` (annualised with 252 periods).
+/// Max-Sharpe mean-variance allocation of `asset_prices`, annualised with `periods_per_year`.
 ///
 /// Reported only: these weights are not used by the backtest.
 #[derive(Debug, Clone)]
@@ -231,8 +240,9 @@ pub struct RiskStage {
     /// Conditional drawdown at risk of the equity curve at level `1 - confidence_level`, in
     /// equity units (the curve starts at 1).
     pub conditional_drawdown_risk: f64,
-    /// Sharpe ratio of the per-bar returns annualised with 252 bars a year (AFML §14.7.1);
-    /// NaN with fewer than two returns, infinite or NaN when they are constant.
+    /// Sharpe ratio of the per-bar returns net of `risk_free_rate / periods_per_year`,
+    /// annualised with `periods_per_year` (AFML §14.7.1); NaN with fewer than two returns,
+    /// infinite or NaN when they are constant.
     pub realized_sharpe: f64,
 }
 
@@ -353,8 +363,8 @@ impl From<RiskMetricsError> for PipelineError {
 ///   `close`, `model_sides` and `close`, or `asset_names` and the columns of `asset_prices`
 ///   differ in length.
 /// - [`PipelineError::InvalidParameter`] if `asset_prices` has fewer than 2 rows or no
-///   columns, `cusum_threshold <= 0`, `num_classes < 2`, or `confidence_level` is outside
-///   `[0, 1]` (NaN included).
+///   columns, `cusum_threshold <= 0`, `num_classes < 2`, `confidence_level` is outside
+///   `[0, 1]` (NaN included), or `periods_per_year` is not finite and > 0.
 /// - [`PipelineError::NoEvents`] if the CUSUM filter selects no bar (including when `close` has
 ///   a single bar).
 /// - [`PipelineError::PortfolioAllocation`] if the max-Sharpe optimisation on `asset_prices`
@@ -394,14 +404,20 @@ pub fn run_mid_frequency_pipeline(
 
     let signals = SignalStage { event_signal, timeline_signal: timeline_signal.clone() };
 
-    let portfolio_out = allocate_max_sharpe(input.asset_prices, config.risk_free_rate, None, None)
-        .map_err(|err| PipelineError::PortfolioAllocation(format!("{err:?}")))?;
+    // `allocate_max_sharpe` annualises with 252 periods a year. Rescale to `periods_per_year`:
+    // hand it the risk-free rate in its units, then convert its annual figures back. With
+    // `k = periods_per_year / 252`, returns scale by `k`, volatility and Sharpe by `sqrt(k)`,
+    // and the weights do not move.
+    let scale = config.periods_per_year / 252.0;
+    let portfolio_out =
+        allocate_max_sharpe(input.asset_prices, config.risk_free_rate / scale, None, None)
+            .map_err(|err| PipelineError::PortfolioAllocation(format!("{err:?}")))?;
     let portfolio = PortfolioStage {
         asset_names: input.asset_names.to_vec(),
         weights: portfolio_out.weights,
-        portfolio_risk: portfolio_out.portfolio_risk,
-        portfolio_return: portfolio_out.portfolio_return,
-        portfolio_sharpe: portfolio_out.portfolio_sharpe,
+        portfolio_risk: portfolio_out.portfolio_risk * scale.sqrt(),
+        portfolio_return: portfolio_out.portfolio_return * scale,
+        portfolio_sharpe: portfolio_out.portfolio_sharpe * scale.sqrt(),
     };
 
     let (strategy_returns, equity_curve) =
@@ -416,7 +432,11 @@ pub fn run_mid_frequency_pipeline(
     let conditional_drawdown_risk = risk_metrics
         .calculate_conditional_drawdown_risk(&equity_curve, 1.0 - config.confidence_level)?;
     let realized_sharpe = if strategy_returns.len() > 1 {
-        sharpe_ratio(&strategy_returns, 252.0, config.risk_free_rate)
+        sharpe_ratio(
+            &strategy_returns,
+            config.periods_per_year,
+            config.risk_free_rate / config.periods_per_year,
+        )
     } else {
         f64::NAN
     };
@@ -507,6 +527,9 @@ fn validate_input(
     }
     if !(0.0..=1.0).contains(&config.confidence_level) {
         return Err(PipelineError::InvalidParameter("confidence_level must be in [0, 1]"));
+    }
+    if !(config.periods_per_year.is_finite() && config.periods_per_year > 0.0) {
+        return Err(PipelineError::InvalidParameter("periods_per_year must be finite and > 0"));
     }
     Ok(())
 }

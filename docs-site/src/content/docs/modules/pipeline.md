@@ -40,7 +40,8 @@ Use this when you want to run a complete AFML workflow without manually chaining
 | `cusum_threshold` | `float` | CUSUM event filter threshold | 0.001 |
 | `num_classes` | `int` | Number of label classes for bet sizing | 2 |
 | `step_size` | `float` | Bet size discretization step | 0.1 |
-| `risk_free_rate` | `float` | Risk-free rate for Sharpe calculations | 0.0 |
+| `risk_free_rate` | `float` | Annual risk-free rate, for both the max-Sharpe allocation and realized_sharpe | 0.0 |
+| `periods_per_year` | `float` | Bars per year of close and rows per year of asset_prices; annualises realized_sharpe and the portfolio figures | 252.0 |
 | `confidence_level` | `float` | Confidence level for VaR/ES | 0.05 |
 
 ## Usage Examples
@@ -77,6 +78,7 @@ print(summary)
 
 - Reading has_forward_look_bias as a test: it is a deprecated constant (always false). The pipeline cannot see look-ahead inside model_probabilities; fit them on data available at each bar's close.
 - Unordered timestamps do not stop the run; check leakage_checks.timestamps_increasing.
+- Leaving periods_per_year at 252 for intraday bars: realized_sharpe and the portfolio figures are then annual in units of 252 bars, not calendar years.
 - Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.
 
 ## API Reference
