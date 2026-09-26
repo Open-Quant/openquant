@@ -3,7 +3,7 @@ title: "viz"
 description: "Visualization payload builders for feature importance, drawdown, regime, frontier, and cluster charts."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -15,6 +15,13 @@ rust_api:
   - "prepare_regime_payload"
   - "prepare_frontier_payload"
   - "prepare_cluster_payload"
+python_api:
+  - "viz.prepare_feature_importance_payload"
+  - "viz.prepare_feature_importance_comparison_payload"
+  - "viz.prepare_drawdown_payload"
+  - "viz.prepare_regime_payload"
+  - "viz.prepare_frontier_payload"
+  - "viz.prepare_cluster_payload"
 sidebar:
   badge: Module
 ---
@@ -59,25 +66,6 @@ dd_payload = prepare_drawdown_payload(
 )
 # {"chart": "line", "x": [...], "equity": [...], "drawdown": [...]}
 ```
-
-## API Reference
-
-### Python API
-
-- `viz.prepare_feature_importance_payload`
-- `viz.prepare_feature_importance_comparison_payload`
-- `viz.prepare_drawdown_payload`
-- `viz.prepare_regime_payload`
-- `viz.prepare_frontier_payload`
-- `viz.prepare_cluster_payload`
-
-### Key Functions
-
-- `prepare_feature_importance_payload`
-- `prepare_drawdown_payload`
-- `prepare_regime_payload`
-- `prepare_frontier_payload`
-- `prepare_cluster_payload`
 
 ## Risk Notes and Caveats
 

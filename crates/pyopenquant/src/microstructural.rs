@@ -4,11 +4,54 @@ use crate::helpers::to_py_err;
 
 // --- Bar-based features ---
 
+/// Roll's (1984) effective bid-ask spread over a rolling window of close prices.
+///
+/// Computes `2 * sqrt(|cov(dp_t, dp_{t-1})|)`, where the covariance is the sample (`n - 1`)
+/// covariance of close-to-close price changes with their first lag over the last `window`
+/// bars (AFML §19.3.2). The result is in price units. Roll's formula needs a negative
+/// autocovariance; following mlfinlab the absolute value is taken, so a trending series with
+/// positive autocovariance also reports a "spread". Check the sign yourself on anything that
+/// is not a liquid, mean-reverting tick series.
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// window : int
+///     Number of bars in the rolling covariance.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar. `NaN` before index `window + 1`, and everywhere when `window < 2`
+///     or fewer than two prices are given.
 #[pyfunction(name = "get_roll_measure")]
 fn ms_get_roll_measure(close: Vec<f64>, window: usize) -> Vec<f64> {
     openquant::microstructural_features::get_roll_measure(&close, window)
 }
 
+/// Roll measure per unit of dollar volume, a spread cost scaled by traded value.
+///
+/// Element-wise `get_roll_measure(close, window) / dollar_volume` (AFML §19.3.2).
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// dollar_volume : list[float]
+///     Dollar volume of each bar, aligned with `close`.
+/// window : int
+///     Number of bars in the rolling Roll covariance.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar; `NaN` where the Roll measure is `NaN` or the dollar volume is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `dollar_volume` and `close` differ in length.
 #[pyfunction(name = "get_roll_impact")]
 fn ms_get_roll_impact(
     close: Vec<f64>,
@@ -19,6 +62,34 @@ fn ms_get_roll_impact(
         .map_err(to_py_err)
 }
 
+/// Corwin and Schultz's (2012) relative bid-ask spread from bar highs and lows.
+///
+/// AFML §19.3.4, Snippet 19.1. With `beta` the `window`-bar rolling mean of
+/// `ln(H_t/L_t)^2 + ln(H_{t-1}/L_{t-1})^2` and `gamma` the squared log range of the two-bar
+/// high and low, `alpha = (sqrt(2 beta) - sqrt(beta)) / (3 - 2 sqrt(2)) -
+/// sqrt(gamma / (3 - 2 sqrt(2)))` is floored at zero and the spread is
+/// `2 (exp(alpha) - 1) / (1 + exp(alpha))`. The result is a fraction of price, not price
+/// units. Individual values are floored at exactly zero whenever volatility swamps the
+/// spread, so average over many bars rather than reading single values.
+///
+/// Parameters
+/// ----------
+/// high : list[float]
+///     Bar highs, oldest first.
+/// low : list[float]
+///     Bar lows, aligned with `high`.
+/// window : int
+///     Number of bars in the rolling mean of `beta`.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One relative spread per bar; `NaN` before index `window` and wherever a low is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `high` and `low` differ in length.
 #[pyfunction(name = "get_corwin_schultz_estimator")]
 fn ms_get_corwin_schultz_estimator(
     high: Vec<f64>,
@@ -29,12 +100,64 @@ fn ms_get_corwin_schultz_estimator(
         .map_err(to_py_err)
 }
 
+/// Bekker-Parkinson volatility: high-low volatility net of the Corwin-Schultz spread.
+///
+/// AFML §19.3.4, Snippet 19.2. Uses the same `beta` and `gamma` as
+/// `get_corwin_schultz_estimator`:
+/// `sigma = (2^(-1/2) - 1) sqrt(beta) / (k2 (3 - 2 sqrt(2)))
+/// + sqrt(gamma / (k2^2 (3 - 2 sqrt(2))))` with `k2 = sqrt(8 / pi)`, floored at zero. It is a
+/// per-bar volatility of log prices, not annualised.
+///
+/// Parameters
+/// ----------
+/// high : list[float]
+///     Bar highs, oldest first.
+/// low : list[float]
+///     Bar lows, aligned with `high`.
+/// window : int
+///     Number of bars in the rolling mean of `beta`.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One volatility per bar; `NaN` before index `window` and wherever a low is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `high` and `low` differ in length.
 #[pyfunction(name = "get_bekker_parkinson_vol")]
 fn ms_get_bekker_parkinson_vol(high: Vec<f64>, low: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
     openquant::microstructural_features::get_bekker_parkinson_vol(&high, &low, window)
         .map_err(to_py_err)
 }
 
+/// Bar-based Kyle's lambda: rolling mean of `dp_t / (V_t * b_t)` over `window` bars.
+///
+/// AFML §19.4.1. `dp_t` is the close-to-close change, `V_t` the bar's volume and `b_t` the
+/// sign of `dp_t`, carried forward over unchanged bars. Because the sign comes from the same
+/// price change, each ratio equals `|dp_t| / V_t` and the result is never negative. It is a
+/// mean of ratios, not a regression, so one bar with tiny volume can dominate a window.
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// volume : list[float]
+///     Volume of each bar, aligned with `close`.
+/// window : int
+///     Number of bars in the rolling mean.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar; `NaN` before index `window` and for any window containing a
+///     zero-volume bar.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `volume` and `close` differ in length.
 #[pyfunction(name = "get_bar_based_kyle_lambda")]
 fn ms_get_bar_based_kyle_lambda(
     close: Vec<f64>,
@@ -45,6 +168,31 @@ fn ms_get_bar_based_kyle_lambda(
         .map_err(to_py_err)
 }
 
+/// Bar-based Amihud's lambda: rolling mean of `|r_t| / DV_t` over `window` bars.
+///
+/// AFML §19.4.2. `r_t` is the close-to-close log return and `DV_t` the bar's dollar volume.
+/// A bar with zero dollar volume contributes 0 to the sum but still counts in the `window`
+/// divisor.
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// dollar_volume : list[float]
+///     Dollar volume of each bar, aligned with `close`.
+/// window : int
+///     Number of bars in the rolling mean.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar; `NaN` before index `window` and for any window containing a zero
+///     previous close or a `NaN` dollar volume.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `dollar_volume` and `close` differ in length.
 #[pyfunction(name = "get_bar_based_amihud_lambda")]
 fn ms_get_bar_based_amihud_lambda(
     close: Vec<f64>,
@@ -55,6 +203,32 @@ fn ms_get_bar_based_amihud_lambda(
         .map_err(to_py_err)
 }
 
+/// Bar-based Hasbrouck's lambda: rolling mean of `r_t / (b_t * sqrt(DV_t))` over `window` bars.
+///
+/// AFML §19.4.3. `r_t` is the close-to-close log return, `DV_t` the bar's dollar volume and
+/// `b_t` the sign of `r_t`, carried forward over unchanged bars, so each ratio equals
+/// `|r_t| / sqrt(DV_t)`. A bar with zero dollar volume contributes 0 but still counts in the
+/// `window` divisor.
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// dollar_volume : list[float]
+///     Dollar volume of each bar, aligned with `close`.
+/// window : int
+///     Number of bars in the rolling mean.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar; `NaN` before index `window` and for any window containing a zero
+///     previous close or a negative dollar volume.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `dollar_volume` and `close` differ in length.
 #[pyfunction(name = "get_bar_based_hasbrouck_lambda")]
 fn ms_get_bar_based_hasbrouck_lambda(
     close: Vec<f64>,
@@ -71,6 +245,31 @@ fn ms_get_bar_based_hasbrouck_lambda(
 
 // --- Trade-based features ---
 
+/// Trades-based Kyle's lambda over one bar's trades.
+///
+/// AFML §19.4.1. The regression through the origin of per-trade price changes on signed
+/// volume, `sum(dp * v * a) / sum((v * a)^2)`. Transaction price changes include bid-ask
+/// bounce, so the estimate is impact plus bounce; regress mid-price changes if quotes are
+/// available.
+///
+/// Parameters
+/// ----------
+/// price_diff : list[float]
+///     Each trade's price change from the previous trade.
+/// volume : list[float]
+///     Each trade's size, aligned with `price_diff`.
+/// aggressor_flags : list[float]
+///     Each trade's side: `+1` buy, `-1` sell (`0` drops the trade from the regression).
+///
+/// Returns
+/// -------
+/// float
+///     The lambda estimate, or `NaN` if every signed volume is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `volume` or `aggressor_flags` is not as long as `price_diff`.
 #[pyfunction(name = "get_trades_based_kyle_lambda")]
 fn ms_get_trades_based_kyle_lambda(
     price_diff: Vec<f64>,
@@ -85,12 +284,59 @@ fn ms_get_trades_based_kyle_lambda(
     .map_err(to_py_err)
 }
 
+/// Trades-based Amihud's lambda over one bar's trades.
+///
+/// AFML §19.4.2. The regression through the origin of per-trade absolute log returns on
+/// dollar volume, `sum(DV * |r|) / sum(DV^2)`.
+///
+/// Parameters
+/// ----------
+/// log_ret : list[float]
+///     Each trade's log return from the previous trade.
+/// dollar_volume : list[float]
+///     Each trade's dollar volume, aligned with `log_ret`.
+///
+/// Returns
+/// -------
+/// float
+///     The lambda estimate, or `NaN` if every dollar volume is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `dollar_volume` and `log_ret` differ in length.
 #[pyfunction(name = "get_trades_based_amihud_lambda")]
 fn ms_get_trades_based_amihud_lambda(log_ret: Vec<f64>, dollar_volume: Vec<f64>) -> PyResult<f64> {
     openquant::microstructural_features::get_trades_based_amihud_lambda(&log_ret, &dollar_volume)
         .map_err(to_py_err)
 }
 
+/// Trades-based Hasbrouck's lambda over one bar's trades.
+///
+/// AFML §19.4.3. The regression through the origin of per-trade log returns on signed root
+/// dollar volume, `sum(r * a * sqrt(DV)) / sum((a * sqrt(DV))^2)`. The signed return is
+/// regressed, as in AFML; results from versions before issue #105 was fixed (which used the
+/// absolute return) are not comparable.
+///
+/// Parameters
+/// ----------
+/// log_ret : list[float]
+///     Each trade's log return from the previous trade.
+/// dollar_volume : list[float]
+///     Each trade's dollar volume, aligned with `log_ret`.
+/// aggressor_flags : list[float]
+///     Each trade's side: `+1` buy, `-1` sell.
+///
+/// Returns
+/// -------
+/// float
+///     The lambda estimate; `NaN` if every signed root dollar volume is zero or any dollar
+///     volume is negative.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `dollar_volume` or `aggressor_flags` is not as long as `log_ret`.
 #[pyfunction(name = "get_trades_based_hasbrouck_lambda")]
 fn ms_get_trades_based_hasbrouck_lambda(
     log_ret: Vec<f64>,
@@ -107,21 +353,105 @@ fn ms_get_trades_based_hasbrouck_lambda(
 
 // --- VPIN ---
 
+/// Volume-weighted average price, `sum(dollar_volume) / sum(volume)`.
+///
+/// Parameters
+/// ----------
+/// dollar_volume : list[float]
+///     Dollar volume (price times size) of each trade.
+/// volume : list[float]
+///     Size of each trade, aligned with `dollar_volume`.
+///
+/// Returns
+/// -------
+/// float
+///     The VWAP, or `NaN` if the volumes sum to zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `volume` and `dollar_volume` differ in length.
 #[pyfunction(name = "vwap")]
 fn ms_vwap(dollar_volume: Vec<f64>, volume: Vec<f64>) -> PyResult<f64> {
     openquant::microstructural_features::vwap(&dollar_volume, &volume).map_err(to_py_err)
 }
 
+/// Arithmetic mean of trade sizes (the mean trade size of a bar).
+///
+/// Parameters
+/// ----------
+/// tick_sizes : list[float]
+///     Size of each trade.
+///
+/// Returns
+/// -------
+/// float
+///     The mean, or `NaN` for an empty list.
 #[pyfunction(name = "get_avg_tick_size")]
 fn ms_get_avg_tick_size(tick_sizes: Vec<f64>) -> f64 {
     openquant::microstructural_features::get_avg_tick_size(&tick_sizes)
 }
 
+/// Volume-synchronised probability of informed trading (VPIN).
+///
+/// Easley, López de Prado and O'Hara (2012); AFML §19.5.2. The rolling mean over `window`
+/// bars of `|V_buy - V_sell|`, with `V_sell = volume - buy_volume`, divided by the
+/// **current** bar's volume. Dividing by the current bar's volume rather than the window's
+/// makes this the published measure only on volume bars, where every bar has the same
+/// volume; on time bars a quiet bar inflates it and a busy bar deflates it.
+///
+/// Parameters
+/// ----------
+/// volume : list[float]
+///     Total volume of each bar, oldest first.
+/// buy_volume : list[float]
+///     Buy-initiated volume of each bar (e.g. from `get_bvc_buy_volume`), aligned with
+///     `volume`.
+/// window : int
+///     Number of bars in the rolling mean.
+///
+/// Returns
+/// -------
+/// list[float]
+///     One value per bar; `NaN` for the first `window - 1` bars and where the current volume
+///     is zero.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `buy_volume` and `volume` differ in length.
 #[pyfunction(name = "get_vpin")]
 fn ms_get_vpin(volume: Vec<f64>, buy_volume: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
     openquant::microstructural_features::get_vpin(&volume, &buy_volume, window).map_err(to_py_err)
 }
 
+/// Bulk volume classification: estimated buy volume of each bar.
+///
+/// AFML §19.5.2 (Easley, López de Prado and O'Hara, 2012). Each bar's buy volume is
+/// `V_t * Phi(dp_t / sigma)`, where `dp_t` is the close-to-close change, `sigma` the sample
+/// standard deviation of the last `window` changes (including the current one, floored at
+/// `1e-12`) and `Phi` the standard normal CDF. `window = 0` is not rejected but degenerates to
+/// the `1e-12` floor, so pass `window >= 2`.
+///
+/// Parameters
+/// ----------
+/// close : list[float]
+///     Close prices, oldest first.
+/// volume : list[float]
+///     Total volume of each bar, aligned with `close`.
+/// window : int
+///     Number of price changes in the rolling standard deviation.
+///
+/// Returns
+/// -------
+/// list[float]
+///     Estimated buy volume per bar; `NaN` before index `window`, and everywhere when
+///     `window == 1`.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `volume` and `close` differ in length.
 #[pyfunction(name = "get_bvc_buy_volume")]
 fn ms_get_bvc_buy_volume(close: Vec<f64>, volume: Vec<f64>, window: usize) -> PyResult<Vec<f64>> {
     openquant::microstructural_features::get_bvc_buy_volume(&close, &volume, window)
@@ -130,21 +460,104 @@ fn ms_get_bvc_buy_volume(close: Vec<f64>, volume: Vec<f64>, window: usize) -> Py
 
 // --- Encoding ---
 
+/// Encode tick signs as a string: `1 -> "a"`, `-1 -> "b"`, `0 -> "c"` (AFML §18.5).
+///
+/// Parameters
+/// ----------
+/// arr : list[int]
+///     Tick-rule signs, each `1`, `-1` or `0`.
+///
+/// Returns
+/// -------
+/// str
+///     One letter per sign, for the entropy functions.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a value is not `1`, `-1` or `0`.
 #[pyfunction(name = "encode_tick_rule_array")]
 fn ms_encode_tick_rule_array(arr: Vec<i32>) -> PyResult<String> {
     openquant::microstructural_features::encode_tick_rule_array(&arr).map_err(to_py_err)
 }
 
+/// Build a quantile codebook for `encode_array` (AFML §18.5).
+///
+/// Returns `num_letters` pairs `(value, letter)`, one per quantile. The quantiles are evenly
+/// spaced from 0.01 to 1.0 (just 0.01 when `num_letters == 1`); each value is the order
+/// statistic at `round(q * (n - 1))`, so bins are roughly equally populated. Letters are
+/// characters `chr(0), chr(1), ...`, starting with control characters such as NUL: fine for
+/// the entropy functions, not for printing. Duplicate values can appear when the data has
+/// ties.
+///
+/// Parameters
+/// ----------
+/// array : list[float]
+///     Values to build the codebook from.
+/// num_letters : int
+///     Alphabet size, between 1 and 256.
+///
+/// Returns
+/// -------
+/// list[tuple[float, str]]
+///     `(value, letter)` pairs in increasing quantile order; each letter is a one-character
+///     string.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `num_letters` is 0 or above 256, `array` is empty, or `array` contains `NaN`.
 #[pyfunction(name = "quantile_mapping")]
 fn ms_quantile_mapping(array: Vec<f64>, num_letters: usize) -> PyResult<Vec<(f64, char)>> {
     openquant::microstructural_features::quantile_mapping(&array, num_letters).map_err(to_py_err)
 }
 
+/// Build a fixed-width codebook for `encode_array` (AFML §18.5).
+///
+/// The codebook values are `min, min + step, ...`, strictly below `max(array)`, lettered
+/// `chr(0), chr(1), ...` (control characters first). `NaN`s in `array` are ignored when taking
+/// the minimum and maximum. An empty array, or one whose values are all equal, gives an empty
+/// codebook.
+///
+/// Parameters
+/// ----------
+/// array : list[float]
+///     Values to build the codebook from.
+/// step : float
+///     Width of each bin, e.g. a fraction of the standard deviation of `array`.
+///
+/// Returns
+/// -------
+/// list[tuple[float, str]]
+///     `(value, letter)` pairs in increasing value order; each letter is a one-character
+///     string.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `step <= 0`, or more than 256 letters would be needed.
 #[pyfunction(name = "sigma_mapping")]
 fn ms_sigma_mapping(array: Vec<f64>, step: f64) -> PyResult<Vec<(f64, char)>> {
     openquant::microstructural_features::sigma_mapping(&array, step).map_err(to_py_err)
 }
 
+/// Encode each value as the letter of the nearest codebook value (AFML §18.5).
+///
+/// Ties go to the first codebook entry. Values with no nearest entry (`NaN`s, or any value
+/// when the codebook is empty) are skipped, so the string can be shorter than `array`.
+///
+/// Parameters
+/// ----------
+/// array : list[float]
+///     Values to encode.
+/// encoding : list[tuple[float, str]]
+///     Codebook from `quantile_mapping` or `sigma_mapping`; each letter must be a
+///     one-character string.
+///
+/// Returns
+/// -------
+/// str
+///     The encoded message.
 #[pyfunction(name = "encode_array")]
 fn ms_encode_array(array: Vec<f64>, encoding: Vec<(f64, char)>) -> String {
     openquant::microstructural_features::encode_array(&array, &encoding)
@@ -152,22 +565,94 @@ fn ms_encode_array(array: Vec<f64>, encoding: Vec<(f64, char)>) -> String {
 
 // --- Entropy ---
 
+/// Shannon entropy of a message's characters, `-sum(p * log2(p))`, in bits per symbol.
+///
+/// AFML §18.2. It ignores order entirely: `"abababab"` scores 1 bit, the same as a fair
+/// coin. An empty message returns (negative) zero.
+///
+/// Parameters
+/// ----------
+/// message : str
+///     Encoded message, e.g. from `encode_tick_rule_array` or `encode_array`.
+///
+/// Returns
+/// -------
+/// float
+///     Entropy in bits per symbol.
 #[pyfunction(name = "get_shannon_entropy")]
 fn ms_get_shannon_entropy(message: String) -> f64 {
     openquant::microstructural_features::get_shannon_entropy(&message)
 }
 
+/// Lempel-Ziv complexity: LZ dictionary size divided by message length.
+///
+/// AFML §18.4, Snippet 18.2. Lower values mean more repetition. Works on characters, not
+/// bytes. The estimate is erratic on short messages and quadratic or worse in length.
+///
+/// Parameters
+/// ----------
+/// message : str
+///     Encoded message.
+///
+/// Returns
+/// -------
+/// float
+///     The complexity in `(0, 1]`, or 0 for an empty message.
 #[pyfunction(name = "get_lempel_ziv_entropy")]
 fn ms_get_lempel_ziv_entropy(message: String) -> f64 {
     openquant::microstructural_features::get_lempel_ziv_entropy(&message)
 }
 
+/// Plug-in (maximum-likelihood) entropy rate, in bits per symbol.
+///
+/// AFML §18.3, Snippet 18.1. The Shannon entropy of overlapping words of `word_length`
+/// characters, divided by `word_length`. As in Snippet 18.1, the words are those ending
+/// before the last character, so there are `len(message) - word_length` of them and
+/// `word_length == len(message)` returns (negative) zero. Biased downward for long words on
+/// short messages.
+///
+/// Parameters
+/// ----------
+/// message : str
+///     Encoded message.
+/// word_length : int
+///     Word length in characters, between 1 and `len(message)`.
+///
+/// Returns
+/// -------
+/// float
+///     Entropy rate in bits per symbol.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `word_length` is 0 or exceeds the message length in characters.
 #[pyfunction(name = "get_plug_in_entropy")]
 fn ms_get_plug_in_entropy(message: String, word_length: usize) -> PyResult<f64> {
     openquant::microstructural_features::get_plug_in_entropy(&message, word_length)
         .map_err(to_py_err)
 }
 
+/// Kontoyiannis' entropy-rate estimator from longest-match lengths, in bits per symbol.
+///
+/// AFML §18.4, Snippets 18.3-18.4. For each point `i`, `L_i` is one plus the length of the
+/// longest substring starting at `i` that also starts within the preceding look-back window;
+/// the estimate is the mean of `log2(n + 1) / L_i`. With `window == 0` the window expands
+/// (`n = i`, points `1..=len/2`); otherwise the points run from `w` to `len - w` with
+/// `w = min(window, len // 2)`, while the look-back and the `log2(window + 1)` numerator use
+/// the unclamped `window`. Quadratic or worse in the message length.
+///
+/// Parameters
+/// ----------
+/// message : str
+///     Encoded message.
+/// window : int
+///     Look-back window in characters; 0 for an expanding window.
+///
+/// Returns
+/// -------
+/// float
+///     Entropy rate in bits per symbol; 0 for messages shorter than 2 characters.
 #[pyfunction(name = "get_konto_entropy")]
 fn ms_get_konto_entropy(message: String, window: usize) -> f64 {
     openquant::microstructural_features::get_konto_entropy(&message, window)
