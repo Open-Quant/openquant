@@ -23,7 +23,7 @@ stamp, so re-running this script is a no-op unless a source moved.
 What the gallery reads from a notebook (the runbook sections of the notebook
 contract, see notebooks/python/README.md):
 
-  title       the first `# ` heading, without a leading "Runbook: "
+  title       the first `# ` heading, without a leading "Runbook: " or "API tour: "
   hypothesis  the `## Hypothesis` section: its `**H1 ...**` paragraphs and bullets
               (the whole section when there are none)
   figures     every `figure("nbNN-...")` call in a code cell, alt text from the
@@ -254,7 +254,7 @@ def notebook_entry(path: Path) -> dict:
     m = re.match(r"^# (.+?)\s*$", head.splitlines()[0] if head else "")
     if not m:
         raise SourceError(f"{path.name}: the first cell does not open with a `# ` title")
-    title = re.sub(r"^Runbook:\s*", "", m.group(1)).strip()
+    title = re.sub(r"^(Runbook|API tour):\s*", "", m.group(1)).strip()
     title = title[0].upper() + title[1:]
     intro = [
         p
@@ -354,11 +354,12 @@ def render_gallery(entries: list[dict], stamp: str) -> str:
             out.append("</details>\n")
 
     if others:
-        out.append("## Other research notebooks\n")
+        out.append("## API tours\n")
         out.append(
             "These notebooks have no pre-registered hypothesis and promotion decision, so they are "
-            "not runbooks. They run the API on synthetic data and are executed and checked in CI "
-            "in the same way.\n"
+            "not runbooks: they show how a few calls fit together on synthetic data and claim "
+            "nothing (see the [notebook contract](/workflows/research-notebook-contract/)). They "
+            "are executed and checked in CI in the same way.\n"
         )
         for e in others:
             out.append(f"### {e['number']} · {e['title']}\n")

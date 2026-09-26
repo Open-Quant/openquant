@@ -27,10 +27,16 @@ A runbook's sections, in order:
 4. **Results** and **Analysis**: tables and figures, then the verdict on each hypothesis.
 5. **Promotion decision**: what is promoted (usually a procedure, not a strategy), under which
    conditions, and what is not.
-6. **Self-review checklist** and **Reproducibility**: versions, data hashes, seed, git commit.
+6. **Self-review checklist** and **Reproducibility**: data hash and seed, with the git commit and
+   versions on stderr.
 
 The gallery page is generated from these sections, so a runbook that follows them appears there
 without anyone copying text.
+
+The full rules are the [notebook contract](/workflows/research-notebook-contract/): what each
+section must contain, the `nbrepro.footer(...)` reproducibility cell every notebook ends with,
+and the API tours (notebooks 01 to 08), which make no claims and so have no hypothesis or
+decision. `just notebooks-lint` checks the headings and the footer on every pull request.
 
 ## Running the notebooks
 
