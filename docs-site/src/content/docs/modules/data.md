@@ -125,6 +125,7 @@ quality = data_quality_report(df)
 - Expecting a cached range to serve a sub-range. The cache key is the exact (source, symbol, start, end), so a different range is a new fetch.
 - Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.
 - Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.
+- Using align_calendar with bars that are not on the grid. Each symbol's grid starts at its first bar and steps by `interval`, so a bar stamped off that grid (a daily bar at a different time of day, an irregular intraday print) is not in the output. `align_calendar(df, interval=..., return_report=True)` returns `(aligned, report)` with those bars in `report["off_grid_bars"]` and their number in `report["off_grid_bar_count"]`; without `return_report` a `UserWarning` says how many were dropped. The `_core.data.align_calendar` and `align_calendar_df` bindings take the same `return_report` flag.
 
 ## API Reference
 
@@ -163,6 +164,7 @@ quality = data_quality_report(df)
 - Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol').
 - clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically.
 - align_calendar marks missing bars with is_missing_bar=True for downstream imputation logic.
+- `gap_interval_count` in the quality report depends on the bar spacing, which the report infers and returns as `inferred_interval_us`: the most common spacing between consecutive bars of one symbol, pooled over symbols (the smallest on a tie). For daily data (a spacing within an hour of one day) a gap is a skipped weekday, so weekends are not gaps; exchange holidays are, since no holiday calendar is applied. For any other spacing a gap is a spacing longer than the inferred one, so intraday data counts every overnight and weekend break as a gap. Before #168 any spacing over one day was a gap whatever the frequency: weekends counted on daily data, and nothing counted on intraday data.
 
 ## Related Modules
 
