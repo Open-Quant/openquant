@@ -89,6 +89,13 @@ pub enum CombinatorialOptimizationError {
         /// The length supplied.
         found: usize,
     },
+    /// A path given to [`evaluate_trading_path`] is not self-consistent:
+    /// `inventory_path[step + 1]` is not `inventory_path[step] + trades[step]` (or that sum
+    /// overflows `i64`).
+    InconsistentInventoryPath {
+        /// The first trade index at which the inventory does not follow the trades.
+        step: usize,
+    },
     /// The objective returned a NaN or infinite value; the search is aborted.
     ObjectiveNotFinite,
     /// The schema has no variables, or no trading steps.
@@ -109,6 +116,10 @@ impl Display for CombinatorialOptimizationError {
             Self::DecisionLengthMismatch { expected, found } => {
                 write!(f, "decision length mismatch: expected {expected}, found {found}")
             }
+            Self::InconsistentInventoryPath { step } => write!(
+                f,
+                "inventory_path is not the running sum of trades: step {step} does not add up"
+            ),
             Self::ObjectiveNotFinite => write!(f, "objective evaluation returned non-finite value"),
             Self::EmptyDomain => write!(f, "decision domain is empty"),
             Self::EnumerationLimitExceeded { limit } => {
@@ -347,6 +358,9 @@ pub fn solve_exact(
         .copied()
         .map(IntegerVariable::values)
         .collect::<Result<Vec<_>, _>>()?;
+    // Defensive: `validate` already rejects `lower > upper`, so every grid holds at least
+    // `lower`, and the non-empty box below always yields a best decision. `EmptyDomain` and
+    // `NoFeasibleSolution` stay (both are reachable elsewhere) instead of an `expect`.
     if values.iter().any(Vec::is_empty) {
         return Err(CombinatorialOptimizationError::EmptyDomain);
     }
@@ -767,6 +781,7 @@ pub fn solve_trading_trajectory_exact(
             best_value = value;
         }
     }
+    // Defensive: `enumerate_trading_paths` never returns an empty list, so a best path exists.
     let idx = best_idx.ok_or(CombinatorialOptimizationError::NoFeasibleSolution)?;
     Ok(TrajectoryOptimizationResult {
         best_path: paths[idx].clone(),
@@ -790,16 +805,20 @@ pub fn solve_trading_trajectory_exact(
 /// is what makes the problem non-convex. Impact is linear in `|dq_t|`, not the square-root
 /// cost of AFML §21.3.
 ///
-/// Only the lengths of `path` are checked: `inventory_path` is taken as given and is not
-/// checked to be the running sum of `trades`.
+/// `path` must be self-consistent: `inventory_path[0]` is the starting inventory and each
+/// later entry is the previous one plus that step's trade, as [`enumerate_trading_paths`]
+/// builds them.
 ///
 /// # Errors
 ///
 /// - [`CombinatorialOptimizationError::InvalidInput`] if `inventory_path.len() !=
-///   trades.len() + 1`, or `risk_aversion`, `fixed_ticket_cost` or
-///   `terminal_inventory_penalty` is negative or non-finite.
+///   trades.len() + 1`, or `risk_aversion`, `fixed_ticket_cost`,
+///   `terminal_inventory_penalty` or an entry of `impact_coefficients` is negative or
+///   non-finite.
 /// - [`CombinatorialOptimizationError::DecisionLengthMismatch`] if `expected_returns` or
 ///   `impact_coefficients` does not have one entry per trade.
+/// - [`CombinatorialOptimizationError::InconsistentInventoryPath`] if `inventory_path` is not
+///   the running sum of `trades`.
 /// - [`CombinatorialOptimizationError::ObjectiveNotFinite`] if the result is NaN or infinite.
 ///
 /// `final inventory - terminal_inventory_target` is formed in `i128`, so it cannot overflow
@@ -857,6 +876,18 @@ pub fn evaluate_trading_path(
         return Err(CombinatorialOptimizationError::InvalidInput(
             "risk/cost coefficients must be finite and >= 0",
         ));
+    }
+    // A negative impact coefficient would pay the trader to trade.
+    if cfg.impact_coefficients.iter().any(|c| !(c.is_finite() && *c >= 0.0)) {
+        return Err(CombinatorialOptimizationError::InvalidInput(
+            "impact_coefficients must be finite and >= 0",
+        ));
+    }
+    for step in 0..path.horizon() {
+        let expected = path.inventory_path[step].checked_add(path.trades[step]);
+        if expected != Some(path.inventory_path[step + 1]) {
+            return Err(CombinatorialOptimizationError::InconsistentInventoryPath { step });
+        }
     }
 
     let mut objective = 0.0;
