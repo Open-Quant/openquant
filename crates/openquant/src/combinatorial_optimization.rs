@@ -622,12 +622,12 @@ impl TradingTrajectorySchema {
         for bounds in &self.step_trade_bounds {
             bounds.validate()?;
         }
-        if let Some(term) = self.terminal_inventory {
-            if term < self.inventory_min || term > self.inventory_max {
-                return Err(CombinatorialOptimizationError::InvalidInput(
-                    "terminal_inventory must be inside [inventory_min, inventory_max]",
-                ));
-            }
+        if let Some(term) = self.terminal_inventory
+            && (term < self.inventory_min || term > self.inventory_max)
+        {
+            return Err(CombinatorialOptimizationError::InvalidInput(
+                "terminal_inventory must be inside [inventory_min, inventory_max]",
+            ));
         }
         Ok(())
     }

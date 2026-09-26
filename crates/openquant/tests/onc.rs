@@ -109,10 +109,10 @@ fn noisy_block_correlation(seed: u64, sizes: &[usize], noise: &[f64], t: usize) 
     let mut x = DMatrix::<f64>::zeros(t, n);
     let mut col = 0;
     for (group, &size) in sizes.iter().enumerate() {
-        let factor: Vec<f64> = (0..t).map(|_| rng.gen::<f64>() - 0.5).collect();
+        let factor: Vec<f64> = (0..t).map(|_| rng.r#gen::<f64>() - 0.5).collect();
         for _ in 0..size {
             for (r, f) in factor.iter().enumerate() {
-                x[(r, col)] = f + noise[group] * (rng.gen::<f64>() - 0.5);
+                x[(r, col)] = f + noise[group] * (rng.r#gen::<f64>() - 0.5);
             }
             col += 1;
         }

@@ -154,14 +154,14 @@ pub(crate) fn check_score_inputs(
             expected: n_rows,
         });
     }
-    if let Some(sw) = sample_weight {
-        if sw.len() != n_rows {
-            return Err(CrossValidationError::LengthMismatch {
-                name: "sample_weight",
-                len: sw.len(),
-                expected: n_rows,
-            });
-        }
+    if let Some(sw) = sample_weight
+        && sw.len() != n_rows
+    {
+        return Err(CrossValidationError::LengthMismatch {
+            name: "sample_weight",
+            len: sw.len(),
+            expected: n_rows,
+        });
     }
     for (train, test) in splits {
         if let Some(&index) = train.iter().chain(test).find(|&&i| i >= n_rows) {
