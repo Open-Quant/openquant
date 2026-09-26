@@ -20,7 +20,7 @@ classifiers = [
   "Topic :: Scientific/Engineering",
   "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["numpy>=1.26,<3", "polars>=1.0,<2", "pyarrow>=15,<20"]
+dependencies = ["numpy>=1.26,<3", "polars>=1.0,<2", "pyarrow>=15,<26"]
 
 [project.urls]
 Homepage = "https://open-quant.github.io/openquant/"
