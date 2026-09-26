@@ -47,9 +47,10 @@ type AlignedOhlcvColumns = (
 ///
 /// A duplicate is a repeated `(symbol, timestamp)` key; one row per key is kept. Output is
 /// sorted by symbol, then timestamp. Prices are neither validated nor filled. This is data
-/// preparation ahead of bars, labels or features (no AFML chapter). A gap in the report is
-/// two consecutive bars of one symbol more than one day apart, whatever the bar interval,
-/// so weekends count as gaps on daily data.
+/// preparation ahead of bars, labels or features (no AFML chapter). The report infers the
+/// bar spacing as the most common positive spacing between consecutive bars of one symbol.
+/// For daily data a gap is a skipped weekday (weekends are not gaps; holidays are); for any
+/// other spacing it is a spacing longer than the inferred one.
 ///
 /// Parameters
 /// ----------
@@ -78,8 +79,9 @@ type AlignedOhlcvColumns = (
 ///       list[float], list[float], dict[str, Any]]
 ///     `(timestamps_us, symbols, open, high, low, close, volume, adj_close, report)` for
 ///     the cleaned rows. `report` has keys `row_count`, `symbol_count`,
-///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`, `ts_min` and
-///     `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
 ///     `rows_removed_by_deduplication`.
 ///
 /// Raises
@@ -130,8 +132,10 @@ fn data_clean_ohlcv(
 /// Data-quality report for OHLCV columns, without modifying them.
 ///
 /// Rows are sorted by `(symbol, timestamp)` before counting. A duplicate is a repeated
-/// `(symbol, timestamp)` key. A gap is two consecutive bars of one symbol more than one
-/// day apart, whatever the bar interval, so weekends count as gaps on daily data.
+/// `(symbol, timestamp)` key. The report infers the bar spacing as the most common positive
+/// spacing between consecutive bars of one symbol. For daily data a gap is a skipped
+/// weekday (weekends are not gaps; holidays are); for any other spacing it is a spacing
+/// longer than the inferred one.
 ///
 /// Parameters
 /// ----------
@@ -156,6 +160,7 @@ fn data_clean_ohlcv(
 /// -------
 /// dict[str, Any]
 ///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
 ///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
 ///     `rows_removed_by_deduplication` (always 0 here).
 ///
@@ -220,6 +225,8 @@ fn data_quality_report(
 ///     Closes adjusted for splits and dividends.
 /// interval_seconds : int
 ///     Grid spacing in seconds; must be positive.
+/// return_report : bool, default False
+///     Also return a report of what alignment removed.
 ///
 /// Returns
 /// -------
@@ -228,6 +235,9 @@ fn data_quality_report(
 ///     `(timestamps_us, symbols, open, high, low, close, volume, adj_close, is_missing_bar)`
 ///     on the grid, sorted by symbol then timestamp. Price fields are None where the grid
 ///     point had no bar.
+///     With `return_report=True` the result is `(aligned, report)`, where `report` has
+///     keys `rows_removed_by_deduplication`, `off_grid_bar_count` and `off_grid_bars` (a
+///     list of `(symbol, timestamp_us)` for each dropped off-grid bar).
 ///
 /// Raises
 /// ------
@@ -286,11 +296,13 @@ fn data_align_calendar(
 
 /// Sort an OHLCV DataFrame by `(symbol, ts_us)` and drop duplicate keys.
 ///
-/// DataFrame form of `clean_ohlcv`. The frame needs columns `symbol` (str), `ts_us`
-/// (int64 microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`,
-/// `volume`, `adj_close` (float64). A duplicate is a repeated `(symbol, ts_us)` key. Prices
-/// are neither validated nor filled. A gap in the report is two consecutive bars of one
-/// symbol more than one day apart.
+/// DataFrame form of `clean_ohlcv`. The frame needs columns `symbol` (str), `ts_us` (int64
+/// microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`, `volume`,
+/// `adj_close` (float64). A duplicate is a repeated `(symbol, ts_us)` key. Prices are
+/// neither validated nor filled. The report infers the bar spacing as the most common
+/// positive spacing between consecutive bars of one symbol. For daily data a gap is a
+/// skipped weekday (weekends are not gaps; holidays are); for any other spacing it is a
+/// spacing longer than the inferred one.
 ///
 /// Parameters
 /// ----------
@@ -303,8 +315,9 @@ fn data_align_calendar(
 /// -------
 /// tuple[polars.DataFrame, dict[str, Any]]
 ///     `(cleaned_frame, report)`. `report` has keys `row_count`, `symbol_count`,
-///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`, `ts_min` and
-///     `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
 ///     `rows_removed_by_deduplication`.
 ///
 /// Raises
@@ -329,8 +342,10 @@ fn data_clean_ohlcv_df(
 ///
 /// DataFrame form of `quality_report`. The frame needs columns `symbol` (str), `ts_us`
 /// (int64 microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`,
-/// `volume`, `adj_close` (float64). A gap is two consecutive bars of one symbol more than
-/// one day apart, whatever the bar interval.
+/// `volume`, `adj_close` (float64). The report infers the bar spacing as the most common
+/// positive spacing between consecutive bars of one symbol. For daily data a gap is a
+/// skipped weekday (weekends are not gaps; holidays are); for any other spacing it is a
+/// spacing longer than the inferred one.
 ///
 /// Parameters
 /// ----------
@@ -341,6 +356,7 @@ fn data_clean_ohlcv_df(
 /// -------
 /// dict[str, Any]
 ///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
 ///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
 ///     `rows_removed_by_deduplication` (always 0 here).
 ///
@@ -371,12 +387,17 @@ fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObjec
 ///     OHLCV frame with the columns listed above.
 /// interval_seconds : int
 ///     Grid spacing in seconds; must be positive.
+/// return_report : bool, default False
+///     Also return a report of what alignment removed.
 ///
 /// Returns
 /// -------
 /// polars.DataFrame
 ///     The aligned frame with the input columns plus a boolean `is_missing_bar` column,
 ///     sorted by `symbol` then `ts_us`.
+///     With `return_report=True` the result is `(aligned, report)`, where `report` has
+///     keys `rows_removed_by_deduplication`, `off_grid_bar_count` and `off_grid_bars` (a
+///     list of `(symbol, timestamp_us)` for each dropped off-grid bar).
 ///
 /// Raises
 /// ------
