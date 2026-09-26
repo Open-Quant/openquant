@@ -2,7 +2,7 @@
 name = "openquant"
 version = "0.1.0"
 authors = ["seankoval <seanmkoval@gmail.com>"]
-edition = "2021"
+edition = "2024"
 description = "Rust implementations of methods from Advances in Financial Machine Learning (AFML)"
 repository = "https://github.com/Open-Quant/openquant"
 homepage = "https://open-quant.github.io/openquant/"

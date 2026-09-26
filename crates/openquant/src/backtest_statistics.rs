@@ -73,10 +73,10 @@ pub fn timing_of_flattening_and_flips(
     res.extend(flips);
     res.sort();
     res.dedup();
-    if let Some(last) = target_positions.last() {
-        if !res.contains(&last.0) {
-            res.push(last.0);
-        }
+    if let Some(last) = target_positions.last()
+        && !res.contains(&last.0)
+    {
+        res.push(last.0);
     }
     res
 }
