@@ -2,7 +2,7 @@
 title: Prerequisites
 description: Toolchain OpenQuant requires, how to install it on each platform, and why each version floor exists.
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -73,8 +73,8 @@ rustc --version && cargo --version && uv --version && git --version
 |---|---|---|---|
 | Rust | the pinned toolchain | `rust-toolchain.toml` (`channel = "1.98.1"`) | rustup reads `rust-toolchain.toml` in the repository root, so local builds and every CI job use the same compiler and the same clippy lints. No `rust-version` (MSRV) key is declared in any `Cargo.toml`; the pinned version is the only one CI proves. |
 | Python | 3.11 minimum, **3.13 recommended** | `requires-python = ">=3.11"` in `pyproject.toml` | 3.11 is the floor the package metadata enforces at install time. The `python` jobs in `.github/workflows/ci.yml` build and test the extension on both 3.11 and 3.13 on every PR; 3.13 is what the `justfile` develops on. 3.12 is not tested. |
-| `uv` | any recent release | not pinned | Every `just py-*` recipe shells out to `uv`, and CI installs it via `astral-sh/setup-uv@v5`. It is the project's only supported way to create the Python environment. |
-| Node | 20 | `node-version: 20` in `.github/workflows/docs-pages.yml` | Docs site only. Astro 5 requires Node 18.17+; CI uses 20. |
+| `uv` | any recent release | not pinned | Every `just py-*` recipe shells out to `uv`, and CI installs it via `astral-sh/setup-uv@v7`. It is the project's only supported way to create the Python environment. |
+| Node | 22.12 | not pinned (CI builds the site with Bun via `oven-sh/setup-bun@v2`) | Docs site only. Astro 7 requires Node 22.12 or later; Bun works too. |
 | Bun | latest | `oven-sh/setup-bun@v2` in `docs-pages.yml` | Docs site only, and **optional** — see below. |
 
 :::note[Which Python versions have evidence behind them]
