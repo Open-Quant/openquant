@@ -567,8 +567,7 @@ fn bet_sizing_bet_size_dynamic(
 
 /// CDF at `x` of the two-Gaussian mixture `p1 N(mu1, sigma1) + (1 - p1) N(mu2, sigma2)`.
 ///
-/// Standard deviations are floored at `1e-8`. A NaN `mu1` or `mu2` makes the Rust core panic
-/// (raised as `pyo3_runtime.PanicException`, not `ValueError`).
+/// Standard deviations are floored at `1e-8`. `x` may be infinite.
 ///
 /// Parameters
 /// ----------
@@ -589,16 +588,27 @@ fn bet_sizing_bet_size_dynamic(
 /// -------
 /// float
 ///     The mixture CDF at `x`.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a mixture parameter is not finite or `x` is NaN.
 #[pyfunction(name = "cdf_mixture")]
-fn bet_sizing_cdf_mixture(mu1: f64, mu2: f64, sigma1: f64, sigma2: f64, p1: f64, x: f64) -> f64 {
-    openquant::bet_sizing::cdf_mixture(mu1, mu2, sigma1, sigma2, p1, x)
+fn bet_sizing_cdf_mixture(
+    mu1: f64,
+    mu2: f64,
+    sigma1: f64,
+    sigma2: f64,
+    p1: f64,
+    x: f64,
+) -> PyResult<f64> {
+    openquant::bet_sizing::cdf_mixture(mu1, mu2, sigma1, sigma2, p1, x).map_err(to_py_err)
 }
 
 /// Reserve bet size for net concurrency `c` under a fitted two-Gaussian mixture.
 ///
 /// AFML 10.2. With `F` the mixture CDF (`cdf_mixture`), returns `(F(c) - F(0)) / (1 - F(0))`
-/// for `c >= 0` and `(F(c) - F(0)) / F(0)` otherwise. A NaN mean in `fit` makes the Rust core
-/// panic (`pyo3_runtime.PanicException`).
+/// for `c >= 0` and `(F(c) - F(0)) / F(0)` otherwise.
 ///
 /// Parameters
 /// ----------
@@ -615,10 +625,11 @@ fn bet_sizing_cdf_mixture(mu1: f64, mu2: f64, sigma1: f64, sigma2: f64, p1: f64,
 /// Raises
 /// ------
 /// ValueError
-///     If `fit` does not have exactly five values.
+///     If `fit` does not have exactly five values, a value of `fit` is not finite, or `c` is
+///     NaN.
 #[pyfunction(name = "single_bet_size_mixed")]
-fn bet_sizing_single_bet_size_mixed(c: f64, fit: [f64; 5]) -> f64 {
-    openquant::bet_sizing::single_bet_size_mixed(c, &fit)
+fn bet_sizing_single_bet_size_mixed(c: f64, fit: [f64; 5]) -> PyResult<f64> {
+    openquant::bet_sizing::single_bet_size_mixed(c, &fit).map_err(to_py_err)
 }
 
 /// Count the long and short bets live at each bet's start.
@@ -831,8 +842,7 @@ fn bet_sizing_mp_avg_active_signals(
 ///
 /// AFML 10.2. Computes `c_t = active_long - active_short` at each bet's start (see
 /// `get_concurrent_sides`) and sizes it with `single_bet_size_mixed`. Pass the parameters
-/// returned by `bet_size_reserve_full` for reproducible sizes. A NaN mean in `fit` makes the
-/// Rust core panic (`pyo3_runtime.PanicException`).
+/// returned by `bet_size_reserve_full` for reproducible sizes.
 ///
 /// Parameters
 /// ----------
@@ -855,7 +865,7 @@ fn bet_sizing_mp_avg_active_signals(
 /// ------
 /// ValueError
 ///     If `t1_starts`, `t1_ends` and `side` differ in length, a timestamp does not parse, or
-///     `fit` does not have exactly five values.
+///     `fit` does not have exactly five finite values.
 #[pyfunction(name = "bet_size_reserve")]
 fn bet_sizing_bet_size_reserve(
     t1_starts: Vec<String>,
@@ -878,8 +888,7 @@ fn bet_sizing_bet_size_reserve(
 
 /// Reserve bet sizes under a given mixture fit, keeping the net concurrency in each row.
 ///
-/// Like `bet_size_reserve`, with the `c_t = active_long - active_short` column included. A
-/// NaN mean in `fit` makes the Rust core panic (`pyo3_runtime.PanicException`).
+/// Like `bet_size_reserve`, with the `c_t = active_long - active_short` column included.
 ///
 /// Parameters
 /// ----------
@@ -902,7 +911,7 @@ fn bet_sizing_bet_size_reserve(
 /// ------
 /// ValueError
 ///     If `t1_starts`, `t1_ends` and `side` differ in length, a timestamp does not parse, or
-///     `fit` does not have exactly five values.
+///     `fit` does not have exactly five finite values.
 #[pyfunction(name = "bet_size_reserve_with_fit")]
 fn bet_sizing_bet_size_reserve_with_fit(
     t1_starts: Vec<String>,
