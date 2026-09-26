@@ -44,7 +44,8 @@ _WIDTH = 14
 
 
 def _line(label: str, value: Any, *, err: bool = False) -> None:
-    print(f"{label + ':':<{_WIDTH}}{value}", file=sys.stderr if err else sys.stdout)
+    head = f"{label}:".ljust(_WIDTH - 1)
+    print(f"{head} {value}", file=sys.stderr if err else sys.stdout)
 
 
 def _version(dist: str) -> str:
@@ -87,6 +88,21 @@ def frame_hash(frame: Any, *, decimals: int | None = 10) -> str:
     if decimals is not None:
         frame = frame.with_columns(pl.col(pl.Float32, pl.Float64).round(decimals))
     return dataset_hash(frame)
+
+
+def dataset_frame(ds: Any) -> Any:
+    """A ``research.ResearchDataset`` (``make_synthetic_futures_dataset``) as one polars frame."""
+    import polars as pl
+
+    columns: dict[str, list[Any]] = {
+        "ts": list(ds.timestamps),
+        "close": list(ds.close),
+        "prob": list(ds.model_probabilities),
+        "side": list(ds.model_sides),
+    }
+    for j, name in enumerate(ds.asset_names):
+        columns[f"asset:{name}"] = [row[j] for row in ds.asset_prices]
+    return pl.DataFrame(columns)
 
 
 def footer(

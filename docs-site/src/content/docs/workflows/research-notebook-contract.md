@@ -28,7 +28,7 @@ A notebook is either a **runbook** (a research notebook) or an **API tour**. Its
 | May claim | Whatever the hypothesis, controls and trial count support | Nothing about performance. Its numbers illustrate the API; they are not evidence |
 | Forbidden sections | None | `## Hypothesis`, `## Promotion decision`, `## Self-review checklist` |
 | Reproducibility footer | Required | Required |
-| Docs page | One under Runbooks | None required |
+| Docs page | One under Runbooks, and an entry in the [research gallery](/runbooks/) | Listed under API tours in the gallery |
 
 The notebooks today:
 
@@ -164,6 +164,11 @@ than float noise. See `notebooks/python/README.md`.
 
 It reports every problem as `path: rule: message` and exits 1 if there are any. Run it on one
 notebook with `just notebooks-lint notebooks/python/11_meta_labeling_triple_barrier.ipynb`.
+
+The [research gallery](/runbooks/) is generated from the same headings
+(`scripts/docs/generate_site_pages.py`): a notebook with `## Hypothesis` and `## Promotion
+decision` sections is shown as a runbook, anything else as an API tour. After re-running a
+notebook, regenerate it with `python3 scripts/docs/generate_site_pages.py --write`.
 
 The lint checks structure, not substance. Whether a hypothesis was really written first, whether
 the trial count is complete and whether the analysis follows from the numbers is for the reviewer,

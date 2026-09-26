@@ -33,7 +33,8 @@ only `cargo`.
 The twelve notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
 `13_bet_sizing_from_probabilities.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 13 are
-research runbooks, listed under [Runbooks](#runbooks) below and in the [research gallery](/runbooks/). They are committed with their outputs,
+research runbooks, listed under [Runbooks](#runbooks) below and in the [research gallery](/runbooks/); 01 to 08 are
+API tours that claim nothing (see the [notebook contract](/workflows/research-notebook-contract/)). They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
 All of them run on synthetic data: `09` to `13` read the SYNTHETIC `SYN_A`..`SYN_E`
 sample through `openquant.data.fetch`, and run on real data only when you pass your own source.
