@@ -119,24 +119,18 @@ fn test_time_decay_weights() {
     let no_decay = get_weights_by_time_decay(&events, &close, 1.0).expect("nodecay");
     let neg_decay = get_weights_by_time_decay(&events, &close, -0.5).expect("neg");
     let converge = get_weights_by_time_decay(&events, &close, 0.0).expect("conv");
-    let pos_decay = get_weights_by_time_decay(&events, &close, 1.5).expect("pos");
 
     let len = events.len();
     assert_eq!(standard.len(), len);
     assert_eq!(no_decay.len(), len);
     assert_eq!(neg_decay.len(), len);
     assert_eq!(converge.len(), len);
-    assert_eq!(pos_decay.len(), len);
 
     assert_eq!(standard.last().unwrap().1, 1.0);
     let reference = load_reference();
-    for (decay, got) in [
-        ("0.5", &standard),
-        ("1.0", &no_decay),
-        ("-0.5", &neg_decay),
-        ("0.0", &converge),
-        ("1.5", &pos_decay),
-    ] {
+    for (decay, got) in
+        [("0.5", &standard), ("1.0", &no_decay), ("-0.5", &neg_decay), ("0.0", &converge)]
+    {
         let want = &reference.time_decay[decay];
         assert_eq!(got.len(), want.len());
         for (g, w) in got.iter().zip(want) {
@@ -145,11 +139,24 @@ fn test_time_decay_weights() {
     }
     assert!(no_decay.iter().all(|(_, w)| (*w - 1.0).abs() < 1e-12));
     assert_eq!(neg_decay.iter().filter(|(_, w)| *w == 0.0).count(), 3);
-    assert_eq!(
-        pos_decay.first().unwrap().1,
-        pos_decay.iter().map(|(_, w)| *w).fold(f64::MIN, f64::max)
-    );
-    assert!(pos_decay[pos_decay.len() - 2].1 >= pos_decay.last().unwrap().1);
+}
+
+/// #186 item 20: `decay` was not checked against AFML's domain `(-1, 1]`. The mlfinlab
+/// reference includes `decay = 1.5`, which weights old events *more* than new ones, and
+/// `decay = -1` divided by zero.
+#[test]
+fn test_time_decay_rejects_decay_outside_afml_domain() {
+    let (events, close, _, _) = setup_events();
+    for decay in [1.5, -1.0, -2.0, f64::NAN, f64::INFINITY] {
+        let err = get_weights_by_time_decay(&events, &close, decay).unwrap_err();
+        assert!(
+            matches!(err, SampleWeightsError::InvalidDecay(d) if d.to_bits() == decay.to_bits()),
+            "{decay}: {err:?}"
+        );
+    }
+    // The edges of the domain: just above -1, and exactly 1.
+    assert!(get_weights_by_time_decay(&events, &close, -0.999).is_ok());
+    assert!(get_weights_by_time_decay(&events, &close, 1.0).is_ok());
 }
 
 #[test]

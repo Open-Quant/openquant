@@ -109,6 +109,10 @@ The newest label always has weight 1. The parameter $c$ (`decay`) sets the other
 | `0.0` | decays linearly toward 0 |
 | `-1 < c < 0` | 0 for the oldest fraction $-c$ of cumulative uniqueness, then linear up to 1 |
 
+These are AFML's cases, and `decay` must lie in $(-1, 1]$: anything else (including `NaN`)
+is rejected with an error (`ValueError` in Python). A value above 1 would weight old labels
+more than new ones, and $-1$ divides by zero.
+
 With $X$ the final cumulative uniqueness, the weight is $\max(0,\,a+b\,x_i)$ where
 $b=(1-c)/X$ for $c\ge 0$ and $b=1/\bigl((c+1)X\bigr)$ for $c<0$, and $a=1-bX$.
 
