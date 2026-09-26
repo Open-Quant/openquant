@@ -166,11 +166,19 @@ way to convince yourself you have found something.
 **Every Sharpe ratio and volatility here is annualised for one-minute
 bars.** The synthetic bars are one minute apart, so the loop annualises
 with `dataset.periods_per_year` = 390 bars a session × 252 sessions =
-98,280 bars a year (a Sharpe ratio scales with its square root). On your
-own data the factor is derived from the timestamps; pass
-`config={"periods_per_year": ...}` to override it. A three-hour sample
-annualised to a year is noisy, which is part of why these magnitudes look
-extreme.
+98,280 bars a year. On your own data the factor is derived from the
+timestamps; pass `config={"periods_per_year": ...}` to override it.
+
+:::caution[Annualised figures are not performance]
+These numbers come from a few hours of synthetic one-minute bars, and the
+max-Sharpe allocation is fitted and scored on the same data (in-sample).
+Annualising at 390 bars a day (98,280 a year) multiplies a per-bar Sharpe
+ratio by √98,280 ≈ 313, so a small per-bar edge, or plain noise, becomes a
+very large annual number. For an honest estimate, evaluate out of sample on
+real data with purged CV or CPCV and deflate the Sharpe ratio for the
+number of trials ([CPCV and the deflated Sharpe
+ratio](/runbooks/cpcv-deflated-sharpe/)).
+:::
 
 ## Next
 

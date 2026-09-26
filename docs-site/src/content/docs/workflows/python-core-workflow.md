@@ -95,6 +95,17 @@ stage 4  promotion gates:
            promote_candidate          False
 ```
 
+:::caution[Annualised figures are not performance]
+These numbers come from a few hours of synthetic one-minute bars, and the
+max-Sharpe allocation is fitted and scored on the same data (in-sample).
+Annualising at 390 bars a day (98,280 a year) multiplies a per-bar Sharpe
+ratio by √98,280 ≈ 313, so a small per-bar edge, or plain noise, becomes a
+very large annual number. For an honest estimate, evaluate out of sample on
+real data with purged CV or CPCV and deflate the Sharpe ratio for the
+number of trials ([CPCV and the deflated Sharpe
+ratio](/runbooks/cpcv-deflated-sharpe/)).
+:::
+
 Four things in that output are worth pausing on.
 
 **480 bars produced 207 events.** CUSUM at a 0.1% threshold fires on
