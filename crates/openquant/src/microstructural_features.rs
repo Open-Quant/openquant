@@ -1002,7 +1002,10 @@ fn find_nearest(enc: &[(f64, char)], value: f64) -> char {
 ///
 /// - [`MicrostructuralError::InvalidCodebook`] if `encoding` is empty or has a `NaN` value.
 /// - [`MicrostructuralError::NanInArray`] if `array` contains `NaN`.
-pub fn encode_array(array: &[f64], encoding: &[(f64, char)]) -> Result<String, MicrostructuralError> {
+pub fn encode_array(
+    array: &[f64],
+    encoding: &[(f64, char)],
+) -> Result<String, MicrostructuralError> {
     check_codebook(encoding)?;
     if array.iter().any(|v| v.is_nan()) {
         return Err(MicrostructuralError::NanInArray);

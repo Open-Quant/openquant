@@ -1,8 +1,8 @@
 use openquant::combinatorial_optimization::{
-    compare_exact_and_adapter, enumerate_trading_paths, solve_with_adapter, evaluate_trading_path, solve_exact,
-    solve_trading_trajectory_exact, CombinatorialOptimizationError, DecisionSchema,
-    IntegerObjective, IntegerVariable, ObjectiveSense, OptimizationResult, SolverAdapter,
-    TradeBounds, TradingTrajectoryObjective, TradingTrajectoryObjectiveConfig,
+    compare_exact_and_adapter, enumerate_trading_paths, evaluate_trading_path, solve_exact,
+    solve_trading_trajectory_exact, solve_with_adapter, CombinatorialOptimizationError,
+    DecisionSchema, IntegerObjective, IntegerVariable, ObjectiveSense, OptimizationResult,
+    SolverAdapter, TradeBounds, TradingTrajectoryObjective, TradingTrajectoryObjectiveConfig,
     TradingTrajectoryPath, TradingTrajectorySchema,
 };
 
@@ -273,7 +273,11 @@ fn adapter_result_must_be_in_the_box_and_scored_honestly() {
     let grid = IntegerVariable { lower: -2, upper: 2, step: 2 };
     let schema = DecisionSchema { variables: vec![grid, grid], max_enumeration: 100 };
     let run = |decision: Vec<i64>, objective: f64| {
-        solve_with_adapter(&schema, &NonConvexIntegerObjective, &FixedAdapter { decision, objective })
+        solve_with_adapter(
+            &schema,
+            &NonConvexIntegerObjective,
+            &FixedAdapter { decision, objective },
+        )
     };
     let at = |d: &[i64]| NonConvexIntegerObjective.evaluate(d).unwrap();
     for (decision, why) in [

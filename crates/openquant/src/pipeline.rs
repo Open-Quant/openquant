@@ -647,8 +647,10 @@ mod tests {
                 asset_prices: &asset_prices,
                 asset_names: &asset_names,
             };
-            let config =
-                ResearchPipelineConfig { cusum_threshold: 0.01, ..ResearchPipelineConfig::default() };
+            let config = ResearchPipelineConfig {
+                cusum_threshold: 0.01,
+                ..ResearchPipelineConfig::default()
+            };
             run_mid_frequency_pipeline(input, &config).expect("pipeline run should succeed")
         };
         assert!(run(&timestamps).leakage_checks.timestamps_increasing);

@@ -345,10 +345,7 @@ fn sigma_mapping_rejects_bad_steps_and_matches_quantile_mapping_on_edge_cases() 
     // A constant array has a one-letter codebook (it was empty), so it still encodes.
     assert_eq!(sigma_mapping(&[3.0, 3.0], 0.5), Ok(vec![(3.0, '\u{0}')]));
     // Unchanged for ordinary input.
-    assert_eq!(
-        sigma_mapping(&[0.0, 0.3, 1.0], 0.5),
-        Ok(vec![(0.0, '\u{0}'), (0.5, '\u{1}')])
-    );
+    assert_eq!(sigma_mapping(&[0.0, 0.3, 1.0], 0.5), Ok(vec![(0.0, '\u{0}'), (0.5, '\u{1}')]));
 }
 
 #[test]
@@ -359,10 +356,7 @@ fn encode_array_keeps_one_letter_per_value_or_errors() {
     assert_eq!(encode_array(&values, &codebook).unwrap().chars().count(), values.len());
     // These used to return shorter strings with no warning.
     assert_eq!(encode_array(&[1.0, f64::NAN], &codebook), Err(MicrostructuralError::NanInArray));
-    assert!(matches!(
-        encode_array(&[1.0], &[]),
-        Err(MicrostructuralError::InvalidCodebook(_))
-    ));
+    assert!(matches!(encode_array(&[1.0], &[]), Err(MicrostructuralError::InvalidCodebook(_))));
     assert!(matches!(
         encode_array(&[1.0], &[(f64::NAN, 'a')]),
         Err(MicrostructuralError::InvalidCodebook(_))
