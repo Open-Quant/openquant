@@ -2,7 +2,7 @@
 title: "hpc_parallel"
 description: "AFML's atoms and molecules: split a job into contiguous chunks of equal work, run a callback over each in serial or on threads, and get the outputs back in order."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering

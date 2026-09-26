@@ -383,9 +383,8 @@ fn build_bounds(
 
 fn check_bounds_feasible(bounds: &[(f64, f64)]) -> Result<(), AllocError> {
     for (asset, &(lo, hi)) in bounds.iter().enumerate() {
-        // `f64::min` drops a NaN `hi`, so test it first; `!(lo <= upper)` also catches NaN `lo`.
-        let upper = hi.min(1.0);
-        if hi.is_nan() || !(lo <= upper) {
+        // `f64::min` drops a NaN `hi`, so test both bounds for NaN explicitly.
+        if lo.is_nan() || hi.is_nan() || lo > hi.min(1.0) {
             return Err(AllocError::InvalidBounds { asset, lower: lo, upper: hi });
         }
     }
