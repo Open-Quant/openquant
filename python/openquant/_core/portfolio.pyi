@@ -23,7 +23,8 @@ def allocate_efficient_risk(
     Solves `min w' Sigma w` subject to `mu' w >= target_return`, `sum(w) = 1` and the
     bounds. A target below the minimum-variance portfolio's return yields that portfolio.
     Returns are simple returns and both `mu` and `Sigma` are annualised with 252 periods a
-    year, so `target_return` is an annual figure. Markowitz (1952); AFML chapter 16.
+    year (daily rows), so `target_return` is an annual figure. Markowitz (1952); AFML
+    chapter 16.
 
     Parameters
     ----------
@@ -114,8 +115,9 @@ def allocate_inverse_variance(
     Weights are `w_i = (1 / Sigma_ii) / sum_j(1 / Sigma_jj)` (correlation ignored), where
     `Sigma` is the sample covariance of simple returns `p_t / p_{t-1} - 1`. Expected
     returns and covariance are annualised with 252 periods a year, so the reported figures
-    are annual. Markowitz (1952); see AFML chapter 16 for why mean-variance portfolios are
-    fragile.
+    are annual for daily rows. The 252 assumes daily rows: for one-minute rows multiply the
+    return by 390 and the risk by `sqrt(390)`; the weights do not depend on it. Markowitz
+    (1952); see AFML chapter 16 for why mean-variance portfolios are fragile.
 
     Parameters
     ----------
@@ -149,8 +151,9 @@ def allocate_max_sharpe(
 
     Maximises `(mu' w - rf) / sqrt(w' Sigma w)` subject to `sum(w) = 1` and the bounds, via
     the substitution `y = kappa w`. Returns are simple returns and both `mu` and `Sigma` are
-    annualised with 252 periods a year, so `risk_free_rate` is an annual rate. The Sharpe
-    ratio is in-sample. Markowitz (1952); AFML chapter 16.
+    annualised with 252 periods a year, so `risk_free_rate` is an annual rate. The 252
+    assumes daily rows; `openquant.pipeline.run_mid_frequency_pipeline` rescales for other
+    bar frequencies with `periods_per_year`. The Sharpe ratio is in-sample. Markowitz (1952); AFML chapter 16.
 
     Parameters
     ----------
@@ -190,8 +193,8 @@ def allocate_min_vol(
 
     Solves the quadratic programme subject to `sum(w) = 1` and the bounds (the bounds are
     part of the problem, not applied afterwards). Returns are simple returns and both the
-    expected returns and covariance are annualised with 252 periods a year. Markowitz
-    (1952); AFML chapter 16.
+    expected returns and covariance are annualised with 252 periods a year (daily rows; the
+    weights do not depend on the factor). Markowitz (1952); AFML chapter 16.
 
     Parameters
     ----------
