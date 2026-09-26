@@ -237,6 +237,10 @@ jobs:
       # signature, types or docstring changed without regenerating them.
       - name: Python stubs up to date
         run: uv run --no-sync python scripts/generate_python_stubs.py --check
+      # The notebook contract: section headings and the reproducibility footer of every
+      # notebooks/python/NN_*.ipynb (docs-site: Workflows > Notebook contract).
+      - name: Notebook contract (just notebooks-lint)
+        run: uv run --no-sync python notebooks/python/scripts/lint_notebooks.py
       - name: Ruff lint
         run: uv run --no-sync ruff check python/
       - name: Ruff format check

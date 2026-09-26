@@ -373,11 +373,11 @@ to your own.
 
 </details>
 
-## Other research notebooks
+## API tours
 
-These notebooks have no pre-registered hypothesis and promotion decision, so they are not runbooks. They run the API on synthetic data and are executed and checked in CI in the same way.
+These notebooks have no pre-registered hypothesis and promotion decision, so they are not runbooks: they show how a few calls fit together on synthetic data and claim nothing (see the [notebook contract](/workflows/research-notebook-contract/)). They are executed and checked in CI in the same way.
 
-### 01 · Event Labeling + Pipeline (Futures)
+### 01 · Event labeling and the mid-frequency pipeline
 
 [notebook `01_event_labeling_and_pipeline.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/01_event_labeling_and_pipeline.ipynb)
 
@@ -388,7 +388,7 @@ side/probability signals (Ch. 3 and 10), portfolio weights (Ch. 16) and risk che
 <img class="dark:sl-hidden" src="/figures/notebooks/nb01-cusum-events-light.svg" alt="Synthetic futures close series with the CUSUM-sampled events marked by model side." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb01-cusum-events-dark.svg" alt="Synthetic futures close series with the CUSUM-sampled events marked by model side." />
 
-### 02 · Sequential Bootstrap Diagnostics
+### 02 · Sequential bootstrap diagnostics
 
 [notebook `02_purged_cv_and_seq_bootstrap.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/02_purged_cv_and_seq_bootstrap.ipynb)
 
@@ -398,7 +398,7 @@ hand-written set of five overlapping labels.
 <img class="dark:sl-hidden" src="/figures/notebooks/nb02-seq-bootstrap-light.svg" alt="Indicator matrix of five overlapping labels and their sequential-bootstrap draw probabilities." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb02-seq-bootstrap-dark.svg" alt="Indicator matrix of five overlapping labels and their sequential-bootstrap draw probabilities." />
 
-### 03 · Feature Diagnostics
+### 03 · Feature diagnostics payloads
 
 [notebook `03_feature_diagnostics.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/03_feature_diagnostics.ipynb)
 
@@ -408,7 +408,7 @@ values are illustrative inputs, not the output of a fitted model.
 <img class="dark:sl-hidden" src="/figures/notebooks/nb03-feature-diagnostics-light.svg" alt="Feature importance bars with error bars, and a regime score with its thresholded state." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb03-feature-diagnostics-dark.svg" alt="Feature importance bars with error bars, and a regime score with its thresholded state." />
 
-### 04 · Portfolio Construction
+### 04 · Portfolio construction
 
 [notebook `04_portfolio_construction.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/04_portfolio_construction.ipynb)
 
@@ -418,17 +418,17 @@ Inverse-variance, minimum-volatility and maximum-Sharpe allocations (AFML Ch. 16
 <img class="dark:sl-hidden" src="/figures/notebooks/nb04-allocations-light.svg" alt="Grouped bars comparing inverse-variance, minimum-volatility and maximum-Sharpe weights per asset." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb04-allocations-dark.svg" alt="Grouped bars comparing inverse-variance, minimum-volatility and maximum-Sharpe weights per asset." />
 
-### 05 · Risk Overlays and Reality Checks
+### 05 · Risk overlays and the flywheel's promotion gates
 
 [notebook `05_risk_overlays_and_reality_check.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/05_risk_overlays_and_reality_check.ipynb)
 
-Cost-adjusted promotion logic: realised Sharpe, net Sharpe and leakage guards, on the **synthetic**
+The flywheel's cost-adjusted promotion gates (realised Sharpe, net Sharpe and leakage guards), on the **synthetic**
 futures dataset (seed 13). The equity curve and drawdown come from `openquant.viz.prepare_drawdown_payload`.
 
 <img class="dark:sl-hidden" src="/figures/notebooks/nb05-equity-drawdown-light.svg" alt="Equity curve of the synthetic flywheel backtest with its drawdown from the running peak below." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb05-equity-drawdown-dark.svg" alt="Equity curve of the synthetic flywheel backtest with its drawdown from the running peak below." />
 
-### 07 · Feature Engineering Discovery Loop
+### 07 · Feature engineering and screening
 
 [notebook `07_feature_engineering_discovery_loop.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/07_feature_engineering_discovery_loop.ipynb)
 
@@ -438,7 +438,7 @@ on the **synthetic** futures dataset (seed 19).
 <img class="dark:sl-hidden" src="/figures/notebooks/nb07-feature-correlation-light.svg" alt="Correlation heatmap of the five candidate features." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb07-feature-correlation-dark.svg" alt="Correlation heatmap of the five candidate features." />
 
-### 08 · Algo Wheel Experiments
+### 08 · Algo wheel experiments
 
 [notebook `08_algo_wheel_experiments.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/08_algo_wheel_experiments.ipynb)
 

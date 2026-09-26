@@ -222,6 +222,9 @@ def execute_all(
         "OPENQUANT_FIGURE_DIR": str(fig_dir),
         "PYTHONHASHSEED": "0",
         "MPLBACKEND": "Agg",
+        # nbrepro.footer() then leaves the commit and the package versions out of the
+        # committed outputs: the commit that contains a notebook pins both (see nbrepro.py).
+        "OPENQUANT_NOTEBOOK_PINNED": "1",
     }
     results: dict[str, Result] = {}
     todo: list[tuple[Path, Path]] = []

@@ -167,7 +167,7 @@ have done what that status means.
 
 ## Notebooks
 
-The research runbooks are `notebooks/python/NN_*.ipynb`, committed with their outputs,
+The notebooks are `notebooks/python/NN_*.ipynb` (research runbooks and API tours), committed with their outputs,
 and the figures they export to `docs-site/public/figures/notebooks/`. The Notebooks
 workflow executes all of them on pull requests that touch notebooks, Python, crates or the
 lockfiles, and fails if the committed outputs are stale. If your change alters what a
@@ -178,6 +178,7 @@ just py-develop-release                  # the notebooks are far faster against 
 just notebooks-run                       # execute every notebook in place and re-export figures
 just notebooks-run --only 05             # or just one (number or stem)
 just notebooks-verify                    # compare the tree with HEAD, as CI does
+just notebooks-lint                      # check the notebook contract (headings, footer, outputs)
 ```
 
 `notebooks-verify` ignores float noise and PNG bytes, but not a changed source cell, a new
@@ -185,6 +186,13 @@ output line or a missing or extra figure. The notebooks read the committed SYNTH
 sample through `openquant.data.fetch`, so none of this touches the network. After
 re-running them, regenerate the research gallery with
 `python3 scripts/docs/generate_site_pages.py --write` (see Documentation).
+
+Every notebook follows the [notebook contract](docs-site/src/content/docs/workflows/research-notebook-contract.md):
+a runbook's `##` sections are Setup, Hypothesis, Data, Method, Results, Analysis, Promotion
+decision, Self-review checklist and Reproducibility, in that order; an API tour (01 to 08) starts
+with Setup, ends with Reproducibility and makes no claims; and both end with an
+`nbrepro.footer(...)` cell that prints the data hash and seed on stdout and the git commit and
+versions on stderr. `just notebooks-lint` checks this, and CI runs it in `python-lint`.
 
 ## Research smoke checks
 

@@ -115,6 +115,14 @@ notebook-smoke:
 notebooks-run *args:
     uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/run_notebooks.py {{args}}
 
+# Checks every notebooks/python/NN_*.ipynb against the notebook contract
+# (docs-site: Workflows > Notebook contract): the title says "Runbook:" or
+# "API tour:", the sections are in order, the last cell is the nbrepro.footer()
+# reproducibility footer, and the committed outputs hold no versions or machine
+# paths on stdout. Standard library only; CI runs it in the python-lint job.
+notebooks-lint *args:
+    python3 notebooks/python/scripts/lint_notebooks.py {{args}}
+
 # Fails if the working-tree notebooks/figures differ from the committed ones
 # beyond float noise and image bytes; CI runs it after `just notebooks-run`.
 notebooks-verify ref="HEAD":
