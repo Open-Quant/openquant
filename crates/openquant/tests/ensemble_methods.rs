@@ -68,7 +68,7 @@ fn test_bias_variance_noise_recovers_known_label_noise() {
     let n_train = 30;
     let preds: Vec<Vec<f64>> = (0..n_models)
         .map(|_| {
-            let x: Vec<f64> = (0..n_train).map(|_| rng.gen::<f64>()).collect();
+            let x: Vec<f64> = (0..n_train).map(|_| rng.r#gen::<f64>()).collect();
             let y: Vec<f64> = x.iter().map(|&v| f(v) + normal.sample(&mut rng)).collect();
             let (a, b) = fit_line(&x, &y);
             x_test.iter().map(|&v| a + b * v).collect()

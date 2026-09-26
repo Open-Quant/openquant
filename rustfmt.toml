@@ -1,4 +1,8 @@
-edition = "2021"
+edition = "2024"
+# Formatting style stays on the 2021 style edition for now: the 2024 style edition
+# (version sorting of imports, etc.) would reformat most files. Switching it is a
+# separate, deliberate mass-reformat PR.
+style_edition = "2021"
 max_width = 100
 use_small_heuristics = "Max"
 newline_style = "Unix"
