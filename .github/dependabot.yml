@@ -2,8 +2,9 @@
 # bumps; major bumps arrive one per dependency so each breaking change is reviewed alone.
 version: 2
 updates:
-  # Rust workspace (crates/openquant, crates/pyopenquant). vendor/pyo3-polars is a
-  # [patch.crates-io] path dependency and is not updated by Dependabot.
+  # Rust workspace (crates/openquant, crates/pyopenquant). polars, pyo3 and pyo3-polars
+  # move together (pyo3-polars pins one polars and one pyo3 release), so a bump of one
+  # alone fails to build; see #220.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:

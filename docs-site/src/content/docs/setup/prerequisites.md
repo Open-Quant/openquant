@@ -2,7 +2,7 @@
 title: Prerequisites
 description: Toolchain OpenQuant requires, how to install it on each platform, and why each version floor exists.
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -102,19 +102,15 @@ That is the path used to verify every docs command on this site. If you do
 want Bun, install it with `curl -fsSL https://bun.sh/install | bash`.
 :::
 
-## Rust dependencies that need no action
+## Rust dependencies that move together
 
-The workspace vendors a patched `pyo3-polars` 0.20.0 (`vendor/pyo3-polars`,
-wired up by a `[patch.crates-io]` entry in the root `Cargo.toml`). The patch
-changes one call so that polars `DataFrame` arguments still work with Python
-polars 1.32.3 and later. `vendor/README.md` describes the exact change and
-what would let us drop it. The directory is checked in, so `cargo build`
-resolves it with no extra setup.
-
-Only the Python extension crate (`pyopenquant`) uses it. That crate ships as
-a wheel built from this repository and is never published to crates.io
-(`publish = false`), because Cargo ignores `[patch]` for registry
-downloads. The `openquant` crate does not depend on `pyo3-polars`.
+The Python extension crate (`pyopenquant`) passes polars `DataFrame`s through
+`pyo3-polars` 0.28, which is built for one polars release (0.55) and one PyO3
+release (0.29). The three are upgraded together, and `openquant` uses the same
+polars. The extension takes a frame from Python polars through
+`Series._export`, so it needs Python polars 1.28.1 or later (the
+`pyproject.toml` lower bound). Everything comes from crates.io; nothing is
+vendored.
 
 ## Next
 

@@ -86,7 +86,7 @@ package are all at version 0.1.0, no version has been tagged, and nothing is pub
 crates.io or PyPI. Until a release, only `main` is supported.
 
 - **When a release is made,** `openquant` goes to crates.io; `pyopenquant` has `publish = false`
-  and ships as a wheel built with maturin, because it depends on the vendored pyo3-polars patch.
+  and ships as a wheel built with maturin (it is a Python extension module, not a Rust library).
   The steps are in `docs/publishing.md`.
 - **Release gate.** Pushing a `v*` tag runs `.github/workflows/release.yml`: format, clippy with
   `-D warnings`, the fast test suite, a `cargo package` dry run, a compile check of every benchmark,

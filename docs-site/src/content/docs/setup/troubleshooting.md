@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -162,32 +162,29 @@ environment and the `[lib] name = "_core"` / `module-name =
 "openquant._core"` wiring in `crates/pyopenquant/Cargo.toml` and
 `pyproject.toml`; the failure itself was not triggered here.
 
-## ``TypeError: argument 'pydf': `compat_level` has invalid type: 'int'``
+## `AttributeError: 'builtins.PySeries' object has no attribute '_export'`
 
 **Symptom** — `import openquant` works, but any `openquant._core.data.*_df`
-call that takes a polars `DataFrame` raises this `TypeError`.
+call that takes a polars `DataFrame` raises this `AttributeError`, followed by
+`while processing 'pydf'`.
 
-**Cause** — the extension was built against unpatched `pyo3-polars` 0.20.0.
-That release passes an integer `compat_level` to Python `Series.to_arrow`,
-and Python polars 1.32.3 and later reject it. The repository fixes this with
-`vendor/pyo3-polars`, applied through `[patch.crates-io]` in the root
-`Cargo.toml`. You get the error when that entry is removed, or when the
-extension is built outside this workspace.
+**Cause** — the installed Python polars is older than 1.28.1. The extension
+takes each column through `pyo3-polars` 0.28, which calls the polars
+`Series._export` method; older Python polars releases do not have it.
+`pyproject.toml` requires `polars>=1.28.1`, so this only happens when polars
+was installed or pinned outside it.
 
-**Fix** — build from the repository root with the `[patch.crates-io]` entry
-in place, and check that `Cargo.lock` resolves `pyo3-polars` without a
-`source = "registry+..."` line. Then rebuild:
+**Fix** — upgrade polars in the environment the extension runs in:
 
 ```bash
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv pip install --python .venv/bin/python 'polars>=1.28.1,<2'
 ```
 
-`vendor/README.md` describes the patch and what would let us drop it.
-
-**Status: reproduced** with polars 1.38.1 by removing the `[patch]` entry
-and calling `_core.data.clean_ohlcv_df`. It is covered by
-`test_core_dataframe_bindings_accept_polars_frames` in
-`python/tests/test_data_module.py`.
+**Status: reproduced** with polars 1.25.2 and 1.27.1 against the extension
+built from this repository; 1.28.1, 1.29.0, 1.32.3 and 1.44.2 pass
+`python/tests/test_data_module.py`. (Before #220 the extension used a patched
+`pyo3-polars` 0.20.0 to avoid a `compat_level` `TypeError` on polars 1.32.3
+and later; that patch is gone.)
 
 ## `linker 'cc' not found` (Linux)
 
