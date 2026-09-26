@@ -1,20 +1,24 @@
 //! Value tests for `hcaa`. Expected numbers are closed forms worked out in the comments from the
-//! definition of each allocation metric; none of them was read off the library's output.
+//! definition of each allocation metric, or `tests/fixtures/hcaa/reference.json`, written by
+//! `tests/fixtures/hcaa/generate.py` (numpy/scipy only, no openquant or mlfinlab) for both
+//! distances the library offers; none of them was read off the library's output.
 //!
 //! The pre-existing `tests/hcaa.rs` only asserts "non-negative and sums to one"; see
 //! `docs/test-sensitivity-audit.md`.
 //!
 //! What the library implements (and what these tests therefore pin): single-linkage clustering
-//! on the correlation distance, leaf order by quasi-diagonalisation, then weight handed down the
+//! on the correlation distance (pairwise by default, or the distance between its columns), leaf order by quasi-diagonalisation, then weight handed down the
 //! dendrogram, each of the top `optimal_num_clusters - 1` merges splitting it between its two
 //! children by the chosen metric, with inverse-variance weights inside a side when its risk is
 //! measured and inside each cluster below the cut (equal weights for `equal_weighting`).
 
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
-use openquant::hcaa::{HcaaError, HierarchicalClusteringAssetAllocation};
+use openquant::hcaa::{HcaaDistance, HcaaError, HierarchicalClusteringAssetAllocation};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::Path;
 
 fn names(n: usize) -> Vec<String> {
@@ -340,4 +344,151 @@ fn optimal_num_clusters_must_be_between_one_and_the_number_of_assets() {
         let err = allocate_cov_k(&cov, "equal_weighting", Some(k)).unwrap_err();
         assert_eq!(err, HcaaError::InvalidNumClusters { requested: k, assets: 2 });
     }
+}
+
+/// One distance's tree and weights in `tests/fixtures/hcaa/reference.json`.
+#[derive(Deserialize)]
+struct Variant {
+    link: Vec<[usize; 2]>,
+    order: Vec<usize>,
+    /// metric -> cut (`"none"`, `"2"`, `"4"`) -> weights.
+    weights: HashMap<String, HashMap<String, Vec<f64>>>,
+}
+
+#[derive(Deserialize)]
+struct Case {
+    cov: Option<Vec<Vec<f64>>>,
+    correlation: Variant,
+    distance_of_distances: Variant,
+}
+
+impl Case {
+    fn variant(&self, distance: HcaaDistance) -> &Variant {
+        match distance {
+            HcaaDistance::Correlation => &self.correlation,
+            HcaaDistance::DistanceOfDistances => &self.distance_of_distances,
+        }
+    }
+}
+
+fn reference() -> HashMap<String, Case> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/hcaa/reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+const DISTANCES: [HcaaDistance; 2] = [HcaaDistance::Correlation, HcaaDistance::DistanceOfDistances];
+
+/// Absolute tolerance on a weight against the numpy reference. The library adds `f64::EPSILON`
+/// to each split's denominator and sums in a different order; on the price fixture it also
+/// estimates the covariance itself, and the tiny inverse-variance sides of the ETF data
+/// amplify that last-bit difference to about 1e-12 in a weight. 1e-10 leaves room for that
+/// and is still far below any change of tree or metric (those move weights by >= 1e-3).
+const REF_TOL: f64 = 1e-10;
+
+/// Checks the tree, the leaf order and every metric and cut against the reference.
+fn assert_matches_reference(
+    case: &Case,
+    what: &str,
+    run: impl Fn(HcaaDistance, &str, Option<usize>) -> HierarchicalClusteringAssetAllocation,
+) {
+    for distance in DISTANCES {
+        let want = case.variant(distance);
+        assert_eq!(want.weights.len(), 3, "{what}: metrics in the fixture");
+        for (metric, cuts) in &want.weights {
+            assert_eq!(cuts.len(), 3, "{what}: cuts in the fixture");
+            for (cut, weights) in cuts {
+                let k = if cut == "none" { None } else { Some(cut.parse().unwrap()) };
+                let got = run(distance, metric, k);
+                let label = format!("{what} {distance:?} {metric} k={cut}");
+                assert_eq!(got.clusters, want.link, "{label}: tree");
+                assert_eq!(got.ordered_indices, want.order, "{label}: leaf order");
+                assert_close(&got.weights, weights, REF_TOL, &label);
+            }
+        }
+    }
+}
+
+#[test]
+fn both_distances_match_independent_reference_on_price_fixture() {
+    let (prices, names) = load_prices_and_names();
+    let reference = reference();
+    assert_matches_reference(&reference["stock_prices"], "stock_prices", |distance, metric, k| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean").with_distance(distance);
+        hcaa.allocate(&names, Some(&prices), None, None, None, metric, 0.05, k, None).unwrap();
+        hcaa
+    });
+}
+
+#[test]
+fn both_distances_match_independent_reference_on_random_covariance() {
+    let reference = reference();
+    let case = &reference["random_cov_8"];
+    let rows = case.cov.as_ref().unwrap();
+    let cov = DMatrix::from_fn(rows.len(), rows.len(), |i, j| rows[i][j]);
+    assert_matches_reference(case, "random_cov_8", |distance, metric, k| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean");
+        hcaa.distance = distance;
+        hcaa.allocate(&names(cov.nrows()), None, None, Some(&cov), None, metric, 0.05, k, None)
+            .unwrap();
+        hcaa
+    });
+}
+
+/// The option changes the answer: on both fixtures the two trees differ, and so do the weights.
+#[test]
+fn the_two_distances_build_different_trees_on_the_fixtures() {
+    for (key, case) in reference() {
+        assert_ne!(case.correlation.link, case.distance_of_distances.link, "{key}");
+    }
+    let (prices, names) = load_prices_and_names();
+    let run = |distance| {
+        let mut hcaa = HierarchicalClusteringAssetAllocation::new("mean").with_distance(distance);
+        hcaa.allocate(
+            &names,
+            Some(&prices),
+            None,
+            None,
+            None,
+            "minimum_variance",
+            0.05,
+            None,
+            None,
+        )
+        .unwrap();
+        hcaa.weights
+    };
+    let (pairwise, dd) = (run(HcaaDistance::Correlation), run(HcaaDistance::DistanceOfDistances));
+    let gap = pairwise.iter().zip(&dd).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    assert!(gap > 1e-3, "weights barely move between the distances (max gap {gap})");
+}
+
+/// Two assets have one possible tree, so the distance cannot matter.
+#[test]
+fn two_assets_do_not_depend_on_the_distance() {
+    let cov = two_asset_cov(0.005);
+    for metric in ["minimum_variance", "minimum_standard_deviation", "equal_weighting"] {
+        let mut a = HierarchicalClusteringAssetAllocation::default();
+        let mut b = HierarchicalClusteringAssetAllocation::default()
+            .with_distance(HcaaDistance::DistanceOfDistances);
+        a.allocate(&names(2), None, None, Some(&cov), None, metric, 0.05, None, None).unwrap();
+        b.allocate(&names(2), None, None, Some(&cov), None, metric, 0.05, None, None).unwrap();
+        assert_eq!(a.weights, b.weights, "{metric}");
+        assert_eq!(a.clusters, b.clusters, "{metric}");
+    }
+}
+
+#[test]
+fn default_distance_and_parsing() {
+    assert_eq!(HcaaDistance::default(), HcaaDistance::Correlation);
+    assert_eq!(
+        HierarchicalClusteringAssetAllocation::new("mean").distance,
+        HcaaDistance::Correlation
+    );
+    assert_eq!("Correlation".parse(), Ok(HcaaDistance::Correlation));
+    assert_eq!("DISTANCE_OF_DISTANCES".parse(), Ok(HcaaDistance::DistanceOfDistances));
+    assert_eq!(
+        "euclidean".parse::<HcaaDistance>(),
+        Err(HcaaError::UnknownDistance("euclidean".to_string()))
+    );
 }

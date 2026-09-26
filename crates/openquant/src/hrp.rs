@@ -48,6 +48,7 @@
 //! ```
 #![deny(missing_docs)]
 
+use crate::util::linkage::{distance_of_distances, quasi_diagonalization, single_linkage_children};
 use crate::util::resample::{freq_step, resample_prices};
 use nalgebra::DMatrix;
 
@@ -355,92 +356,6 @@ fn corr_to_distances(corr: &DMatrix<f64>) -> DMatrix<f64> {
         }
     }
     d
-}
-
-/// `d~_ij = sqrt(sum_n (d_ni - d_nj)^2)`: the Euclidean distance between columns `i` and `j`.
-/// The diagonal of `d` is taken as exactly 0 (rounding in `cov2corr` can leave `rho_ii` a few
-/// ulps below 1).
-fn distance_of_distances(distances: &DMatrix<f64>) -> DMatrix<f64> {
-    let mut d = distances.clone_owned();
-    d.fill_diagonal(0.0);
-    let n = d.nrows();
-    let mut out = DMatrix::zeros(n, n);
-    for i in 0..n {
-        for j in i + 1..n {
-            let s: f64 = (0..n).map(|k| (d[(k, i)] - d[(k, j)]).powi(2)).sum();
-            out[(i, j)] = s.sqrt();
-            out[(j, i)] = out[(i, j)];
-        }
-    }
-    out
-}
-
-fn single_linkage_children(distance: &DMatrix<f64>) -> Vec<[usize; 2]> {
-    #[derive(Clone)]
-    struct Cluster {
-        id: usize,
-        members: Vec<usize>,
-    }
-
-    let n = distance.nrows();
-    let mut clusters: Vec<Cluster> = (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
-    let mut next_id = n;
-    let mut children = Vec::with_capacity(n.saturating_sub(1));
-    let eps = 1e-12;
-
-    while clusters.len() > 1 {
-        let mut best_i = 0usize;
-        let mut best_j = 1usize;
-        let mut best_d = f64::INFINITY;
-        let mut best_ids = (
-            clusters[best_i].id.min(clusters[best_j].id),
-            clusters[best_i].id.max(clusters[best_j].id),
-        );
-        for i in 0..clusters.len() {
-            for j in i + 1..clusters.len() {
-                let mut d = f64::INFINITY;
-                for &a in &clusters[i].members {
-                    for &b in &clusters[j].members {
-                        d = d.min(distance[(a, b)]);
-                    }
-                }
-                let ids = (clusters[i].id.min(clusters[j].id), clusters[i].id.max(clusters[j].id));
-                if d + eps < best_d || ((d - best_d).abs() <= eps && ids < best_ids) {
-                    best_i = i;
-                    best_j = j;
-                    best_d = d;
-                    best_ids = ids;
-                }
-            }
-        }
-        let (lo, hi) = if best_i < best_j { (best_i, best_j) } else { (best_j, best_i) };
-        let right = clusters.remove(hi);
-        let left = clusters.remove(lo);
-        let mut members = left.members;
-        members.extend(right.members);
-        let left_id = left.id.min(right.id);
-        let right_id = left.id.max(right.id);
-        children.push([left_id, right_id]);
-        clusters.push(Cluster { id: next_id, members });
-        next_id += 1;
-    }
-    children
-}
-
-fn quasi_diagonalization(
-    num_assets: usize,
-    clusters: &[[usize; 2]],
-    curr_index: usize,
-) -> Vec<usize> {
-    if curr_index < num_assets {
-        return vec![curr_index];
-    }
-    let row = curr_index - num_assets;
-    let left = clusters[row][0];
-    let right = clusters[row][1];
-    let mut out = quasi_diagonalization(num_assets, clusters, left);
-    out.extend(quasi_diagonalization(num_assets, clusters, right));
-    out
 }
 
 fn seriate_matrix(mat: &DMatrix<f64>, order: &[usize]) -> DMatrix<f64> {
