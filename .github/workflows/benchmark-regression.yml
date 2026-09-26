@@ -50,7 +50,7 @@ jobs:
       CARGO_TERM_COLOR: always
       BENCH_ARGS: "--sample-size 30 --warm-up-time 2 --measurement-time 3"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
@@ -127,7 +127,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload benchmark report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-base-vs-head
           path: |

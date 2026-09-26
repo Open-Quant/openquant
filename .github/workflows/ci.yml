@@ -92,7 +92,7 @@ jobs:
       CARGO_TERM_COLOR: always
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
@@ -120,7 +120,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -138,7 +138,7 @@ jobs:
       CARGO_TERM_COLOR: always
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -159,7 +159,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # Shared with benchmark-regression.yml, which builds two of these benches
       # in the same profile but never runs on main, so never saves.
@@ -185,9 +185,9 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       # One cache per Python version: PyO3 and everything above it are built
       # against the interpreter.
       - uses: Swatinem/rust-cache@v2
@@ -227,8 +227,8 @@ jobs:
   python-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Install dev dependencies (ruff, mypy pinned in pyproject.toml)
         run: |
           uv venv --python 3.13 .venv
@@ -256,7 +256,7 @@ jobs:
       CARGO_TERM_COLOR: always
       PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # Full history: check:content-schema dates pages with `git log`; a depth-1
         # clone makes every page look changed today and fails every stamp.
         with:
@@ -320,10 +320,10 @@ jobs:
       # unlike the Rust gate it needs the compiled extension, not just a
       # toolchain. Same maturin recipe as the python job; the gate finds
       # the interpreter at .venv/bin/python3 on its own.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - name: Create virtual environment for the Python examples
         run: uv venv --python 3.11 .venv
       - name: Build + install the openquant extension

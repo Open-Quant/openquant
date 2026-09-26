@@ -56,10 +56,10 @@ jobs:
       CARGO_TERM_COLOR: always
       OPENQUANT_DATA_CACHE: ${{ github.workspace }}/.cache/openquant-data
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v5
-      - uses: extractions/setup-just@v2
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v4
       # The release extension build gets its own cache; saved only from main
       # (pushes and the nightly run), like every Rust cache (see ci.yml).
       - uses: Swatinem/rust-cache@v2
@@ -69,7 +69,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # The Parquet cache openquant.data.fetch fills from the committed sample.
       - name: Cache the synthetic sample data
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/openquant-data
           key: openquant-data-${{ hashFiles('python/openquant/_sample_data/**', 'python/openquant/data.py') }}
@@ -89,7 +89,7 @@ jobs:
         run: just notebooks-run --jobs 0
       - name: Upload executed notebooks and figures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: executed-notebooks
           path: |
