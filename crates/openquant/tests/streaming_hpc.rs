@@ -272,3 +272,64 @@ fn supports_large_synthetic_stream_incrementally() {
     assert!(report.snapshots.last().and_then(|s| s.vpin).is_some());
     assert!(report.snapshots.last().and_then(|s| s.hhi).is_some());
 }
+
+/// Runs `f` on a thread and fails the test if it has not finished within `secs` seconds (the
+/// thread is left running; the old code looped forever here).
+fn within<T: Send + 'static>(secs: u64, f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(secs)).expect("call did not return in time")
+}
+
+/// #184 item 9: `buy + sell` overflowing to +inf passed validation and looped forever, and a
+/// huge finite volume cost one iteration per bucket (and stalled once `remaining - take` no
+/// longer changed `remaining`).
+#[test]
+fn vpin_update_is_bounded_for_huge_or_overflowing_volume() {
+    let vpin_cfg = VpinConfig { bucket_volume: 100.0, support_buckets: 8, cdf_lookback: 20 };
+
+    let err = within(10, move || {
+        let mut state = VpinState::new(vpin_cfg).unwrap();
+        state.update(f64::MAX, f64::MAX)
+    })
+    .unwrap_err();
+    assert_eq!(err, StreamingHpcError::InvalidEvent("buy_volume + sell_volume must be finite"));
+
+    // 4e17 / 6e17 fills 1e16 buckets, each with toxicity 0.2.
+    let (vpin, cdf) = within(10, move || {
+        let mut state = VpinState::new(vpin_cfg).unwrap();
+        state.update(4e17, 6e17).unwrap();
+        (state.current(), state.current_cdf())
+    });
+    assert!((vpin.unwrap() - 0.2).abs() < 1e-12);
+    assert_eq!(cdf, Some(0.5));
+}
+
+/// The bounded update must match bucket-by-bucket filling: an event split into ten equal
+/// events with the same buy/sell ratio leaves the same VPIN and CDF.
+#[test]
+fn vpin_update_matches_the_same_volume_fed_in_pieces() {
+    let vpin_cfg = VpinConfig { bucket_volume: 100.0, support_buckets: 4, cdf_lookback: 6 };
+    let events = [(30.0, 5.0), (250.0, 10.0), (7.0, 93.0), (0.0, 1234.5), (61.0, 40.0), (5e3, 1e3)];
+    let mut whole = VpinState::new(vpin_cfg).unwrap();
+    let mut pieces = VpinState::new(vpin_cfg).unwrap();
+    for (buy, sell) in events {
+        whole.update(buy, sell).unwrap();
+        for _ in 0..10 {
+            pieces.update(buy / 10.0, sell / 10.0).unwrap();
+        }
+        let (a, b) = (whole.current(), pieces.current());
+        assert_eq!(a.is_some(), b.is_some());
+        if let (Some(a), Some(b)) = (a, b) {
+            assert!((a - b).abs() < 1e-9, "{a} vs {b}");
+        }
+        let (a, b) = (whole.current_cdf(), pieces.current_cdf());
+        assert_eq!(a.is_some(), b.is_some());
+        if let (Some(a), Some(b)) = (a, b) {
+            assert!((a - b).abs() < 1e-9, "{a} vs {b}");
+        }
+    }
+    assert!(whole.current_cdf().is_some());
+}

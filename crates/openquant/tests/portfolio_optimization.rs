@@ -372,3 +372,30 @@ fn max_sharpe_from_prices_agrees_with_cla() {
         assert!(max_diff < 1e-7, "{} assets: max weight difference {max_diff}", cols.len());
     }
 }
+
+/// #184 item 1: a lower bound above its upper bound (or a `NaN` bound) whose sums still pass
+/// the feasibility check used to panic in `f64::clamp` inside the inverse-variance projection,
+/// and was misreported as "covariance is not positive definite" by the QP solutions. Every
+/// solution now rejects it up front with `InvalidBounds`.
+#[test]
+fn inverted_or_nan_bounds_are_rejected_not_panicking() {
+    let cov = DMatrix::from_row_slice(3, 3, &[0.04, 0.0, 0.0, 0.0, 0.09, 0.0, 0.0, 0.0, 0.16]);
+    let mu = [0.05, 0.08, 0.10];
+    let bad = [(0.3, 0.2), (f64::NAN, 0.5), (0.1, f64::NAN)];
+    for (lo, hi) in bad {
+        let opts = AllocationOptions {
+            bounds: Some(HashMap::from([(0, (lo, hi))])),
+            ..AllocationOptions::default()
+        };
+        for solution in ["inverse_variance", "min_volatility", "max_sharpe", "efficient_risk"] {
+            let out = std::panic::catch_unwind(|| {
+                openquant::portfolio_optimization::allocate_from_inputs(&mu, &cov, solution, &opts)
+            });
+            let err = out.expect("must not panic").unwrap_err();
+            assert!(
+                matches!(err, AllocError::InvalidBounds { asset: 0, .. }),
+                "{solution} ({lo}, {hi}): {err:?}"
+            );
+        }
+    }
+}

@@ -2,7 +2,7 @@
 title: "cla"
 description: "The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points, with no general-purpose optimiser."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -172,9 +172,17 @@ assert!(matches!(
 - **The first turning point appears twice.** The walk records its starting portfolio and then
   the first turning point proper, which is the same portfolio with a finite $\lambda$; the
   first `lambda` is infinite. Skip index 0 when plotting against $\lambda$.
-- **Bounds that cannot sum to one are reported as `DimensionMismatch`**, which is misleading.
-  If that error appears with correctly sized inputs, check that the lower bounds sum to at
-  most 1 and the upper bounds to at least 1.
+- **Errors name their cause.** Bounds with no feasible portfolio (a bound that is not
+  finite, a lower bound above its upper bound, lower bounds summing to more than 1, upper
+  bounds to less than 1) return `InfeasibleBounds`; a covariance that cannot be inverted among
+  the free assets returns `SingularCovariance`; a walk that does not reach $\lambda = 0$
+  returns `NoTermination`; an `AssetPrices` index without one date per row returns
+  `InvalidPriceIndex`. Python raises `ValueError` with the same messages. Before
+  [#168](https://github.com/Open-Quant/openquant/issues/168) the first was reported as
+  `DimensionMismatch` and the next three as `InvalidAssetPrices`, which no longer exists. A
+  lower bound above its upper bound was not caught at all: every turning point was then
+  purged, and `"max_sharpe"` panicked on the empty frontier. `NoTurningPoints` is now
+  returned if that ever happens.
 - **It is exact, and it inherits every weakness of its inputs.** CLA removes solver error,
   not estimation error. The frontier's upper end is always the single asset with the highest
   expected return, whatever its risk, and small changes in $\mu$ move the turning points a

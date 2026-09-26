@@ -214,7 +214,7 @@ let x: Vec<Vec<f64>> = (0..40).map(|i| vec![f64::from(i)]).collect();
 let y: Vec<f64> = (0..40).map(|i| f64::from(u8::from(i % 4 == 0))).collect();
 
 let splits = PurgedKFold::new(5, info_sets, 0.0)?.split(40)?;
-let scores = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss);
+let scores = ml_cross_val_score(&mut BaseRate(0.0), &x, &y, None, &splits, Scoring::NegLogLoss)?;
 
 // A quarter of labels are positive, so every fold scores near ln-loss of p = 0.25.
 let entropy = -(0.25 * 0.25f64.ln() + 0.75 * 0.75f64.ln());
@@ -284,9 +284,10 @@ fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
   metric. Here `sample_weight` reaches `fit` only, so every test sample counts equally. If
   your weights matter — and with return attribution they differ by an order of magnitude —
   compute the weighted score yourself from `splits`.
-- **`ml_cross_val_score` does not validate.** It returns `Vec<f64>`, not `Result`. An index
-  in `splits` beyond `x` panics, and an empty test set yields `NaN`. Build `splits` with
-  `PurgedKFold` and pass the same `x` and `y` it was sized for.
+- **`ml_cross_val_score` checks shapes, not content.** It returns an error if `y` or
+  `sample_weight` is not one entry per row of `x`, if an index in `splits` is beyond `x`, or
+  if `predict_proba` returns the wrong number of values. An empty test set still yields
+  `NaN`. Build `splits` with `PurgedKFold` and pass the same `x` and `y` it was sized for.
 - **`samples_info_sets` must be in time order, one per row of `x`.** Folds are blocks of
   consecutive indices; the purge compares timestamps but the embargo counts positions.
   Unsorted input purges correctly and embargoes nonsense.
