@@ -280,7 +280,8 @@ export const apiInventory = {
     "openquant::hcaa": [
       "allocate",
       "new",
-      "with_distance"
+      "with_distance",
+      "with_linkage"
     ],
     "openquant::hpc_parallel": [
       "is_empty",
@@ -827,10 +828,12 @@ export const apiInventory = {
     "openquant::hcaa": {
       "HcaaDistance": "enum",
       "HcaaError": "enum",
+      "HcaaLinkage": "enum",
       "HierarchicalClusteringAssetAllocation": "struct",
       "HierarchicalClusteringAssetAllocation::allocate": "method",
       "HierarchicalClusteringAssetAllocation::new": "method",
-      "HierarchicalClusteringAssetAllocation::with_distance": "method"
+      "HierarchicalClusteringAssetAllocation::with_distance": "method",
+      "HierarchicalClusteringAssetAllocation::with_linkage": "method"
     },
     "openquant::hpc_parallel": {
       "AsyncParallelHandle": "struct",

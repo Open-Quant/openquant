@@ -10,20 +10,28 @@ Run from the repository root:
 It imports only numpy and scipy (no openquant, no mlfinlab) and shares no code with the Rust
 library or with tests/fixtures/hrp/generate.py.  The method is written from its description
 (Raffinot 2017, as documented on the hcaa module page): correlation distance
-d_ij = sqrt(2 (1 - rho_ij)), a single-linkage tree built by scipy, weight 1 at the root, each
+d_ij = sqrt(2 (1 - rho_ij)), a hierarchical tree built by scipy, weight 1 at the root, each
 of the top k - 1 merges splitting a node's weight between its two children by the metric
 (each side scored as its inverse-variance portfolio), and below the cut each cluster shared by
 inverse variance (equal weights for equal_weighting).
 
-Every case is computed with both trees the library offers (openquant.hcaa's `distance` option):
+Every case is computed with every tree the library offers: both matrices of openquant.hcaa's
+`distance` option crossed with the four methods of its `linkage` option ("single", "complete",
+"average", "ward"; scipy's `method=` of the same name):
 
-  * "correlation": the condensed matrix d is handed to scipy's linkage(method="single") as
-    pairwise distances, as mlfinlab's HCAA does (`linkage(squareform(d))`).
+  * "correlation": the condensed matrix d is handed to scipy's linkage as pairwise distances,
+    as mlfinlab's HCAA does (`linkage(squareform(d), method=linkage)`).
   * "distance_of_distances": the square matrix d is handed to linkage as AFML's Snippet 16.4
     does, which clusters on the Euclidean distance between columns of d,
     d~_ij = sqrt(sum_n (d_ni - d_nj)^2).  The script asserts it equals linkage on pdist(d).
 
-For each distance the case records `link` (the (left, right) merge list: ids below n are assets
+scipy's "ward" applies Ward's update to whatever distances it is given.  d is itself a Euclidean
+distance: with the correlation matrix factored as C = X X', the rows of X are points with
+||x_i - x_j||^2 = 2 (1 - rho_ij).  So Ward on the condensed d is Ward's minimum-variance method
+on genuine points; the script checks this by running scipy's Ward on the points X directly and
+asserting the same tree.
+
+For each distance and linkage the case (`case[distance][linkage]`) records `link` (the (left, right) merge list: ids below n are assets
 and n + k is the cluster formed by merge k), `order` (leaf order, left child first) and
 `weights[metric][k]` for metric in minimum_variance / minimum_standard_deviation /
 equal_weighting and k in "none" (no cut), "2", "4".
@@ -58,14 +66,18 @@ def side_variance(cov, items):
     return float(w @ cov[np.ix_(items, items)] @ w)
 
 
-def linkage(dist, distance):
+LINKAGES = ("single", "complete", "average", "ward")
+DISTANCES = ("correlation", "distance_of_distances")
+
+
+def linkage(dist, distance, method):
     if distance == "correlation":
-        return sch.linkage(squareform(dist, checks=False), method="single")
+        return sch.linkage(squareform(dist, checks=False), method=method)
     # Snippet 16.4 verbatim: the square matrix goes in, so scipy treats rows as observations.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", sch.ClusterWarning)
-        link = sch.linkage(dist, method="single")
-    check = sch.linkage(pdist(dist, metric="euclidean"), method="single")
+        link = sch.linkage(dist, method=method)
+    check = sch.linkage(pdist(dist, metric="euclidean"), method=method)
     assert np.array_equal(link[:, [0, 1, 3]], check[:, [0, 1, 3]])
     assert np.allclose(link[:, 2], check[:, 2], rtol=1e-12, atol=0.0)
     return link
@@ -118,12 +130,16 @@ def hcaa_weights(cov, link, metric, k):
     return w
 
 
-def hcaa(cov, distance):
+def correlation(cov):
     std = np.sqrt(np.diag(cov))
-    corr = cov / np.outer(std, std)
+    return cov / np.outer(std, std)
+
+
+def hcaa(cov, distance, method):
+    corr = correlation(cov)
     dist = np.sqrt(np.clip(2.0 * (1.0 - corr), 0.0, None))
     np.fill_diagonal(dist, 0.0)
-    link = linkage(dist, distance)
+    link = linkage(dist, distance, method)
     # A tie in merge height would make the tree (and the cut) depend on tie-breaking.
     assert np.all(np.diff(link[:, 2]) > 1e-9)
     pairs = [[int(a), int(b)] for a, b in link[:, :2]]
@@ -135,8 +151,22 @@ def hcaa(cov, distance):
     return {"link": pairs, "order": leaves(link, 2 * cov.shape[0] - 2), "weights": weights}
 
 
-def both(cov):
-    return {d: hcaa(cov, d) for d in ("correlation", "distance_of_distances")}
+def check_ward_on_points(cov, link):
+    """Ward on the condensed d is Ward on points whose Euclidean distances are d."""
+    vals, vecs = np.linalg.eigh(correlation(cov))
+    points = vecs * np.sqrt(np.clip(vals, 0.0, None))
+    ward = sch.linkage(points, method="ward")
+    assert np.array_equal(ward[:, [0, 1, 3]], link[:, [0, 1, 3]])
+    assert np.allclose(ward[:, 2], link[:, 2], rtol=1e-8, atol=1e-12)
+
+
+def every_tree(cov):
+    out = {d: {m: hcaa(cov, d, m) for m in LINKAGES} for d in DISTANCES}
+    corr = correlation(cov)
+    dist = np.sqrt(np.clip(2.0 * (1.0 - corr), 0.0, None))
+    np.fill_diagonal(dist, 0.0)
+    check_ward_on_points(cov, linkage(dist, "correlation", "ward"))
+    return out
 
 
 def load_prices():
@@ -150,7 +180,7 @@ def load_prices():
 def main():
     names, prices = load_prices()
     returns = prices[1:] / prices[:-1] - 1.0
-    out = {"stock_prices": {"names": names, **both(np.cov(returns, rowvar=False, ddof=1))}}
+    out = {"stock_prices": {"names": names, **every_tree(np.cov(returns, rowvar=False, ddof=1))}}
 
     rng = np.random.default_rng(20260925)
     a = rng.normal(size=(40, 8))
@@ -159,18 +189,26 @@ def main():
     a[:, 6] += 0.5 * a[:, 1]
     a *= rng.uniform(0.5, 2.0, size=8)
     cov = np.cov(a, rowvar=False, ddof=1)
-    out["random_cov_8"] = {"cov": cov.tolist(), **both(cov)}
+    out["random_cov_8"] = {"cov": cov.tolist(), **every_tree(cov)}
 
     (HERE / "reference.json").write_text(json.dumps(out, indent=1) + "\n")
     for key, case in out.items():
-        c, dd = case["correlation"], case["distance_of_distances"]
-        print(key, "order", c["order"])
-        print(
-            " " * len(key),
-            "d~   ",
-            dd["order"],
-            "same tree" if dd["link"] == c["link"] else "different tree",
-        )
+        print(key)
+        for m in LINKAGES:
+            c, dd = case["correlation"][m], case["distance_of_distances"][m]
+            single = case["correlation"]["single"]
+            print(
+                f"  {m:8s} d  order {c['order']}",
+                ""
+                if m == "single"
+                else (
+                    "same tree as single" if c["link"] == single["link"] else "differs from single"
+                ),
+            )
+            print(
+                f"  {m:8s} d~ order {dd['order']}",
+                "same tree as d" if dd["link"] == c["link"] else "differs from d",
+            )
 
 
 if __name__ == "__main__":

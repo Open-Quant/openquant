@@ -197,7 +197,10 @@ fn test_hcaa_conditional_drawdown_risk() {
 #[test]
 fn test_quasi_diagonalization() {
     let (prices, names) = load_prices_and_names();
-    let mut hcaa = HierarchicalClusteringAssetAllocation::default();
+    // The reference is HRP's pairwise single-linkage tree, so ask for single linkage (the default
+    // is Ward; `hcaa_reference.rs` pins every linkage against scipy).
+    let mut hcaa = HierarchicalClusteringAssetAllocation::default()
+        .with_linkage(openquant::hcaa::HcaaLinkage::Single);
     hcaa.allocate(&names, Some(&prices), None, None, None, "equal_weighting", 0.05, Some(5), None)
         .unwrap();
     assert_eq!(hcaa.ordered_indices, reference_leaf_order());
