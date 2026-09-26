@@ -37,24 +37,15 @@
 //!   per entry of `timestamps`.
 //! - **Units.** `risk_free_rate` is an **annual** rate everywhere, as in
 //!   [`crate::portfolio_optimization`]. `periods_per_year` is the number of bars a year, for
-<<<<<<< HEAD
 //!   both `close` and the rows of `asset_prices`. It annualises `realized_sharpe` and the
 //!   portfolio's return, volatility and Sharpe ratio, and the risk-free rate per bar is
-//!   `risk_free_rate / periods_per_year`. If `asset_prices` is sampled at a different
-//!   frequency from `close`, resample it first. The default, 252, is right for **daily bars
+//!   `risk_free_rate / periods_per_year`. The default, 252, is right for **daily bars
 //!   only**; for other bars set it, or derive it from the timestamps with
 //!   [`infer_periods_per_year`]. The convention is a US equity year of
 //!   [`TRADING_DAYS_PER_YEAR`] = 252 sessions of [`SESSION_MINUTES`] = 390 minutes (6.5
 //!   hours), so one-minute bars have `252 * 390 = 98,280` bars a year
 //!   ([`MINUTE_BARS_PER_YEAR`]) and five-minute bars 19,656. Using 252 for one-minute bars
 //!   understates every annualised Sharpe ratio and volatility by `sqrt(390) ≈ 19.7`.
-=======
-//!   both `close` and the rows of `asset_prices` (252 for daily bars, the default; about
-//!   `252 * 390` for one-minute bars over a 6.5-hour session). It annualises
-//!   `realized_sharpe` and the portfolio's return, volatility and Sharpe ratio, and the
-//!   risk-free rate per bar is `risk_free_rate / periods_per_year`. If `asset_prices` is
-//!   sampled at a different frequency from `close`, resample it onto the bars of `close` first.
->>>>>>> origin/main
 //! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
 //!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
@@ -805,12 +796,14 @@ mod tests {
     #[test]
     fn test_realized_sharpe_scales_with_periods_per_year() {
         // #205: the same per-bar returns annualise with sqrt(periods_per_year).
-        let timestamps: Vec<NaiveDateTime> =
-            (0..6).map(|m| parse_ts("2024-01-02 09:30:00") + chrono::Duration::minutes(m)).collect();
+        let timestamps: Vec<NaiveDateTime> = (0..6)
+            .map(|m| parse_ts("2024-01-02 09:30:00") + chrono::Duration::minutes(m))
+            .collect();
         let close = vec![100.0, 102.0, 101.0, 103.0, 102.5, 104.0];
         let probs = vec![0.9; 6];
         let asset_names = vec!["A".to_string()];
-        let asset_prices = DMatrix::from_row_slice(4, 1, &[100.0, 101.0, 100.5, 102.0]);
+        let asset_prices =
+            DMatrix::from_row_slice(6, 1, &[100.0, 101.0, 100.5, 102.0, 101.5, 103.0]);
         let run = |periods_per_year: f64| {
             let input = ResearchPipelineInput {
                 timestamps: &timestamps,
