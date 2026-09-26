@@ -105,7 +105,9 @@ export default defineConfig({
           autogenerate: { directory: 'workflows' },
         },
         {
-          label: 'Runbooks',
+          // The research gallery (runbooks/index.md, generated from the executed
+          // notebooks by scripts/docs/generate_site_pages.py) and one page per runbook.
+          label: 'Research',
           autogenerate: { directory: 'runbooks' },
         },
         {
@@ -238,10 +240,17 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Governance',
-          autogenerate: { directory: 'governance' },
+          // Governance, and the performance and changelog pages generated from
+          // benchmarks/ and CHANGELOG.md. The five governance stubs were folded into
+          // project/governance.md.
+          label: 'Project',
+          items: [
+            { slug: 'project/governance' },
+            { slug: 'project/performance' },
+            { slug: 'project/changelog' },
+            { label: 'Coverage', link: '/coverage/' },
+          ],
         },
-        { label: 'Coverage', link: '/coverage/' },
       ],
     }),
   ],
@@ -258,10 +267,21 @@ export default defineConfig({
     // indexing-and-discovery.md described the sidebar; its discovery paths now
     // live on the home page.
     '/search': '/openquant/',
-    '/publishing': '/openquant/governance/versioning-and-release-policy/',
-    '/performance': '/openquant/governance/benchmark-policy/',
-    '/contributing': '/openquant/governance/support-and-escalation/',
-    '/faq': '/openquant/governance/methodology-and-leakage-controls/',
+    '/publishing': '/openquant/project/governance/#versioning-and-releases',
+    '/performance': '/openquant/project/performance/',
+    '/contributing': '/openquant/project/governance/#support-and-escalation',
+    '/faq': '/openquant/project/governance/#methodology-and-leakage-controls',
+    '/research': '/openquant/runbooks/',
+    '/changelog': '/openquant/project/changelog/',
+    // The five governance pages were folded into one.
+    '/governance/methodology-and-leakage-controls':
+      '/openquant/project/governance/#methodology-and-leakage-controls',
+    '/governance/reproducibility-and-artifact-contracts':
+      '/openquant/project/governance/#reproducibility',
+    '/governance/benchmark-policy': '/openquant/project/performance/',
+    '/governance/versioning-and-release-policy':
+      '/openquant/project/governance/#versioning-and-releases',
+    '/governance/support-and-escalation': '/openquant/project/governance/#support-and-escalation',
     '/module': '/openquant/modules/',
   },
 });

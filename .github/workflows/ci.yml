@@ -302,6 +302,13 @@ jobs:
       - name: Check docs coverage
         run: bun run check:coverage
         working-directory: docs-site
+      # The research gallery, the performance page and the changelog page are
+      # rendered from the executed notebooks, benchmarks/ and CHANGELOG.md by
+      # scripts/docs/generate_site_pages.py; fail if a page disagrees with its
+      # source. Standard-library Python, like check:coverage.
+      - name: Check generated pages are current
+        run: bun run check:generated-pages
+        working-directory: docs-site
       - name: Check documented Rust examples compile
         run: bun run check:examples
         working-directory: docs-site
