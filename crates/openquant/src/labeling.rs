@@ -355,11 +355,12 @@ pub fn drop_labels(
                 min_label = Some((*label, pct));
             }
         }
-        if let Some((label, pct)) = min_label {
-            if pct <= min_pct && counts.len() >= 3 {
-                filtered.retain(|(_, _, _, b, _)| *b != label);
-                continue;
-            }
+        if let Some((label, pct)) = min_label
+            && pct <= min_pct
+            && counts.len() >= 3
+        {
+            filtered.retain(|(_, _, _, b, _)| *b != label);
+            continue;
         }
         break;
     }
