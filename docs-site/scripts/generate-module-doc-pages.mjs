@@ -167,7 +167,7 @@ for (const doc of moduleDocs.filter(isGenerated)) {
   // --- Risk Notes and Caveats ---
   // These were emitted twice on every page: once as the `risk_notes` frontmatter
   // key and again, verbatim, as a body section titled 'Implementation Notes'.
-  // Nothing reads the frontmatter key (it is optional in src/content/config.ts
+  // Nothing reads the frontmatter key (it is optional in src/content.config.ts
   // and referenced by no component or script), and the content is caveats rather
   // than implementation detail — so it is now rendered once, under its real name.
   if (doc.notes.length) {
