@@ -2,7 +2,7 @@
 title: "Runbook: fracdiff, stationarity versus memory"
 description: "Sweeps the fractional differencing order d per series, picks the smallest d that passes ADF, and checks that rule against simulated series whose memory is known. Committed results are on SYNTHETIC data."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
 afml_chapter:
@@ -108,7 +108,9 @@ as their default feature transform. Keep `frac_diff_ffd` as a candidate feature,
 on the training span and counted as a trial. If $d$ is chosen by a test, pair ADF with a test whose
 null is stationarity (KPSS or similar). Report the FFD weight sum next to any FFD feature. Issue
 #49's other question, whether FFD features beat returns in a purged-CV classifier net of costs,
-needs real data or a planted signal. This runbook does not test it.
+needs real data or a planted signal. This runbook does not test it;
+[runbook 14](/runbooks/fracdiff-features-classifier/) does, on a planted signal, and does not
+promote them either.
 
 ## Run it on your own data
 

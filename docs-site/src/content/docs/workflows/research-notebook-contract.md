@@ -41,7 +41,7 @@ The notebooks today:
 | `05_risk_overlays_and_reality_check` | API tour: `research.run_flywheel_iteration` and its drawdown payload |
 | `07_feature_engineering_discovery_loop` | API tour: `feature_diagnostics.feature_screen_report` |
 | `08_algo_wheel_experiments` | API tour: `research.run_flywheel_grid` |
-| `09` to `13` | Runbooks, each with a page under Runbooks |
+| `09` to `14` | Runbooks, each with a page under Runbooks |
 
 A tour that grows a question worth answering becomes a runbook: add the research sections, a
 trial registry and controls, and change the title. Do not add a hypothesis to a tour and leave the
@@ -50,7 +50,7 @@ rest out.
 ## Runbook sections
 
 The level-2 (`##`) headings of a runbook are exactly these, in this order. Use `###` subsections
-for anything else. Runbooks 09 to 13 are the reference implementations.
+for anything else. Runbooks 09 to 14 are the reference implementations.
 
 1. **Setup.** Imports and one parameters cell. Every parameter that could change a result is set
    here, before the first full run, with a comment saying why it has that value. The seed is set
@@ -176,7 +176,7 @@ with the self-review checklist as the starting point.
 
 ## Adding a notebook
 
-1. Copy the closest existing notebook of the same kind; runbooks 09 to 13 show every section.
+1. Copy the closest existing notebook of the same kind; runbooks 09 to 14 show every section.
 2. Number it `NN_short_name.ipynb` with the next free number.
 3. For a runbook, write the hypothesis and fix the parameters cell before the first full run, and
    add a page under `docs-site/src/content/docs/runbooks/`.
