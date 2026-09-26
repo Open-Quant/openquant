@@ -1,17 +1,19 @@
-//! Hierarchical Clustering-based Asset Allocation (HCAA): split weight down a single-linkage
+//! Hierarchical Clustering-based Asset Allocation (HCAA): split weight down a hierarchical
 //! cluster tree with a choice of risk measure.
 //!
 //! References: Raffinot (2017), *Hierarchical clustering-based asset allocation*, Journal of
 //! Portfolio Management 44(2); AFML Chapter 16 (§16.4, the tree and quasi-diagonalisation,
 //! Snippets 16.1–16.2).
 //!
-//! The tree is single linkage on the correlation distance `d = sqrt(2 (1 - rho))`. Which
+//! The tree is built with Ward linkage by default (see [`HcaaLinkage`] for single, complete
+//! and average) on the correlation distance `d = sqrt(2 (1 - rho))`. Which
 //! matrix is clustered is set by [`HcaaDistance`]: by default `d` itself, pairwise (Mantegna's
 //! 1999 distance, which Raffinot builds on, and what mlfinlab's HCAA clusters on); or, with
 //! [`HcaaDistance::DistanceOfDistances`], the Euclidean distance between columns of `d`, which
-//! is what AFML's Snippet 16.4 clusters on and [`crate::hrp`]'s default. The two trees are the
-//! same as HRP's [`HrpDistance`](crate::hrp::HrpDistance) options of the same names (HRP's
-//! `d` is half of this one, which does not change a single-linkage tree).
+//! is what AFML's Snippet 16.4 clusters on and [`crate::hrp`]'s default. These are the same
+//! matrices as HRP's [`HrpDistance`](crate::hrp::HrpDistance) options of the same names (HRP's
+//! `d` is half of this one, which does not change the tree); with [`HcaaLinkage::Single`] the
+//! trees are HRP's too.
 //!
 //! Weight starts at 1 at the root. At each of the top `k - 1` merges
 //! (`k` = `optimal_num_clusters`) the node's weight is split between its children, the left one receiving a share `alpha`
@@ -71,7 +73,9 @@
 //! ```
 #![deny(missing_docs)]
 
-use crate::util::linkage::{distance_of_distances, quasi_diagonalization, single_linkage_children};
+use crate::util::linkage::{
+    distance_of_distances, linkage_children, quasi_diagonalization, Linkage,
+};
 use crate::util::resample::{freq_step, resample_prices};
 use nalgebra::DMatrix;
 
@@ -116,9 +120,13 @@ pub enum HcaaError {
     /// `"distance_of_distances"`.
     #[error("unknown distance: {0} (expected \"correlation\" or \"distance_of_distances\")")]
     UnknownDistance(String),
+    /// A linkage name given to [`HcaaLinkage`]'s `FromStr` is not `"single"`, `"complete"`,
+    /// `"average"` or `"ward"`.
+    #[error("unknown linkage: {0} (expected \"single\", \"complete\", \"average\" or \"ward\")")]
+    UnknownLinkage(String),
 }
 
-/// Which distance the single-linkage tree is built on.
+/// Which distance the tree is built on.
 ///
 /// Both start from the correlation distance `d_ij = sqrt(2 (1 - rho_ij))`. The options and
 /// their names match [`HrpDistance`](crate::hrp::HrpDistance), but the default differs: HCAA
@@ -150,6 +158,60 @@ impl std::str::FromStr for HcaaDistance {
     }
 }
 
+/// How the distance between two clusters is measured when the tree is built.
+///
+/// Each step of the tree merges the two closest clusters; the linkage defines "closest" from the
+/// distances between their assets (whichever matrix [`HcaaDistance`] chose). The updates are
+/// scipy's (`scipy.cluster.hierarchy.linkage` with `method=` the lower-case name), and the trees
+/// are pinned against scipy in `tests/fixtures/hcaa/generate.py`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HcaaLinkage {
+    /// Nearest pair: the smallest distance between a member of one cluster and a member of the
+    /// other. The tree of [`crate::hrp`] (AFML Snippet 16.4). Prone to chaining: assets join a
+    /// growing cluster one at a time, which makes the tree deep and lopsided.
+    Single,
+    /// Farthest pair: the largest distance between members. Compact clusters of similar
+    /// diameter.
+    Complete,
+    /// Mean distance over all pairs of members (UPGMA): between single and complete.
+    Average,
+    /// Ward's minimum-variance criterion, scipy's `method="ward"` (R's `ward.D2`): merge the
+    /// pair whose union least increases the within-cluster sum of squares. The default: it is
+    /// the default of every reference implementation of HCAA (mlfinlab, R HierPortfolios,
+    /// jduarte00), and the linkage secondary sources attribute to Raffinot (2017). The distances are treated as Euclidean, which they are:
+    /// `sqrt(2 (1 - rho_ij))` is the Euclidean distance between the two assets' standardised
+    /// return series (scaled to unit length), and the distance of distances is Euclidean by
+    /// construction.
+    #[default]
+    Ward,
+}
+
+impl std::str::FromStr for HcaaLinkage {
+    type Err = HcaaError;
+
+    /// Parses `"single"`, `"complete"`, `"average"` or `"ward"` (case-insensitive).
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name.to_ascii_lowercase().as_str() {
+            "single" => Ok(Self::Single),
+            "complete" => Ok(Self::Complete),
+            "average" => Ok(Self::Average),
+            "ward" => Ok(Self::Ward),
+            _ => Err(HcaaError::UnknownLinkage(name.to_string())),
+        }
+    }
+}
+
+impl From<HcaaLinkage> for Linkage {
+    fn from(linkage: HcaaLinkage) -> Self {
+        match linkage {
+            HcaaLinkage::Single => Linkage::Single,
+            HcaaLinkage::Complete => Linkage::Complete,
+            HcaaLinkage::Average => Linkage::Average,
+            HcaaLinkage::Ward => Linkage::Ward,
+        }
+    }
+}
+
 /// HCAA allocator; call [`allocate`](Self::allocate), then read the public fields.
 ///
 /// The fields are empty until the first successful `allocate` and are overwritten by each
@@ -160,12 +222,15 @@ pub struct HierarchicalClusteringAssetAllocation {
     pub weights: Vec<f64>,
     /// Asset indices in quasi-diagonal (dendrogram leaf) order.
     pub ordered_indices: Vec<usize>,
-    /// Single-linkage merges in SciPy linkage convention: row `i` merges the two listed nodes
+    /// The tree's merges in SciPy linkage convention: row `i` merges the two listed nodes
     /// (smaller id first) into node `N + i`, where ids below `N` are assets.
     pub clusters: Vec<[usize; 2]>,
     /// The distance the tree is built on; set it before calling [`allocate`](Self::allocate)
     /// (or build with [`with_distance`](Self::with_distance)).
     pub distance: HcaaDistance,
+    /// The linkage the tree is built with; set it before calling [`allocate`](Self::allocate)
+    /// (or build with [`with_linkage`](Self::with_linkage)).
+    pub linkage: HcaaLinkage,
     calculate_expected_returns: String,
 }
 
@@ -187,6 +252,7 @@ impl HierarchicalClusteringAssetAllocation {
             ordered_indices: Vec::new(),
             clusters: Vec::new(),
             distance: HcaaDistance::default(),
+            linkage: HcaaLinkage::default(),
             calculate_expected_returns: calculate_expected_returns.to_string(),
         }
     }
@@ -204,6 +270,23 @@ impl HierarchicalClusteringAssetAllocation {
     /// ```
     pub fn with_distance(mut self, distance: HcaaDistance) -> Self {
         self.distance = distance;
+        self
+    }
+
+    /// Returns this allocator set to build its tree with `linkage` (the default is
+    /// [`HcaaLinkage::Ward`]).
+    ///
+    /// ```
+    /// use openquant::hcaa::{HcaaLinkage, HierarchicalClusteringAssetAllocation};
+    ///
+    /// let model = HierarchicalClusteringAssetAllocation::new("mean")
+    ///     .with_linkage(HcaaLinkage::Average);
+    /// assert_eq!(model.linkage, HcaaLinkage::Average);
+    /// assert_eq!("Single".parse(), Ok(HcaaLinkage::Single));
+    /// assert_eq!(HierarchicalClusteringAssetAllocation::default().linkage, HcaaLinkage::Ward);
+    /// ```
+    pub fn with_linkage(mut self, linkage: HcaaLinkage) -> Self {
+        self.linkage = linkage;
         self
     }
 
@@ -381,10 +464,11 @@ impl HierarchicalClusteringAssetAllocation {
         }
 
         let distances = corr_to_distances(&cov2corr(&covariance_owned)?);
+        let method = Linkage::from(self.linkage);
         self.clusters = match self.distance {
-            HcaaDistance::Correlation => single_linkage_children(&distances),
+            HcaaDistance::Correlation => linkage_children(&distances, method),
             HcaaDistance::DistanceOfDistances => {
-                single_linkage_children(&distance_of_distances(&distances))
+                linkage_children(&distance_of_distances(&distances), method)
             }
         };
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);

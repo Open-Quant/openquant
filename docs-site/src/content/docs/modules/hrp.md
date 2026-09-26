@@ -2,7 +2,7 @@
 title: "hrp"
 description: "Hierarchical Risk Parity: portfolio weights from a clustering of the correlation matrix, with no matrix inversion."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -224,7 +224,7 @@ steadier from one window to the next. Pass
 
 ## Related modules
 
-- [`hcaa`](/modules/hcaa/) — a single-linkage tree (on the pairwise distances) with other allocation metrics.
+- [`hcaa`](/modules/hcaa/) — allocation down the tree's own branches (Ward linkage by default) with other allocation metrics.
 - [`onc`](/modules/onc/) — choose the number of clusters instead of bisecting blindly.
 - [`codependence`](/modules/codependence/) — distances other than correlation.
 - [`cla`](/modules/cla/), [`portfolio-optimization`](/modules/portfolio-optimization/) — the

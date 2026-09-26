@@ -130,15 +130,17 @@ def test_hcaa_ordering_places_correlated_pair_together(n):
 
 
 @pytest.mark.parametrize("distance", ["correlation", "distance_of_distances"])
+@pytest.mark.parametrize("linkage", ["single", "complete", "average", "ward"])
 @pytest.mark.parametrize(
     "metric", ["minimum_variance", "minimum_standard_deviation", "equal_weighting"]
 )
 @pytest.mark.parametrize("k", [None, 2, 4])
-def test_hcaa_distance_matches_independent_reference(distance, metric, k):
-    # tests/fixtures/hcaa/generate.py: scipy single linkage on the pairwise distances, or on the
-    # square distance matrix as AFML Snippet 16.4 passes it, then the tree walk in numpy.
+def test_hcaa_tree_matches_independent_reference(distance, linkage, metric, k):
+    # tests/fixtures/hcaa/generate.py: scipy's linkage(method=linkage) on the pairwise
+    # distances, or on the square distance matrix as AFML Snippet 16.4 passes it, then the tree
+    # walk in numpy.
     reference = json.loads((FIXTURES / "hcaa" / "reference.json").read_text())
-    want = reference["stock_prices"][distance]
+    want = reference["stock_prices"][distance][linkage]
     prices, names = _load_prices_and_names()
 
     weights, order = hcaa.allocate_hcaa(
@@ -147,6 +149,7 @@ def test_hcaa_distance_matches_independent_reference(distance, metric, k):
         allocation_metric=metric,
         optimal_num_clusters=k,
         distance=distance,
+        linkage=linkage,
     )
 
     assert order == want["order"]
@@ -165,3 +168,16 @@ def test_hcaa_distance_default_and_validation():
     assert default == hcaa.allocate_hcaa(names, **kwargs, distance="Correlation")
     with pytest.raises(ValueError, match="unknown distance"):
         hcaa.allocate_hcaa(names, **kwargs, distance="euclidean")
+
+
+def test_hcaa_linkage_default_and_validation():
+    prices, names = _load_prices_and_names()
+    kwargs = {"asset_prices": prices, "allocation_metric": "minimum_variance"}
+    default = hcaa.allocate_hcaa(names, **kwargs)
+    # The default is Ward, as in mlfinlab's and R HierPortfolios' HCAA.
+    assert default == hcaa.allocate_hcaa(names, **kwargs, linkage="ward")
+    assert default == hcaa.allocate_hcaa(names, **kwargs, linkage="Ward")
+    for other in ("single", "complete", "average"):
+        assert default != hcaa.allocate_hcaa(names, **kwargs, linkage=other)
+    with pytest.raises(ValueError, match="unknown linkage"):
+        hcaa.allocate_hcaa(names, **kwargs, linkage="centroid")
