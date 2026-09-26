@@ -41,11 +41,13 @@
 //!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
 //! - `realized_sharpe` annualises per-bar returns with 252 bars a year, whatever the bar
 //!   spacing, and subtracts `risk_free_rate` per bar.
-//! - The [`LeakageChecks`] are structural, not tests of the data: misaligned inputs are
-//!   rejected with an error rather than flagged, CUSUM events are always in increasing order,
-//!   and `has_forward_look_bias` is always `false` because the one-bar lag above is built in.
-//!   Whether `model_probabilities` themselves were fitted without look-ahead is the caller's
-//!   responsibility.
+//! - [`LeakageChecks`] computes two things from the data: whether `timestamps` strictly
+//!   increase and whether the event positions do. Misaligned lengths are rejected with an
+//!   error rather than flagged. The pipeline does **not** detect look-ahead: the one-bar lag
+//!   above is built in, and whether `model_probabilities` were fitted without look-ahead is
+//!   the caller's responsibility. The fields `inputs_aligned` and `has_forward_look_bias`
+//!   are deprecated constants (`true` and `false`) kept for compatibility; they test
+//!   nothing.
 //!
 //! # Example
 //!
@@ -103,7 +105,7 @@
 //! assert!((out.risk.realized_sharpe - 4.1451).abs() < 1e-4);
 //! // A single asset takes the whole portfolio.
 //! assert!((out.portfolio.weights[0] - 1.0).abs() < 1e-9);
-//! assert!(!out.leakage_checks.has_forward_look_bias);
+//! assert!(out.leakage_checks.timestamps_increasing);
 //! # Ok::<(), openquant::pipeline::PipelineError>(())
 //! ```
 #![deny(missing_docs)]
@@ -161,7 +163,7 @@ impl Default for ResearchPipelineConfig {
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineInput<'a> {
     /// Bar timestamps in increasing order; used for event timestamps and time under water.
-    /// Their order is not checked.
+    /// Their order is not enforced; [`LeakageChecks::timestamps_increasing`] reports it.
     pub timestamps: &'a [NaiveDateTime],
     /// Positive closing prices of the traded instrument, one per bar.
     pub close: &'a [f64],
@@ -252,19 +254,33 @@ pub struct BacktestStage {
     pub time_under_water_years: Vec<f64>,
 }
 
-/// Structural leakage guards of the run.
+/// Ordering checks of the run.
 ///
-/// These describe the pipeline's construction rather than test the data: an output only
-/// exists when the inputs passed validation, so the flags take fixed values in practice.
+/// `timestamps_increasing` and `event_indices_sorted` are computed from the data. Nothing here
+/// detects look-ahead in `model_probabilities` or `model_sides`; see the
+/// [module conventions](self#conventions).
 #[derive(Debug, Clone)]
 pub struct LeakageChecks {
-    /// Always `true`: misaligned inputs are rejected with [`PipelineError::LengthMismatch`]
-    /// instead of producing an output.
+    /// Deprecated constant, always `true`: an output only exists when the input lengths
+    /// agree (a mismatch is [`PipelineError::LengthMismatch`]), so this tests nothing. Read
+    /// [`LeakageChecks::timestamps_increasing`] for the check on the data.
+    #[deprecated(
+        since = "0.1.0",
+        note = "always true; misaligned lengths are an error. Use `timestamps_increasing`."
+    )]
     pub inputs_aligned: bool,
+    /// Whether `timestamps` strictly increase. The run does not reject unordered timestamps,
+    /// but time under water and event timestamps are meaningless when this is `false`.
+    pub timestamps_increasing: bool,
     /// Whether the event positions are non-decreasing; always `true` for CUSUM events.
     pub event_indices_sorted: bool,
-    /// Always `false`: signals are applied with a one-bar lag. It does not detect look-ahead
-    /// in the caller's `model_probabilities` or `model_sides`.
+    /// Deprecated constant, always `false`. The pipeline does not detect look-ahead: the
+    /// one-bar lag is built in, and look-ahead in the caller's `model_probabilities` or
+    /// `model_sides` is invisible to it.
+    #[deprecated(
+        since = "0.1.0",
+        note = "always false; the pipeline does not detect look-ahead in its inputs."
+    )]
     pub has_forward_look_bias: bool,
 }
 
@@ -281,7 +297,7 @@ pub struct ResearchPipelineOutput {
     pub risk: RiskStage,
     /// Strategy returns, equity curve, drawdowns and time under water.
     pub backtest: BacktestStage,
-    /// Structural leakage guards.
+    /// Ordering checks on the timestamps and events.
     pub leakage_checks: LeakageChecks,
 }
 
@@ -418,8 +434,11 @@ pub fn run_mid_frequency_pipeline(
         drawdowns,
         time_under_water_years,
     };
+    // The two deprecated fields are constants kept for compatibility (#185).
+    #[allow(deprecated)]
     let leakage_checks = LeakageChecks {
         inputs_aligned: true,
+        timestamps_increasing: input.timestamps.windows(2).all(|w| w[0] < w[1]),
         event_indices_sorted: event_indices.windows(2).all(|w| w[0] <= w[1]),
         has_forward_look_bias: false,
     };
@@ -584,6 +603,37 @@ mod tests {
         assert_eq!(out.portfolio.weights.len(), asset_names.len());
         let total_weight: f64 = out.portfolio.weights.iter().sum();
         assert!((total_weight - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_leakage_checks_report_unordered_timestamps() {
+        // #185 item 11: the ordering flag is computed from the data, not a constant.
+        let mut timestamps: Vec<NaiveDateTime> = (0..6)
+            .map(|m| parse_ts("2024-01-01 09:30:00") + chrono::Duration::minutes(m))
+            .collect();
+        let close = vec![100.0, 102.0, 100.0, 102.0, 100.0, 102.0];
+        let probs = vec![0.9; 6];
+        let asset_names = vec!["A".to_string()];
+        let asset_prices = DMatrix::from_row_slice(3, 1, &[100.0, 101.0, 102.0]);
+        let run = |timestamps: &[NaiveDateTime]| {
+            let input = ResearchPipelineInput {
+                timestamps,
+                close: &close,
+                model_probabilities: &probs,
+                model_sides: None,
+                asset_prices: &asset_prices,
+                asset_names: &asset_names,
+            };
+            let config =
+                ResearchPipelineConfig { cusum_threshold: 0.01, ..ResearchPipelineConfig::default() };
+            run_mid_frequency_pipeline(input, &config).expect("pipeline run should succeed")
+        };
+        assert!(run(&timestamps).leakage_checks.timestamps_increasing);
+        timestamps.swap(2, 3);
+        assert!(!run(&timestamps).leakage_checks.timestamps_increasing);
+        timestamps.swap(2, 3);
+        timestamps[3] = timestamps[2];
+        assert!(!run(&timestamps).leakage_checks.timestamps_increasing, "ties are not increasing");
     }
 
     #[test]

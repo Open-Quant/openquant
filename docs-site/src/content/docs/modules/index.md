@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+last_generated: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -60,7 +60,7 @@ For the AFML chapter each module implements, see
 ### Research Workflows
 
 - [`evaluation`](/modules/evaluation/) — PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.
-- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
+- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.
 - [`research`](/modules/research/) — Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates.
 - [`viz`](/modules/viz/) — Visualization payload builders for feature importance, drawdown, regime, frontier, and cluster charts.
 
@@ -111,7 +111,7 @@ For the AFML chapter each module implements, see
 - [`labeling`](/modules/labeling/) — Triple-barrier labels and meta-labels, with barriers in units of volatility at the event.
 - [`microstructural_features`](/modules/microstructural-features/) — Spread, price-impact, order-flow and entropy features from bars or trades.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
-- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks.
+- [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.
 - [`portfolio_optimization`](/modules/portfolio-optimization/) — Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe, target return.
 - [`risk_metrics`](/modules/risk-metrics/) — Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance.
 - [`sample_weights`](/modules/sample-weights/) — Training weights for overlapping labels: return attribution and time decay.
@@ -128,20 +128,24 @@ For the AFML chapter each module implements, see
 
 - [`adapters`](/modules/adapters/) — `to_polars_signal_frame`, `to_polars_event_frame`, `to_polars_backtest_frame`, `to_polars_weights_frame`, `to_polars_indicator_matrix`, `to_polars_frontier_frame`, `SignalStreamBuffer`, `to_pandas`
 - [`backtest_stats`](/modules/backtest-statistics/) — `sharpe_ratio`, `information_ratio`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`, `timing_of_flattening_and_flips`, `average_holding_period`, `bets_concentration`, `all_bets_concentration`, `drawdown_and_time_under_water`
+- [`backtesting_engine`](/modules/backtesting-engine/) — `cpcv_path_count`, `run_cpcv`, `assemble_cpcv_paths`
 - [`bars`](/modules/data-structures/) — `build_time_bars`, `build_tick_bars`, `build_volume_bars`, `build_dollar_bars`, `bar_diagnostics`
 - [`bet_sizing`](/modules/bet-sizing/) — `get_signal`, `discrete_signal`, `bet_size`, `bet_size_sigmoid`, `bet_size_power`, `inv_price`, `inv_price_sigmoid`, `inv_price_power`, `get_w`, `get_w_sigmoid`, `get_w_power`, `get_target_pos`, `get_target_pos_sigmoid`, `get_target_pos_power`, `limit_price`, `limit_price_sigmoid`, `limit_price_power`, `avg_active_signals`, `bet_size_dynamic`, `cdf_mixture`, `single_bet_size_mixed`, `get_concurrent_sides`, `bet_size_budget`, `bet_size_probability`, `mp_avg_active_signals`, `bet_size_reserve`, `bet_size_reserve_with_fit`, `bet_size_reserve_full`
 - [`cla`](/modules/cla/) — `allocate_cla`
 - [`codependence`](/modules/codependence/) — `angular_distance`, `absolute_angular_distance`, `squared_angular_distance`, `distance_correlation`, `get_optimal_number_of_bins`, `get_mutual_info`, `variation_of_information_score`
+- [`cross_validation`](/modules/cross-validation/) — `purged_kfold_splits`, `split_with_diagnostics`, `cpcv_splits`, `cpcv_paths`, `naive_kfold_splits`, `count_train_test_overlaps`
 - [`data`](/modules/data/) — `fetch`, `dataset_hash`, `record_dataset_hash`, `quality_failures`, `default_cache_dir`, `DataSource`, `LocalSampleSource`, `LocalFileSource`, `CallableSource`, `CacheMissError`, `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`, `clean_ohlcv_df`, `quality_report_df`, `align_calendar_df`
 - [`ef3m`](/modules/ef3m/) — `centered_moment`, `raw_moment`, `most_likely_parameters`, `fit_m2n`
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
 - [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
 - [`fast_ewma`](/modules/util-fast-ewma/) — `ewma`
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — `mdi_importance`, `mda_importance`, `sfi_importance`, `orthogonalize_features_pca`, `substitution_effect_report`
+- [`feature_importance`](/modules/feature-importance/) — `mean_decrease_impurity`, `mean_decrease_accuracy`, `single_feature_importance`, `mda_from_probabilities`, `sfi_from_probabilities`
 - [`filters`](/modules/filters/) — `cusum_filter_indices`, `cusum_filter_timestamps`, `z_score_filter_indices`, `z_score_filter_timestamps`
 - [`fracdiff`](/modules/fracdiff/) — `get_weights`, `get_weights_ffd`, `frac_diff`, `frac_diff_ffd`
 - [`hcaa`](/modules/hcaa/) — `allocate_hcaa`
 - [`hrp`](/modules/hrp/) — `allocate_hrp`
+- [`hyperparameter_tuning`](/modules/hyperparameter-tuning/) — `expand_param_grid`, `sample_param_sets`, `classification_score`, `purged_search`
 - [`labeling`](/modules/labeling/) — `triple_barrier_labels`, `triple_barrier_events`, `meta_labels`, `add_vertical_barrier`, `get_events`, `get_bins`, `drop_labels`
 - [`microstructural`](/modules/microstructural-features/) — `get_roll_measure`, `get_roll_impact`, `get_corwin_schultz_estimator`, `get_bekker_parkinson_vol`, `get_bar_based_kyle_lambda`, `get_bar_based_amihud_lambda`, `get_bar_based_hasbrouck_lambda`, `get_trades_based_kyle_lambda`, `get_trades_based_amihud_lambda`, `get_trades_based_hasbrouck_lambda`, `vwap`, `get_avg_tick_size`, `get_vpin`, `get_bvc_buy_volume`, `encode_tick_rule_array`, `quantile_mapping`, `sigma_mapping`, `encode_array`, `get_shannon_entropy`, `get_lempel_ziv_entropy`, `get_plug_in_entropy`, `get_konto_entropy`
 - [`onc`](/modules/onc/) — `get_onc_clusters`

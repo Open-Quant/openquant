@@ -2,7 +2,7 @@
 title: Python Core Workflow
 description: One runnable Python script from raw OHLCV to a promotion decision, with its output.
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -82,7 +82,7 @@ stage 1  columns: ['ts', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'ad
 stage 2  4 dollar bars
 stage 2  diagnostics: {'n_bars': 4.0, 'lag1_return_autocorr': 0.0, 'lag1_sq_return_autocorr': 0.0, 'return_std': 0.0}
 stage 3  207 CUSUM events
-stage 3  leakage checks: {'inputs_aligned': True, 'event_indices_sorted': True, 'has_forward_look_bias': False}
+stage 3  leakage checks: {'inputs_aligned': True, 'timestamps_increasing': True, 'event_indices_sorted': True, 'has_forward_look_bias': False}
 stage 4  realized_sharpe -0.3277   VaR(5%) -0.000201   ES(5%) -0.000330
 stage 4  weights {'CL': 0.237, 'NG': 0.313, 'RB': 0.215, 'GC': 0.234}   portfolio_sharpe 1.8291
 stage 4  turnover 9.40   cost 0.003441
@@ -153,19 +153,21 @@ frame you started from. On multi-million-row inputs, slice first. See
 
 ### Stage 3 — the pipeline, and its leakage checks
 
-`run_mid_frequency_pipeline_frames` runs CUSUM sampling → labeling →
-bet sizing → backtest → portfolio and risk in one call, returning nested
+`run_mid_frequency_pipeline_frames` runs CUSUM sampling → bet sizing →
+backtest → portfolio and risk in one call (no labeling: the model
+probabilities are an input), returning nested
 dicts under `events`, `signals`, `portfolio`, `risk`, `backtest`,
 `leakage_checks`, plus polars frames under `frames`. The `_frames`
 variant is the one to use interactively;
 `run_mid_frequency_pipeline` returns the same content without the
 DataFrames.
 
-Read `leakage_checks` before you read anything else. `inputs_aligned`
-and `event_indices_sorted` are the pipeline stating that it was handed
-coherent inputs. A Sharpe computed on top of a failed alignment check is
-not a number, and every gate in `promotion` below depends on these two
-passing.
+Read `leakage_checks` before you read anything else.
+`timestamps_increasing` and `event_indices_sorted` are computed from the
+data, and two gates in `promotion` below depend on them. `inputs_aligned`
+and `has_forward_look_bias` are deprecated constants (`True` and `False`):
+mismatched lengths raise instead, and the pipeline cannot detect
+look-ahead in the model probabilities you pass it.
 
 The parameters worth knowing:
 
@@ -195,7 +197,7 @@ enough to change the sign of the decision — which is the point.
 |---|---|
 | `passed_realized_sharpe` | realised Sharpe ≥ `min_realized_sharpe` (0.25) |
 | `passed_net_sharpe` | net-of-cost Sharpe ≥ `min_net_sharpe` (0.30) |
-| `passed_alignment_guard` | `leakage_checks["inputs_aligned"]` |
+| `passed_alignment_guard` | `leakage_checks["timestamps_increasing"]` |
 | `passed_event_order_guard` | `leakage_checks["event_indices_sorted"]` |
 
 Two of the four are leakage guards, not performance thresholds. A

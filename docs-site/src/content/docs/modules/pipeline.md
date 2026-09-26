@@ -1,9 +1,9 @@
 ---
 title: "pipeline"
-description: "End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks."
+description: "End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -11,15 +11,17 @@ module: "pipeline"
 api_surface: "both"
 rust_api:
   - "run_mid_frequency_pipeline"
-  - "run_mid_frequency_pipeline_frames"
-  - "summarize_pipeline"
+  - "ResearchPipelineConfig"
+  - "ResearchPipelineInput"
+  - "ResearchPipelineOutput"
+  - "LeakageChecks"
 sidebar:
   badge: Module
 ---
 
 ## Concept Overview
 
-The pipeline module orchestrates the full AFML research workflow in a single function call. It chains: CUSUM event detection → triple-barrier labeling → bet sizing → portfolio allocation → risk metrics → backtest statistics. Each stage passes its output to the next, and built-in leakage checks verify that inputs are aligned, events are chronologically ordered, and no forward-looking bias is present.
+The pipeline module orchestrates the full AFML research workflow in a single function call. It chains: CUSUM event detection → bet sizing from the model's probabilities → a max-Sharpe portfolio allocation → risk metrics → a single-asset backtest. No labeling or model fitting happens here: the model probabilities and sides are inputs, one per bar, and the signal is traded with a one-bar lag. The output also reports whether the timestamps and the event positions are in increasing order. The pipeline does not detect look-ahead in the probabilities you pass it; that is your responsibility.
 
 This is designed for rapid research iteration — change a parameter, re-run the pipeline, and compare the summary table. The `_frames` variant enriches output with Polars DataFrames for each stage, making notebook exploration ergonomic.
 
@@ -68,12 +70,13 @@ weights_df = out["frames"]["weights"]
 # One-row summary with key metrics
 summary = summarize_pipeline(out)
 print(summary)
-# portfolio_sharpe | realized_sharpe | value_at_risk | has_forward_look_bias
+# portfolio_sharpe | realized_sharpe | value_at_risk | timestamps_increasing | ...
 ```
 
 ## Common Pitfalls
 
-- Not checking leakage_checks in the output — the pipeline flags forward-look bias but doesn't stop execution.
+- Reading has_forward_look_bias as a test: it is a deprecated constant (always false). The pipeline cannot see look-ahead inside model_probabilities; fit them on data available at each bar's close.
+- Unordered timestamps do not stop the run; check leakage_checks.timestamps_increasing.
 - Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.
 
 ## API Reference
@@ -87,12 +90,15 @@ print(summary)
 ### Rust API
 
 - `run_mid_frequency_pipeline`
-- `run_mid_frequency_pipeline_frames`
-- `summarize_pipeline`
+- `ResearchPipelineConfig`
+- `ResearchPipelineInput`
+- `ResearchPipelineOutput`
+- `LeakageChecks`
 
 ## Risk Notes and Caveats
 
-- The pipeline enforces input alignment and event ordering as leakage guards.
+- Mismatched input lengths are an error. leakage_checks reports two computed ordering checks, timestamps_increasing and event_indices_sorted; inputs_aligned (always true) and has_forward_look_bias (always false) are deprecated constants.
+- run_mid_frequency_pipeline_frames and summarize_pipeline are Python-only helpers over the Rust run_mid_frequency_pipeline.
 - run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output.
 - summarize_pipeline extracts key metrics into a single-row DataFrame for notebook display.
 

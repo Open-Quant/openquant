@@ -25,6 +25,11 @@ def run_mid_frequency_pipeline(
 
     Returns nested dictionaries with stage outputs:
     events, signals, portfolio, risk, backtest, leakage_checks.
+
+    ``leakage_checks["timestamps_increasing"]`` and ``["event_indices_sorted"]`` are computed
+    from the data. ``["inputs_aligned"]`` (always True) and ``["has_forward_look_bias"]``
+    (always False) are deprecated constants: mismatched lengths raise instead, and the
+    pipeline does not detect look-ahead in ``model_probabilities``.
     """
     return _core.pipeline.run_mid_frequency_pipeline(
         list(timestamps),
@@ -119,6 +124,7 @@ def summarize_pipeline(out: dict[str, Any]) -> pl.DataFrame:
             "expected_shortfall": [risk["expected_shortfall"]],
             "conditional_drawdown_risk": [risk["conditional_drawdown_risk"]],
             "inputs_aligned": [leakage["inputs_aligned"]],
+            "timestamps_increasing": [leakage["timestamps_increasing"]],
             "event_indices_sorted": [leakage["event_indices_sorted"]],
             "has_forward_look_bias": [leakage["has_forward_look_bias"]],
         }

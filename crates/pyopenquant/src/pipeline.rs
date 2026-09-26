@@ -99,9 +99,15 @@ fn pipeline_run_mid_frequency_pipeline(
     root.set_item("backtest", backtest)?;
 
     let leakage_checks = PyDict::new(py);
-    leakage_checks.set_item("inputs_aligned", out.leakage_checks.inputs_aligned)?;
+    // `inputs_aligned` and `has_forward_look_bias` are deprecated constants, kept so existing
+    // readers of the dict don't break (#185).
+    #[allow(deprecated)]
+    let (inputs_aligned, has_forward_look_bias) =
+        (out.leakage_checks.inputs_aligned, out.leakage_checks.has_forward_look_bias);
+    leakage_checks.set_item("inputs_aligned", inputs_aligned)?;
+    leakage_checks.set_item("timestamps_increasing", out.leakage_checks.timestamps_increasing)?;
     leakage_checks.set_item("event_indices_sorted", out.leakage_checks.event_indices_sorted)?;
-    leakage_checks.set_item("has_forward_look_bias", out.leakage_checks.has_forward_look_bias)?;
+    leakage_checks.set_item("has_forward_look_bias", has_forward_look_bias)?;
     root.set_item("leakage_checks", leakage_checks)?;
 
     Ok(root.into_pyobject(py).unwrap().into_any().unbind())

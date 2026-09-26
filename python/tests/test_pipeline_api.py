@@ -58,7 +58,25 @@ def test_pipeline_run_contract():
     assert len(out["portfolio"]["weights"]) == 3
     assert sum(out["portfolio"]["weights"]) == pytest.approx(1.0, abs=1e-6)
     assert out["leakage_checks"]["inputs_aligned"] is True
+    assert out["leakage_checks"]["timestamps_increasing"] is True
     assert out["leakage_checks"]["has_forward_look_bias"] is False
+
+
+def test_pipeline_reports_unordered_timestamps():
+    # #185 item 11: the ordering check is computed, not a constant.
+    timestamps, close, probabilities, sides, asset_prices, asset_names = _toy_pipeline_input()
+    timestamps[2], timestamps[3] = timestamps[3], timestamps[2]
+    out = openquant.pipeline.run_mid_frequency_pipeline(
+        timestamps=timestamps,
+        close=close,
+        model_probabilities=probabilities,
+        model_sides=sides,
+        asset_prices=asset_prices,
+        asset_names=asset_names,
+        cusum_threshold=0.0005,
+    )
+    assert out["leakage_checks"]["timestamps_increasing"] is False
+    assert openquant.pipeline.summarize_pipeline(out)["timestamps_increasing"][0] is False
 
 
 def test_pipeline_run_frames():
