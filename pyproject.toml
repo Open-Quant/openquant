@@ -41,7 +41,7 @@ features = []
 # Those four are used by `just notebooks-run` and .github/workflows/notebooks.yml only.
 dev = [
   "maturin>=1.7,<2.0",
-  "pytest>=8,<9",
+  "pytest>=8,<10",
   "pytest-cov>=5",
   "ruff==0.16.9",
   "mypy==2.3.1",
