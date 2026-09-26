@@ -17,7 +17,8 @@ You need:
   with `clippy` and `rustfmt`); `rustup` installs it automatically the first time you run
   `cargo` in the repository. Do not override it: `clippy -D warnings` is only
   reproducible on the pinned version.
-- Python 3.11 or newer and [`uv`](https://docs.astral.sh/uv/).
+- Python 3.11, 3.12 or 3.13 (CI tests 3.11 and 3.13; the recipes use 3.13) and
+  [`uv`](https://docs.astral.sh/uv/).
 - [`bun`](https://bun.sh/) if you touch the documentation site.
 - Optionally [`just`](https://github.com/casey/just); every recipe below is also given
   as the plain command it runs.
@@ -34,7 +35,8 @@ uv run --python .venv/bin/python python -c "import openquant; print('ok')"
 
 `maturin develop` builds `crates/pyopenquant` and installs it into `.venv`. Re-run it
 after any change to Rust code that the bindings call, or the Python tests run against the
-old build.
+old build. `just py-develop-release` builds it optimised, which the notebooks and heavy
+calls such as `structural_breaks.get_sadf` need to finish in reasonable time.
 
 ## Build and test (Rust)
 
@@ -52,13 +54,59 @@ nightly. Run it yourself when you change `structural_breaks`:
 cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored   # just test-slow
 ```
 
-## Python tests
+CI also builds the rustdoc with every public item documented and every intra-doc link
+resolving, and runs the doctests:
+
+```bash
+RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc -p openquant --no-deps
+cargo test -p openquant --doc
+cargo bench -p openquant --no-run                                       # just bench-compile
+```
+
+## Python tests, lint and types
 
 After `maturin develop`:
 
 ```bash
 uv run --python .venv/bin/python pytest python/tests -q                 # just py-test
+uv run --python .venv/bin/python python -m mypy.stubtest openquant._core   # just py-stubtest
 ```
+
+`py-stubtest` checks the `.pyi` stubs in `python/openquant/_core/` against the built
+extension: every function, parameter name, kind and default must match.
+
+Lint, formatting and type checks do not need the extension (the compiled module is typed
+by its stubs):
+
+```bash
+uv run --python .venv/bin/python ruff check python/                     # just py-lint
+uv run --python .venv/bin/python ruff format --check python/            #   (all three)
+uv run --python .venv/bin/python mypy                                   #
+```
+
+`ruff format python/` fixes formatting. The ruff and mypy versions are pinned in the `dev`
+group of `pyproject.toml`, and mypy's scope is `[tool.mypy]` there.
+
+## Generated API artefacts
+
+Three files are generated, and CI fails if a committed copy is stale. After you add,
+rename or change the signature or docstring of a binding (a `#[pyfunction]` in
+`crates/pyopenquant`) or a public Rust function, rebuild the extension and regenerate them:
+
+```bash
+just py-develop
+just py-api-docs
+```
+
+`py-api-docs` runs these three generators; each has a `--check` mode that CI runs:
+
+| Generator | Writes | CI check |
+|---|---|---|
+| `scripts/generate_python_stubs.py` | `python/openquant/_core/*.pyi`, from the Rust source | `python scripts/generate_python_stubs.py --check` |
+| `scripts/generate_api_inventory.py` | `docs-site/src/data/apiInventory.ts`, the public Rust and Python API inventory | `bun run check:api-drift` |
+| `scripts/generate_python_api_reference.py` | `docs-site/src/data/pythonApiReference.json`, from the built extension | `bun run check:python-reference` |
+
+The API reference generator imports the built extension, so run `just py-develop` first.
 
 ## Benchmarks
 
@@ -88,19 +136,55 @@ bun run dev            # local preview
 bun run check:docs     # every docs gate, in the order CI runs them
 ```
 
-`check:docs` runs, in order: `build`, `check:links`, `check:api-drift`,
-`check:content-schema`, `check:contrast`, `check:coverage`, `check:examples` (every
-Rust block in the docs is compiled with `cargo check`) and `check:python-examples`
-(every Python block is executed). The last one needs the extension built into `.venv`
-(see Setup) or an interpreter named by `DOC_PYTHON` that can `import openquant`. A block
+`check:docs` runs, in order: `build`, `stage:rustdoc` (rustdoc into the built site, so
+`check:links` can check links to it), `check:links`, `check:api-drift`,
+`check:content-schema`, `check:contrast`, `check:coverage`, `check:generated-pages`,
+`check:examples` (every Rust block in the docs is compiled with `cargo check`),
+`check:python-examples` (every Python block is executed) and `check:python-reference`.
+The last two need the extension built into `.venv` (see Setup); `check:python-examples`
+also accepts an interpreter named by `DOC_PYTHON` that can `import openquant`. A block
 that cannot run must opt out visibly with ` ```python doc-check=skip `.
 
-If you add or rename a public Rust or Python function, regenerate the API inventory
-with `python3 scripts/generate_api_inventory.py` so `check:api-drift` passes.
+Some pages are generated from other files in the repository, and their gates fail when a
+source changes without regenerating them. Both scripts are standard-library Python:
+
+```bash
+# Research gallery (from the executed notebooks), performance page (from benchmarks/)
+# and changelog page (from CHANGELOG.md). Checked by `bun run check:generated-pages`.
+python3 scripts/docs/generate_site_pages.py --write
+
+# The coverage dashboard's tables. Checked by `bun run check:coverage`.
+python3 scripts/docs/check_coverage.py --write
+```
+
+Run `generate_site_pages.py --write` after re-running the notebooks, changing a benchmark
+file or editing `CHANGELOG.md`, and `check_coverage.py --write` after adding or removing a
+public module or a docs page, or changing a page's `status`.
 
 Claims on a page need a source: an AFML section or snippet, a paper, or a test in this
 repository. Do not raise a page's status (`draft`, `authored`, `reviewed`, …) unless you
 have done what that status means.
+
+## Notebooks
+
+The research runbooks are `notebooks/python/NN_*.ipynb`, committed with their outputs,
+and the figures they export to `docs-site/public/figures/notebooks/`. The Notebooks
+workflow executes all of them on pull requests that touch notebooks, Python, crates or the
+lockfiles, and fails if the committed outputs are stale. If your change alters what a
+notebook prints or draws, re-run it and commit the result:
+
+```bash
+just py-develop-release                  # the notebooks are far faster against a release build
+just notebooks-run                       # execute every notebook in place and re-export figures
+just notebooks-run --only 05             # or just one (number or stem)
+just notebooks-verify                    # compare the tree with HEAD, as CI does
+```
+
+`notebooks-verify` ignores float noise and PNG bytes, but not a changed source cell, a new
+output line or a missing or extra figure. The notebooks read the committed SYNTHETIC
+sample through `openquant.data.fetch`, so none of this touches the network. After
+re-running them, regenerate the research gallery with
+`python3 scripts/docs/generate_site_pages.py --write` (see Documentation).
 
 ## Research smoke checks
 
@@ -176,8 +260,23 @@ Look at recently merged pull requests for the house style. In short:
 - Keep unrelated changes out. One issue per pull request unless they cannot be separated.
 - Update the docs page for any module whose behaviour you change.
 
-Every pull request must pass CI: format, clippy, fast tests, the docs gates, the Python
-binding tests and, for changes under `crates/openquant/`, the benchmark regression check.
+Every pull request must pass CI, and the one required check is `ci-success`, which
+passes only when every CI job passed (or was skipped because the pull request changes
+documentation only). The jobs: format, clippy and rustdoc (`lint`), `doctests`, fast tests
+(`tests`), `bench-compile`, the Python binding tests with stubtest and the smoke checks on
+Python 3.11 and 3.13 (`python`), stubs, ruff and mypy (`python-lint`) and the docs gates
+(`docs-checks`). Separate workflows also run the notebooks (for changes they could affect)
+and, for changes under `crates/openquant/`, the benchmark regression check.
+
+Before pushing, the quickest local equivalent is:
+
+```bash
+just lint test-fast py-lint
+uv run --python .venv/bin/python python scripts/generate_python_stubs.py --check
+just py-develop py-test py-stubtest
+(cd docs-site && bun run check:docs)     # if you touched docs, bindings or public APIs
+just notebooks-run && just notebooks-verify   # if you touched notebooks, python/ or crates/
+```
 
 ## License
 

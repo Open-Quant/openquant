@@ -22,8 +22,10 @@
 - Most previously closed deliverables are now present on `main`.
 - Of the two follow-ups raised by that reconciliation:
   - `OQ-ojp` (docs-site notebook workflow page + navigation links) landed in PR #14.
-  - `OQ-det` (experiment plot artifact outputs and tests) was closed in the tracker, but its
-    commit `27a2007` never reached `main`. Recovery is tracked in GitHub issue #33.
+  - `OQ-det` (experiment plot artifact outputs and tests) was closed in the tracker before its
+    commit `27a2007` reached `main`; it was re-ported in PR #137 (issue #33).
+    `experiments/run_pipeline.py` now writes `equity_curve.svg` and `drawdown.svg` for every
+    run, including grid sub-runs. See `docs/decisions/0002-stranded-work-outcomes.md`.
 
 ## Quality and CI posture
 - What each CI workflow enforces, and on which events, is tabulated in
