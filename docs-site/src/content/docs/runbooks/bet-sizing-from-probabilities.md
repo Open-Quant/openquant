@@ -2,7 +2,7 @@
 title: "Runbook: bet sizing from predicted probabilities"
 description: "Does sizing meta-labeled bets by their predicted probability (AFML Snippets 10.1-10.3) beat a flat 0.5 filter, net of costs and deflated by every sizing choice tried? A pre-registered test of runbook 11's post hoc finding, on fresh SYNTHETIC planted-signal paths and no-signal controls."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
 afml_chapter:
@@ -99,8 +99,9 @@ turnover**:
   - `prob` with $K \in \{2, 3\}$ × step $\in \{0, 0.05, 0.1, 0.2\}$ × {`avg`, `latest`};
   - `prob-signed`;
   - the filter and the headline sized rule, walk-forward.
-- **No-bet trials.** `TrialRegistry.record` rejects constant returns (#187; the fix, PR #190, was
-  not merged when this ran). A trial that takes no position is counted with a Sharpe ratio of 0.
+- **No-bet trials.** A trial that takes no position has constant returns and no Sharpe ratio.
+  `TrialRegistry.record` stores it with a Sharpe ratio of 0 (#187), so it still counts toward the
+  deflation; the Monte Carlo paths count it the same way.
 
 ## Results (SYNTHETIC)
 
