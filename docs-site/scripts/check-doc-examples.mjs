@@ -97,7 +97,7 @@ fs.writeFileSync(
 [package]
 name = "openquant-doc-examples"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]
