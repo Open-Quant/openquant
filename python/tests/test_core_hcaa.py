@@ -1,4 +1,5 @@
 import csv
+import json
 
 import pytest
 from _core_fixtures import FIXTURES
@@ -126,3 +127,41 @@ def test_hcaa_ordering_places_correlated_pair_together(n):
     _, order = hcaa.allocate_hcaa([str(i) for i in range(n)], covariance_matrix=cov)
 
     assert abs(order.index(0) - order.index(12)) == 1
+
+
+@pytest.mark.parametrize("distance", ["correlation", "distance_of_distances"])
+@pytest.mark.parametrize(
+    "metric", ["minimum_variance", "minimum_standard_deviation", "equal_weighting"]
+)
+@pytest.mark.parametrize("k", [None, 2, 4])
+def test_hcaa_distance_matches_independent_reference(distance, metric, k):
+    # tests/fixtures/hcaa/generate.py: scipy single linkage on the pairwise distances, or on the
+    # square distance matrix as AFML Snippet 16.4 passes it, then the tree walk in numpy.
+    reference = json.loads((FIXTURES / "hcaa" / "reference.json").read_text())
+    want = reference["stock_prices"][distance]
+    prices, names = _load_prices_and_names()
+
+    weights, order = hcaa.allocate_hcaa(
+        names,
+        asset_prices=prices,
+        allocation_metric=metric,
+        optimal_num_clusters=k,
+        distance=distance,
+    )
+
+    assert order == want["order"]
+    assert weights == pytest.approx(
+        want["weights"][metric]["none" if k is None else str(k)], abs=1e-10
+    )
+
+
+def test_hcaa_distance_default_and_validation():
+    prices, names = _load_prices_and_names()
+    kwargs = {"asset_prices": prices, "allocation_metric": "minimum_variance"}
+    default = hcaa.allocate_hcaa(names, **kwargs)
+    # The default is the pairwise tree (mlfinlab's), unlike HRP's default.
+    assert default == hcaa.allocate_hcaa(names, **kwargs, distance="correlation")
+    assert default != hcaa.allocate_hcaa(names, **kwargs, distance="distance_of_distances")
+    assert default == hcaa.allocate_hcaa(names, **kwargs, distance="Correlation")
+    with pytest.raises(ValueError, match="unknown distance"):
+        hcaa.allocate_hcaa(names, **kwargs, distance="euclidean")

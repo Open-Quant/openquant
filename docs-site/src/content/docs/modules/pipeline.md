@@ -3,7 +3,7 @@ title: "pipeline"
 description: "End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest with leakage checks."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -11,8 +11,13 @@ module: "pipeline"
 api_surface: "both"
 rust_api:
   - "run_mid_frequency_pipeline"
-  - "run_mid_frequency_pipeline_frames"
-  - "summarize_pipeline"
+  - "ResearchPipelineConfig"
+  - "ResearchPipelineInput"
+  - "ResearchPipelineOutput"
+python_api:
+  - "pipeline.run_mid_frequency_pipeline"
+  - "pipeline.run_mid_frequency_pipeline_frames"
+  - "pipeline.summarize_pipeline"
 sidebar:
   badge: Module
 ---
@@ -75,20 +80,6 @@ print(summary)
 
 - Not checking leakage_checks in the output — the pipeline flags forward-look bias but doesn't stop execution.
 - Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.
-
-## API Reference
-
-### Python API
-
-- `pipeline.run_mid_frequency_pipeline`
-- `pipeline.run_mid_frequency_pipeline_frames`
-- `pipeline.summarize_pipeline`
-
-### Rust API
-
-- `run_mid_frequency_pipeline`
-- `run_mid_frequency_pipeline_frames`
-- `summarize_pipeline`
 
 ## Risk Notes and Caveats
 

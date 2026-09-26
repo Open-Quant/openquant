@@ -99,6 +99,7 @@ code or tests of any version.
 | --- | --- | --- | --- |
 | `feature_importance/pca_reference.json` | `feature_importance/generate.py` | synthetic, seeded | see the docstring |
 | `hrp/reference.json` | `hrp/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | see the docstring |
+| `hcaa/reference.json` | `hcaa/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | Raffinot 2017 tree walk on scipy single linkage, both distances (see the docstring) |
 | `onc/silhouette_reference.json` | `onc/generate.py` | synthetic, seeded | see the docstring |
 | `sample_weights/reference.json` | `sample_weights/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
 | `volatility/daily_vol_reference.json` | `volatility/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
