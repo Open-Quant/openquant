@@ -1,0 +1,81 @@
+---
+/**
+ * One page per Python module of the reference, rendered from
+ * src/data/pythonApiReference.json (scripts/generate_python_api_reference.py, which
+ * introspects the built extension). Nothing here is written by hand.
+ */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import reference from '../../../data/pythonApiReference.json';
+import { renderDocstring, summary } from '../../../lib/docstring';
+import { PY_REF_BANNER } from '../../../lib/pythonReference';
+
+export function getStaticPaths() {
+  return reference.modules.map((mod) => ({ params: { slug: mod.slug }, props: { mod } }));
+}
+
+type Entry = { name: string; signature: string; doc: string };
+type Klass = Entry & { methods: Entry[] };
+type Module = {
+  slug: string;
+  import: string;
+  kind: string;
+  doc: string;
+  functions: Entry[];
+  classes: Klass[];
+};
+
+const { mod } = Astro.props as { mod: Module };
+const moduleSummary = summary(mod.doc);
+const headings = [
+  ...(mod.classes.length ? [{ depth: 2, slug: 'classes', text: 'Classes' }] : []),
+  ...mod.classes.map((c) => ({ depth: 3, slug: c.name, text: c.name })),
+  ...(mod.functions.length ? [{ depth: 2, slug: 'functions', text: 'Functions' }] : []),
+  ...mod.functions.map((f) => ({ depth: 3, slug: f.name, text: f.name })),
+];
+const kindNote =
+  mod.kind === 'compiled'
+    ? 'Compiled from Rust (crates/pyopenquant). Signatures and types are from the shipped .pyi stubs; descriptions are the functions’ own docstrings, as help() shows them.'
+    : 'Pure Python. Signatures are as written in the source; descriptions are the docstrings.';
+---
+
+<StarlightPage
+  frontmatter={{
+    title: mod.import,
+    description: moduleSummary || `Python API reference for ${mod.import}.`,
+    status: 'generated',
+    banner: { content: PY_REF_BANNER },
+  }}
+  headings={headings}
+>
+  <p class="oq-api-kind">{kindNote} <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/python/`}>All Python modules</a>.</p>
+  {mod.doc && <div class="oq-doc" set:html={renderDocstring(mod.doc)} />}
+
+  {mod.classes.length > 0 && <h2 id="classes">Classes</h2>}
+  {
+    mod.classes.map((c) => (
+      <section class="oq-api-item">
+        <h3 id={c.name}><code>{c.name}</code></h3>
+        <pre class="oq-signature"><code>{`class ${c.name}${c.signature}`}</code></pre>
+        <div class="oq-doc" set:html={renderDocstring(c.doc)} />
+        {c.methods.map((m) => (
+          <div class="oq-api-method">
+            <h4 id={`${c.name}.${m.name}`}><code>{`${c.name}.${m.name}`}</code></h4>
+            <pre class="oq-signature"><code>{`${m.name}${m.signature}`}</code></pre>
+            {m.doc && <div class="oq-doc" set:html={renderDocstring(m.doc)} />}
+          </div>
+        ))}
+      </section>
+    ))
+  }
+
+  {mod.functions.length > 0 && <h2 id="functions">Functions</h2>}
+  {
+    mod.functions.map((f) => (
+      <section class="oq-api-item">
+        <h3 id={f.name}><code>{f.name}</code></h3>
+        <pre class="oq-signature"><code>{`${f.name}${f.signature}`}</code></pre>
+        <div class="oq-doc" set:html={renderDocstring(f.doc)} />
+      </section>
+    ))
+  }
+</StarlightPage>

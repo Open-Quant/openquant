@@ -10,10 +10,25 @@ audience:
 module: "data"
 api_surface: "both"
 rust_api:
-  - "load_ohlcv"
-  - "clean_ohlcv"
-  - "align_calendar"
-  - "data_quality_report"
+  - "clean_ohlcv_df"
+  - "quality_report_df"
+  - "align_calendar_df"
+  - "DataQualityReport"
+python_api:
+  - "data.fetch"
+  - "data.dataset_hash"
+  - "data.record_dataset_hash"
+  - "data.quality_failures"
+  - "data.default_cache_dir"
+  - "data.DataSource"
+  - "data.LocalSampleSource"
+  - "data.LocalFileSource"
+  - "data.CallableSource"
+  - "data.CacheMissError"
+  - "data.load_ohlcv"
+  - "data.clean_ohlcv"
+  - "data.align_calendar"
+  - "data.data_quality_report"
 sidebar:
   badge: Module
 ---
@@ -125,35 +140,6 @@ quality = data_quality_report(df)
 - Expecting a cached range to serve a sub-range. The cache key is the exact (source, symbol, start, end), so a different range is a new fetch.
 - Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.
 - Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.
-
-## API Reference
-
-### Python API
-
-- `data.fetch`
-- `data.dataset_hash`
-- `data.record_dataset_hash`
-- `data.quality_failures`
-- `data.default_cache_dir`
-- `data.DataSource`
-- `data.LocalSampleSource`
-- `data.LocalFileSource`
-- `data.CallableSource`
-- `data.CacheMissError`
-- `data.load_ohlcv`
-- `data.clean_ohlcv`
-- `data.align_calendar`
-- `data.data_quality_report`
-- `data.clean_ohlcv_df`
-- `data.quality_report_df`
-- `data.align_calendar_df`
-
-### Rust API
-
-- `load_ohlcv`
-- `clean_ohlcv`
-- `align_calendar`
-- `data_quality_report`
 
 ## Risk Notes and Caveats
 

@@ -14,6 +14,11 @@ rust_api:
   - "get_parkinson_vol"
   - "get_garman_class_vol"
   - "get_yang_zhang_vol"
+python_api:
+  - "volatility.get_daily_vol"
+  - "volatility.get_parkinson_vol"
+  - "volatility.get_garman_class_vol"
+  - "volatility.get_yang_zhang_vol"
 sidebar:
   badge: Module
 ---
@@ -69,22 +74,6 @@ let parkinson = get_parkinson_vol(&high, &low, 20)?;
 println!("daily vol tail = {:?}", daily.last());
 println!("parkinson vol tail = {:?}", parkinson.last());
 ```
-
-## API Reference
-
-### Python API
-
-- `volatility.get_daily_vol`
-- `volatility.get_parkinson_vol`
-- `volatility.get_garman_class_vol`
-- `volatility.get_yang_zhang_vol`
-
-### Rust API
-
-- `get_daily_vol`
-- `get_parkinson_vol`
-- `get_garman_class_vol`
-- `get_yang_zhang_vol`
 
 ## Risk Notes and Caveats
 

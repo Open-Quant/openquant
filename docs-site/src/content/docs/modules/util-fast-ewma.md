@@ -3,7 +3,7 @@ title: "util::fast_ewma"
 description: "Fast EWMA primitive shared across feature and volatility routines."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-20'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -11,6 +11,8 @@ module: "util::fast_ewma"
 api_surface: "both"
 rust_api:
   - "ewma"
+python_api:
+  - "fast_ewma.ewma"
 sidebar:
   badge: Module
 ---
@@ -49,16 +51,6 @@ use openquant::util::fast_ewma::ewma;
 let x = vec![1.0, 2.0, 3.0, 4.0];
 let y = ewma(&x, 3)?;
 ```
-
-## API Reference
-
-### Python API
-
-- `fast_ewma.ewma`
-
-### Rust API
-
-- `ewma`
 
 ## Risk Notes and Caveats
 
