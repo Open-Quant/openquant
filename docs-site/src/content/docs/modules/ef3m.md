@@ -2,7 +2,7 @@
 title: "ef3m"
 description: "EF3M: fit a mixture of two Gaussians by matching its first four or five moments exactly, from many random starts, and take the mode of the fits."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering

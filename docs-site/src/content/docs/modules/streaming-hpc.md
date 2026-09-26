@@ -2,7 +2,7 @@
 title: "streaming_hpc"
 description: "VPIN and a venue-concentration HHI updated event by event in constant memory, with an alert when both cross their thresholds, and a synthetic flash crash to calibrate on."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering

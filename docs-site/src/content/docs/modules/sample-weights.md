@@ -2,7 +2,7 @@
 title: "sample_weights"
 description: "Training weights for overlapping labels: return attribution and time decay."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
