@@ -69,7 +69,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;

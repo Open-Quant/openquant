@@ -153,4 +153,5 @@ comparison against another library, so read these as orders of magnitude.
 - **To work on the Rust core:** [Prerequisites](/setup/prerequisites/),
   [Local build](/setup/local-build/), [Rust workflow](/workflows/rust-core-workflow/).
 - **To review methodology:**
-  [Methodology and leakage controls](/governance/methodology-and-leakage-controls/).
+  [Methodology and leakage controls](/project/governance/#methodology-and-leakage-controls),
+  then the [research gallery](/runbooks/).

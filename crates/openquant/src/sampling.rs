@@ -52,7 +52,6 @@
 //! assert!((u[1] / total - 3.0 / 14.0).abs() < 1e-12);
 //! assert!((u[2] / total - 6.0 / 14.0).abs() < 1e-12);
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::InputError;
 use rand::distributions::{Distribution, WeightedIndex};

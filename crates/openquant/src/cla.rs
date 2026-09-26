@@ -47,7 +47,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::resample::{freq_step, resample_prices};
 use chrono::NaiveDate;
@@ -796,10 +795,10 @@ fn critical_line(
         if free.len() > 1 {
             let b = blocks(&free, mean, cov, &w)?;
             for (j, &i) in free.iter().enumerate() {
-                if let Some((l, bi)) = compute_lambda(&b, j, Pin::Bounds(lower[i], upper[i])) {
-                    if going_in.is_none_or(|(best, _, _)| l > best) {
-                        going_in = Some((l, i, bi));
-                    }
+                if let Some((l, bi)) = compute_lambda(&b, j, Pin::Bounds(lower[i], upper[i]))
+                    && going_in.is_none_or(|(best, _, _)| l > best)
+                {
+                    going_in = Some((l, i, bi));
                 }
             }
         }
@@ -811,10 +810,11 @@ fn critical_line(
                 let mut candidate = free.clone();
                 candidate.push(i);
                 let b = blocks(&candidate, mean, cov, &w)?;
-                if let Some((l, _)) = compute_lambda(&b, candidate.len() - 1, Pin::Value(w[i])) {
-                    if l < last_lambda && going_out.is_none_or(|(best, _)| l > best) {
-                        going_out = Some((l, i));
-                    }
+                if let Some((l, _)) = compute_lambda(&b, candidate.len() - 1, Pin::Value(w[i]))
+                    && l < last_lambda
+                    && going_out.is_none_or(|(best, _)| l > best)
+                {
+                    going_out = Some((l, i));
                 }
             }
         }

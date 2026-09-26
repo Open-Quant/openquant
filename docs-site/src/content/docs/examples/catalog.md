@@ -1,7 +1,8 @@
 ---
 title: Examples Catalog
 description: Runnable examples that ship in this repository, and what each one demonstrates.
-status: draft
+status: authored
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -26,13 +27,13 @@ only `cargo`.
 | `notebooks/python/scripts/smoke_all.py` | `just notebook-smoke` | Plain-script mirror of the core notebook calls; a quick check that the Python surface works. |
 | `experiments/run_pipeline.py` | `just exp-run` | A config-driven pipeline run (`experiments/configs/futures_oil_baseline.toml`) that writes artifacts to `experiments/artifacts`. |
 | `python/benchmarks/benchmark_pipeline.py` | `just py-bench` | Times the mid-frequency pipeline over 30 iterations at 2048 bars. |
-| `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Ingestion and bar-building throughput at 200k rows × 4 symbols. Use this if you want a real memory profile before feeding it production data. |
-| `python/tests/` | `just py-test` | Nine test modules that double as usage examples — `test_pipeline_api.py` and `test_bindings_contract.py` are the two worth reading first. |
+| `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Time and throughput of `openquant.data` loading (CSV and Parquet), cleaning, calendar alignment and quality reporting at 200k rows × 4 symbols. The committed results are on the [Performance](/project/performance/) page. |
+| `python/tests/` | `just py-test` | 46 test modules, many of which double as usage examples — `test_pipeline_api.py` and `test_bindings_contract.py` are the two worth reading first. |
 
 The twelve notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
 `13_bet_sizing_from_probabilities.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 13 are
-research runbooks, listed under [Runbooks](#runbooks) below. They are committed with their outputs,
+research runbooks, listed under [Runbooks](#runbooks) below and in the [research gallery](/runbooks/). They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
 All of them run on synthetic data: `09` to `13` read the SYNTHETIC `SYN_A`..`SYN_E`
 sample through `openquant.data.fetch`, and run on real data only when you pass your own source.
@@ -52,7 +53,8 @@ signal, not a real market.
 ### Runbooks
 
 Studies that state a hypothesis up front and end with a promotion decision, each with a page under
-Runbooks:
+Research. The [research gallery](/runbooks/) shows every runbook's hypothesis, figures, result and
+decision on one page:
 
 - [Fracdiff: stationarity versus memory](/runbooks/fracdiff-stationarity-memory/) —
   `09_fracdiff_stationarity_memory.ipynb`, the FFD d-sweep (AFML Fig. 5.5) on SYNTHETIC data,
@@ -131,10 +133,14 @@ stages explained rather than just listed:
 | Look up one module | [Modules by AFML chapter](/module-reference/by-afml-chapter/) |
 | Build and test the repo | [Local Build Setup](/setup/local-build/) |
 
-:::note[What is still missing]
-This page indexes examples and works two of them. It does not yet have a
-worked example for feature diagnostics (MDI/MDA/SFI and the substitution
-effect), which is the part of the library most likely to be misused, nor
-one for `backtesting_engine`'s CPCV path. That is why this page is still
-`draft`.
-:::
+## Worked examples on other pages
+
+This page works two examples itself. The others live next to the method
+they exercise, where their output is checked by the docs gates:
+
+- **Feature diagnostics** (MDI, MDA and SFI on the same features, with
+  purged folds): [Feature diagnostics](/modules/feature-diagnostics/#three-rankings-of-the-same-features),
+  and the Rust side in [Feature importance](/modules/feature-importance/).
+- **A CPCV backtest**: [Backtesting engine](/modules/backtesting-engine/#combinatorial-purged-cross-validation)
+  for the splits and paths, and [runbook 12](/runbooks/cpcv-deflated-sharpe/) for
+  CPCV path Sharpe ratios next to PSR and the deflated Sharpe ratio.

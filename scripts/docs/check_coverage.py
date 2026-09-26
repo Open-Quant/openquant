@@ -43,7 +43,7 @@ ALLOWLIST = ROOT / "docs-site" / "coverage_allowlist.toml"
 # Same taxonomy, same order, as docs-site/scripts/check-content-schema.mjs.
 STATUS_ORDER = ("generated", "draft", "authored", "reviewed", "validated")
 STATUS_MEANS = {
-    "generated": "Emitted from `src/data/moduleDocs.ts`. Nobody has read it.",
+    "generated": "Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it.",
     "draft": "Hand-written, known incomplete. Claims nothing.",
     "authored": "Hand-written and complete, examples executed by the docs gates. No human has read it.",
     "reviewed": "A human read the page end to end.",

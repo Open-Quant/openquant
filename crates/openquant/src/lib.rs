@@ -53,6 +53,7 @@
 //! assert!(diffed[0].is_nan());
 //! assert_eq!(&diffed[1..], &[1.0, 2.0, 3.0]);
 //! ```
+#![deny(missing_docs)]
 
 pub mod backtest_statistics;
 pub mod backtesting_engine;

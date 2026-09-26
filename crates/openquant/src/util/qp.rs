@@ -6,7 +6,6 @@
 //! problems here has one, which also makes the minimiser invariant to the scale of `P`.
 //!
 //! It is meant for tens of assets, not thousands: every iteration is a dense back-substitution.
-#![deny(missing_docs)]
 
 use nalgebra::{DMatrix, DVector};
 

@@ -14,9 +14,10 @@
     "check:content-schema": "node scripts/check-content-schema.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:coverage": "python3 ../scripts/docs/check_coverage.py --check",
+    "check:generated-pages": "python3 ../scripts/docs/generate_site_pages.py --check",
     "check:examples": "node scripts/check-doc-examples.mjs",
     "check:python-examples": "node scripts/check-doc-python-examples.mjs",
-    "check:docs": "bun run build && bun run stage:rustdoc && bun run check:links && bun run check:api-drift && bun run check:content-schema && bun run check:contrast && bun run check:coverage && bun run check:examples && bun run check:python-examples && bun run check:python-reference"
+    "check:docs": "bun run build && bun run stage:rustdoc && bun run check:links && bun run check:api-drift && bun run check:content-schema && bun run check:contrast && bun run check:coverage && bun run check:generated-pages && bun run check:examples && bun run check:python-examples && bun run check:python-reference"
   },
   "devDependencies": {
     "astro": "^5.5.0"

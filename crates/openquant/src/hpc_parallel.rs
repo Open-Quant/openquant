@@ -56,7 +56,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use std::fmt::{Display, Formatter};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -674,10 +673,10 @@ fn validate_config(cfg: HpcParallelConfig) -> Result<(), HpcParallelError> {
     if cfg.progress_every == 0 {
         return Err(HpcParallelError::InvalidConfig("progress_every must be > 0"));
     }
-    if let ExecutionMode::Threaded { num_threads } = cfg.mode {
-        if num_threads == 0 {
-            return Err(HpcParallelError::InvalidConfig("num_threads must be > 0"));
-        }
+    if let ExecutionMode::Threaded { num_threads } = cfg.mode
+        && num_threads == 0
+    {
+        return Err(HpcParallelError::InvalidConfig("num_threads must be > 0"));
     }
     Ok(())
 }
