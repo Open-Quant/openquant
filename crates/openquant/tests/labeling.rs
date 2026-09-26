@@ -23,7 +23,7 @@ fn fixture_dir() -> std::path::PathBuf {
 }
 
 fn load_close() -> Vec<(NaiveDateTime, f64)> {
-    let path = fixture_dir().join("dollar_bar_sample.csv");
+    let path = fixture_dir().join("../shared/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(&path).expect("read csv");
     let mut out = Vec::new();
     for result in rdr.deserialize::<Row>() {

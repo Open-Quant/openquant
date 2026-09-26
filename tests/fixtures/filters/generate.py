@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).parent
-data = pd.read_csv(HERE / "dollar_bar_sample.csv", index_col="date_time", parse_dates=True)
+data = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col="date_time", parse_dates=True)
 close = data["close"]
 
 
@@ -55,7 +55,7 @@ def iso(events):
 
 result = {
     "source": "tests/fixtures/filters/generate.py: AFML snippet 2.4 (CUSUM) and a rolling z-score "
-              "rule, pandas %s, on tests/fixtures/filters/dollar_bar_sample.csv" % pd.__version__,
+              "rule, pandas %s, on tests/fixtures/shared/dollar_bar_sample.csv" % pd.__version__,
     "meta": {"rows": len(data), "columns": list(data.columns)},
     "cusum": {},
 }

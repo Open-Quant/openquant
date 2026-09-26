@@ -6,7 +6,7 @@ from openquant import fracdiff
 
 
 def _load_close():
-    (close,) = load_csv_columns("backtest_statistics/dollar_bar_sample.csv", ["close"])
+    (close,) = load_csv_columns("shared/dollar_bar_sample.csv", ["close"])
     return close
 
 

@@ -1,5 +1,5 @@
 {
-  "source": "Parkinson (1980), Garman & Klass (1980), Yang & Zhang (2000) in pandas 3.0.6 on tests/fixtures/backtest_statistics/dollar_bar_sample.csv",
+  "source": "Parkinson (1980), Garman & Klass (1980), Yang & Zhang (2000) in pandas 3.0.6 on tests/fixtures/shared/dollar_bar_sample.csv",
   "window": 20,
   "n_bars": 1000,
   "parkinson": {

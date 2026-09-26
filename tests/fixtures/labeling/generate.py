@@ -4,7 +4,7 @@
 
 Writes reference.json next to this file. Imports neither openquant nor mlfinlab.
 
-Pipeline, AFML chapter 3 on tests/fixtures/filters/dollar_bar_sample.csv (the setup of
+Pipeline, AFML chapter 3 on tests/fixtures/shared/dollar_bar_sample.csv (the setup of
 crates/openquant/tests/labeling.rs):
   daily volatility, span 100 (snippet 3.1) -> CUSUM filter on log prices, h = 0.02 (snippet 2.4)
   -> vertical barrier one day after each event (snippet 3.4) -> events with pt = sl = 1 x target,
@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).parent
-close = pd.read_csv(HERE.parent / "filters" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
+close = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
 
 
 def daily_vol(close, lookback=100):  # snippet 3.1

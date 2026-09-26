@@ -2,7 +2,7 @@
 
     uv run --with pandas --with scipy python tests/fixtures/microstructural_features/generate.py
 
-Independent of this library. Reads dollar_bar_sample.csv and writes reference.json
+Independent of this library. Reads tests/fixtures/shared/dollar_bar_sample.csv and writes reference.json
 next to this file. Every feature uses a 20-bar window.
 
 Sources (Lopez de Prado, "Advances in Financial Machine Learning", 2018):
@@ -37,7 +37,7 @@ from scipy.stats import norm
 
 HERE = Path(__file__).parent
 WINDOW = 20
-bars = pd.read_csv(HERE / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
+bars = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
 close, high, low = bars["close"], bars["high"], bars["low"]
 dollar_volume, volume = bars["cum_dollar"], bars["cum_vol"]
 

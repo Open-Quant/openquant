@@ -3,7 +3,7 @@
     uv run --with pandas python tests/fixtures/structural_breaks/generate.py
 
 Independent of this library (imports neither openquant nor mlfinlab). Input is
-the log of `close` in dollar_bar_sample.csv next to this file. Writes
+the log of `close` in tests/fixtures/shared/dollar_bar_sample.csv. Writes
 reference.json next to this file.
 
 * 17.3.1 Chow-type Dickey-Fuller: dy_t = delta * y_{t-1} * D_t + e_t, no
@@ -49,7 +49,7 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).parent
-LOG_P = np.log(pd.read_csv(HERE / "dollar_bar_sample.csv")["close"].to_numpy(dtype=float))
+LOG_P = np.log(pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv")["close"].to_numpy(dtype=float))
 
 
 # --- 17.3.1 Chow-type DF -------------------------------------------------------------
@@ -191,7 +191,7 @@ for name, (model, lags, add_const) in CASES.items():
 
 out = {
     "source": "AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) in numpy %s on "
-              "log(close) of tests/fixtures/structural_breaks/dollar_bar_sample.csv" % np.__version__,
+              "log(close) of tests/fixtures/shared/dollar_bar_sample.csv" % np.__version__,
     "n_bars": int(len(LOG_P)),
     "chow": {"min_length": 10, **stats(chow), "at_3": float(chow[3])},
     "chu_stinchcombe_white": csw,

@@ -42,13 +42,13 @@ Git blob hashes (`git ls-files -s`) were compared with the upstream tree at `59f
 
 Each file is byte-identical (same git blob) to the file of the same name in
 `mlfinlab/tests/test_data/` at commit `59f1457` (v0.8.0, BSD-3-Clause).
+`shared/` holds the one copy of an input that several fixture sets and test files read
+(`dollar_bar_sample.csv`, used by the filters, labeling, sample-weights, volatility,
+fracdiff, backtest-statistics, microstructural and structural-break tests).
 
 | File in this repository | Upstream file | Blob |
 | --- | --- | --- |
-| `backtest_statistics/dollar_bar_sample.csv` | `dollar_bar_sample.csv` | `1a24ee6` |
-| `filters/dollar_bar_sample.csv` | `dollar_bar_sample.csv` | `1a24ee6` |
-| `microstructural_features/dollar_bar_sample.csv` | `dollar_bar_sample.csv` | `1a24ee6` |
-| `structural_breaks/dollar_bar_sample.csv` | `dollar_bar_sample.csv` | `1a24ee6` |
+| `shared/dollar_bar_sample.csv` | `dollar_bar_sample.csv` | `1a24ee6` |
 | `microstructural_features/tick_data.csv` | `tick_data.csv` | `3a92250` |
 | `microstructural_features/tick_data_time_bars.csv` | `tick_data_time_bars.csv` | `4b75f8f` |
 | `portfolio_optimization/stock_prices.csv` | `stock_prices.csv` | `ebb6d80` |
@@ -101,20 +101,20 @@ code or tests of any version.
 | `hrp/reference.json` | `hrp/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | see the docstring |
 | `hcaa/reference.json` | `hcaa/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | Raffinot 2017 tree walk on scipy's single, complete, average and Ward linkage, both distances (see the docstring) |
 | `onc/silhouette_reference.json` | `onc/generate.py` | synthetic, seeded | see the docstring |
-| `sample_weights/reference.json` | `sample_weights/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
-| `volatility/daily_vol_reference.json` | `volatility/generate.py` | `filters/dollar_bar_sample.csv` | see the docstring |
+| `sample_weights/reference.json` | `sample_weights/generate.py` | `shared/dollar_bar_sample.csv` | see the docstring |
+| `volatility/daily_vol_reference.json` | `volatility/generate.py` | `shared/dollar_bar_sample.csv` | see the docstring |
 | `portfolio_optimization/qp_reference.json` | `portfolio_optimization/generate_qp_reference.py` | `expected_returns_weekly` and `covariance_weekly` from `mean_variance_fixture.json` | scipy SLSQP |
-| `filters/events.json` | `filters/generate.py` | `filters/dollar_bar_sample.csv` | CUSUM: AFML snippet 2.4 on log prices; z-score: rolling mean + k rolling std (stated in the docstring) |
+| `filters/events.json` | `filters/generate.py` | `shared/dollar_bar_sample.csv` | CUSUM: AFML snippet 2.4 on log prices; z-score: rolling mean + k rolling std (stated in the docstring) |
 | `bet_sizing/prob_dynamic_budget.json` | `bet_sizing/generate_prob_dynamic_budget.py` | hand-written events of `bet_sizing.rs` | AFML snippets 10.1-10.4, section 10.2 (budget) |
 | `bet_sizing/reserve_fixture.json` | `bet_sizing/generate_reserve.py` | synthetic, `numpy default_rng(138)` | AFML section 10.2 (reserve); two-Gaussian fit by EM |
 | `portfolio_optimization/mean_variance_fixture.json` | `portfolio_optimization/generate_mean_variance.py` | `portfolio_optimization/stock_prices.csv` | simple returns; inverse variance; min variance by scipy SLSQP; weekly (mu, C) |
-| `backtest_statistics/reference.json` | `backtest_statistics/generate.py` | `backtest_statistics/dollar_bar_sample.csv`, inline inputs | AFML ch. 14 (snippet 14.3, section 14.7), Bailey & Lopez de Prado 2012/2014 |
+| `backtest_statistics/reference.json` | `backtest_statistics/generate.py` | `shared/dollar_bar_sample.csv`, inline inputs | AFML ch. 14 (snippet 14.3, section 14.7), Bailey & Lopez de Prado 2012/2014 |
 | `codependence/reference.json` | `codependence/generate.py` | `codependence/random_state_42.csv` | MLAM ch. 3 (snippets 3.1-3.3), Szekely, Rizzo & Bakirov 2007 |
-| `microstructural_features/reference.json` | `microstructural_features/generate.py` | `microstructural_features/dollar_bar_sample.csv` | AFML ch. 19 (19.3-19.5) |
-| `structural_breaks/reference.json` | `structural_breaks/generate.py` | `structural_breaks/dollar_bar_sample.csv` | AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) |
-| `volatility/range_reference.json` | `volatility/generate_range.py` | `backtest_statistics/dollar_bar_sample.csv` | Parkinson 1980, Garman & Klass 1980, Yang & Zhang 2000 |
+| `microstructural_features/reference.json` | `microstructural_features/generate.py` | `shared/dollar_bar_sample.csv` | AFML ch. 19 (19.3-19.5) |
+| `structural_breaks/reference.json` | `structural_breaks/generate.py` | `shared/dollar_bar_sample.csv` | AFML ch. 17 (17.3.1, 17.3.2, snippets 17.1-17.4, 17.4.3) |
+| `volatility/range_reference.json` | `volatility/generate_range.py` | `shared/dollar_bar_sample.csv` | Parkinson 1980, Garman & Klass 1980, Yang & Zhang 2000 |
 | `etf_trick/reference.json` | `etf_trick/generate.py` | the five `etf_trick/*.csv` | AFML section 2.4.1 (ETF trick), snippet 2.2 (roll gaps) |
-| `labeling/reference.json` | `labeling/generate.py` | `filters/dollar_bar_sample.csv` | AFML snippets 2.4, 3.1-3.5 |
+| `labeling/reference.json` | `labeling/generate.py` | `shared/dollar_bar_sample.csv` | AFML snippets 2.4, 3.1-3.5 |
 | `onc/breast_cancer_reference.json` | `onc/generate_breast_cancer.py` | `onc/breast_cancer.csv` | MLAM snippets 4.1-4.2 with scikit-learn KMeans; clusters found under every seed |
 
 `portfolio_optimization/mean_variance_fixture.json` keeps only the blocks the tests read

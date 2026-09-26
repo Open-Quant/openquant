@@ -96,6 +96,7 @@
 //! ```
 
 use crate::cross_validation::{embargo_width, embargo_windows};
+use crate::util::stats;
 use chrono::NaiveDateTime;
 use std::collections::HashMap;
 
@@ -918,13 +919,9 @@ fn summarize_returns(split_id: usize, returns: &[f64]) -> Result<FoldPerformance
         return Err(BacktestError::NonFiniteSplitReturns);
     }
     let n = returns.len();
-    let mean = returns.iter().sum::<f64>() / n as f64;
-    let variance = if n > 1 {
-        returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (n as f64 - 1.0)
-    } else {
-        0.0
-    };
-    let std = variance.sqrt();
+    // `returns` is non-empty (checked above); one return has deviation 0.
+    let mean = stats::mean(returns).unwrap_or(0.0);
+    let std = stats::std_dev(returns, 1).unwrap_or(0.0);
     let sharpe = if std > 0.0 { mean / std * (n as f64).sqrt() } else { 0.0 };
     Ok(FoldPerformance { split_id, sharpe, mean_return: mean, std_return: std, observations: n })
 }

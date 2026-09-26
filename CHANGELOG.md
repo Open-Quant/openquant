@@ -94,6 +94,7 @@ file disagree).
 
 ### Changed
 
+- One `util::stats` module for mean, std_dev, covariance and quantiles (bit-identical results); one shared `dollar_bar_sample.csv` fixture (#38) ([#210](https://github.com/Open-Quant/openquant/pull/210))
 - The docs site and README use the Monograph identity (#57) ([#86](https://github.com/Open-Quant/openquant/pull/86))
 - Typed errors across the Rust core; the bindings raise the core's message (#35) ([#85](https://github.com/Open-Quant/openquant/pull/85))
 - One visual identity: palette, type, logo (#56) ([#72](https://github.com/Open-Quant/openquant/pull/72))

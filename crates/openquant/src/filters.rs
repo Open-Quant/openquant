@@ -26,6 +26,7 @@
 //! # }
 //! ```
 
+use crate::util::stats;
 use chrono::NaiveDateTime;
 use std::fmt;
 
@@ -160,25 +161,6 @@ pub fn cusum_filter_timestamps(
         .collect()
 }
 
-fn rolling_mean_std(window: &[f64]) -> (f64, f64) {
-    let len = window.len() as f64;
-    let mean = window.iter().sum::<f64>() / len;
-    // sample std (ddof=1) to match pandas default
-    let var = if window.len() > 1 {
-        window
-            .iter()
-            .map(|v| {
-                let diff = v - mean;
-                diff * diff
-            })
-            .sum::<f64>()
-            / (len - 1.0)
-    } else {
-        0.0
-    };
-    (mean, var.sqrt())
-}
-
 /// Rolling z-score filter returning event positions (ported from mlfinlab, not in AFML).
 ///
 /// Bar `i` is an event when `close[i] >= mean + threshold * std`, where `mean` is the mean of
@@ -208,8 +190,9 @@ pub fn z_score_filter_indices(
     for i in (window - 1)..n {
         let start_mean = i + 1 - mean_window;
         let start_std = i + 1 - std_window;
-        let (mean, _) = rolling_mean_std(&close[start_mean..=i]);
-        let (_, std_for_threshold) = rolling_mean_std(&close[start_std..=i]);
+        // Sample deviation (ddof = 1, pandas' default), 0 for a one-value window.
+        let mean = stats::mean(&close[start_mean..=i]).unwrap_or(f64::NAN);
+        let std_for_threshold = stats::std_dev(&close[start_std..=i], 1).unwrap_or(0.0);
         let threshold_val = mean + threshold * std_for_threshold;
         if close[i] >= threshold_val {
             events.push(i);

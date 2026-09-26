@@ -47,7 +47,7 @@ from scipy.stats import norm
 HERE = Path(__file__).parent
 EULER_GAMMA = float(np.euler_gamma)
 
-bars = pd.read_csv(HERE / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
+bars = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
 close = bars["close"]
 log_ret = np.log(close).diff().dropna()
 

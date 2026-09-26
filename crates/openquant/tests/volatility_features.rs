@@ -13,7 +13,7 @@ struct OhlcRow {
 
 fn load_ohlc() -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/backtest_statistics/dollar_bar_sample.csv");
+        .join("../../tests/fixtures/shared/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();
 
     let mut open = Vec::new();

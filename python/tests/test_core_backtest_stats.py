@@ -12,7 +12,7 @@ REFERENCE = load_json("backtest_statistics/reference.json")
 
 
 def _load_log_returns():
-    path = "backtest_statistics/dollar_bar_sample.csv"
+    path = "shared/dollar_bar_sample.csv"
     (close,) = load_csv_columns(path, ["close"])
     timestamps = load_timestamps(path)
     returns = [math.log(close[i]) - math.log(close[i - 1]) for i in range(1, len(close))]

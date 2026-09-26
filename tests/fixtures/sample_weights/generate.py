@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).parent
-close = pd.read_csv(HERE.parent / "filters" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
+close = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])["close"]
 
 
 def daily_vol(close, lookback=100):

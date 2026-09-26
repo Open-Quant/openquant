@@ -116,8 +116,6 @@ def _compare_against_baseline(
     current: list[BenchStats],
     baseline_path: Path,
 ) -> list[dict[str, Any]]:
-    if not baseline_path.exists():
-        return []
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     base_map = {
         item["name"]: item
@@ -266,6 +264,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--baseline", type=Path, default=None)
     args = parser.parse_args()
+    if args.baseline is not None and not args.baseline.exists():
+        parser.error(f"--baseline {args.baseline} does not exist")
 
     result = run_benchmarks(
         rows_per_symbol=args.rows_per_symbol,

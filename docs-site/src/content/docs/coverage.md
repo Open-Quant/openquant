@@ -97,9 +97,11 @@ it.
 | Python (`python/openquant/`) | `bars` | 2026-12-31 | Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted. |
 <!-- coverage:end:gaps -->
 
-`util` also appears in the raw module list, but it is a parent namespace whose
-two children (`util::fast_ewma`, `util::volatility`) both have pages; it is not
-a gap, and the gate does not count it as one.
+`util` also appears in the raw module list, but it is a parent namespace: two
+of its children (`util::fast_ewma`, `util::volatility`) have pages, and the
+third, `util::stats`, holds the descriptive-statistics helpers the other modules
+share and is documented in rustdoc only. It is not a gap, and the gate does not
+count it as one.
 
 `openquant.bars` is the sharper miss of the two. It has no module page
 even though [Python Core Workflow](/workflows/python-core-workflow/)

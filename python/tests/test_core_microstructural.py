@@ -12,7 +12,7 @@ REL_TOL = 1e-9
 
 def _load_dollar_bars():
     return load_csv_columns(
-        "microstructural_features/dollar_bar_sample.csv",
+        "shared/dollar_bar_sample.csv",
         ["close", "high", "low", "cum_dollar", "cum_vol"],
     )
 

@@ -4,7 +4,7 @@
 
 Independent of this library (imports neither openquant nor mlfinlab). Writes
 range_reference.json next to this file. Input: the OHLC columns of
-tests/fixtures/backtest_statistics/dollar_bar_sample.csv, rolling window n = 20. Each
+tests/fixtures/shared/dollar_bar_sample.csv, rolling window n = 20. Each
 estimator is a rolling variance over the last n bars (NaN until n values exist), then
 its square root; the tests compare the mean of the non-NaN values plus a few samples.
 
@@ -32,7 +32,7 @@ import pandas as pd
 
 HERE = Path(__file__).parent
 WINDOW = 20
-bars = pd.read_csv(HERE.parent / "backtest_statistics" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
+bars = pd.read_csv(HERE.parent / "shared" / "dollar_bar_sample.csv", index_col=0, parse_dates=[0])
 o, h, l, c = (bars[k] for k in ("open", "high", "low", "close"))
 n = WINDOW
 k = 0.34 / (1.34 + (n + 1) / (n - 1))
@@ -60,7 +60,7 @@ def summary(series):
 
 out = {
     "source": "Parkinson (1980), Garman & Klass (1980), Yang & Zhang (2000) in pandas %s "
-              "on tests/fixtures/backtest_statistics/dollar_bar_sample.csv" % pd.__version__,
+              "on tests/fixtures/shared/dollar_bar_sample.csv" % pd.__version__,
     "window": WINDOW,
     "n_bars": int(len(bars)),
     "parkinson": summary(parkinson),

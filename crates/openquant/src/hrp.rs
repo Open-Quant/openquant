@@ -288,25 +288,7 @@ fn returns_from_prices(prices: &DMatrix<f64>) -> Result<DMatrix<f64>, HrpError> 
 }
 
 fn covariance(returns: &DMatrix<f64>) -> Result<DMatrix<f64>, HrpError> {
-    if returns.nrows() < 2 {
-        return Err(HrpError::NoData);
-    }
-    let rows = returns.nrows();
-    let cols = returns.ncols();
-    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
-    let mut cov = DMatrix::zeros(cols, cols);
-    for i in 0..cols {
-        for j in i..cols {
-            let mut s = 0.0;
-            for r in 0..rows {
-                s += (returns[(r, i)] - means[i]) * (returns[(r, j)] - means[j]);
-            }
-            s /= (rows - 1) as f64;
-            cov[(i, j)] = s;
-            cov[(j, i)] = s;
-        }
-    }
-    Ok(cov)
+    crate::util::stats::covariance(returns).ok_or(HrpError::NoData)
 }
 
 fn shrink_covariance(cov: &DMatrix<f64>, alpha: f64) -> DMatrix<f64> {
