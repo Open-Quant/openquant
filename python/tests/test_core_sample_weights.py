@@ -21,7 +21,7 @@ def _setup_events():
 
     daily_vol = volatility.get_daily_vol(timestamps, close, 100)
     cusum_events = filters.cusum_filter_timestamps(close, timestamps, 0.02)
-    vertical_barriers = labeling.add_vertical_barrier(cusum_events, timestamps, close, 2, 0, 0, 0)
+    vertical_barriers = labeling.add_vertical_barrier(cusum_events, timestamps, num_days=2)
     events = labeling.get_events(
         timestamps,
         close,

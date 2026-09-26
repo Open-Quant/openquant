@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::helpers::to_py_err;
+use crate::helpers::{to_py_err, warn_deprecated};
 
 fn ou_params_to_dict(
     py: Python<'_>,
@@ -101,8 +101,8 @@ fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObjec
 /// `P_t = intercept + phi * P_{t-1} + sigma * eps_t` with standard-normal innovations from an
 /// RNG seeded with `seed`, so the same seed reproduces the same paths. Only `intercept`, `phi`
 /// and `sigma` drive the simulation; when building parameters by hand keep
-/// `intercept = (1 - phi) * equilibrium`. The arguments `phi` through `stationary` match the
-/// keys returned by `calibrate_ou_params`.
+/// `intercept = (1 - phi) * equilibrium`. Pass `initial_price`, `n_paths`, `horizon` and
+/// `seed` by keyword; their defaults are those of `run_synthetic_otr_workflow`.
 ///
 /// Parameters
 /// ----------
@@ -114,17 +114,21 @@ fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObjec
 ///     Long-run mean; must be finite but is not used by the simulation.
 /// sigma : float
 ///     Innovation standard deviation in price units; must be >= 0.
-/// r_squared : float
-///     Ignored by the simulation (carried for symmetry with `calibrate_ou_params`).
-/// stationary : bool
-///     Ignored by the simulation (carried for symmetry with `calibrate_ou_params`).
-/// initial_price : float
+/// r_squared : float | None, default None
+///     Deprecated: passing it emits a `DeprecationWarning`. It is a diagnostic of the
+///     calibration regression, not a parameter of the process, so it cannot affect the paths
+///     (AFML §13.5.1 simulates from the fitted coefficients and residual deviation alone).
+/// stationary : bool | None, default None
+///     Deprecated: passing it emits a `DeprecationWarning`. It is `abs(phi) < 1`, which `phi`
+///     already determines. To simulate a calibrated fit, pass its `phi`, `intercept`,
+///     `equilibrium` and `sigma` only.
+/// initial_price : float, default 100.0
 ///     Entry price of every path.
-/// n_paths : int
+/// n_paths : int, default 1000
 ///     Number of paths; must be > 0.
-/// horizon : int
+/// horizon : int, default 252
 ///     Points per path, including the entry; must be >= 2.
-/// seed : int
+/// seed : int, default 42
 ///     Seed of the simulation RNG.
 ///
 /// Returns
@@ -138,27 +142,49 @@ fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObjec
 ///     If `initial_price` is not finite, `n_paths` is 0, `horizon < 2`, `phi`, `intercept`,
 ///     `equilibrium` or `sigma` is not finite, or `sigma` is negative.
 #[pyfunction(name = "generate_ou_paths")]
+#[pyo3(signature = (
+    phi,
+    intercept,
+    equilibrium,
+    sigma,
+    r_squared=None,
+    stationary=None,
+    initial_price=100.0,
+    n_paths=1000,
+    horizon=252,
+    seed=42
+))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
 fn sbt_generate_ou_paths(
+    py: Python<'_>,
     phi: f64,
     intercept: f64,
     equilibrium: f64,
     sigma: f64,
-    r_squared: f64,
-    stationary: bool,
+    r_squared: Option<f64>,
+    stationary: Option<bool>,
     initial_price: f64,
     n_paths: usize,
     horizon: usize,
     seed: u64,
 ) -> PyResult<Vec<Vec<f64>>> {
+    if r_squared.is_some() || stationary.is_some() {
+        warn_deprecated(
+            py,
+            "generate_ou_paths: r_squared and stationary are deprecated and have no effect on \
+             the simulation; pass phi, intercept, equilibrium and sigma, and initial_price, \
+             n_paths, horizon and seed by keyword",
+        )?;
+    }
     let params = openquant::synthetic_backtesting::OuProcessParams {
         phi,
         intercept,
         equilibrium,
         sigma,
-        r_squared,
-        stationary,
+        // Neither is read by the simulation.
+        r_squared: r_squared.unwrap_or(f64::NAN),
+        stationary: stationary.unwrap_or(phi.abs() < 1.0),
     };
     openquant::synthetic_backtesting::generate_ou_paths(
         params,

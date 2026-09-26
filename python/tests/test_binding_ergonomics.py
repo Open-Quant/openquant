@@ -1,6 +1,7 @@
 """Call-site ergonomics of the bindings (issue #77): return types, defaults, keywords."""
 
 import random
+import warnings
 
 import pytest
 from openquant import ensemble, labeling, sampling, sb_bagging, synthetic_bt
@@ -40,24 +41,40 @@ CLOSE = [100.0 + d for d in range(7)]
 
 def test_add_vertical_barrier_defaults_to_zero_and_takes_keywords():
     events = STAMPS[:3]
-    positional = labeling.add_vertical_barrier(events, STAMPS, CLOSE, 2, 0, 0, 0)
-    assert positional == [(STAMPS[i], STAMPS[i + 2]) for i in range(3)]
+    two_days = [(STAMPS[i], STAMPS[i + 2]) for i in range(3)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert labeling.add_vertical_barrier(events, STAMPS, num_days=2) == two_days
+        assert labeling.add_vertical_barrier(events, STAMPS, None, 2, 0, 0, 0) == two_days
+        assert labeling.add_vertical_barrier(events, STAMPS, num_hours=48) == two_days
+        # Components add up: one day plus 24 hours is two days.
+        assert labeling.add_vertical_barrier(events, STAMPS, num_days=1, num_hours=24) == two_days
+        assert labeling.add_vertical_barrier(events, STAMPS, num_minutes=1) == [
+            (STAMPS[i], STAMPS[i + 1]) for i in range(3)
+        ]
 
-    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, 2) == positional
-    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, num_days=2) == positional
-    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, num_hours=48) == positional
-    # Components add up: one day plus 24 hours is two days.
-    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, 1, num_hours=24) == positional
-    assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, num_minutes=1) == [
-        (STAMPS[i], STAMPS[i + 1]) for i in range(3)
-    ]
+
+def test_add_vertical_barrier_close_prices_is_deprecated():
+    # Issue #194: close_prices was silently ignored (a vertical barrier depends only on the
+    # bar times). Passing it still works, positionally or by keyword, but warns.
+    events = STAMPS[:3]
+    expected = labeling.add_vertical_barrier(events, STAMPS, num_days=2)
+    with pytest.warns(DeprecationWarning, match="close_prices is deprecated"):
+        assert labeling.add_vertical_barrier(events, STAMPS, CLOSE, 2, 0, 0, 0) == expected
+    with pytest.warns(DeprecationWarning, match="close_prices is deprecated"):
+        other = [-p for p in CLOSE]
+        assert labeling.add_vertical_barrier(events, STAMPS, close_prices=other, num_days=2) == (
+            expected
+        )
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="length mismatch"):
+        labeling.add_vertical_barrier(events, STAMPS, CLOSE[:3], num_days=2)
 
 
 def test_add_vertical_barrier_requires_a_horizon():
     with pytest.raises(ValueError, match="non-zero horizon"):
-        labeling.add_vertical_barrier(STAMPS[:3], STAMPS, CLOSE)
+        labeling.add_vertical_barrier(STAMPS[:3], STAMPS)
     with pytest.raises(ValueError, match="non-zero horizon"):
-        labeling.add_vertical_barrier(STAMPS[:3], STAMPS, CLOSE, 0, 0, 0, 0)
+        labeling.add_vertical_barrier(STAMPS[:3], STAMPS, None, 0, 0, 0, 0)
 
 
 def test_event_on_last_bar_without_vertical_barrier_is_left_unlabelled():

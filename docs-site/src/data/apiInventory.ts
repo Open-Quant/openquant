@@ -255,7 +255,8 @@ export const apiInventory = {
       "feature_pca_analysis",
       "get_orthogonal_features",
       "mean_decrease_impurity",
-      "plot_feature_importance"
+      "plot_feature_importance",
+      "single_feature_importance_from_proba"
     ],
     "openquant::filters": [
       "cusum_filter_indices",
@@ -491,7 +492,8 @@ export const apiInventory = {
       "parse_naive_datetimes",
       "parse_one_naive_datetime",
       "parse_vertical_barriers",
-      "report_to_pydict"
+      "report_to_pydict",
+      "warn_deprecated"
     ],
     "pyopenquant::hrp": [
       "register"
@@ -784,7 +786,8 @@ export const apiInventory = {
       "mean_decrease_accuracy": "fn",
       "mean_decrease_impurity": "fn",
       "plot_feature_importance": "fn",
-      "single_feature_importance": "fn"
+      "single_feature_importance": "fn",
+      "single_feature_importance_from_proba": "fn"
     },
     "openquant::filters": {
       "FilterError": "enum",

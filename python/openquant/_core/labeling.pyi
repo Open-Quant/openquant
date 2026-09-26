@@ -16,7 +16,7 @@ __all__ = [
 def add_vertical_barrier(
     t_events: Sequence[str],
     close_timestamps: Sequence[str],
-    close_prices: Sequence[float],
+    close_prices: Sequence[float] | None = None,
     num_days: int = 0,
     num_hours: int = 0,
     num_minutes: int = 0,
@@ -26,8 +26,8 @@ def add_vertical_barrier(
 
     AFML Snippet 3.4. The offset is `num_days + num_hours + num_minutes + num_seconds`. An
     event too close to the end of the series to have such a bar gets no row at all (no
-    shortened barrier). `close_prices` is only checked for length. The result can be passed as
-    `vertical_barrier_times` to the other labeling functions.
+    shortened barrier). The result can be passed as `vertical_barrier_times` to the other
+    labeling functions.
 
     Parameters
     ----------
@@ -35,8 +35,10 @@ def add_vertical_barrier(
         Event timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
     close_timestamps : list[str]
         Bar timestamps in the same format, in increasing order.
-    close_prices : list[float]
-        Close price of each bar (same length as `close_timestamps`).
+    close_prices : list[float] | None, default None
+        Deprecated: passing it emits a `DeprecationWarning`. A vertical barrier depends only on
+        the bar times (AFML Snippet 3.4 reads `close.index` alone), so the prices cannot
+        affect the result; they are still checked to have one value per timestamp.
     num_days : int, default 0
         Days in the offset.
     num_hours : int, default 0
@@ -54,8 +56,8 @@ def add_vertical_barrier(
     Raises
     ------
     ValueError
-        If all four offsets are zero, the timestamps and prices differ in length, or a
-        timestamp does not parse.
+        If all four offsets are zero, `close_prices` is given and differs in length from
+        `close_timestamps`, or a timestamp does not parse.
     """
 
 def drop_labels(

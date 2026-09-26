@@ -2,7 +2,7 @@
 title: "feature_importance"
 description: "MDI, MDA and SFI feature importance, and a PCA cross-check, for models validated on purged folds."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -17,6 +17,7 @@ rust_api:
   - "mean_decrease_impurity"
   - "mean_decrease_accuracy"
   - "single_feature_importance"
+  - "single_feature_importance_from_proba"
   - "get_orthogonal_features"
   - "feature_pca_analysis"
   - "plot_feature_importance"
@@ -182,16 +183,18 @@ argument for passing folds of your own.
 | `mean_decrease_impurity(per_tree_importances, feature_names=None)` | none: one row per tree, e.g. `[t.feature_importances_ for t in forest.estimators_]` | MDI |
 | `mean_decrease_accuracy(estimator, X, y, t0, t1, *, n_splits, pct_embargo, scoring, sample_weight, seed=42)` | any object with `fit(X, y, sample_weight=...)` and `predict_proba(X)`; copied per fold with `sklearn.base.clone` when scikit-learn is installed | MDA, each test column shuffled with `numpy.random.default_rng(seed)`; the default seed is 42, as for `feature_diagnostics.mda_importance` |
 | `single_feature_importance(estimator, X, y, t0, t1, ...)` | the same, fitted on one column at a time | SFI |
-| `mda_from_probabilities(y, t0, t1, base_proba, permuted_proba, *, n_splits, ..., seed=42)` | none: out-of-sample probabilities you computed on `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | MDA |
+| `mda_from_probabilities(y, t0, t1, base_proba, permuted_proba, *, n_splits, ...)` | none: out-of-sample probabilities you computed on `purged_kfold_splits(t0, t1, n_splits, pct_embargo)` | MDA |
 | `sfi_from_probabilities(y, t0, t1, proba, *, n_splits, ...)` | the same, one column per single-feature model | SFI |
 
 The estimator-driven functions fit in Python and pass the probabilities to the last two, which
-rebuild the purged folds and hand the Rust MDA and SFI a stand-in classifier that plays the
-probabilities back. Each result maps a feature name to `{"mean", "std"}`, `std` being the
-standard error, in the order of `feature_names`. Labels must be 0/1 and `scoring` is
-`"neg_log_loss"`, `"accuracy"` or `"f1"`. `mda_from_probabilities` passes its `seed` on to the
-Rust MDA, but the shuffled predictions are already yours, so the seed cannot change its
-result; in `mean_decrease_accuracy` it drives the shuffles.
+rebuild the purged folds and score them in Rust: MDA through a stand-in classifier that plays
+the probabilities back to the Rust MDA, SFI through `single_feature_importance_from_proba`.
+Each result maps a feature name to `{"mean", "std"}`, `std` being the standard error, in the
+order of `feature_names`. Labels must be 0/1 and `scoring` is `"neg_log_loss"`, `"accuracy"`
+or `"f1"`. `sample_weight` weights both the fit (estimator-driven functions) and every
+test-fold score, as AFML's `cvScore` does. `mda_from_probabilities` no longer takes a useful
+`seed`: the shuffled predictions are already yours, so passing one only emits a
+`DeprecationWarning`. In `mean_decrease_accuracy` the seed drives the shuffles.
 
 ```python
 import numpy as np

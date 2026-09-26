@@ -8,6 +8,8 @@
 //!   `s_max` = 0 for negative log loss and 1 for accuracy/F1.
 //! - [`single_feature_importance`] (SFI, §8.4.1, Snippet 8.4) — out-of-sample; the raw
 //!   cross-validated score of the model fitted on each feature alone.
+//!   [`single_feature_importance_from_proba`] scores out-of-sample probabilities computed
+//!   elsewhere, with sample-weighted scoring.
 //! - [`get_orthogonal_features`] and [`feature_pca_analysis`] (§8.4.2, Snippets 8.5–8.6) —
 //!   PCA-orthogonalised features, and rank correlations between an importance vector and the
 //!   PCA loadings as an unsupervised sanity check.
@@ -357,6 +359,97 @@ pub fn single_feature_importance<C: SimpleClassifier>(
         let xj: Vec<Vec<f64>> = x.iter().map(|r| vec![r[j]]).collect();
         let scores = ml_cross_val_score(clf, &xj, y, sample_weight, splits, scoring)?;
         // Snippet 8.4 takes `.std()` of the numpy array cvScore returns: ddof = 0.
+        let (mean, std) = mean_std(&scores, 0);
+        out.insert(
+            name.clone(),
+            ImportanceStats { mean, std: std * (scores.len() as f64).powf(-0.5) },
+        );
+    }
+    Ok(out)
+}
+
+/// Single feature importance from out-of-sample probabilities computed elsewhere, with
+/// weighted scoring (AFML §8.4.1, Snippets 8.4 and 7.4).
+///
+/// `proba[j][i]` is the probability of class 1 for sample `i` from a model fitted on feature
+/// `j` alone, on the fold of `splits` whose test set holds `i`. Each fold's test rows are
+/// scored as [`mean_decrease_accuracy`] scores them: weighted by `sample_weight` when given
+/// (weighted accuracy, weighted mean log loss, F1 from weighted counts), as AFML's `cvScore`
+/// passes the weights to the scorer. Accuracy and F1 threshold the probabilities at 0.5. The
+/// statistic is otherwise [`single_feature_importance`]'s: the raw mean score over folds, with
+/// the population deviation (ddof 0) over `sqrt(n_folds)` as its standard error. Without
+/// weights the two functions agree; [`single_feature_importance`] itself passes the weights to
+/// `fit` only, which here happened on the caller's side.
+///
+/// Probabilities are used as given (log loss clips them to `[1e-15, 1 - 1e-15]`); validate
+/// them first if they may be out of range.
+///
+/// # Errors
+///
+/// - [`FeatureImportanceError::EmptyXy`] if `y` is empty.
+/// - [`FeatureImportanceError::LengthMismatch`] (`"proba"`) if `proba` does not have one
+///   column per feature name, or a column does not have one value per label.
+/// - [`FeatureImportanceError::CrossValidation`] if `sample_weight` does not have one entry
+///   per label or a split index is out of range.
+///
+/// ```
+/// use openquant::cross_validation::Scoring;
+/// use openquant::feature_importance::single_feature_importance_from_proba;
+/// # use openquant::feature_importance::FeatureImportanceError;
+///
+/// let y = [1.0, 0.0, 1.0, 0.0];
+/// let splits = vec![(vec![2, 3], vec![0, 1]), (vec![0, 1], vec![2, 3])];
+/// let names = vec!["f".to_string()];
+/// // Right on samples 0 and 2, wrong on 1 and 3.
+/// let proba = vec![vec![0.9, 0.8, 0.9, 0.8]];
+/// let plain =
+///     single_feature_importance_from_proba(&y, &proba, &names, &splits, None, Scoring::Accuracy)?;
+/// assert_eq!(plain["f"].mean, 0.5);
+/// // Weighting the correct samples 3:1 gives 0.75 in each fold.
+/// let w = [3.0, 1.0, 3.0, 1.0];
+/// let weighted = single_feature_importance_from_proba(
+///     &y, &proba, &names, &splits, Some(&w), Scoring::Accuracy,
+/// )?;
+/// assert_eq!(weighted["f"].mean, 0.75);
+/// # Ok::<(), FeatureImportanceError>(())
+/// ```
+pub fn single_feature_importance_from_proba(
+    y: &[f64],
+    proba: &[Vec<f64>],
+    feature_names: &[String],
+    splits: &[(Vec<usize>, Vec<usize>)],
+    sample_weight: Option<&[f64]>,
+    scoring: Scoring,
+) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
+    if y.is_empty() {
+        return Err(FeatureImportanceError::EmptyXy);
+    }
+    if proba.len() != feature_names.len() || proba.iter().any(|col| col.len() != y.len()) {
+        return Err(FeatureImportanceError::LengthMismatch("proba"));
+    }
+    check_score_inputs(y.len(), y.len(), sample_weight, splits)?;
+
+    /// Plays back one feature's probabilities; each test row carries its sample index.
+    struct Column<'a>(&'a [f64]);
+    impl SimpleClassifier for Column<'_> {
+        fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}
+        fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+            x.iter().map(|row| self.0[row[0] as usize]).collect()
+        }
+    }
+
+    let mut out = BTreeMap::new();
+    for (name, column) in feature_names.iter().zip(proba) {
+        let model = Column(column);
+        let mut scores = Vec::with_capacity(splits.len());
+        for (_, test) in splits {
+            // Indices up to 2^53 are exact as f64.
+            let x_test: Vec<Vec<f64>> = test.iter().map(|&i| vec![i as f64]).collect();
+            let y_test = vals(y, test);
+            let sw_test = sample_weight.map(|sw| vals(sw, test));
+            scores.push(score_model(&model, &x_test, &y_test, sw_test.as_deref(), scoring)?);
+        }
+        // As in `single_feature_importance`: Snippet 8.4's `.std()` of a numpy array, ddof 0.
         let (mean, std) = mean_std(&scores, 0);
         out.insert(
             name.clone(),

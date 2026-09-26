@@ -2,7 +2,8 @@ use pyo3::prelude::*;
 
 use crate::helpers::{
     build_labeling_events, format_naive_datetime, pair_timestamps_values, parse_datetime_str,
-    parse_naive_datetime, parse_naive_datetimes, parse_vertical_barriers, LabelingEventArgs,
+    parse_naive_datetime, parse_naive_datetimes, parse_vertical_barriers, warn_deprecated,
+    LabelingEventArgs,
 };
 
 /// Python-facing event row: `(timestamp, t1, trgt, side, pt, sl)`.
@@ -15,8 +16,8 @@ type BinRow = (String, f64, f64, i8, Option<f64>);
 ///
 /// AFML Snippet 3.4. The offset is `num_days + num_hours + num_minutes + num_seconds`. An
 /// event too close to the end of the series to have such a bar gets no row at all (no
-/// shortened barrier). `close_prices` is only checked for length. The result can be passed as
-/// `vertical_barrier_times` to the other labeling functions.
+/// shortened barrier). The result can be passed as `vertical_barrier_times` to the other
+/// labeling functions.
 ///
 /// Parameters
 /// ----------
@@ -24,8 +25,10 @@ type BinRow = (String, f64, f64, i8, Option<f64>);
 ///     Event timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
 /// close_timestamps : list[str]
 ///     Bar timestamps in the same format, in increasing order.
-/// close_prices : list[float]
-///     Close price of each bar (same length as `close_timestamps`).
+/// close_prices : list[float] | None, default None
+///     Deprecated: passing it emits a `DeprecationWarning`. A vertical barrier depends only on
+///     the bar times (AFML Snippet 3.4 reads `close.index` alone), so the prices cannot
+///     affect the result; they are still checked to have one value per timestamp.
 /// num_days : int, default 0
 ///     Days in the offset.
 /// num_hours : int, default 0
@@ -43,22 +46,25 @@ type BinRow = (String, f64, f64, i8, Option<f64>);
 /// Raises
 /// ------
 /// ValueError
-///     If all four offsets are zero, the timestamps and prices differ in length, or a
-///     timestamp does not parse.
+///     If all four offsets are zero, `close_prices` is given and differs in length from
+///     `close_timestamps`, or a timestamp does not parse.
 #[pyfunction(name = "add_vertical_barrier")]
 #[pyo3(signature = (
     t_events,
     close_timestamps,
-    close_prices,
+    close_prices=None,
     num_days=0,
     num_hours=0,
     num_minutes=0,
     num_seconds=0
 ))]
+// Python keyword signature.
+#[allow(clippy::too_many_arguments)]
 fn labeling_add_vertical_barrier(
+    py: Python<'_>,
     t_events: Vec<String>,
     close_timestamps: Vec<String>,
-    close_prices: Vec<f64>,
+    close_prices: Option<Vec<f64>>,
     num_days: i64,
     num_hours: i64,
     num_minutes: i64,
@@ -71,8 +77,23 @@ fn labeling_add_vertical_barrier(
         ));
     }
     let t_events = parse_naive_datetimes(t_events)?;
-    let close =
-        pair_timestamps_values(close_timestamps, close_prices, "close_timestamps", "close_prices")?;
+    // The barrier needs only the bar times; the prices are a placeholder for the core's
+    // `(timestamp, price)` series.
+    let close = match close_prices {
+        Some(prices) => {
+            warn_deprecated(
+                py,
+                "add_vertical_barrier: close_prices is deprecated and has no effect; pass the \
+                 offsets by keyword, e.g. add_vertical_barrier(t_events, close_timestamps, \
+                 num_days=1)",
+            )?;
+            pair_timestamps_values(close_timestamps, prices, "close_timestamps", "close_prices")?
+        }
+        None => {
+            let n = close_timestamps.len();
+            pair_timestamps_values(close_timestamps, vec![0.0; n], "close_timestamps", "")?
+        }
+    };
     let barriers = openquant::labeling::add_vertical_barrier(
         &t_events,
         &close,
