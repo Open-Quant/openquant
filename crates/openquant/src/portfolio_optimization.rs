@@ -28,6 +28,12 @@
 //!   **and** the covariance are annualised by `252 / step` (`step` = 1, 5 or 21 with
 //!   `resample_by`), so `risk_free_rate` and `target_return` are annual figures and
 //!   `portfolio_sharpe` is an annual Sharpe ratio.
+//! - The factor 252 assumes **daily** rows; it is intentional and not configurable here. For
+//!   intraday rows the figures are per `252` rows, not per year: with `k` = bars a year / 252
+//!   (390 for one-minute bars), multiply the returned return by `k` and the volatility and
+//!   Sharpe ratio by `sqrt(k)`, and pass `risk_free_rate / k` (what
+//!   [`crate::pipeline::run_mid_frequency_pipeline`] does with its `periods_per_year`). With
+//!   `risk_free_rate = 0` and no `target_return`, the weights do not depend on the factor.
 //! - With [`allocate_from_inputs`] the units are the caller's: `mu`, `Σ` and
 //!   `risk_free_rate` must agree (an annual `mu` with a daily `Σ` overstates the Sharpe ratio
 //!   by `sqrt(252)`). Weights do not depend on the scale of `Σ`.

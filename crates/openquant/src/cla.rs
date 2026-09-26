@@ -13,7 +13,10 @@
 //! - Price matrices have one row per observation (oldest first) and one column per asset.
 //!   From prices, returns are **simple** returns, and expected returns are annualised with
 //!   `252 / step` periods per year, where `step` is 1 (daily), 5 (`resample_by = "W"`) or
-//!   21 (`"M"`). Resampling is positional: every 5th or 21st row.
+//!   21 (`"M"`). Resampling is positional: every 5th or 21st row. The 252 assumes **daily**
+//!   rows and is intentional: for intraday rows the "annual" returns are per 252 rows. It is
+//!   a constant scale of the expected returns only, so the turning-point weights, the
+//!   minimum-variance and the maximum-Sharpe solution do not depend on it.
 //! - Expected returns and covariance supplied directly are used as given (no annualisation).
 //! - Weights are returned in the column order of the inputs.
 //!

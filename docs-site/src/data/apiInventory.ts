@@ -85,6 +85,7 @@ export const apiInventory = {
       "sample_param_sets"
     ],
     "pipeline": [
+      "infer_periods_per_year",
       "run_mid_frequency_pipeline",
       "run_mid_frequency_pipeline_frames",
       "summarize_pipeline"
@@ -343,6 +344,7 @@ export const apiInventory = {
       "get_onc_clusters"
     ],
     "openquant::pipeline": [
+      "infer_periods_per_year",
       "run_mid_frequency_pipeline"
     ],
     "openquant::portfolio_optimization": [
@@ -940,13 +942,17 @@ export const apiInventory = {
       "BacktestStage": "struct",
       "EventSelectionStage": "struct",
       "LeakageChecks": "struct",
+      "MINUTE_BARS_PER_YEAR": "constant",
       "PipelineError": "enum",
       "PortfolioStage": "struct",
       "ResearchPipelineConfig": "struct",
       "ResearchPipelineInput": "struct",
       "ResearchPipelineOutput": "struct",
       "RiskStage": "struct",
+      "SESSION_MINUTES": "constant",
       "SignalStage": "struct",
+      "TRADING_DAYS_PER_YEAR": "constant",
+      "infer_periods_per_year": "fn",
       "run_mid_frequency_pipeline": "fn"
     },
     "openquant::portfolio_optimization": {

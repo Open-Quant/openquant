@@ -565,7 +565,7 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
     subject: "Research Workflows",
     summary: "End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.",
     whyItExists: "Chains the core AFML steps (event filtering, bet sizing, allocation, risk, backtest) into a single reproducible research call.",
-    keyApis: ["run_mid_frequency_pipeline", "ResearchPipelineConfig", "ResearchPipelineInput", "ResearchPipelineOutput", "LeakageChecks"],
+    keyApis: ["run_mid_frequency_pipeline", "infer_periods_per_year", "ResearchPipelineConfig", "ResearchPipelineInput", "ResearchPipelineOutput", "LeakageChecks"],
     formulas: [],
     examples: [
       {
@@ -599,6 +599,7 @@ print(summary)
       "Mismatched input lengths are an error. leakage_checks reports two computed ordering checks, timestamps_increasing and event_indices_sorted; inputs_aligned (always true) and has_forward_look_bias (always false) are deprecated constants.",
       "run_mid_frequency_pipeline_frames and summarize_pipeline are Python-only helpers over the Rust run_mid_frequency_pipeline.",
       "run_mid_frequency_pipeline_frames adds Polars DataFrames to the raw dict output.",
+      "Annualisation convention: 252 sessions a year of 390 minutes (6.5 hours), so one-minute bars have 252 × 390 = 98,280 bars a year (MINUTE_BARS_PER_YEAR). The Python wrappers derive periods_per_year from the timestamps by default (infer_periods_per_year) and report it as risk[\"periods_per_year\"]; the Rust ResearchPipelineConfig and openquant._core default to 252.",
       "summarize_pipeline extracts key metrics into a single-row DataFrame for notebook display.",
     ],
     conceptOverview: `The pipeline module orchestrates the full AFML research workflow in a single function call. It chains: CUSUM event detection → bet sizing from the model's probabilities → a max-Sharpe portfolio allocation → risk metrics → a single-asset backtest. No labeling or model fitting happens here: the model probabilities and sides are inputs, one per bar, and the signal is traded with a one-bar lag. The output also reports whether the timestamps and the event positions are in increasing order. The pipeline does not detect look-ahead in the probabilities you pass it; that is your responsibility.
@@ -614,18 +615,18 @@ This is designed for rapid research iteration — change a parameter, re-run the
       { name: "num_classes", type: "int", description: "Number of label classes for bet sizing", default: "2" },
       { name: "step_size", type: "float", description: "Bet size discretization step", default: "0.1" },
       { name: "risk_free_rate", type: "float", description: "Annual risk-free rate, for both the max-Sharpe allocation and realized_sharpe", default: "0.0" },
-      { name: "periods_per_year", type: "float", description: "Bars per year of close and rows per year of asset_prices; annualises realized_sharpe and the portfolio figures", default: "252.0" },
+      { name: "periods_per_year", type: "float | None", description: "Bars per year of close and rows per year of asset_prices; annualises realized_sharpe and the portfolio figures. None (Python) derives it from the timestamps: 252 for daily bars, 98,280 for one-minute bars", default: "None (Python), 252.0 (Rust)" },
       { name: "confidence_level", type: "float", description: "Confidence level for VaR/ES", default: "0.05" },
     ],
     commonPitfalls: [
       "Reading has_forward_look_bias as a test: it is a deprecated constant (always false). The pipeline cannot see look-ahead inside model_probabilities; fit them on data available at each bar's close.",
       "Unordered timestamps do not stop the run; check leakage_checks.timestamps_increasing.",
-      "Leaving periods_per_year at 252 for intraday bars: realized_sharpe and the portfolio figures are then annual in units of 252 bars, not calendar years.",
+      "Setting periods_per_year to 252 for intraday bars: realized_sharpe and the portfolio figures are then per 252 bars, not per year, and understated by sqrt(390) ≈ 19.7 for one-minute bars.",
       "Using the raw dict output when DataFrames are more convenient — prefer run_mid_frequency_pipeline_frames.",
     ],
     relatedModules: ["filters", "labeling", "bet-sizing", "backtest-statistics", "risk-metrics"],
     apiSurface: "both",
-    pythonApis: ["pipeline.run_mid_frequency_pipeline", "pipeline.run_mid_frequency_pipeline_frames", "pipeline.summarize_pipeline"],
+    pythonApis: ["pipeline.run_mid_frequency_pipeline", "pipeline.run_mid_frequency_pipeline_frames", "pipeline.summarize_pipeline", "pipeline.infer_periods_per_year"],
   },
   {
     slug: "research",
@@ -667,6 +668,7 @@ print(result["summary"])`,
     notes: [
       "make_synthetic_futures_dataset is deterministic given seed — use for regression tests and reproducible notebooks.",
       "run_flywheel_iteration includes turnover estimation, transaction cost modeling, and net-of-cost Sharpe.",
+      "Sharpe ratios and realized_vol are annualised with the dataset's periods_per_year: 98,280 (390 × 252) for the one-minute synthetic bars, or derived from the timestamps for your own data. config[\"periods_per_year\"] overrides it.",
       "Promotion gates check realized Sharpe, net Sharpe, and leakage guards before flagging a strategy as deployment-ready.",
     ],
     conceptOverview: `The research module implements the "research flywheel" pattern: a tight loop of hypothesis → synthetic test → cost estimation → promotion gate. It wraps the pipeline module with additional cost modeling (commissions, spread, slippage proportional to realized volatility) and strategy-readiness checks.
@@ -683,6 +685,7 @@ print(result["summary"])`,
       { name: "commission_bps", type: "float", description: "Commission in basis points per turn", default: "1.5" },
       { name: "spread_bps", type: "float", description: "Spread cost in basis points", default: "2.0" },
       { name: "min_net_sharpe", type: "float", description: "Minimum net-of-cost Sharpe for promotion", default: "0.30" },
+      { name: "periods_per_year", type: "float | None", description: "Bars per year for annualisation; None uses the dataset's value or the timestamps", default: "None" },
     ],
     commonPitfalls: [
       "Over-optimizing on synthetic data — the data generator has known dynamics; validate on real data before deployment.",

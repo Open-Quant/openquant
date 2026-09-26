@@ -3,7 +3,7 @@ title: "research"
 description: "Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+last_generated: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -44,6 +44,7 @@ Use this for rapid strategy research iteration, especially during development wh
 | `commission_bps` | `float` | Commission in basis points per turn | 1.5 |
 | `spread_bps` | `float` | Spread cost in basis points | 2.0 |
 | `min_net_sharpe` | `float` | Minimum net-of-cost Sharpe for promotion | 0.30 |
+| `periods_per_year` | `float | None` | Bars per year for annualisation; None uses the dataset's value or the timestamps | None |
 
 ## Usage Examples
 
@@ -86,6 +87,7 @@ print(result["summary"])
 
 - make_synthetic_futures_dataset is deterministic given seed — use for regression tests and reproducible notebooks.
 - run_flywheel_iteration includes turnover estimation, transaction cost modeling, and net-of-cost Sharpe.
+- Sharpe ratios and realized_vol are annualised with the dataset's periods_per_year: 98,280 (390 × 252) for the one-minute synthetic bars, or derived from the timestamps for your own data. config["periods_per_year"] overrides it.
 - Promotion gates check realized Sharpe, net Sharpe, and leakage guards before flagging a strategy as deployment-ready.
 
 ## Related Modules
