@@ -92,6 +92,23 @@ fn two_assets_sharpe_ratio_closed_form() {
     assert_close(&hcaa.weights, &[0.25, 0.75], TOL, "sharpe");
 }
 
+/// #185 item 13: the Sharpe share is used only when neither Sharpe ratio is negative.
+/// v = (0.04, 0.01), s = (0.2, 0.1). mu = (-0.2, -0.3) gives SR = (-1, -3): the raw share
+/// -1 / -4 = 0.25 would give the *better* asset 0 the smaller weight, so the split falls back
+/// to minimum variance, (0.2, 0.8). Mixed signs and two zero Sharpe ratios fall back too (two
+/// zeros used to put everything on the right).
+#[test]
+fn two_assets_sharpe_ratio_falls_back_to_minimum_variance_unless_both_are_non_negative() {
+    let cov = two_asset_cov(0.003);
+    for mu in [[-0.2, -0.3], [0.06, -0.09], [-0.06, 0.09], [0.0, 0.0]] {
+        let hcaa = allocate_cov(&cov, "sharpe_ratio", Some(&mu));
+        assert_close(&hcaa.weights, &[0.2, 0.8], 1e-12, &format!("sharpe fallback {mu:?}"));
+    }
+    // One side at exactly 0 and the other positive is a valid share: everything to the right.
+    let hcaa = allocate_cov(&cov, "sharpe_ratio", Some(&[0.0, 0.09]));
+    assert_close(&hcaa.weights, &[0.0, 1.0], TOL, "sharpe zero-left");
+}
+
 /// Expected shortfall at the 5% level of ten observations is the single worst return under every
 /// common quantile convention (nearest-rank, lower, or linear interpolation all leave exactly one
 /// observation at or below the 5% quantile). Worst returns: asset 0 -> -0.04, asset 1 -> -0.01.

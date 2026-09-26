@@ -87,6 +87,22 @@ def test_hcaa_rejects_invalid_inputs():
         hcaa.allocate_hcaa(["a", "b"], covariance_matrix=COV_2, allocation_metric="sharpe_ratio")
 
 
+def test_hcaa_sharpe_ratio_estimates_expected_returns_from_asset_returns():
+    # #185 item 13: returns alone are enough; same answer as from the prices behind them.
+    prices, names = _load_prices_and_names()
+    returns = [
+        [prices[t][j] / prices[t - 1][j] - 1.0 for j in range(len(names))]
+        for t in range(1, len(prices))
+    ]
+    from_returns, _ = hcaa.allocate_hcaa(
+        names, asset_returns=returns, allocation_metric="sharpe_ratio", optimal_num_clusters=5
+    )
+    from_prices, _ = hcaa.allocate_hcaa(
+        names, asset_prices=prices, allocation_metric="sharpe_ratio", optimal_num_clusters=5
+    )
+    assert from_returns == pytest.approx(from_prices, abs=1e-12)
+
+
 def test_hcaa_reads_asset_returns_as_rows_of_observations():
     n_obs = 40
     a = [0.001 if t % 2 == 0 else -0.001 for t in range(n_obs)]
