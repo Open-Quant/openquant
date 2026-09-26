@@ -2,7 +2,7 @@
 title: "streaming_hpc"
 description: "VPIN and a venue-concentration HHI updated event by event in constant memory, with an alert when both cross their thresholds, and a synthetic flash crash to calibrate on."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -149,8 +149,9 @@ alerts at events 723 to 728 - the crash began at event 700
 alerts: 6
 ```
 
-The calm stream has VPIN $|120-130|/250 = 0.04$ and HHI $0.25$, one quarter of the volume per
-venue. VPIN needs 10,000 units of volume, 40 events, before it reports; its CDF needs 100 more
+The calm stream has VPIN $|120-130|/250 = 0.04$ and HHI $0.2504$ (printed as 0.250). The
+venues take turns, so the last 50 events split 13/13/12/12 across the four venues rather than
+exactly a quarter each: $(2\cdot 13^2 + 2\cdot 12^2)/50^2 = 626/2500$. VPIN needs 10,000 units of volume, 40 events, before it reports; its CDF needs 100 more
 values, one per bucket, and first reports at event 435. On a perfectly steady stream every
 value ties, so the CDF sits at 0.5. Two events into the crash, VPIN moves above everything in
 its history and the CDF jumps to its ceiling, $1 - 0.5/100 = 0.995$. HHI is slower: crash
