@@ -132,12 +132,12 @@ def generate_ou_paths(
     intercept: float,
     equilibrium: float,
     sigma: float,
-    r_squared: float,
-    stationary: bool,
-    initial_price: float,
-    n_paths: int,
-    horizon: int,
-    seed: int,
+    r_squared: float | None = None,
+    stationary: bool | None = None,
+    initial_price: float = 100.0,
+    n_paths: int = 1000,
+    horizon: int = 252,
+    seed: int = 42,
 ) -> list[list[float]]:
     """Simulate O-U price paths from given process parameters.
 
@@ -145,8 +145,8 @@ def generate_ou_paths(
     `P_t = intercept + phi * P_{t-1} + sigma * eps_t` with standard-normal innovations from an
     RNG seeded with `seed`, so the same seed reproduces the same paths. Only `intercept`, `phi`
     and `sigma` drive the simulation; when building parameters by hand keep
-    `intercept = (1 - phi) * equilibrium`. The arguments `phi` through `stationary` match the
-    keys returned by `calibrate_ou_params`.
+    `intercept = (1 - phi) * equilibrium`. Pass `initial_price`, `n_paths`, `horizon` and
+    `seed` by keyword; their defaults are those of `run_synthetic_otr_workflow`.
 
     Parameters
     ----------
@@ -158,17 +158,21 @@ def generate_ou_paths(
         Long-run mean; must be finite but is not used by the simulation.
     sigma : float
         Innovation standard deviation in price units; must be >= 0.
-    r_squared : float
-        Ignored by the simulation (carried for symmetry with `calibrate_ou_params`).
-    stationary : bool
-        Ignored by the simulation (carried for symmetry with `calibrate_ou_params`).
-    initial_price : float
+    r_squared : float | None, default None
+        Deprecated: passing it emits a `DeprecationWarning`. It is a diagnostic of the
+        calibration regression, not a parameter of the process, so it cannot affect the paths
+        (AFML §13.5.1 simulates from the fitted coefficients and residual deviation alone).
+    stationary : bool | None, default None
+        Deprecated: passing it emits a `DeprecationWarning`. It is `abs(phi) < 1`, which `phi`
+        already determines. To simulate a calibrated fit, pass its `phi`, `intercept`,
+        `equilibrium` and `sigma` only.
+    initial_price : float, default 100.0
         Entry price of every path.
-    n_paths : int
+    n_paths : int, default 1000
         Number of paths; must be > 0.
-    horizon : int
+    horizon : int, default 252
         Points per path, including the entry; must be >= 2.
-    seed : int
+    seed : int, default 42
         Seed of the simulation RNG.
 
     Returns
@@ -221,8 +225,8 @@ def run_synthetic_otr_workflow(
     profit_taking_grid : list[float] | None, default None
         Profit-taking widths to try, each finite and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
     stop_loss_grid : list[float] | None, default None
-        Stop-loss widths to try, as positive numbers, each finite and > 0. `None` currently
-        builds `-0.25, -0.5, ..., -5.0`, which the core rejects, so pass a positive grid.
+        Stop-loss widths to try, as positive numbers (distance below the entry), each finite
+        and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
     max_holding_steps : int, default 252
         Maximum holding period in steps (capped by the path length).
     annualization_factor : float, default 252.0

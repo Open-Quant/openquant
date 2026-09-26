@@ -44,17 +44,6 @@ _COLUMN_ALIASES = {
     "adj close": "adj_close",
 }
 
-_ZERO_NULL_COUNTS = {
-    "ts": 0,
-    "symbol": 0,
-    "open": 0,
-    "high": 0,
-    "low": 0,
-    "close": 0,
-    "volume": 0,
-    "adj_close": 0,
-}
-
 
 def _normalize_column_name(name: str) -> str:
     return name.strip().lower().replace("-", "_")
@@ -101,7 +90,8 @@ def _parse_ts(expr: pl.Expr) -> pl.Expr:
     )
 
 
-def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
+def _cast_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
+    """The canonical columns, parsed and cast, before rows with nulls are dropped."""
     frame = _canonicalize_columns(df)
     _validate_required_columns(frame)
 
@@ -118,7 +108,21 @@ def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
         lf = lf.with_columns(pl.col("adj_close").cast(pl.Float64))
     else:
         lf = lf.with_columns(pl.col("close").alias("adj_close"))
-    return lf.select(CANONICAL_OHLCV_COLUMNS).drop_nulls(CANONICAL_OHLCV_COLUMNS)
+    return lf.select(CANONICAL_OHLCV_COLUMNS)
+
+
+def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
+    return _cast_ohlcv_lf(df).drop_nulls(CANONICAL_OHLCV_COLUMNS)
+
+
+def _null_counts(cast_lf: pl.LazyFrame) -> dict[str, int]:
+    """Nulls per canonical column of `_cast_ohlcv_lf`'s frame, i.e. before they are dropped.
+
+    A timestamp that does not parse is a null `ts`; a missing `adj_close` is filled from
+    `close`, so it has `close`'s nulls.
+    """
+    row = cast_lf.select(pl.col(CANONICAL_OHLCV_COLUMNS).null_count()).collect().row(0)
+    return {name: int(n) for name, n in zip(CANONICAL_OHLCV_COLUMNS, row, strict=True)}
 
 
 def _format_ts(v: Any) -> str | None:
@@ -184,7 +188,7 @@ def _gap_count(sorted_df: pl.DataFrame, interval_us: int | None) -> int:
 
 
 def _build_quality_report(
-    sorted_df: pl.DataFrame, rows_removed_by_deduplication: int
+    sorted_df: pl.DataFrame, rows_removed_by_deduplication: int, null_counts: dict[str, int]
 ) -> dict[str, Any]:
     if sorted_df.height == 0:
         return {
@@ -196,7 +200,7 @@ def _build_quality_report(
             "ts_min": None,
             "ts_max": None,
             "rows_removed_by_deduplication": rows_removed_by_deduplication,
-            "null_counts": dict(_ZERO_NULL_COUNTS),
+            "null_counts": dict(null_counts),
         }
 
     interval_us = _inferred_interval_us(sorted_df)
@@ -229,7 +233,7 @@ def _build_quality_report(
         "ts_min": _format_ts(summary["ts_min"]),
         "ts_max": _format_ts(summary["ts_max"]),
         "rows_removed_by_deduplication": rows_removed_by_deduplication,
-        "null_counts": dict(_ZERO_NULL_COUNTS),
+        "null_counts": dict(null_counts),
     }
 
 
@@ -306,7 +310,8 @@ def clean_ohlcv(
         Columns `ts, symbol, open, high, low, close, volume, adj_close`, sorted by `symbol`
         then `ts`. With `return_report=True`, a `(frame, report)` tuple; the report has the
         keys of `data_quality_report`, with `rows_removed_by_deduplication` set to the number
-        of duplicate rows dropped and `duplicate_key_count` 0.
+        of duplicate rows dropped, `duplicate_key_count` 0, and `null_counts` counting the
+        nulls of the input (whose rows were dropped).
 
     Raises
     ------
@@ -316,7 +321,8 @@ def clean_ohlcv(
     if dedupe_keep not in {"first", "last"}:
         raise ValueError("dedupe_keep must be 'first' or 'last'")
 
-    base_lf = _prepare_ohlcv_lf(df).with_columns(
+    cast_lf = _cast_ohlcv_lf(df)
+    base_lf = cast_lf.drop_nulls(CANONICAL_OHLCV_COLUMNS).with_columns(
         pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us")
     )
     sorted_lf = base_lf.sort(["symbol", "ts_us"])
@@ -350,7 +356,11 @@ def clean_ohlcv(
     if not return_report:
         return frame
 
-    report = _build_quality_report(cleaned, rows_removed_by_deduplication=duplicate_key_count)
+    report = _build_quality_report(
+        cleaned,
+        rows_removed_by_deduplication=duplicate_key_count,
+        null_counts=_null_counts(cast_lf),
+    )
     report["duplicate_key_count"] = 0
     return frame, report
 
@@ -358,8 +368,9 @@ def clean_ohlcv(
 def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
     """Summarize row counts, duplicate keys, gaps and time range of an OHLCV frame.
 
-    The frame is normalized as in `clean_ohlcv` (aliases, casts, null rows dropped) but not
-    de-duplicated, so duplicate keys are counted rather than removed.
+    The frame is normalized as in `clean_ohlcv` (aliases, casts) but not de-duplicated, so
+    duplicate keys are counted rather than removed. Rows with a null in a canonical column are
+    counted in `null_counts` and then left out of every other figure.
 
     Parameters
     ----------
@@ -370,25 +381,31 @@ def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        `row_count`, `symbol_count`, `duplicate_key_count` (rows repeating the previous
-        row's `(symbol, ts)`), `gap_interval_count` (consecutive rows of one symbol more than
-        24 hours apart, so weekends count on daily data), `ts_min` and `ts_max` (as
-        `"%Y-%m-%d %H:%M:%S"` strings, with `.ffffff` when there are microseconds; None when
-        empty), `rows_removed_by_deduplication` (always 0 here) and `null_counts` (per
-        canonical column; always 0, because rows with nulls are dropped before counting).
+        `row_count` (rows without nulls), `symbol_count`, `duplicate_key_count` (rows
+        repeating the previous row's `(symbol, ts)`), `inferred_interval_us` (the most common
+        bar spacing), `gap_interval_count` (consecutive bars of one symbol with a skipped
+        weekday between them on daily data, or further apart than the inferred spacing
+        otherwise), `ts_min` and `ts_max`
+        (as `"%Y-%m-%d %H:%M:%S"` strings, with `.ffffff` when there are microseconds; None
+        when empty), `rows_removed_by_deduplication` (always 0 here) and `null_counts`
+        (nulls per canonical column of the input after aliasing and casting: a timestamp that
+        does not parse counts as a null `ts`, and a missing `adj_close` has `close`'s nulls).
 
     Raises
     ------
     ValueError
         If a required column is missing.
     """
+    cast_lf = _cast_ohlcv_lf(df)
     sorted_df = (
-        _prepare_ohlcv_lf(df)
+        cast_lf.drop_nulls(CANONICAL_OHLCV_COLUMNS)
         .with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
         .sort(["symbol", "ts_us"])
         .collect()
     )
-    return _build_quality_report(sorted_df, rows_removed_by_deduplication=0)
+    return _build_quality_report(
+        sorted_df, rows_removed_by_deduplication=0, null_counts=_null_counts(cast_lf)
+    )
 
 
 def load_ohlcv(

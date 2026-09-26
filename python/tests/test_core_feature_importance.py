@@ -6,6 +6,7 @@ out-of-sample probabilities are computed in Python and passed in, or a Python po
 classifier is passed to the estimator-driven functions.
 """
 
+import warnings
 from math import log, sqrt
 
 import numpy as np
@@ -114,20 +115,74 @@ def test_mda_standard_error_uses_sample_std_hand_worked():
     assert mda["f0"]["std"] == pytest.approx(0.5, abs=1e-12)
 
 
-def test_mda_from_probabilities_does_not_depend_on_seed():
-    # The seed reaches the Rust `mean_decrease_accuracy`, but the shuffled predictions are the
-    # caller's, so it cannot change the result.
-    results = [
-        fi.mda_from_probabilities(
-            Y_REF, T0_REF, T1_REF, BASE, PERMUTED, n_splits=2, scoring="accuracy", seed=seed
+def test_mda_from_probabilities_seed_is_deprecated():
+    # Issue #194: `seed` could not change the result (the shuffled predictions are the
+    # caller's), so passing it now warns. Omitting it is silent and gives the same values.
+    kw = {"n_splits": 2, "scoring": "accuracy"}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        plain = fi.mda_from_probabilities(Y_REF, T0_REF, T1_REF, BASE, PERMUTED, **kw)
+        core = _core.feature_importance.mda_from_probabilities(
+            Y_REF.tolist(),
+            T0_REF.tolist(),
+            T1_REF.tolist(),
+            BASE.tolist(),
+            PERMUTED.T.tolist(),
+            ["f0", "f1"],
+            pct_embargo=0.0,
+            **kw,
         )
-        for seed in (0, 42, 2**63)
-    ]
-    assert results[0] == results[1] == results[2]
-    with pytest.raises(ValueError, match="seed must be a non-negative"):
-        fi.mda_from_probabilities(
-            Y_REF, T0_REF, T1_REF, BASE, PERMUTED, n_splits=2, scoring="accuracy", seed=-1
+    assert core == {k: (v["mean"], v["std"]) for k, v in plain.items()}
+    for seed in (0, 42, 2**63):
+        with pytest.warns(DeprecationWarning, match="seed is deprecated"):
+            got = fi.mda_from_probabilities(Y_REF, T0_REF, T1_REF, BASE, PERMUTED, seed=seed, **kw)
+        assert got == plain
+    with pytest.warns(DeprecationWarning, match="seed is deprecated"):
+        _core.feature_importance.mda_from_probabilities(
+            Y_REF.tolist(),
+            T0_REF.tolist(),
+            T1_REF.tolist(),
+            BASE.tolist(),
+            PERMUTED.T.tolist(),
+            ["f0", "f1"],
+            pct_embargo=0.0,
+            seed=7,
+            **kw,
         )
+    # The estimator-driven MDA uses its seed for its own shuffles and does not warn.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        fi.mean_decrease_accuracy(
+            SignOfFirstColumn(), X_REF, Y_REF, T0_REF, T1_REF, pct_embargo=0.0, seed=3, **kw
+        )
+
+
+def test_sfi_from_probabilities_weights_the_scores():
+    # Issue #194: sample_weight was checked but ignored. f0's accuracy is 1 on fold 0 and 1/2
+    # on fold 1 (row 3 is wrong); weighting row 3 by 3 makes fold 1 score 1/4.
+    kw = {"n_splits": 2, "scoring": "accuracy"}
+    w = [1.0, 1.0, 1.0, 3.0]
+    sfi = fi.sfi_from_probabilities(Y_REF, T0_REF, T1_REF, SFI_PROBA, sample_weight=w, **kw)
+    assert sfi["f0"]["mean"] == pytest.approx(0.625, abs=1e-15)
+    assert sfi["f0"]["std"] == pytest.approx(0.375 / sqrt(2), abs=1e-15)
+    # Uniform weights are no weights.
+    ones = fi.sfi_from_probabilities(
+        Y_REF, T0_REF, T1_REF, SFI_PROBA, sample_weight=[2.0] * 4, **kw
+    )
+    assert ones == fi.sfi_from_probabilities(Y_REF, T0_REF, T1_REF, SFI_PROBA, **kw)
+
+    # Log loss: fold 1 is the weighted mean of -ln 0.9 and -ln 0.1, weights 1 and 3.
+    nll = fi.sfi_from_probabilities(
+        Y_REF, T0_REF, T1_REF, SFI_PROBA, n_splits=2, scoring="neg_log_loss", sample_weight=w
+    )
+    fold1 = -(log(0.9) + 3 * log(0.1)) / 4
+    assert nll["f0"]["mean"] == pytest.approx((log(0.9) - fold1) / 2, abs=1e-12)
+
+    # The estimator-driven SFI passes the weights on, so its score is weighted too.
+    est = fi.single_feature_importance(
+        SignOfFirstColumn(), X_REF, Y_REF, T0_REF, T1_REF, pct_embargo=0.0, sample_weight=w, **kw
+    )
+    assert est["f0"]["mean"] == pytest.approx(0.625, abs=1e-15)
 
 
 def test_sfi_accuracy_hand_worked():

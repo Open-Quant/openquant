@@ -62,3 +62,30 @@ def test_bet_size_dynamic_limit_prices_match_reference():
     # Rows 0 and 4 grow a long position, where Snippet 10.4 as written agrees.
     for i in (0, 4):
         assert got[i] == pytest.approx(fixture["l_p"][i], abs=1e-9)
+
+
+NAN = float("nan")
+FIT = [0.0, 1.0, 1.0, 2.0, 0.5]
+STARTS = ["2024-01-01 00:00:00", "2024-01-02 00:00:00"]
+ENDS = ["2024-01-03 00:00:00", "2024-01-04 00:00:00"]
+SIDES = [1.0, -1.0]
+
+
+@pytest.mark.parametrize(
+    ("call", "name"),
+    [
+        (lambda: bet_sizing.cdf_mixture(NAN, 1.0, 1.0, 2.0, 0.5, 0.0), "mu1"),
+        (lambda: bet_sizing.cdf_mixture(0.0, NAN, 1.0, 2.0, 0.5, 0.0), "mu2"),
+        (lambda: bet_sizing.cdf_mixture(0.0, 1.0, NAN, 2.0, 0.5, 0.0), "sigma1"),
+        (lambda: bet_sizing.cdf_mixture(0.0, 1.0, 1.0, 2.0, 0.5, NAN), "x"),
+        (lambda: bet_sizing.single_bet_size_mixed(NAN, FIT), "c"),
+        (lambda: bet_sizing.single_bet_size_mixed(0.5, [NAN, *FIT[1:]]), "mu1"),
+        (lambda: bet_sizing.bet_size_reserve(STARTS, ENDS, SIDES, [0.0, NAN, *FIT[2:]]), "mu2"),
+        (lambda: bet_sizing.bet_size_reserve_with_fit(STARTS, ENDS, SIDES, [*FIT[:4], NAN]), "p1"),
+    ],
+)
+def test_mixture_functions_raise_value_error_on_nan(call, name):
+    # Issue #194: a NaN mean used to raise pyo3_runtime.PanicException, a BaseException that
+    # `except ValueError` and `except Exception` both miss.
+    with pytest.raises(ValueError, match=rf"'{name}' must be finite, got NaN"):
+        call()

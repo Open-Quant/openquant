@@ -19,6 +19,7 @@ trees (MDI), in the order of ``feature_names``.
 from __future__ import annotations
 
 import copy
+import warnings
 from collections.abc import Sequence
 from typing import Any
 
@@ -107,7 +108,7 @@ def mda_from_probabilities(
     scoring: str = "neg_log_loss",
     sample_weight: Any = None,
     feature_names: Sequence[str] | None = None,
-    seed: int = 42,
+    seed: int | None = None,
 ) -> dict[str, dict[str, float]]:
     """MDA (AFML Snippet 8.3) scored from out-of-sample probabilities of ``y == 1``.
 
@@ -117,10 +118,18 @@ def mda_from_probabilities(
     ``purged_kfold_splits(t0, t1, n_splits, pct_embargo)``; every sample is tested once.
     Per fold, a feature's importance is ``(base - permuted) / (1 - permuted)`` for accuracy
     and F1, and ``(base - permuted) / -permuted`` for negative log loss. ``sample_weight``
-    weights the scores. ``seed`` is passed to the Rust ``mean_decrease_accuracy`` as its
-    permutation seed; the shuffling that matters happened when ``permuted_proba`` was
-    computed, so the result does not depend on it.
+    weights the scores.
+
+    ``seed`` is deprecated and passing it emits a ``DeprecationWarning``: the shuffling
+    happened when ``permuted_proba`` was computed, so no seed here can change the result.
     """
+    if seed is not None:
+        warnings.warn(
+            "mda_from_probabilities: seed is deprecated and has no effect; the shuffling "
+            "happened when permuted_proba was computed",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     y_list = _vector(y, "y")
     s0, s1 = _label_spans(t0, t1)
     permuted = np.asarray(permuted_proba, dtype=np.float64)
@@ -138,7 +147,6 @@ def mda_from_probabilities(
         pct_embargo=float(pct_embargo),
         scoring=scoring,
         sample_weight=_weights(sample_weight),
-        seed=_seed(seed),
     )
     return _ordered(result, names)
 
@@ -159,8 +167,8 @@ def sfi_from_probabilities(
 
     ``proba[i, j]`` is the probability for sample ``i`` from a model trained on feature ``j``
     alone, on the fold of ``purged_kfold_splits(t0, t1, n_splits, pct_embargo)`` that tests
-    ``i``. ``sample_weight`` is accepted for symmetry but, as in the Rust SFI, does not weight
-    the score; weight the fit instead.
+    ``i``. ``sample_weight`` weights each fold's score, as in :func:`mda_from_probabilities`
+    and AFML's ``cvScore``; weight the fit on your side as well.
     """
     y_list = _vector(y, "y")
     s0, s1 = _label_spans(t0, t1)
@@ -247,8 +255,8 @@ def mean_decrease_accuracy(
     For each purged fold a copy of ``estimator`` (``sklearn.base.clone`` when scikit-learn is
     installed) is fitted on the training samples with their ``sample_weight``, then each
     feature column of the test fold is shuffled in turn with ``numpy.random.default_rng(seed)``.
-    ``seed`` defaults to 42, as in :func:`openquant.feature_diagnostics.mda_importance`, and is
-    also handed to the Rust ``mean_decrease_accuracy``. Labels must be 0/1. See
+    ``seed`` defaults to 42, as in :func:`openquant.feature_diagnostics.mda_importance`. Labels
+    must be 0/1. See
     :func:`mda_from_probabilities` for the scoring.
     """
     x, yv, w = _prepare(X, y, sample_weight)
@@ -275,7 +283,6 @@ def mean_decrease_accuracy(
         scoring=scoring,
         sample_weight=w,
         feature_names=names,
-        seed=seed,
     )
 
 
