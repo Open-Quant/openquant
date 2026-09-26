@@ -2,7 +2,7 @@
 title: Quickstart
 description: Install OpenQuant and get one real result out of it.
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -114,7 +114,7 @@ summary:
   estimated_cost                 0.001314
   gross_total_return            -0.000197
   net_total_return              -0.001511
-  net_sharpe                    -0.194432
+  net_sharpe                    -1.485917
 
 promotion gates:
   passed_realized_sharpe     False
