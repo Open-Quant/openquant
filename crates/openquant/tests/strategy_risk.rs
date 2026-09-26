@@ -1,7 +1,7 @@
 use openquant::strategy_risk::{
     estimate_strategy_failure_probability, implied_frequency_asymmetric,
     implied_frequency_symmetric, implied_precision_asymmetric, implied_precision_symmetric,
-    sharpe_asymmetric, sharpe_symmetric, AsymmetricPayout, StrategyRiskConfig,
+    sharpe_asymmetric, sharpe_symmetric, AsymmetricPayout, StrategyRiskConfig, StrategyRiskError,
 };
 
 #[test]
@@ -107,4 +107,44 @@ fn test_failure_probability_rises_with_higher_target_sharpe() {
 
     assert!(high_target.implied_precision_threshold > low_target.implied_precision_threshold);
     assert!(high_target.kde_failure_probability >= low_target.kde_failure_probability);
+}
+
+/// #168: the implied-frequency formulas square the Sharpe ratio, so a negative mean payoff
+/// used to get the frequency of the opposite edge. No frequency reaches a positive target
+/// when the Sharpe ratio is negative at every frequency.
+#[test]
+fn test_implied_frequency_rejects_a_negative_mean_payoff() {
+    // Symmetric: precision 0.45 is the mirror image of 0.55, which needs 396 bets a year.
+    assert!((implied_frequency_symmetric(0.55, 2.0).unwrap() - 396.0).abs() < 1e-9);
+    assert!(sharpe_symmetric(0.45, 396.0).unwrap() < 0.0);
+    assert!(matches!(
+        implied_frequency_symmetric(0.45, 2.0),
+        Err(StrategyRiskError::NoValidRoot(_))
+    ));
+
+    // Asymmetric: win 1%, lose 2%, precision 0.6 -> mean payoff 0.03 * 0.6 - 0.02 < 0.
+    let payout = AsymmetricPayout { pi_plus: 0.01, pi_minus: -0.02 };
+    assert!(sharpe_asymmetric(0.6, 260.0, payout).unwrap() < 0.0);
+    assert!(matches!(
+        implied_frequency_asymmetric(0.6, 2.0, payout),
+        Err(StrategyRiskError::NoValidRoot(_))
+    ));
+    // Above break-even (2/3) it still inverts sharpe_asymmetric.
+    let n = implied_frequency_asymmetric(0.8, 2.0, payout).unwrap();
+    assert!((sharpe_asymmetric(0.8, n, payout).unwrap() - 2.0).abs() < 1e-9);
+}
+
+/// #168: the formulas need only pi_plus > pi_minus; neither payout has to be negative.
+#[test]
+fn test_payouts_need_only_be_ordered() {
+    let both_positive = AsymmetricPayout { pi_plus: 0.02, pi_minus: 0.01 };
+    let sr = sharpe_asymmetric(0.5, 260.0, both_positive).unwrap();
+    // mean 0.015, sd 0.005: Sharpe 3 per bet.
+    assert!((sr - 3.0 * 260f64.sqrt()).abs() < 1e-9);
+
+    let reversed = AsymmetricPayout { pi_plus: -0.01, pi_minus: 0.01 };
+    assert!(matches!(
+        sharpe_asymmetric(0.5, 260.0, reversed),
+        Err(StrategyRiskError::InvalidInput(_))
+    ));
 }

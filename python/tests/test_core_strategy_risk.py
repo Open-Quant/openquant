@@ -93,3 +93,25 @@ def test_strategy_risk_rejects_invalid_inputs():
         strategy_risk.sharpe_symmetric(0.6, -1.0)
     with pytest.raises(ValueError, match="bet_outcomes"):
         strategy_risk.estimate_strategy_failure_probability([], 5.0, 2.0, 2.0)
+
+
+def test_implied_frequency_rejects_an_unreachable_target():
+    # Mirrors crates/openquant/tests/strategy_risk.rs::
+    # test_implied_frequency_rejects_a_negative_mean_payoff (#168). A negative mean payoff
+    # gives a negative Sharpe ratio at every frequency; the squared formula used to return
+    # the frequency for the opposite edge instead.
+    with pytest.raises(ValueError, match="no valid root"):
+        strategy_risk.implied_frequency_symmetric(0.45, 2.0)
+    with pytest.raises(ValueError, match="no valid root"):
+        # mean payoff 0.03 * 0.6 - 0.02 = -0.002
+        strategy_risk.implied_frequency_asymmetric(0.6, 2.0, 0.01, -0.02)
+    # The mirror images still work.
+    assert strategy_risk.implied_frequency_symmetric(0.55, 2.0) == pytest.approx(396.0)
+    assert strategy_risk.implied_frequency_asymmetric(0.8, 2.0, 0.01, -0.02) > 0.0
+
+
+def test_payouts_need_only_be_ordered():
+    # The closed forms require pi_plus > pi_minus and nothing about signs (#168).
+    assert strategy_risk.sharpe_asymmetric(0.5, 260.0, 0.02, 0.01) > 0.0
+    with pytest.raises(ValueError, match="pi_plus must be greater than pi_minus"):
+        strategy_risk.sharpe_asymmetric(0.5, 260.0, -0.01, 0.01)

@@ -23,6 +23,7 @@ rust_api:
 python_api:
   - "sb_bagging.fit_predict_sb_classifier"
   - "sb_bagging.fit_predict_sb_regressor"
+  - "sb_bagging.SequentiallyBootstrappedBaggingClassifier"
 sidebar:
   badge: Module
 ---
@@ -101,8 +102,67 @@ overlap (see below); score the model under
 
 The Python functions fit and predict on the same `x` in one call and return a dict with
 `predictions` and `oob_score` (always computed; `None` only if every estimator drew every row).
-`sample_weight` is passed through to `fit`. There is no way to predict on new rows from Python; that needs
-the Rust types.
+`sample_weight` is passed through to `fit`.
+
+### Predicting new rows
+
+To score rows the model was not fitted on — a test fold, or tomorrow's events — use
+`sb_bagging.SequentiallyBootstrappedBaggingClassifier`. It takes `n_estimators`,
+`max_samples`, `max_features` (both fractions), `bootstrap_features`, `oob_score` (default
+`False`) and `random_state` (default 42), and has:
+
+- `fit(x, y, ind_mat, sample_weight=None)`, which returns the model. `ind_mat` covers only
+  the training labels: one column per row of `x`.
+- `predict(x)`, a list of 0/1 ints.
+- `predict_proba(x)`, one `[P(y=0), P(y=1)]` row per input row, with columns in the order of
+  `classes_` (`[0, 1]`), the scikit-learn shape. `np.asarray(...)` gives an `n × 2` array. The
+  stumps have no probabilities of their own, so `P(y=1)` is the share of estimators voting 1:
+  a multiple of `1 / n_estimators`, and `predict` is 1 exactly when it is at least 0.5.
+- `classes_`, `n_features_in_`, `oob_score_` (`None` unless `oob_score=True`) and
+  `estimators_samples_`.
+
+`predict` and `predict_proba` raise `ValueError` before a successful `fit`, or for a matrix
+with a different column count from the training one. The same `random_state` and inputs
+reproduce the fit, and with `oob_score=True` the model gives the same predictions and
+`oob_score` as `fit_predict_sb_classifier`.
+
+Out-of-fold probabilities under [purged k-fold](/modules/cross-validation/): fit on each
+training fold with that fold's columns of the indicator matrix, and predict its test fold.
+
+```python
+import random
+
+import numpy as np
+from openquant import sampling, sb_bagging
+from openquant.cross_validation import purged_kfold_splits
+
+# The same 120 labels as above.
+rng = random.Random(3)
+n = 120
+spans = [(2 * i, 2 * i + 7) for i in range(n)]
+ind_mat = np.asarray(sampling.get_ind_matrix(spans, list(range(2 * n + 8))))
+signal = [rng.gauss(0, 1) for _ in range(n)]
+x = np.array([[s, rng.gauss(0, 1)] for s in signal])
+y = np.array([int(s + rng.gauss(0, 0.8) > 0) for s in signal])
+
+t0, t1 = [s for s, _ in spans], [e for _, e in spans]
+oof = np.empty((n, 2))
+for train, test in purged_kfold_splits(t0, t1, n_splits=5, pct_embargo=0.01):
+    model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(n_estimators=50, random_state=7)
+    model.fit(x[train].tolist(), y[train].tolist(), ind_mat[:, train].tolist())
+    oof[test] = model.predict_proba(x[test].tolist())
+
+print("rows sum to 1:", bool(np.allclose(oof.sum(axis=1), 1.0)))
+print(f"out-of-fold accuracy {np.mean((oof[:, 1] >= 0.5) == y):.3f}")
+```
+
+```text
+rows sum to 1: True
+out-of-fold accuracy 0.717
+```
+
+Only the classifier has a model object; the regressor is still reached through
+`fit_predict_sb_regressor` from Python.
 
 ## From Rust
 

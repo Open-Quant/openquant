@@ -2,7 +2,7 @@
 title: "filters"
 description: "The symmetric CUSUM filter and a rolling z-score filter, for sampling events from a price series."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -112,10 +112,52 @@ $h$ is in log-return units and means "a move worth labelling". Two practical anc
   the classifier about moves of the size it is being paid to predict. An $h$ far below the
   barrier width mostly samples noise that never reaches a barrier.
 - **Tie it to volatility.** A constant $h$ fires too often in turbulent regimes and rarely in
-  calm ones. In Rust, `Threshold::Dynamic` takes one threshold per bar — typically a multiple
-  of [`get_daily_vol`](/modules/util-volatility/) — and bar $t$ is compared with element $t$.
-  A dynamic vector shorter than the series is a `FilterError::MissingDynamicThreshold`, not a
-  silent truncation. The Python binding accepts a scalar only.
+  calm ones. Pass one threshold per bar instead — typically a multiple of
+  [`get_daily_vol`](/modules/util-volatility/) — and bar $t$ is compared with element $t$.
+  In Rust that is `Threshold::Dynamic`; a vector shorter than the series is a
+  `FilterError::MissingDynamicThreshold`, not a silent truncation. In Python, pass a list,
+  NumPy array or pandas Series as `threshold` instead of a number.
+
+From Python, a per-bar `threshold` must have exactly one value per price, or it is a
+`ValueError`. Element 0 is never read (the first return is at bar 1), so it may be `NaN`, as
+the first value of a volatility estimate usually is. Every other element, and a scalar
+threshold, must be finite and non-negative: a `NaN` threshold would silently never fire and a
+negative one would fire on every bar. Fill a volatility estimate's warm-up before passing it.
+
+```python
+import math
+import random
+
+import numpy as np
+from openquant import filters
+
+# The same 600 closes as above: minutes 300-399 are four times as volatile.
+rng = random.Random(11)
+price, close = 100.0, []
+for i in range(600):
+    price *= math.exp(rng.gauss(0, 0.004 if 300 <= i < 400 else 0.001))
+    close.append(price)
+
+# h_t = 5 x the trailing 50-bar standard deviation of log returns; 1% until it is defined.
+returns = np.diff(np.log(close), prepend=np.nan)
+vol = np.array([returns[t - 49 : t + 1].std(ddof=1) if t >= 50 else np.nan for t in range(600)])
+h = np.where(np.isnan(vol), 0.01, 5.0 * vol)
+
+events = filters.cusum_filter_indices(close, h)
+volatile = [i for i in events if 300 <= i < 400]
+print(f"{len(events)} events from {len(close)} bars; {len(volatile)} of them in the volatile 100")
+print("a constant array is the scalar filter:",
+      filters.cusum_filter_indices(close, [0.01] * 600) == filters.cusum_filter_indices(close, 0.01))
+```
+
+```text
+29 events from 600 bars; 6 of them in the volatile 100
+a constant array is the scalar filter: True
+```
+
+The threshold rises with the turbulence, so the volatile stretch yields 6 events instead of 13
+and the calm stretches more: the sampler now fires on moves that are large *for their
+regime*, which is what a volatility-scaled triple barrier will then label.
 
 Whichever you use, count the events and look at their spacing before labelling. Events closer
 together than the label horizon produce overlapping labels; [`sampling`](/modules/sampling/)

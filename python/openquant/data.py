@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import tempfile
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from datetime import date, datetime
 from pathlib import Path
@@ -132,13 +133,54 @@ def _format_ts(v: Any) -> str | None:
     return str(v)
 
 
-def _gap_expr(
-    symbol_expr: pl.Expr, ts_us_expr: pl.Expr, threshold_seconds: int = 24 * 3600
-) -> pl.Expr:
-    threshold_us = int(threshold_seconds) * 1_000_000
-    return (symbol_expr == symbol_expr.shift(1)) & (
-        (ts_us_expr - ts_us_expr.shift(1)) > threshold_us
+_DAY_US = 86_400 * 1_000_000
+_HOUR_US = 3_600 * 1_000_000
+
+
+def _inferred_interval_us(sorted_df: pl.DataFrame) -> int | None:
+    """The bar spacing of a frame sorted by (symbol, ts_us): the most common positive spacing
+    between consecutive bars of one symbol, pooled over symbols (the smallest on a tie).
+
+    `None` when no symbol has two bars at different times. Mirrors
+    `openquant::data_processing` in Rust.
+    """
+    spacings = (
+        sorted_df.select(
+            pl.when(pl.col("symbol") == pl.col("symbol").shift(1))
+            .then(pl.col("ts_us") - pl.col("ts_us").shift(1))
+            .alias("spacing")
+        )
+        .get_column("spacing")
+        .drop_nulls()
     )
+    spacings = spacings.filter(spacings > 0)
+    if spacings.len() == 0:
+        return None
+    counts = spacings.value_counts(name="n")
+    top = counts.filter(pl.col("n") == pl.col("n").max())
+    return int(top.get_column("spacing").min())  # type: ignore[arg-type]
+
+
+def _gap_count(sorted_df: pl.DataFrame, interval_us: int | None) -> int:
+    """Gaps between consecutive bars of one symbol, given the inferred bar spacing.
+
+    Daily data (spacing within an hour of one day, to absorb DST shifts): a gap is a skipped
+    weekday, i.e. at least one Monday-to-Friday date strictly between the two bars' dates,
+    so weekends are not gaps (exchange holidays still are). Any other spacing: a gap is a
+    spacing greater than the inferred one.
+    """
+    if interval_us is None:
+        return 0
+    same = pl.col("symbol") == pl.col("symbol").shift(1)
+    if abs(interval_us - _DAY_US) <= _HOUR_US:
+        prev_date = pl.col("ts").shift(1).dt.date()
+        cur_date = pl.col("ts").dt.date()
+        gap = same & (
+            pl.business_day_count(prev_date + pl.duration(days=1), cur_date).fill_null(0) > 0
+        )
+    else:
+        gap = same & ((pl.col("ts_us") - pl.col("ts_us").shift(1)) > interval_us)
+    return int(sorted_df.select(gap.fill_null(False).cast(pl.UInt32).sum()).item())
 
 
 def _build_quality_report(
@@ -150,11 +192,14 @@ def _build_quality_report(
             "symbol_count": 0,
             "duplicate_key_count": 0,
             "gap_interval_count": 0,
+            "inferred_interval_us": None,
             "ts_min": None,
             "ts_max": None,
             "rows_removed_by_deduplication": rows_removed_by_deduplication,
             "null_counts": dict(_ZERO_NULL_COUNTS),
         }
+
+    interval_us = _inferred_interval_us(sorted_df)
 
     summary = (
         sorted_df.lazy()
@@ -169,10 +214,6 @@ def _build_quality_report(
                 .cast(pl.UInt32)
                 .sum()
             ).alias("duplicate_key_count"),
-            _gap_expr(pl.col("symbol"), pl.col("ts_us"))
-            .cast(pl.UInt32)
-            .sum()
-            .alias("gap_interval_count"),
             pl.col("ts").min().alias("ts_min"),
             pl.col("ts").max().alias("ts_max"),
         )
@@ -183,7 +224,8 @@ def _build_quality_report(
         "row_count": int(summary["row_count"]),
         "symbol_count": int(summary["symbol_count"]),
         "duplicate_key_count": int(summary["duplicate_key_count"]),
-        "gap_interval_count": int(summary["gap_interval_count"]),
+        "gap_interval_count": _gap_count(sorted_df, interval_us),
+        "inferred_interval_us": interval_us,
         "ts_min": _format_ts(summary["ts_min"]),
         "ts_max": _format_ts(summary["ts_max"]),
         "rows_removed_by_deduplication": rows_removed_by_deduplication,
@@ -314,16 +356,55 @@ def load_ohlcv(
     return clean_ohlcv(raw, return_report=return_report)
 
 
+@overload
+def align_calendar(
+    df: pl.DataFrame,
+    *,
+    interval: str = ...,
+    return_report: Literal[False] = ...,
+) -> pl.DataFrame: ...
+
+
+@overload
+def align_calendar(
+    df: pl.DataFrame,
+    *,
+    interval: str = ...,
+    return_report: Literal[True],
+) -> tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+@overload
+def align_calendar(
+    df: pl.DataFrame,
+    *,
+    interval: str = ...,
+    return_report: bool = ...,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
 def align_calendar(
     df: pl.DataFrame,
     *,
     interval: str = "1d",
-) -> pl.DataFrame:
+    return_report: bool = False,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
+    """Clean ``df`` and reindex each symbol onto a regular grid of ``interval``.
+
+    Each symbol's grid runs from its first to its last bar in steps of ``interval``. Grid
+    points with no bar get null prices and ``is_missing_bar=True``. A bar whose timestamp is
+    not on its symbol's grid (for example a daily bar stamped at a different time of day)
+    is **not** in the output. With ``return_report=True`` the result is ``(aligned, report)``
+    and ``report["off_grid_bars"]`` holds those bars; otherwise a ``UserWarning`` names how
+    many were dropped. ``report`` also carries ``off_grid_bar_count`` and
+    ``rows_removed_by_deduplication``.
+    """
     interval_seconds = _interval_to_seconds(interval)
     if interval_seconds <= 0:
         raise ValueError("interval_seconds must be > 0")
 
-    clean = clean_ohlcv(df).lazy()
+    clean_df, clean_report = clean_ohlcv(df, return_report=True)
+    clean = clean_df.lazy()
     bounds = clean.group_by("symbol").agg(
         pl.col("ts").min().alias("ts_min"),
         pl.col("ts").max().alias("ts_max"),
@@ -348,6 +429,26 @@ def align_calendar(
         .sort(["symbol", "ts"])
         .collect()
     )
+    off_grid = (
+        clean.join(calendar, on=["symbol", "ts"], how="anti")
+        .select(CANONICAL_OHLCV_COLUMNS)
+        .sort(["symbol", "ts"])
+        .collect()
+    )
+    if return_report:
+        report = {
+            "rows_removed_by_deduplication": clean_report["rows_removed_by_deduplication"],
+            "off_grid_bar_count": off_grid.height,
+            "off_grid_bars": off_grid,
+        }
+        return out, report
+    if off_grid.height:
+        warnings.warn(
+            f"align_calendar dropped {off_grid.height} bar(s) whose timestamp is not on "
+            f"their symbol's {interval} grid; pass return_report=True to get them",
+            UserWarning,
+            stacklevel=2,
+        )
     return out
 
 

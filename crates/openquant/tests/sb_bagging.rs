@@ -418,3 +418,32 @@ fn test_sample_weight_is_validated() {
         Err(SbBaggingError::InvalidSampleWeight)
     );
 }
+
+#[test]
+fn test_predict_proba_is_the_vote_share_and_agrees_with_predict() {
+    let (x, y, _, _) = synthetic_dataset();
+    let split = 150;
+    let x_train = x.rows(0, split).into_owned();
+    let x_test = x.rows(split, x.nrows() - split).into_owned();
+    let mut clf = SequentiallyBootstrappedBaggingClassifier::new(3);
+    clf.n_estimators = 16;
+    assert_eq!(clf.predict_proba(&x_test), Err(SbBaggingError::EmptyInput));
+    clf.fit(&x_train, &y[..split], &train_ind_mat(split), None).unwrap();
+
+    let proba = clf.predict_proba(&x_test).unwrap();
+    let preds = clf.predict(&x_test).unwrap();
+    assert_eq!(proba.len(), x_test.nrows());
+    for (p, pred) in proba.iter().zip(&preds) {
+        // A share of 16 votes.
+        assert!((0.0..=1.0).contains(p));
+        assert!((p * 16.0 - (p * 16.0).round()).abs() < 1e-12, "p={p}");
+        assert_eq!(*pred, u8::from(*p >= 0.5));
+    }
+
+    // One estimator: the probability is that stump's 0/1 vote.
+    clf.n_estimators = 1;
+    clf.fit(&x_train, &y[..split], &train_ind_mat(split), None).unwrap();
+    let single = clf.predict_proba(&x_test).unwrap();
+    let votes: Vec<f64> = clf.predict(&x_test).unwrap().into_iter().map(f64::from).collect();
+    assert_eq!(single, votes);
+}
