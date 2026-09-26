@@ -70,6 +70,23 @@ def test_add_vertical_barrier_close_prices_is_deprecated():
         labeling.add_vertical_barrier(events, STAMPS, CLOSE[:3], num_days=2)
 
 
+def test_drop_labels_rejects_unparseable_timestamps():
+    # Issue #194: rows whose t0 did not parse were dropped silently.
+    rows = [(STAMPS[i], 0.01, 0.02, 1 if i % 2 else -1, None) for i in range(4)]
+    assert labeling.drop_labels(rows, 0.05) == rows
+
+    bad = [*rows, ("2024/01/09", 0.01, 0.02, 1, None), ("not a date", 0.0, 0.02, -1, None)]
+    with pytest.raises(
+        ValueError, match=r"2 timestamp\(s\) do not parse.*row 4: \"2024/01/09\""
+    ) as e:
+        labeling.drop_labels(bad, 0.05)
+    assert 'row 5: "not a date"' in str(e.value)
+
+    many = [(f"bad {i}", 0.0, 0.02, 1, None) for i in range(8)]
+    with pytest.raises(ValueError, match=r"8 timestamp\(s\).*row 4: \"bad 4\" and 3 more$"):
+        labeling.drop_labels(many, 0.05)
+
+
 def test_add_vertical_barrier_requires_a_horizon():
     with pytest.raises(ValueError, match="non-zero horizon"):
         labeling.add_vertical_barrier(STAMPS[:3], STAMPS)

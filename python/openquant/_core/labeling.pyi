@@ -67,13 +67,13 @@ def drop_labels(
     """Drop under-represented labels.
 
     AFML Snippet 3.8. Repeatedly removes every row of the rarest label while its share of the
-    rows is at most `min_pct` and at least three distinct labels remain. Rows whose timestamp
-    does not parse are dropped silently rather than raising.
+    rows is at most `min_pct` and at least three distinct labels remain.
 
     Parameters
     ----------
     events : list[tuple[str, float, float, int, float | None]]
-        `(t0, ret, trgt, bin, side)` rows, as returned by `get_bins`.
+        `(t0, ret, trgt, bin, side)` rows, as returned by `get_bins`; `t0` as
+        `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
     min_pct : float
         Minimum share of the rows a label must have to be kept, e.g. 0.05.
 
@@ -81,6 +81,12 @@ def drop_labels(
     -------
     list[tuple[str, float, float, int, float | None]]
         The remaining rows, in input order.
+
+    Raises
+    ------
+    ValueError
+        If a `t0` does not parse. The message gives the number of such rows and the first few
+        values with their row indices. (Such rows used to be dropped silently.)
     """
 
 def get_bins(

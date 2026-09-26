@@ -550,13 +550,13 @@ fn labeling_get_bins(
 /// Drop under-represented labels.
 ///
 /// AFML Snippet 3.8. Repeatedly removes every row of the rarest label while its share of the
-/// rows is at most `min_pct` and at least three distinct labels remain. Rows whose timestamp
-/// does not parse are dropped silently rather than raising.
+/// rows is at most `min_pct` and at least three distinct labels remain.
 ///
 /// Parameters
 /// ----------
 /// events : list[tuple[str, float, float, int, float | None]]
-///     `(t0, ret, trgt, bin, side)` rows, as returned by `get_bins`.
+///     `(t0, ret, trgt, bin, side)` rows, as returned by `get_bins`; `t0` as
+///     `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is accepted).
 /// min_pct : float
 ///     Minimum share of the rows a label must have to be kept, e.g. 0.05.
 ///
@@ -564,21 +564,45 @@ fn labeling_get_bins(
 /// -------
 /// list[tuple[str, float, float, int, float | None]]
 ///     The remaining rows, in input order.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a `t0` does not parse. The message gives the number of such rows and the first few
+///     values with their row indices. (Such rows used to be dropped silently.)
 #[pyfunction(name = "drop_labels")]
-fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> Vec<BinRow> {
-    let parsed: Vec<(chrono::NaiveDateTime, f64, f64, i8, Option<f64>)> = events
-        .into_iter()
-        .filter_map(|(ts_str, ret, trgt, label, side)| {
-            let ts = parse_datetime_str(&ts_str).ok()?;
-            Some((ts, ret, trgt, label, side))
-        })
-        .collect();
+fn labeling_drop_labels(events: Vec<BinRow>, min_pct: f64) -> PyResult<Vec<BinRow>> {
+    let mut parsed: Vec<(chrono::NaiveDateTime, f64, f64, i8, Option<f64>)> =
+        Vec::with_capacity(events.len());
+    let mut bad: Vec<(usize, String)> = Vec::new();
+    for (i, (ts_str, ret, trgt, label, side)) in events.into_iter().enumerate() {
+        match parse_datetime_str(&ts_str) {
+            Ok(ts) => parsed.push((ts, ret, trgt, label, side)),
+            Err(_) => bad.push((i, ts_str)),
+        }
+    }
+    if !bad.is_empty() {
+        const SHOWN: usize = 5;
+        let listed: Vec<String> =
+            bad.iter().take(SHOWN).map(|(i, s)| format!("row {i}: {s:?}")).collect();
+        let more = if bad.len() > SHOWN {
+            format!(" and {} more", bad.len() - SHOWN)
+        } else {
+            String::new()
+        };
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "drop_labels: {} timestamp(s) do not parse (expected '%Y-%m-%d %H:%M:%S' with an \
+             optional fractional second): {}{more}",
+            bad.len(),
+            listed.join(", ")
+        )));
+    }
 
     let result = openquant::labeling::drop_labels(&parsed, min_pct);
-    result
+    Ok(result
         .into_iter()
         .map(|(ts, ret, trgt, label, side)| (format_naive_datetime(&ts), ret, trgt, label, side))
-        .collect()
+        .collect())
 }
 
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
