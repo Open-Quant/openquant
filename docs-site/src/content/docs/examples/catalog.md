@@ -29,12 +29,12 @@ only `cargo`.
 | `python/benchmarks/benchmark_data_processing.py` | `just py-bench-data` | Ingestion and bar-building throughput at 200k rows × 4 symbols. Use this if you want a real memory profile before feeding it production data. |
 | `python/tests/` | `just py-test` | Nine test modules that double as usage examples — `test_pipeline_api.py` and `test_bindings_contract.py` are the two worth reading first. |
 
-The eleven notebooks under `notebooks/python/` are numbered in reading
+The twelve notebooks under `notebooks/python/` are numbered in reading
 order, from `01_event_labeling_and_pipeline.ipynb` to
-`12_cpcv_deflated_sharpe.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 12 are
+`13_bet_sizing_from_probabilities.ipynb` (06 was removed; 11 replaces it). Notebooks 09 to 13 are
 research runbooks, listed under [Runbooks](#runbooks) below. They are committed with their outputs,
 and their figures are exported to `docs-site/public/figures/notebooks/`.
-All of them run on synthetic data: `09`, `10`, `11` and `12` read the SYNTHETIC `SYN_A`..`SYN_E`
+All of them run on synthetic data: `09` to `13` read the SYNTHETIC `SYN_A`..`SYN_E`
 sample through `openquant.data.fetch`, and run on real data only when you pass your own source.
 
 ### Figures from the executed notebooks
@@ -66,6 +66,10 @@ Runbooks:
 - [CPCV backtest with PSR and deflated Sharpe](/runbooks/cpcv-deflated-sharpe/) —
   `12_cpcv_deflated_sharpe.ipynb`, best-of-74 strategy selection judged by CPCV, PSR and DSR on
   a SYNTHETIC no-signal control and a planted signal.
+- [Bet sizing from predicted probabilities](/runbooks/bet-sizing-from-probabilities/) —
+  `13_bet_sizing_from_probabilities.ipynb`, the pre-registered test of runbook 11's post hoc
+  finding: AFML Snippets 10.1-10.3 probability sizing against a flat 0.5 meta filter, with every
+  sizing choice registered as a trial, on SYNTHETIC planted-signal paths and no-signal controls.
 
 ## Worked example: cleaning a messy OHLCV file
 
