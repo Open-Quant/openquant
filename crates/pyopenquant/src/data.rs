@@ -43,6 +43,51 @@ type AlignedOhlcvColumns = (
     Vec<bool>,
 );
 
+/// Sort OHLCV columns by `(symbol, timestamp)` and drop duplicate keys.
+///
+/// A duplicate is a repeated `(symbol, timestamp)` key; one row per key is kept. Output is
+/// sorted by symbol, then timestamp. Prices are neither validated nor filled. This is data
+/// preparation ahead of bars, labels or features (no AFML chapter). The report infers the
+/// bar spacing as the most common positive spacing between consecutive bars of one symbol.
+/// For daily data a gap is a skipped weekday (weekends are not gaps; holidays are); for any
+/// other spacing it is a spacing longer than the inferred one.
+///
+/// Parameters
+/// ----------
+/// timestamps_us : list[int]
+///     Bar timestamps in microseconds since the Unix epoch (UTC).
+/// symbols : list[str]
+///     Instrument identifier per row.
+/// open : list[float]
+///     Opening prices.
+/// high : list[float]
+///     High prices.
+/// low : list[float]
+///     Low prices.
+/// close : list[float]
+///     Closing prices.
+/// volume : list[float]
+///     Traded volumes.
+/// adj_close : list[float]
+///     Closes adjusted for splits and dividends.
+/// dedupe_keep_last : bool
+///     Keep the last occurrence of a duplicated key if True, the first if False.
+///
+/// Returns
+/// -------
+/// tuple[list[int], list[str], list[float], list[float], list[float], list[float],
+///       list[float], list[float], dict[str, Any]]
+///     `(timestamps_us, symbols, open, high, low, close, volume, adj_close, report)` for
+///     the cleaned rows. `report` has keys `row_count`, `symbol_count`,
+///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `rows_removed_by_deduplication`.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If the column lists differ in length, or a Polars operation fails.
 #[pyfunction(name = "clean_ohlcv")]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -84,6 +129,45 @@ fn data_clean_ohlcv(
     ))
 }
 
+/// Data-quality report for OHLCV columns, without modifying them.
+///
+/// Rows are sorted by `(symbol, timestamp)` before counting. A duplicate is a repeated
+/// `(symbol, timestamp)` key. The report infers the bar spacing as the most common positive
+/// spacing between consecutive bars of one symbol. For daily data a gap is a skipped
+/// weekday (weekends are not gaps; holidays are); for any other spacing it is a spacing
+/// longer than the inferred one.
+///
+/// Parameters
+/// ----------
+/// timestamps_us : list[int]
+///     Bar timestamps in microseconds since the Unix epoch (UTC).
+/// symbols : list[str]
+///     Instrument identifier per row.
+/// open : list[float]
+///     Opening prices.
+/// high : list[float]
+///     High prices.
+/// low : list[float]
+///     Low prices.
+/// close : list[float]
+///     Closing prices.
+/// volume : list[float]
+///     Traded volumes.
+/// adj_close : list[float]
+///     Closes adjusted for splits and dividends.
+///
+/// Returns
+/// -------
+/// dict[str, Any]
+///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `rows_removed_by_deduplication` (always 0 here).
+///
+/// Raises
+/// ------
+/// ValueError
+///     If the column lists differ in length, or a Polars operation fails.
 #[pyfunction(name = "quality_report")]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -113,6 +197,53 @@ fn data_quality_report(
     Ok(out_report.into_pyobject(py).unwrap().into_any().unbind())
 }
 
+/// Clean OHLCV columns and reindex each symbol onto a regular time grid.
+///
+/// Rows are first deduplicated (keeping the last duplicate), then each symbol is reindexed
+/// from its first to its last timestamp in steps of `interval_seconds`. Grid points without
+/// a bar get None prices and `is_missing_bar = True`. The grid starts at each symbol's
+/// first timestamp, so bars whose timestamp is not on that grid are dropped; the interval
+/// should divide the data's spacing. A short interval over a long span produces many rows.
+///
+/// Parameters
+/// ----------
+/// timestamps_us : list[int]
+///     Bar timestamps in microseconds since the Unix epoch (UTC).
+/// symbols : list[str]
+///     Instrument identifier per row.
+/// open : list[float]
+///     Opening prices.
+/// high : list[float]
+///     High prices.
+/// low : list[float]
+///     Low prices.
+/// close : list[float]
+///     Closing prices.
+/// volume : list[float]
+///     Traded volumes.
+/// adj_close : list[float]
+///     Closes adjusted for splits and dividends.
+/// interval_seconds : int
+///     Grid spacing in seconds; must be positive.
+/// return_report : bool, default False
+///     Also return a report of what alignment removed.
+///
+/// Returns
+/// -------
+/// tuple[list[int], list[str], list[float | None], list[float | None], list[float | None],
+///       list[float | None], list[float | None], list[float | None], list[bool]]
+///     `(timestamps_us, symbols, open, high, low, close, volume, adj_close, is_missing_bar)`
+///     on the grid, sorted by symbol then timestamp. Price fields are None where the grid
+///     point had no bar.
+///     With `return_report=True` the result is `(aligned, report)`, where `report` has
+///     keys `rows_removed_by_deduplication`, `off_grid_bar_count` and `off_grid_bars` (a
+///     list of `(symbol, timestamp_us)` for each dropped off-grid bar).
+///
+/// Raises
+/// ------
+/// ValueError
+///     If the column lists differ in length, `interval_seconds <= 0`, or a Polars
+///     operation fails.
 #[pyfunction(name = "align_calendar")]
 #[pyo3(signature = (
     timestamps_us,
@@ -163,6 +294,37 @@ fn data_align_calendar(
     }
 }
 
+/// Sort an OHLCV DataFrame by `(symbol, ts_us)` and drop duplicate keys.
+///
+/// DataFrame form of `clean_ohlcv`. The frame needs columns `symbol` (str), `ts_us` (int64
+/// microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`, `volume`,
+/// `adj_close` (float64). A duplicate is a repeated `(symbol, ts_us)` key. Prices are
+/// neither validated nor filled. The report infers the bar spacing as the most common
+/// positive spacing between consecutive bars of one symbol. For daily data a gap is a
+/// skipped weekday (weekends are not gaps; holidays are); for any other spacing it is a
+/// spacing longer than the inferred one.
+///
+/// Parameters
+/// ----------
+/// pydf : polars.DataFrame
+///     OHLCV frame with the columns listed above.
+/// dedupe_keep_last : bool
+///     Keep the last occurrence of a duplicated key if True, the first if False.
+///
+/// Returns
+/// -------
+/// tuple[polars.DataFrame, dict[str, Any]]
+///     `(cleaned_frame, report)`. `report` has keys `row_count`, `symbol_count`,
+///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `rows_removed_by_deduplication`.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a required column is missing or has the wrong dtype, a `symbol` or `ts_us` value
+///     is null, or a Polars operation fails.
 #[pyfunction(name = "clean_ohlcv_df")]
 fn data_clean_ohlcv_df(
     py: Python<'_>,
@@ -176,6 +338,33 @@ fn data_clean_ohlcv_df(
     Ok((PyDataFrame(out_df), out_report))
 }
 
+/// Data-quality report for an OHLCV DataFrame, without modifying it.
+///
+/// DataFrame form of `quality_report`. The frame needs columns `symbol` (str), `ts_us`
+/// (int64 microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`,
+/// `volume`, `adj_close` (float64). The report infers the bar spacing as the most common
+/// positive spacing between consecutive bars of one symbol. For daily data a gap is a
+/// skipped weekday (weekends are not gaps; holidays are); for any other spacing it is a
+/// spacing longer than the inferred one.
+///
+/// Parameters
+/// ----------
+/// pydf : polars.DataFrame
+///     OHLCV frame with the columns listed above.
+///
+/// Returns
+/// -------
+/// dict[str, Any]
+///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
+///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `rows_removed_by_deduplication` (always 0 here).
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a required column is missing or has the wrong dtype, a `symbol` or `ts_us` value
+///     is null, or a Polars operation fails.
 #[pyfunction(name = "quality_report_df")]
 fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObject> {
     let df: DataFrame = pydf.into();
@@ -183,6 +372,38 @@ fn data_quality_report_df(py: Python<'_>, pydf: PyDataFrame) -> PyResult<PyObjec
     report_to_pydict(py, report)
 }
 
+/// Clean an OHLCV DataFrame and reindex each symbol onto a regular time grid.
+///
+/// DataFrame form of `align_calendar`. The frame needs columns `symbol` (str), `ts_us`
+/// (int64 microseconds since the Unix epoch, UTC) and `open`, `high`, `low`, `close`,
+/// `volume`, `adj_close` (float64). Duplicates are dropped (keeping the last), then each
+/// symbol is reindexed from its first to its last `ts_us` in steps of `interval_seconds`.
+/// Grid points without a bar get null prices. Bars not on the grid (which starts at each
+/// symbol's first timestamp) are dropped, so the interval should divide the data's spacing.
+///
+/// Parameters
+/// ----------
+/// pydf : polars.DataFrame
+///     OHLCV frame with the columns listed above.
+/// interval_seconds : int
+///     Grid spacing in seconds; must be positive.
+/// return_report : bool, default False
+///     Also return a report of what alignment removed.
+///
+/// Returns
+/// -------
+/// polars.DataFrame
+///     The aligned frame with the input columns plus a boolean `is_missing_bar` column,
+///     sorted by `symbol` then `ts_us`.
+///     With `return_report=True` the result is `(aligned, report)`, where `report` has
+///     keys `rows_removed_by_deduplication`, `off_grid_bar_count` and `off_grid_bars` (a
+///     list of `(symbol, timestamp_us)` for each dropped off-grid bar).
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `interval_seconds <= 0`, a required column is missing or has the wrong dtype, a
+///     `symbol` or `ts_us` value is null, or a Polars operation fails.
 #[pyfunction(name = "align_calendar_df")]
 #[pyo3(signature = (pydf, interval_seconds, return_report=false))]
 fn data_align_calendar_df(
