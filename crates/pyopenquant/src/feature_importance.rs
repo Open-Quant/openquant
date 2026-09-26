@@ -129,6 +129,35 @@ fn check_common(
     Ok(())
 }
 
+/// Mean decrease impurity (MDI) aggregated over the trees of a forest (AFML Snippet 8.2).
+///
+/// Following the snippet, a zero importance is treated as missing: the snippet trains with
+/// `max_features=1`, where 0 means "never offered to the tree". With other settings this
+/// inflates the mean, so replace zeros with a tiny positive number if 0 means "useless". Per
+/// feature the mean over non-missing trees is taken, and its standard error is the sample
+/// deviation (ddof 1) times `n_trees ** -0.5`, with `n_trees` counting every tree. Means and
+/// standard errors are then divided by the sum of the means, so the means sum to 1. A feature
+/// that is zero in every tree gets 0; if no mean is positive, everything is 0.
+///
+/// Parameters
+/// ----------
+/// per_tree_importances : list[list[float]]
+///     One row per tree, each with one impurity importance per feature in `feature_names` order
+///     (e.g. `[t.feature_importances_ for t in forest.estimators_]` in scikit-learn).
+/// feature_names : list[str]
+///     Feature names, one per column of `per_tree_importances`.
+///
+/// Returns
+/// -------
+/// dict[str, tuple[float, float]]
+///     `{feature: (mean, std)}`, keyed by feature name (in sorted order). The means sum to 1;
+///     `std` is the normalised standard error of the mean, not the deviation.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `per_tree_importances` or `feature_names` is empty, or a row does not have one entry
+///     per feature name.
 #[pyfunction(name = "mean_decrease_impurity")]
 fn fi_mean_decrease_impurity(
     per_tree_importances: Vec<Vec<f64>>,
@@ -139,6 +168,67 @@ fn fi_mean_decrease_impurity(
 
 // The spans, the fold settings and the caller's predictions are all independent inputs.
 #[allow(clippy::too_many_arguments)]
+/// Mean decrease accuracy (MDA) from out-of-sample probabilities you computed (AFML 8.3).
+///
+/// The purged folds are rebuilt here with `PurgedKFold(n_splits, spans, pct_embargo)`; they are
+/// the folds of `openquant.cross_validation.purged_kfold_splits` with the same arguments. For
+/// each fold, fit your model on the training indices, predict the test indices to get
+/// `base_proba`, then, for each feature `j`, shuffle column `j` within the test rows and predict
+/// again to get `permuted_proba[j]`. Because the test folds partition the samples, each column
+/// holds one out-of-sample value per sample. The Rust MDA then scores, per fold, the base and
+/// each permuted prediction; the per-fold importance is `(base - perm) / (0 - perm)` for
+/// `"neg_log_loss"` and `(base - perm) / (1 - perm)` for `"accuracy"` and `"f1"` (0 when the
+/// denominator is 0 or the ratio is not finite), and the result is its mean over folds. Test-fold
+/// scores are weighted by `sample_weight`.
+///
+/// 1 means shuffling the feature destroyed everything the model had, 0 that the model did not
+/// need it, and a negative value that it did better without it.
+///
+/// Parameters
+/// ----------
+/// y : list[float]
+///     Labels, each 0.0 or 1.0, one per sample.
+/// t0 : list[int]
+///     Start of each sample's label span, as int64 nanoseconds since the epoch (plain integers
+///     also work). One per sample, in time order.
+/// t1 : list[int]
+///     End of each sample's label span, in the same units as `t0`. Must be `>= t0`.
+/// base_proba : list[float]
+///     Out-of-sample probability of class 1 per sample, from the unpermuted test fold; each in
+///     `[0, 1]`.
+/// permuted_proba : list[list[float]]
+///     One column per feature, in `feature_names` order; column `j` holds, per sample, the
+///     out-of-sample probability of class 1 with feature `j` shuffled within the test fold.
+/// feature_names : list[str]
+///     Feature names; must not be empty.
+/// n_splits : int
+///     Number of purged folds; `2 <= n_splits <= len(y)`. Keyword-only.
+/// pct_embargo : float
+///     Embargo as a fraction of the whole sample count, in `[0, 1)`, rounded up. Keyword-only.
+/// scoring : str
+///     One of `"neg_log_loss"`, `"accuracy"` or `"f1"` (F1 of the positive class). Accuracy
+///     and F1 threshold the probabilities at 0.5. Keyword-only.
+/// sample_weight : list[float] | None, default None
+///     Weight per sample, applied to the test-fold scores. Keyword-only.
+/// seed : int, default 42
+///     Accepted for signature parity with the Rust MDA. It has no effect: the shuffles are
+///     already in `permuted_proba`. Keyword-only.
+///
+/// Returns
+/// -------
+/// dict[str, tuple[float, float]]
+///     `{feature: (mean, std)}`, keyed by feature name (in sorted order). `std` is the standard
+///     error of the mean over folds, not the deviation.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `scoring` is not one of the names above; if `t0` and `t1`, `y`, `base_proba`, a
+///     column of `permuted_proba` or `sample_weight` differ in length from the sample count; if
+///     `feature_names` is empty or `permuted_proba` does not have one column per feature; if a
+///     probability is not finite or outside `[0, 1]`; or if the core rejects the folds (e.g. no
+///     samples, `n_splits` below 2 or above the sample count, `pct_embargo` not a finite number in
+///     `[0, 1)`, a span that ends before it starts).
 #[pyfunction(name = "mda_from_probabilities")]
 #[pyo3(signature = (
     y,
@@ -214,6 +304,57 @@ fn fi_mda_from_probabilities(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Single feature importance (SFI) from out-of-sample probabilities you computed (AFML 8.4).
+///
+/// The purged folds are rebuilt here with `PurgedKFold(n_splits, spans, pct_embargo)`; they are
+/// the folds of `openquant.cross_validation.purged_kfold_splits` with the same arguments. For
+/// each feature `j` and each fold, fit your model on feature `j` alone over the training
+/// indices and predict the test indices; `proba[j]` holds those out-of-sample probabilities,
+/// one per sample. The value per feature is the raw cross-validated score, not a ratio: for
+/// `"neg_log_loss"` compare it with `-ln 2` (about -0.693), a coin flip. The standard error is
+/// the population deviation (ddof 0) over folds divided by `sqrt(n_splits)`.
+///
+/// Parameters
+/// ----------
+/// y : list[float]
+///     Labels, each 0.0 or 1.0, one per sample.
+/// t0 : list[int]
+///     Start of each sample's label span, as int64 nanoseconds since the epoch (plain integers
+///     also work). One per sample, in time order.
+/// t1 : list[int]
+///     End of each sample's label span, in the same units as `t0`. Must be `>= t0`.
+/// proba : list[list[float]]
+///     One column per feature, in `feature_names` order; column `j` holds, per sample, the
+///     out-of-sample probability of class 1 from the model fitted on feature `j` alone.
+/// feature_names : list[str]
+///     Feature names; must not be empty.
+/// n_splits : int
+///     Number of purged folds; `2 <= n_splits <= len(y)`. Keyword-only.
+/// pct_embargo : float
+///     Embargo as a fraction of the whole sample count, in `[0, 1)`, rounded up. Keyword-only.
+/// scoring : str
+///     One of `"neg_log_loss"`, `"accuracy"` or `"f1"` (F1 of the positive class). Accuracy
+///     and F1 threshold the probabilities at 0.5. Keyword-only.
+/// sample_weight : list[float] | None, default None
+///     Weight per sample. Its length is checked, but it does not affect the result: the Rust
+///     SFI passes weights only to model fitting (which happened on your side) and scores the
+///     test folds unweighted. Keyword-only.
+///
+/// Returns
+/// -------
+/// dict[str, tuple[float, float]]
+///     `{feature: (mean, std)}`, keyed by feature name (in sorted order). `std` is the standard
+///     error of the mean over folds, not the deviation.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `scoring` is not one of the names above; if `t0` and `t1`, `y`, a column of `proba`
+///     or `sample_weight` differ in length from the sample count; if `feature_names` is empty
+///     or `proba` does not have one column per feature; if a probability is not finite or
+///     outside `[0, 1]`; or if the core rejects the folds (e.g. no samples,
+///     `n_splits` below 2 or above the sample count, `pct_embargo` not a finite number in
+///     `[0, 1)`, a span that ends before it starts).
 #[pyfunction(name = "sfi_from_probabilities")]
 #[pyo3(signature = (
     y,

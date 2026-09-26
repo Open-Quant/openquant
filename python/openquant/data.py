@@ -237,6 +237,40 @@ def clean_ohlcv(
     dedupe_keep: Literal["first", "last"] = "last",
     return_report: bool = False,
 ) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
+    """Normalize a long OHLCV frame to the canonical schema, sorted and de-duplicated.
+
+    Column names are matched case-insensitively against known aliases (for example `date`,
+    `timestamp` or `datetime` for `ts`, `ticker` for `symbol`, `adjusted_close` for
+    `adj_close`). `ts` is cast to string and parsed to `Datetime` (a
+    `"%Y-%m-%d %H:%M:%S[.f]"` form exactly, anything else by polars' inference); `symbol` is
+    cast to string and the price and volume columns to `Float64`. A missing `adj_close` is
+    filled from `close`. Rows with a null in any canonical column, including timestamps that
+    fail to parse, are dropped silently. Extra columns are discarded.
+
+    Parameters
+    ----------
+    df : polars.DataFrame
+        Long OHLCV frame with `ts`, `symbol`, `open`, `high`, `low`, `close` and `volume`
+        (or their aliases), optionally `adj_close`.
+    dedupe_keep : {"first", "last"}, default "last"
+        Which row to keep among rows sharing a `(symbol, ts)` key, by position after the
+        frame is sorted by `symbol` and `ts`.
+    return_report : bool, default False
+        Also return a data quality report of the cleaned frame.
+
+    Returns
+    -------
+    polars.DataFrame or tuple[polars.DataFrame, dict[str, Any]]
+        Columns `ts, symbol, open, high, low, close, volume, adj_close`, sorted by `symbol`
+        then `ts`. With `return_report=True`, a `(frame, report)` tuple; the report has the
+        keys of `data_quality_report`, with `rows_removed_by_deduplication` set to the number
+        of duplicate rows dropped and `duplicate_key_count` 0.
+
+    Raises
+    ------
+    ValueError
+        If `dedupe_keep` is not `"first"` or `"last"`, or a required column is missing.
+    """
     if dedupe_keep not in {"first", "last"}:
         raise ValueError("dedupe_keep must be 'first' or 'last'")
 
@@ -280,6 +314,32 @@ def clean_ohlcv(
 
 
 def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
+    """Summarize row counts, duplicate keys, gaps and time range of an OHLCV frame.
+
+    The frame is normalized as in `clean_ohlcv` (aliases, casts, null rows dropped) but not
+    de-duplicated, so duplicate keys are counted rather than removed.
+
+    Parameters
+    ----------
+    df : polars.DataFrame
+        Long OHLCV frame with `ts`, `symbol`, `open`, `high`, `low`, `close` and `volume`
+        (or their aliases).
+
+    Returns
+    -------
+    dict[str, Any]
+        `row_count`, `symbol_count`, `duplicate_key_count` (rows repeating the previous
+        row's `(symbol, ts)`), `gap_interval_count` (consecutive rows of one symbol more than
+        24 hours apart, so weekends count on daily data), `ts_min` and `ts_max` (as
+        `"%Y-%m-%d %H:%M:%S"` strings, with `.ffffff` when there are microseconds; None when
+        empty), `rows_removed_by_deduplication` (always 0 here) and `null_counts` (per
+        canonical column; always 0, because rows with nulls are dropped before counting).
+
+    Raises
+    ------
+    ValueError
+        If a required column is missing.
+    """
     sorted_df = (
         _prepare_ohlcv_lf(df)
         .with_columns(pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us"))
@@ -295,6 +355,33 @@ def load_ohlcv(
     symbol: str | None = None,
     return_report: bool = False,
 ) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]:
+    """Read an OHLCV CSV or Parquet file and clean it with `clean_ohlcv`.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        File to read; the suffix selects the reader (`.csv`, `.parquet` or `.pq`,
+        case-insensitive).
+    symbol : str or None, default None
+        Symbol to assign to every row when the file has no symbol column (or alias).
+        Ignored when the file has one.
+    return_report : bool, default False
+        Also return the `clean_ohlcv` quality report.
+
+    Returns
+    -------
+    polars.DataFrame or tuple[polars.DataFrame, dict[str, Any]]
+        The canonical frame of `clean_ohlcv`, or `(frame, report)` with
+        `return_report=True`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `path` does not exist.
+    ValueError
+        If the suffix is unsupported, the file has no symbol column and `symbol` is None,
+        or a required OHLCV column is missing.
+    """
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"file not found: {file_path}")
@@ -319,6 +406,35 @@ def align_calendar(
     *,
     interval: str = "1d",
 ) -> pl.DataFrame:
+    """Reindex each symbol onto a regular time grid, marking the bars that are missing.
+
+    The frame is cleaned with `clean_ohlcv`, then for each symbol a grid is built from that
+    symbol's first to last timestamp (inclusive) in steps of `interval`, anchored at its first
+    timestamp. Rows whose timestamp is off the grid are dropped; grid points with no row get
+    nulls in the price and volume columns. Nothing is forward-filled. A daily grid includes
+    weekends and holidays.
+
+    Parameters
+    ----------
+    df : polars.DataFrame
+        Long OHLCV frame with `ts`, `symbol`, `open`, `high`, `low`, `close` and `volume`
+        (or their aliases).
+    interval : str, default "1d"
+        Grid step: an integer followed by `d`, `h`, `m` or `s` (for example `"1h"`).
+
+    Returns
+    -------
+    polars.DataFrame
+        Columns `ts, symbol, open, high, low, close, volume, adj_close, is_missing_bar`,
+        sorted by `symbol` then `ts`; `is_missing_bar` is True where the grid point had no
+        input row.
+
+    Raises
+    ------
+    ValueError
+        If `interval` does not have a supported form or is not positive, or a required
+        column is missing.
+    """
     interval_seconds = _interval_to_seconds(interval)
     if interval_seconds <= 0:
         raise ValueError("interval_seconds must be > 0")
@@ -491,7 +607,26 @@ class DataSource(Protocol):
 
     name: str
 
-    def fetch_symbol(self, symbol: str, start: date, end: date) -> Any: ...
+    def fetch_symbol(self, symbol: str, start: date, end: date) -> Any:
+        """Return daily OHLCV bars for one symbol with dates in `[start, end]`.
+
+        Parameters
+        ----------
+        symbol : str
+            Symbol to fetch.
+        start : datetime.date
+            First date requested (inclusive).
+        end : datetime.date
+            Last date requested (inclusive).
+
+        Returns
+        -------
+        Any
+            A polars DataFrame, or anything `polars.DataFrame(...)` accepts, with column
+            names `clean_ohlcv` recognizes. Rows for other symbols make `fetch` fail; rows
+            outside `[start, end]` are filtered out by `fetch`.
+        """
+        ...
 
 
 class LocalFileSource:
@@ -525,9 +660,35 @@ class LocalFileSource:
 
     @property
     def symbols(self) -> list[str]:
+        """Sorted list of the distinct symbols in the file (loads the file on first use)."""
         return sorted(self._data()["symbol"].unique().to_list())
 
     def fetch_symbol(self, symbol: str, start: date, end: date) -> pl.DataFrame:
+        """Return all rows of the file for `symbol`.
+
+        The file is loaded and cleaned with `load_ohlcv` once and cached on the instance.
+        `start` and `end` are accepted for the `DataSource` interface but not applied here;
+        `fetch` filters the returned rows to `[start, end]`.
+
+        Parameters
+        ----------
+        symbol : str
+            Symbol to return.
+        start : datetime.date
+            Unused.
+        end : datetime.date
+            Unused.
+
+        Returns
+        -------
+        polars.DataFrame
+            The canonical `clean_ohlcv` columns, restricted to `symbol`.
+
+        Raises
+        ------
+        LookupError
+            If `symbol` is not in the file.
+        """
         if symbol not in self.symbols:
             raise LookupError(
                 f"symbol {symbol!r} is not in {self.path.name}; available: {', '.join(self.symbols)}"
@@ -573,6 +734,22 @@ class CallableSource:
         self.terms = terms
 
     def fetch_symbol(self, symbol: str, start: date, end: date) -> Any:
+        """Call the wrapped function as `fn(symbol, start, end)` and return its result unchanged.
+
+        Parameters
+        ----------
+        symbol : str
+            Symbol to fetch.
+        start : datetime.date
+            First date requested (inclusive).
+        end : datetime.date
+            Last date requested (inclusive).
+
+        Returns
+        -------
+        Any
+            Whatever `fn` returns; `fetch` converts it with `polars.DataFrame(...)` if needed.
+        """
         return self.fn(symbol, start, end)
 
 
