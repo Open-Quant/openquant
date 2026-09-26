@@ -192,7 +192,7 @@ fn entropy_functions_accept_the_encoders_full_alphabet() {
     // UTF-8, and the entropy functions used to slice the message by byte.
     let values: Vec<f64> = (0..400).map(|i| ((i * 37) % 400) as f64).collect();
     let encoding = quantile_mapping(&values, 200).unwrap();
-    let message = encode_array(&values, &encoding);
+    let message = encode_array(&values, &encoding).unwrap();
     assert!(!message.is_ascii());
 
     let n = message.chars().count() as f64;

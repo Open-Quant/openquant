@@ -16,6 +16,13 @@ pub fn to_py_err<T: core::fmt::Display>(err: T) -> PyErr {
     PyValueError::new_err(err.to_string())
 }
 
+/// Emit a `DeprecationWarning` pointing at the Python caller.
+pub fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    let message = std::ffi::CString::new(message)
+        .map_err(|e| PyValueError::new_err(format!("invalid warning text: {e}")))?;
+    PyErr::warn(py, &py.get_type::<pyo3::exceptions::PyDeprecationWarning>(), &message, 1)
+}
+
 pub fn matrix_from_rows(rows: Vec<Vec<f64>>) -> PyResult<DMatrix<f64>> {
     let nrows = rows.len();
     if nrows == 0 {

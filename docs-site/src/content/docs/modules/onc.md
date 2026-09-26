@@ -2,7 +2,7 @@
 title: "onc"
 description: "Optimal Number of Clusters: partition a correlation matrix with k-means, choosing the number of clusters by silhouette quality."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -153,9 +153,11 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
 - **Cost grows as the cube of the number of items or worse.** Every $k$ up to $N-1$ is tried,
   `repeat` times, and each silhouette pass is quadratic. A few hundred items is comfortable;
   thousands is not, and the recursion multiplies it.
-- **It always returns at least two clusters.** There is no "one cluster" outcome, so a matrix
-  with no structure still comes back partitioned. A low mean silhouette, or a silhouette
-  $t$-statistic near zero, is the sign that the clusters are not real.
+- **It returns at least two clusters, except on identical rows.** The search starts at
+  $k=2$, so a matrix with no structure still comes back partitioned. A low mean silhouette, or
+  a silhouette $t$-statistic near zero, is the sign that the clusters are not real. The one
+  exception is a matrix whose rows are all the same, such as all ones: there is nothing to
+  separate, and the result is a single cluster of every item with silhouettes of 0.
 - **Negative correlation is distance, not similarity.** With $d=\sqrt{\tfrac12(1-\rho)}$ a
   pair at $\rho=-1$ is as far apart as possible. If a strategy and its mirror image should
   count as the same bet, take absolute correlations first.

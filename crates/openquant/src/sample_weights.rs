@@ -65,6 +65,10 @@ pub enum SampleWeightsError {
         /// Position (in the input slice) of the first offending event.
         index: usize,
     },
+    /// [`get_weights_by_time_decay`] was given a `decay` outside AFML's domain `(-1, 1]`
+    /// (`NaN` included).
+    #[error("decay must be in (-1, 1], got {0}")]
+    InvalidDecay(f64),
 }
 
 /// Reject events whose end precedes their start; such a span holds no bars to weight.
@@ -210,7 +214,7 @@ pub fn get_weights_by_return(
 /// weight 1. AFML's domain is `decay` in `(-1, 1]`: `1` is no decay, `0 < decay < 1` decays
 /// linearly toward `decay`, `0` toward 0, and `-1 < decay < 0` zeroes the oldest `-decay`
 /// fraction of cumulative uniqueness. The oldest weight *approaches* `decay` rather than
-/// equalling it, because the line is anchored at `x = 0`. `decay` is not validated. The
+/// equalling it, because the line is anchored at `x = 0`. The
 /// weights are not rescaled and do not include return attribution; `close` prices are not
 /// used, only its timestamps.
 ///
@@ -220,7 +224,8 @@ pub fn get_weights_by_return(
 ///
 /// # Errors
 ///
-/// [`SampleWeightsError::EndBeforeStart`] if any event's `end` precedes its `start`.
+/// - [`SampleWeightsError::InvalidDecay`] if `decay` is outside `(-1, 1]` or `NaN`.
+/// - [`SampleWeightsError::EndBeforeStart`] if any event's `end` precedes its `start`.
 ///
 /// ```
 /// use chrono::{Duration, NaiveDate};
@@ -246,6 +251,10 @@ pub fn get_weights_by_time_decay(
     close: &[(NaiveDateTime, f64)],
     decay: f64,
 ) -> Result<Vec<(NaiveDateTime, f64)>, SampleWeightsError> {
+    // `decay = -1` divides by zero in the slope below; above 1 the weights grow with age.
+    if !(decay > -1.0 && decay <= 1.0) {
+        return Err(SampleWeightsError::InvalidDecay(decay));
+    }
     validate_events(triple_barrier_events)?;
     let close_index: Vec<NaiveDateTime> = close.iter().map(|(ts, _)| *ts).collect();
 

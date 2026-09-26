@@ -3,10 +3,12 @@
     python notebooks/python/scripts/run_notebooks.py                   # execute in place + figures
     python notebooks/python/scripts/run_notebooks.py --only 05         # one notebook (number or stem)
     python notebooks/python/scripts/run_notebooks.py --check           # execute to a temp dir, compare
+    python notebooks/python/scripts/run_notebooks.py --jobs 0          # one notebook per CPU at a time
     python notebooks/python/scripts/run_notebooks.py --against-git HEAD  # compare tree to a commit
 
 Every ``notebooks/python/NN_*.ipynb`` runs unless ``EXCLUDED`` lists it with a
-reason. Each notebook runs in a fresh ipykernel (``execute_notebook_cells.py``);
+reason. Each notebook runs in a fresh ipykernel (``execute_notebook_cells.py``),
+``--jobs N`` of them at a time (the notebooks are independent; see ``execute_all``);
 a cell error fails that notebook, the others still run, and the exit status is 1
 if any failed. Market data comes from ``openquant.data.fetch`` with its default
 source, the committed SYNTHETIC sample, so no run touches the network.
@@ -31,12 +33,14 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
 import re
 import subprocess
 import sys
 import tempfile
 import time
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -192,29 +196,53 @@ def _warm_matplotlib() -> None:
         pass
 
 
+def _execute_one(path: Path, out: Path, timeout: int, env: dict[str, str]) -> Result:
+    started = time.monotonic()
+    try:
+        execute_notebook(path, out, timeout=timeout, env=env)
+    except NotebookExecutionError as exc:
+        return Result(path.name, "failed", time.monotonic() - started, str(exc))
+    return Result(path.name, "ok", time.monotonic() - started)
+
+
 def execute_all(
-    paths: list[Path], out_dir: Path | None, fig_dir: Path, timeout: int
+    paths: list[Path], out_dir: Path | None, fig_dir: Path, timeout: int, jobs: int = 1
 ) -> list[Result]:
+    """Execute ``paths``; with ``jobs > 1``, that many notebooks at a time.
+
+    Each notebook already runs in its own kernel with its own working state, writes
+    only its own output file and its own ``nbNN-*`` figures, and reads market data
+    through the atomically written cache, so running several at once changes
+    nothing but the wall-clock time. Workers are processes, not threads:
+    ``execute_notebook`` swaps ``os.environ`` around each run. Results come back
+    in ``paths`` order whatever the completion order.
+    """
     _warm_matplotlib()
     env = {
         "OPENQUANT_FIGURE_DIR": str(fig_dir),
         "PYTHONHASHSEED": "0",
         "MPLBACKEND": "Agg",
     }
-    results: list[Result] = []
+    results: dict[str, Result] = {}
+    todo: list[tuple[Path, Path]] = []
     for path in paths:
         if path.name in EXCLUDED:
-            results.append(Result(path.name, "excluded", detail=EXCLUDED[path.name]))
-            continue
-        out = out_dir / path.name if out_dir is not None else path
-        started = time.monotonic()
-        try:
-            execute_notebook(path, out, timeout=timeout, env=env)
-        except NotebookExecutionError as exc:
-            results.append(Result(path.name, "failed", time.monotonic() - started, str(exc)))
-            continue
-        results.append(Result(path.name, "ok", time.monotonic() - started))
-    return results
+            results[path.name] = Result(path.name, "excluded", detail=EXCLUDED[path.name])
+        else:
+            todo.append((path, out_dir / path.name if out_dir is not None else path))
+    if jobs <= 1 or len(todo) <= 1:
+        for path, out in todo:
+            results[path.name] = _execute_one(path, out, timeout, env)
+    else:
+        with ProcessPoolExecutor(max_workers=min(jobs, len(todo))) as pool:
+            futures = {
+                pool.submit(_execute_one, path, out, timeout, env): path for path, out in todo
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                print(f"{result.name}: {result.status} ({result.seconds:.1f}s)", flush=True)
+                results[result.name] = result
+    return [results[p.name] for p in paths]
 
 
 def _read(path: Path) -> str | None:
@@ -273,7 +301,15 @@ def main() -> int:
     mode.add_argument("--list", action="store_true", help="list notebooks and exclusions")
     parser.add_argument("--only", action="append", default=[], help="notebook number or stem")
     parser.add_argument("--timeout", type=int, default=600, help="per-cell timeout in seconds")
+    parser.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=1,
+        help="notebooks to execute at once (default 1; 0 = one per CPU)",
+    )
     args = parser.parse_args()
+    jobs = args.jobs if args.jobs > 0 else (os.cpu_count() or 1)
 
     paths = _select(discover(), args.only)
     full = not args.only
@@ -298,7 +334,7 @@ def main() -> int:
     if args.check:
         with tempfile.TemporaryDirectory(prefix="openquant-notebooks-") as tmp:
             out_dir, fig_dir = Path(tmp), Path(tmp) / "figures"
-            results = execute_all(paths, out_dir, fig_dir, args.timeout)
+            results = execute_all(paths, out_dir, fig_dir, args.timeout, jobs)
             ran = [r.name for r in results if r.status == "ok"]
             results = [r for r in results if r.status != "ok"] + compare(
                 ran,
@@ -312,7 +348,7 @@ def main() -> int:
     if full and FIGURE_DIR.exists():
         for old in FIGURE_DIR.glob("*.svg"):
             old.unlink()
-    return _report(execute_all(paths, None, FIGURE_DIR, args.timeout))
+    return _report(execute_all(paths, None, FIGURE_DIR, args.timeout, jobs))
 
 
 if __name__ == "__main__":

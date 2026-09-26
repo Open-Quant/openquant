@@ -1,11 +1,12 @@
 //! `openquant._core.feature_importance`: MDI from per-tree importances, and MDA / SFI scored
 //! from out-of-sample probabilities the caller computed on purged folds.
 //!
-//! The Rust MDA and SFI fit a `SimpleClassifier` themselves. A Python model cannot be one
-//! without passing a Python callable into Rust, so these bindings hand the Rust functions a
-//! `Replay` classifier instead: `fit` does nothing and `predict_proba` returns, in call order,
-//! the probabilities the caller already produced. The scoring, the MDA normalisation and the
-//! mean / standard-error aggregation are therefore the Rust code's own.
+//! The Rust MDA fits a `SimpleClassifier` itself. A Python model cannot be one without passing
+//! a Python callable into Rust, so the MDA binding hands it a `Replay` classifier instead:
+//! `fit` does nothing and `predict_proba` returns, in call order, the probabilities the caller
+//! already produced. SFI calls `single_feature_importance_from_proba`, which takes the
+//! probabilities directly. The scoring, the MDA normalisation and the mean / standard-error
+//! aggregation are therefore the Rust code's own.
 //!
 //! The folds are always rebuilt here from the label spans with `PurgedKFold`, so there is no
 //! way to score importance on unpurged folds from Python (issue #27 made spans mandatory).
@@ -15,13 +16,14 @@ use std::collections::BTreeMap;
 
 use openquant::cross_validation::{Scoring, SimpleClassifier};
 use openquant::feature_importance::{
-    mean_decrease_accuracy, mean_decrease_impurity, single_feature_importance, ImportanceStats,
+    mean_decrease_accuracy, mean_decrease_impurity, single_feature_importance_from_proba,
+    ImportanceStats,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::cross_validation::purged_kfold;
-use crate::helpers::to_py_err;
+use crate::helpers::{to_py_err, warn_deprecated};
 
 /// `{feature: (mean, std)}`.
 type ImportanceMap = BTreeMap<String, (f64, f64)>;
@@ -210,9 +212,10 @@ fn fi_mean_decrease_impurity(
 ///     and F1 threshold the probabilities at 0.5. Keyword-only.
 /// sample_weight : list[float] | None, default None
 ///     Weight per sample, applied to the test-fold scores. Keyword-only.
-/// seed : int, default 42
-///     Accepted for signature parity with the Rust MDA. It has no effect: the shuffles are
-///     already in `permuted_proba`. Keyword-only.
+/// seed : int | None, default None
+///     Deprecated: passing it emits a `DeprecationWarning`. It cannot affect the result, since
+///     the shuffles already happened when `permuted_proba` was computed; seed those instead.
+///     Keyword-only.
 ///
 /// Returns
 /// -------
@@ -242,9 +245,10 @@ fn fi_mean_decrease_impurity(
     pct_embargo,
     scoring,
     sample_weight=None,
-    seed=42
+    seed=None
 ))]
 fn fi_mda_from_probabilities(
+    py: Python<'_>,
     y: Vec<f64>,
     t0: Vec<i64>,
     t1: Vec<i64>,
@@ -255,8 +259,15 @@ fn fi_mda_from_probabilities(
     pct_embargo: f64,
     scoring: &str,
     sample_weight: Option<Vec<f64>>,
-    seed: u64,
+    seed: Option<u64>,
 ) -> PyResult<ImportanceMap> {
+    if seed.is_some() {
+        warn_deprecated(
+            py,
+            "mda_from_probabilities: seed is deprecated and has no effect; the shuffling \
+             happened when permuted_proba was computed",
+        )?;
+    }
     let scoring = scoring_from(scoring)?;
     let (cv, n) = purged_kfold(t0, t1, n_splits, pct_embargo)?;
     check_common(&y, &feature_names, sample_weight.as_deref(), n)?;
@@ -283,9 +294,9 @@ fn fi_mda_from_probabilities(
         }
     }
     // The model never reads its features, so a placeholder row per sample suffices; it only
-    // needs one column per feature name. For the same reason the permutation `seed` drives
-    // (Rust shuffles each placeholder column) cannot change the result: the caller's
-    // `permuted_proba` already holds the shuffled predictions.
+    // needs one column per feature name. For the same reason the permutation seed (Rust
+    // shuffles each placeholder column) cannot change the result: the caller's
+    // `permuted_proba` already holds the shuffled predictions. Any fixed value will do.
     let x = vec![vec![0.0; feature_names.len()]; n];
     let mut replay = Replay::new(queue);
     let out = mean_decrease_accuracy(
@@ -296,7 +307,7 @@ fn fi_mda_from_probabilities(
         &splits,
         sample_weight.as_deref(),
         scoring,
-        seed,
+        0,
     )
     .map_err(to_py_err)?;
     replay.finish()?;
@@ -312,7 +323,8 @@ fn fi_mda_from_probabilities(
 /// indices and predict the test indices; `proba[j]` holds those out-of-sample probabilities,
 /// one per sample. The value per feature is the raw cross-validated score, not a ratio: for
 /// `"neg_log_loss"` compare it with `-ln 2` (about -0.693), a coin flip. The standard error is
-/// the population deviation (ddof 0) over folds divided by `sqrt(n_splits)`.
+/// the population deviation (ddof 0) over folds divided by `sqrt(n_splits)`. Test-fold scores
+/// are weighted by `sample_weight`, as for `mda_from_probabilities` and AFML's `cvScore`.
 ///
 /// Parameters
 /// ----------
@@ -336,9 +348,8 @@ fn fi_mda_from_probabilities(
 ///     One of `"neg_log_loss"`, `"accuracy"` or `"f1"` (F1 of the positive class). Accuracy
 ///     and F1 threshold the probabilities at 0.5. Keyword-only.
 /// sample_weight : list[float] | None, default None
-///     Weight per sample. Its length is checked, but it does not affect the result: the Rust
-///     SFI passes weights only to model fitting (which happened on your side) and scores the
-///     test folds unweighted. Keyword-only.
+///     Weight per sample, applied to the test-fold scores (weighted accuracy, weighted mean
+///     log loss, F1 from weighted counts). Weight the fit on your side as well. Keyword-only.
 ///
 /// Returns
 /// -------
@@ -394,26 +405,15 @@ fn fi_sfi_from_probabilities(
     }
     let splits = cv.split(n).map_err(to_py_err)?;
 
-    // `single_feature_importance` cross-validates each feature in turn, fold by fold.
-    let mut queue = Vec::with_capacity(splits.len() * feature_names.len());
-    for column in &proba {
-        for (_, test) in &splits {
-            queue.push(test.iter().map(|&i| column[i]).collect());
-        }
-    }
-    let x = vec![vec![0.0; feature_names.len()]; n];
-    let mut replay = Replay::new(queue);
-    let out = single_feature_importance(
-        &mut replay,
-        &x,
+    let out = single_feature_importance_from_proba(
         &y,
+        &proba,
         &feature_names,
         &splits,
         sample_weight.as_deref(),
         scoring,
     )
     .map_err(to_py_err)?;
-    replay.finish()?;
     Ok(to_map(out))
 }
 

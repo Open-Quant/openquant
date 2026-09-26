@@ -140,9 +140,11 @@ def run_flywheel_iteration(
       realized_vol * 1e-3`, and the estimated total cost is `turnover * cost_per_turn`.
     - `gross_total_return` is the final equity minus 1.0; `net_total_return` subtracts the
       estimated total cost.
-    - `net_sharpe` is the mean over the sample standard deviation of the per-bar returns,
-      times `sqrt(252 * 390 / n_bars)`. Despite the name it uses the gross returns; costs
-      are not deducted from it.
+    - `net_sharpe` is the Sharpe ratio of the per-bar returns net of costs: each bar's
+      strategy return minus `abs(position change into that bar) * cost_per_turn` (the first
+      bar pays nothing), so the per-bar costs add up to the estimated total cost. It is the
+      mean over the sample standard deviation of those net returns, times
+      `sqrt(252 * 390 / n_bars)`, and 0 when the deviation is 0.
 
     Parameters
     ----------
@@ -214,17 +216,22 @@ def run_flywheel_iteration(
     gross_total_return = backtest["equity"][-1] - 1.0
     net_total_return = gross_total_return - total_cost
 
-    bars = len(strategy_returns)
+    # Charge each bar for the position change into it, so the charges sum to total_cost.
+    net_returns = [
+        r - (abs(positions[i] - positions[i - 1]) * cost_per_turn if i > 0 else 0.0)
+        for i, r in enumerate(strategy_returns)
+    ]
+    bars = len(net_returns)
     annualizer = (252.0 * 390.0 / max(bars, 1)) ** 0.5
-    mean_r = sum(strategy_returns) / max(bars, 1)
-    std_r = _std(strategy_returns)
+    mean_r = sum(net_returns) / max(bars, 1)
+    std_r = _std(net_returns)
     net_sharpe = (mean_r / std_r) * annualizer if std_r > 0 else 0.0
 
     promotion = {
         "passed_realized_sharpe": out["risk"]["realized_sharpe"]
         >= float(cfg["min_realized_sharpe"]),
         "passed_net_sharpe": net_sharpe >= float(cfg["min_net_sharpe"]),
-        "passed_alignment_guard": bool(out["leakage_checks"]["inputs_aligned"]),
+        "passed_alignment_guard": bool(out["leakage_checks"]["timestamps_increasing"]),
         "passed_event_order_guard": bool(out["leakage_checks"]["event_indices_sorted"]),
     }
     promotion["promote_candidate"] = bool(all(promotion.values()))

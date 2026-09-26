@@ -158,7 +158,7 @@ FIXTURE = """
 
 <span class="c"># AFML ch. 2: emit an event only when cumulative drift exceeds 0.4%.</span>
 events = filters.cusum_filter_timestamps(close, times, 0.004)
-vertical = labeling.add_vertical_barrier(events, times, close, 0, 0, 30, 0)
+vertical = labeling.add_vertical_barrier(events, times, num_minutes=30)
 labels = labeling.triple_barrier_labels(times, close, events, events, [0.005] * len(events), pt=1.0, sl=1.0, vertical_barrier_times=vertical)</code></pre>
 <pre class="out"><code>500 bars -> 42 events -> 42 labels
 label counts: {-1: 19, 1: 23}</code></pre>

@@ -65,10 +65,14 @@ variance, and:
 | `"equal_weighting"` | one half, always |
 
 The first four give less to the riskier side. `"sharpe_ratio"` gives *more* to the better
-side and needs expected returns: pass `expected_asset_returns`, or prices, from which they
-are estimated as a mean or (`calculate_expected_returns = "exponential"`) an exponentially
-weighted mean of returns. When the two Sharpe ratios do not give a share between 0 and 1 —
-one of them is negative — that split falls back to minimum variance.
+side and needs expected returns: pass `expected_asset_returns`, or a return history
+(`asset_returns` or prices), from which they are estimated as a mean or
+(`calculate_expected_returns = "exponential"`) an exponentially weighted mean of returns,
+annualised by 252. Only a covariance matrix is not enough and raises
+`MissingExpectedReturnsForSharpe`. The share of two Sharpe ratios means something only when
+neither is negative: with both negative it still lands between 0 and 1 but favours the
+*worse* side (−1 against −3 would give the better side a quarter). So whenever either
+Sharpe ratio is negative, or both are 0, that split falls back to minimum variance.
 
 The two tail metrics need the return history and raise `MissingReturnsForTailRisk` if only a
 covariance matrix was supplied. `confidence_level` is the tail probability, 0.05 by default
@@ -212,20 +216,36 @@ this by running scipy's Ward on the points $X$ and getting the same tree. This i
 mlfinlab's HCAA does (`linkage(squareform(d), method="ward")`) for $d$, and what R
 HierPortfolios' HCAA does (`hclust(dist(D), "ward.D2")`) for $\tilde d$.
 
-**Why Ward is the default.** Every HCAA implementation we could read uses it by default:
-mlfinlab's `hcaa.py` (`linkage="ward"`, passed to scipy), R HierPortfolios'
-`HCAA_Portfolio` (`linkage = "ward"`, run as `ward.D2`) and jduarte00's implementation.
-Raffinot's paper itself could not be read (SSRN and ResearchGate refuse automated access and the
-journal version is paywalled). Secondary sources describe it as comparing single, complete,
-average and Ward linkage and favouring Ward, and his follow-up (HERC, 2018) uses Ward. Single
-linkage chains: assets join a growing cluster one at a time, so the tree is deep and lopsided
-and the top splits isolate one asset against the rest. Ward builds compact, balanced clusters,
-which is what a method that allocates between clusters needs. Before
+**Why Ward is the default.** Ward is the linkage of the published method and of every HCAA
+reference implementation we could read: mlfinlab's `hcaa.py` (`linkage="ward"`, passed to
+scipy), R HierPortfolios' `HCAA_Portfolio` (`linkage = "ward"`, run as `ward.D2`) and
+jduarte00's implementation. It builds compact clusters of similar size. Single linkage
+"chains": assets join a growing cluster one at a time, so the tree is deep and lopsided and
+the top splits isolate one asset against the rest, which under `"equal_weighting"` or
+`"minimum_standard_deviation"` can hand that one asset a large share of the capital. Before
 [#197](https://github.com/Open-Quant/openquant/issues/197) this module used single linkage.
-**Pass `linkage="single"` for the old weights.**
+**Pass `linkage="single"` to reproduce results from before #197.**
 
-**What it costs on the book's Monte Carlo.** On the design above (SYNTHETIC, 10,000 runs, seeds
-`[51, k]`), Ward does not lower variance. Mean OOS variance ×1e4, with turnover per rebalance
+**The trade-off depends on the universe.**
+
+- **Block-clustered universes** (assets in a few groups of related exposures): Ward's mean
+  out-of-sample variance is 6–45% lower than single linkage's, with lower drawdown and a 2–4×
+  higher effective number of assets.
+- **AFML's Snippet 16.4 design** (independent assets plus noisy near-duplicates): single
+  linkage has about 3% (`"minimum_variance"`) to 28% (`"minimum_standard_deviation"`) lower
+  out-of-sample variance. Ward isolates the largest group of near-duplicates at the root and,
+  under `"equal_weighting"` or `"minimum_standard_deviation"`, gives that group about half the
+  capital.
+- **Complete linkage** is close to Ward throughout.
+
+If your universe contains many near-copies of one exposure (share classes, several trackers of
+one index), deduplicate it, use `"minimum_variance"`, or pass `linkage="complete"` or
+`linkage="single"`.
+
+**The AFML design in detail.** The table below is the book's Monte Carlo from the section above
+(SYNTHETIC, 10,000 runs, seeds `[51, k]`). It is the design most favourable to single linkage:
+its true tree is a few tight pairs and singletons, which single linkage recovers well and Ward's
+preference for balanced clusters does not. Mean OOS variance ×1e4, with turnover per rebalance
 in brackets:
 
 | `allocation_metric`, cut | distance | single | complete | average | **ward** (default) |
@@ -245,20 +265,14 @@ The single-linkage column reproduces the table above exactly.
   t = 32; Ward lower in 34% of runs), and its turnover is 0.086 against 0.107. Against IVP
   (1.578×, Ward lower in 91% of runs) and CLA (1.623×) it is still far ahead, and it stays below
   HRP (HRP $\tilde d$ / HCAA = 1.144).
-- **With `"minimum_standard_deviation"` the cost is large.** Ward on $d$ gives 4.792, 28% above
-  single linkage's 3.757 and only slightly better than IVP (4.955). Its turnover is 41% lower
-  (0.123 against 0.208). If you use this metric and care about variance on data like this,
-  `linkage="single"`, `"complete"` or `"average"` does better here.
+- **With `"minimum_standard_deviation"` the cost is large here.** Ward on $d$ gives 4.792, 28%
+  above single linkage's 3.757 and only slightly better than IVP (4.955), because about half
+  the capital goes to the near-duplicates Ward isolates at the root. Its turnover is 41% lower
+  (0.123 against 0.208).
 - **Under Ward the choice of distance hardly matters** (3.141 against 3.145, 4.792 against
-  5.046): Ward's balanced tree on $d$ looks like the tree on $\tilde d$. Complete and average
-  sit close to single linkage throughout.
+  5.046): Ward's balanced tree on $d$ looks like the tree on $\tilde d$.
 - **Effective number of assets** rises from 6.78 (single, $d$) to 7.07 (Ward); IVP's is 8.26.
 - The 10 bps cost model changes no variance at 4 significant digits.
-
-The default follows the method's references rather than this one simulation. The design has
-five independent assets and five noisy copies, so its true tree is a few tight pairs and
-singletons, which single linkage recovers well and Ward's preference for balanced clusters does
-not. Real asset universes have larger, looser groups, which is the case Ward is designed for.
 
 ## From Rust
 
@@ -306,8 +320,9 @@ assert!(matches!(
 - **Expected shortfall and conditional drawdown are computed here, not in
   [`risk-metrics`](/modules/risk-metrics/).** Both are historical estimates from the half's
   inverse-variance portfolio. The drawdown measure builds a wealth curve from the returns and
-  averages the worst drawdowns, which is the correct construction; it is unrelated to the
-  `risk_metrics` function of the same name, which has a known defect.
+  averages the worst drawdowns. `risk_metrics`' function of the same name does the same from
+  a wealth curve you pass it, but takes the upper-tail level (0.95) where this module takes
+  the tail probability (0.05).
 - **The Python default metric is `"equal_weighting"`**, which is the least useful of the six
   for the reason above. Pass `allocation_metric` explicitly.
 - **Tail metrics on short histories are noisy.** A 5% tail of 750 days is 38 observations,
@@ -322,8 +337,8 @@ assert!(matches!(
 - **The default linkage changed from single to Ward**
   ([#197](https://github.com/Open-Quant/openquant/issues/197)). Weights and leaf order change
   for most inputs; pass `linkage="single"` (`HcaaLinkage::Single`) to reproduce earlier
-  results. On the book's Monte Carlo Ward has lower turnover and somewhat higher variance, much
-  higher with `"minimum_standard_deviation"` (see [which linkage](#which-linkage)).
+  results. Ward does better on block-clustered universes; on universes full of near-copies of
+  one exposure single linkage can do better (see [which linkage](#which-linkage)).
 - **Results differ from [HRP](/modules/hrp/) even with `"minimum_variance"`.** HRP halves the
   ordered leaf list at its midpoint, which can cut across a branch of the tree; this module
   splits only at the tree's own branches. They agree when every branch happens to divide

@@ -174,6 +174,30 @@ fn rejects_unusable_vpin_cdf_thresholds() {
     assert!(invalid(cfg(100.0, 5, 1, 10, 0.4, 0.5)));
 }
 
+/// #186 item 24: an HHI threshold above 1 was accepted but could never trigger, and the
+/// parallel runner reported a bad pipeline config as a failed callback per stream.
+#[test]
+fn rejects_unreachable_hhi_threshold_and_reports_bad_config_up_front() {
+    let invalid = |c: StreamingPipelineConfig| StreamingEarlyWarningEngine::new(c).unwrap_err();
+    let hhi_range = StreamingHpcError::InvalidConfig("thresholds.hhi must be in (0, 1]");
+    for bad in [1.5, 0.0, f64::NAN, f64::INFINITY] {
+        assert_eq!(invalid(cfg(100.0, 5, 100, 10, 0.5, bad)), hhi_range, "{bad}");
+    }
+    // HHI = 1 (all volume on one venue) is reachable, so 1 is allowed.
+    assert!(StreamingEarlyWarningEngine::new(cfg(100.0, 5, 100, 10, 0.5, 1.0)).is_ok());
+
+    let streams = vec![vec![event(0, 10.0, 10.0, 0)]; 3];
+    let parallel = HpcParallelConfig {
+        mode: ExecutionMode::Threaded { num_threads: 2 },
+        partition: PartitionStrategy::Linear,
+        mp_batches: 1,
+        progress_every: 1,
+    };
+    let err = run_streaming_pipeline_parallel(&streams, cfg(100.0, 5, 100, 10, 0.5, 1.5), parallel)
+        .unwrap_err();
+    assert_eq!(err, hhi_range);
+}
+
 #[test]
 fn flash_crash_segment_raises_early_warning_metrics() {
     let events = generate_synthetic_flash_crash_stream(SyntheticStreamConfig {

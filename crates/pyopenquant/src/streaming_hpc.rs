@@ -39,7 +39,7 @@ type SnapshotRow = (i64, f64, Option<f64>, Option<f64>, Option<f64>, bool, Optio
 ///     Alert threshold on the CDF of VPIN, in `(0, 1)` and at most `1 - 0.5 / cdf_lookback`
 ///     (the largest value the CDF can take).
 /// hhi_threshold : float
-///     Alert threshold on HHI (1 means one venue carries all the volume); finite and > 0.
+///     Alert threshold on HHI (1 means one venue carries all the volume), in `(0, 1]`.
 /// cdf_lookback : int
 ///     Number of past VPIN values the CDF is taken over; must be >= 2.
 ///

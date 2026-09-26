@@ -10,7 +10,9 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// share `alpha` set by `allocation_metric`, each side scored as its inverse-variance
 /// portfolio: `"minimum_variance"`, `"minimum_standard_deviation"`, `"expected_shortfall"`
 /// and `"conditional_drawdown_risk"` give `1 - risk_L / (risk_L + risk_R)`;
-/// `"sharpe_ratio"` gives `sr_L / (sr_L + sr_R)` (minimum variance outside `[0, 1]`);
+/// `"sharpe_ratio"` gives `sr_L / (sr_L + sr_R)` when both are >= 0 and not both 0, and
+/// the minimum-variance share otherwise (two negative Sharpe ratios would favour the worse
+/// side);
 /// `"equal_weighting"` gives 0.5. Below the cut each cluster's weight is shared equally
 /// (`"equal_weighting"`) or by inverse variance (every other metric). Raffinot's
 /// gap-statistic choice of the cluster count is not implemented: None means no cut. Returns
@@ -30,8 +32,9 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// covariance_matrix : list[list[float]] | None, default None
 ///     `N x N` covariance; if None, the sample covariance of the returns.
 /// expected_asset_returns : list[float] | None, default None
-///     `N` expected returns for `"sharpe_ratio"`; if None they are estimated, but only
-///     when `asset_prices` is given. Ignored by the other metrics.
+///     `N` expected returns for `"sharpe_ratio"`; if None they are estimated from the
+///     return history (`asset_returns`, or the returns of `asset_prices`). Ignored by the
+///     other metrics.
 /// allocation_metric : str, default "equal_weighting"
 ///     One of `"minimum_variance"`, `"minimum_standard_deviation"`, `"sharpe_ratio"`,
 ///     `"equal_weighting"`, `"expected_shortfall"`, `"conditional_drawdown_risk"`.
@@ -45,7 +48,7 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 ///     `"M"`/`"month"`/`"monthly"` every 21st (case-insensitive); anything else, or None,
 ///     keeps every row.
 /// calculate_expected_returns : str, default "mean"
-///     How expected returns are estimated from prices for `"sharpe_ratio"`: `"mean"` or
+///     How expected returns are estimated from the returns for `"sharpe_ratio"`: `"mean"` or
 ///     `"exponential"` (exponentially weighted, span 500); case-insensitive.
 /// distance : str | None, default None
 ///     Distance the tree is built on (case-insensitive): `"correlation"` (the default when
@@ -58,7 +61,11 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 ///     None; Ward's minimum-variance criterion, R's `ward.D2`, the default of mlfinlab's and
 ///     R HierPortfolios' HCAA), `"average"` (mean pairwise distance), `"complete"` (largest
 ///     pairwise distance) or `"single"` (smallest pairwise distance; HRP's tree, and this
-///     function's tree before the default changed to Ward).
+///     function's tree before the default changed to Ward). Ward builds compact,
+///     similar-sized clusters; if the universe holds many near-copies of one exposure (share
+///     classes, several trackers of one index), Ward can give that group about half the
+///     capital under `"equal_weighting"` or `"minimum_standard_deviation"`: deduplicate it,
+///     use `"minimum_variance"`, or pass `linkage="complete"` or `"single"`.
 ///
 /// Returns
 /// -------
@@ -74,7 +81,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 ///     or ragged, or the core rejects the input (e.g. no prices, returns or covariance
 ///     given, empty `asset_names`, too few rows, a zero price, a non-positive covariance
 ///     diagonal, an unknown `allocation_metric` or `calculate_expected_returns`, mismatched
-///     shapes, `"sharpe_ratio"` without expected returns or prices, a tail metric without a
+///     shapes, `"sharpe_ratio"` with neither expected returns nor a return history, a tail
+///     metric without a
 ///     return history, or `optimal_num_clusters` of 0 or above `N`).
 #[pyfunction(name = "allocate_hcaa")]
 #[pyo3(signature = (

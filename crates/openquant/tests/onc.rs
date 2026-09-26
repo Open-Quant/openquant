@@ -202,3 +202,23 @@ fn test_onc_recovers_planted_blocks() {
         assert_eq!(got, expected, "block sizes {sizes:?}");
     }
 }
+
+/// #185 item 14: identical rows are the one case with a single cluster. There is nothing to
+/// separate, so every k-means point lands on the first of several identical centroids.
+#[test]
+fn identical_rows_come_back_as_one_cluster() {
+    for n in [2, 3, 6] {
+        let corr = DMatrix::from_element(n, n, 1.0);
+        let result = get_onc_clusters(&corr, 3).unwrap();
+        assert_eq!(result.clusters.len(), 1, "n = {n}");
+        assert_eq!(result.clusters[&0], (0..n).collect::<Vec<_>>());
+        assert_eq!(result.silhouette_scores, vec![0.0; n]);
+    }
+    // Duplicates inside otherwise distinct structure still split into at least two clusters.
+    let block = |i: usize| i / 3;
+    let corr = DMatrix::from_fn(6, 6, |i, j| if block(i) == block(j) { 1.0 } else { 0.2 });
+    let result = get_onc_clusters(&corr, 3).unwrap();
+    let mut found: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+    found.sort();
+    assert_eq!(found, vec![vec![0, 1, 2], vec![3, 4, 5]]);
+}

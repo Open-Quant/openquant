@@ -163,7 +163,7 @@ fn test_entropy_calculations() {
 }
 
 fn encode_array_f64(arr: &[f64], enc: &[(f64, char)]) -> String {
-    openquant::microstructural_features::encode_array(arr, enc)
+    openquant::microstructural_features::encode_array(arr, enc).unwrap()
 }
 
 fn load_tick_data_path() -> std::path::PathBuf {
@@ -305,4 +305,60 @@ fn test_trades_based_hasbrouck_lambda_recovers_lambda_under_balanced_flow() {
     }
     let est = get_trades_based_hasbrouck_lambda(&log_ret, &dollar_volume, &sides).unwrap();
     assert!((est - lambda).abs() < 0.02 * lambda, "estimate {est:e}, true {lambda:e}");
+}
+
+/// #185 item 16: Snippet 18.4 clamps the window before using it for the points, the look-back
+/// and the `log2(window + 1)` numerator.
+#[test]
+fn konto_entropy_clamps_the_window_everywhere() {
+    // "aaaa" with window 5 is window 2: point 2 matches "aa" two back, L = 3, log2(3) / 3.
+    // The old code kept window 5 for the numerator and gave log2(6) / 3.
+    let h = get_konto_entropy("aaaa", 5);
+    assert!((h - 3f64.log2() / 3.0).abs() < 1e-12, "{h}");
+    // Any window at or above len/2 is the same estimate as len/2 itself.
+    let msg = "abbabaabbaababba";
+    for w in [8, 9, 50] {
+        assert_eq!(get_konto_entropy(msg, w), get_konto_entropy(msg, 8));
+    }
+}
+
+#[test]
+fn bvc_buy_volume_rejects_a_window_below_two() {
+    let close = [10.0, 11.0, 10.0, 11.0];
+    for window in [0, 1] {
+        assert!(get_bvc_buy_volume(&close, &[100.0; 4], window).is_err(), "window {window}");
+    }
+    assert!(get_bvc_buy_volume(&close, &[100.0; 4], 2).is_ok());
+}
+
+#[test]
+fn sigma_mapping_rejects_bad_steps_and_matches_quantile_mapping_on_edge_cases() {
+    use openquant::microstructural_features::{sigma_mapping, MicrostructuralError};
+    for step in [f64::NAN, f64::INFINITY, 0.0, -1.0] {
+        assert_eq!(sigma_mapping(&[0.0, 1.0], step), Err(MicrostructuralError::NonPositiveStep));
+    }
+    // Empty and NaN input are errors, as in quantile_mapping.
+    assert_eq!(sigma_mapping(&[], 0.5), Err(MicrostructuralError::EmptyArray));
+    assert_eq!(quantile_mapping(&[], 2), Err(MicrostructuralError::EmptyArray));
+    assert_eq!(sigma_mapping(&[0.0, f64::NAN], 0.5), Err(MicrostructuralError::NanInArray));
+    assert_eq!(quantile_mapping(&[0.0, f64::NAN], 2), Err(MicrostructuralError::NanInArray));
+    // A constant array has a one-letter codebook (it was empty), so it still encodes.
+    assert_eq!(sigma_mapping(&[3.0, 3.0], 0.5), Ok(vec![(3.0, '\u{0}')]));
+    // Unchanged for ordinary input.
+    assert_eq!(sigma_mapping(&[0.0, 0.3, 1.0], 0.5), Ok(vec![(0.0, '\u{0}'), (0.5, '\u{1}')]));
+}
+
+#[test]
+fn encode_array_keeps_one_letter_per_value_or_errors() {
+    use openquant::microstructural_features::{encode_array, MicrostructuralError};
+    let codebook = quantile_mapping(&[1.0, 2.0, 3.0, 4.0, 5.0], 2).unwrap();
+    let values = [1.0, f64::INFINITY, f64::NEG_INFINITY, 4.9];
+    assert_eq!(encode_array(&values, &codebook).unwrap().chars().count(), values.len());
+    // These used to return shorter strings with no warning.
+    assert_eq!(encode_array(&[1.0, f64::NAN], &codebook), Err(MicrostructuralError::NanInArray));
+    assert!(matches!(encode_array(&[1.0], &[]), Err(MicrostructuralError::InvalidCodebook(_))));
+    assert!(matches!(
+        encode_array(&[1.0], &[(f64::NAN, 'a')]),
+        Err(MicrostructuralError::InvalidCodebook(_))
+    ));
 }

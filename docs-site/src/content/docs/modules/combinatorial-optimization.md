@@ -2,7 +2,7 @@
 title: "combinatorial_optimization"
 description: "Exhaustive search over small integer problems, and over single-instrument trading paths with a fixed cost per trade, as an exact baseline for heuristic solvers."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -171,6 +171,13 @@ small enough to enumerate, a faster method can be scored against the truth. `Sol
 the interface for that method, and `compare_exact_and_adapter` runs both and reports how far
 short the adapter fell.
 
+`solve_with_adapter` runs an adapter on its own, on a box of any size: `max_enumeration` caps
+enumeration and does not apply to it. It checks the answer rather than trusting it. The
+decision must be a point of the box, and the reported objective must match the objective
+re-evaluated at that decision, or the call fails with `InvalidAdapterResult`. So the gap
+`compare_exact_and_adapter` reports is never floored: it is the true shortfall, and it cannot
+be negative because the exact optimum is the best value in the same box.
+
 ```rust
 use openquant::combinatorial_optimization::{
     compare_exact_and_adapter, CombinatorialOptimizationError, DecisionSchema,
@@ -244,7 +251,9 @@ gap of 28 is what an exact baseline is for: without it, the heuristic's answer l
 - **The search space is exponential.** A trajectory with $T$ steps and $m$ allowed trades per
   step has up to $m^T$ paths: 7 trades over 5 steps is 16,807 before the inventory bounds
   prune it, and over 10 steps it is 282 million. Treat hitting `max_paths` or
-  `max_enumeration` as the signal to write an adapter, not to raise the cap.
+  `max_enumeration` as the signal to write an adapter, not to raise the cap. The adapter runs
+  through `solve_with_adapter` above the cap; only the comparison against `solve_exact` needs
+  a box small enough to enumerate.
 - **`enumerate_trading_paths` holds every path in memory**, and
   `solve_trading_trajectory_exact` calls it, so memory grows with the path count, not just
   time. `solve_exact` over a `DecisionSchema` visits candidates without storing them.

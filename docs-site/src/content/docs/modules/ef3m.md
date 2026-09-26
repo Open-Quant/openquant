@@ -2,7 +2,7 @@
 title: "ef3m"
 description: "EF3M: fit a mixture of two Gaussians by matching its first four or five moments exactly, from many random starts, and take the mode of the fits."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -133,16 +133,18 @@ On the exact moments of the mixture above, 100 runs of each variant gave:
 | --- | --- | --- | --- | --- |
 | 1 (four moments) | 1e-3 | < 0.1 ms | 6% | 0.96 |
 | 1 | 1e-4 | 0.4 ms | 17% | 0.14 |
-| 1 | 1e-5 (default) | 3.5 ms | 69% | 0.015 |
+| 1 | 1e-5 | 3.5 ms | 69% | 0.015 |
 | 2 (five moments) | 1e-3 | < 0.1 ms | 41% | 0.006 |
 | 2 | 1e-4 | 0.3 ms | 100% | 0.0001 |
-| 2 | 1e-5 | 3.2 ms | 100% | < 1e-6 |
+| 2 | 1e-5 (default) | 3.2 ms | 100% | < 1e-6 |
 
 Variant 2 is more accurate at every setting and no slower. At coarse `epsilon`, two-thirds of
 variant 1's runs ended on a degenerate fit with $p_1\approx1$: one Gaussian for everything
 and a second, arbitrarily wide one with no weight. Variant 1's error is measured on all five
 moments, including the fifth it does not fit, which accounts for part of its higher error but
-not the degenerate fits. Prefer variant 2 unless the fifth moment is too noisy to trust.
+not the degenerate fits. Prefer variant 2 unless the fifth moment is too noisy to trust; it
+is the default of `fit_m2n` and `M2N::with_defaults` (both defaulted to variant 1 before
+[#186](https://github.com/Open-Quant/openquant/issues/186)).
 
 ## From Rust
 
@@ -217,8 +219,8 @@ In Rust, `M2N::single_fit_loop` is one run and `mp_fit` is `n_runs` of them; Pyt
 - **The moments are raw, not centred.** `fit_m2n` expects $\mathrm E[x^k]$ for $k=1..5$. Use
   `raw_moment(central, mean)` to convert centred moments, passing the first centred moment,
   which is 0, as `central[0]`.
-- **`mp_fit` is serial.** Despite the name and the `num_workers` field, the runs execute one
-  after another. At the default `epsilon` a run takes a few milliseconds on the example, so
+- **`mp_fit` is serial.** Despite the name, the runs execute one after another. The
+  `num_workers` field is deprecated and ignored. At the default `epsilon` a run takes a few milliseconds on the example, so
   this rarely matters.
 - **Until this release, a row's `error` could belong to other parameters.** A run that
   converged returned its last iterate alongside the error of an earlier, better one; on the

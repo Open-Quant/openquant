@@ -21,7 +21,7 @@ def _setup_events():
 
     daily_vol = volatility.get_daily_vol(timestamps, close, 100)
     cusum_events = filters.cusum_filter_timestamps(close, timestamps, 0.02)
-    vertical_barriers = labeling.add_vertical_barrier(cusum_events, timestamps, close, 2, 0, 0, 0)
+    vertical_barriers = labeling.add_vertical_barrier(cusum_events, timestamps, num_days=2)
     events = labeling.get_events(
         timestamps,
         close,
@@ -82,16 +82,20 @@ def test_time_decay_weights_on_fixture():
     no_decay = decay(1.0)
     neg_decay = decay(-0.5)
     converge = decay(0.0)
-    pos_decay = decay(1.5)
 
-    for weights in (standard, no_decay, neg_decay, converge, pos_decay):
+    for weights in (standard, no_decay, neg_decay, converge):
         assert len(weights) == len(events)
 
     assert standard[-1] == 1.0
     assert all(abs(w - 1.0) < 1e-12 for w in no_decay)
     assert sum(1 for w in neg_decay if w == 0.0) == 3
-    assert pos_decay[0] == max(pos_decay)
-    assert pos_decay[-2] >= pos_decay[-1]
+
+
+@pytest.mark.parametrize("bad", [1.5, -1.0, float("nan")])
+def test_time_decay_rejects_decay_outside_afml_domain(bad):
+    # AFML's domain is (-1, 1]; 1.5 used to be accepted and weighted old labels more (#186).
+    with pytest.raises(ValueError, match=r"decay must be in \(-1, 1\]"):
+        sample_weights.get_weights_by_time_decay(EVENTS, DATES, PRICES, bad)
 
 
 def test_time_decay_keeps_one_weight_per_event_when_starts_coincide():

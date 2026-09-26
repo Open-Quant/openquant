@@ -75,6 +75,13 @@ pub enum BetSizingError {
         /// The length it must match.
         expected: usize,
     },
+    /// A mixture parameter is not finite, or a concurrency / evaluation point is `NaN`.
+    NonFinite {
+        /// Input name: `mu1`, `mu2`, `sigma1`, `sigma2`, `p1`, `x` or `c`.
+        name: &'static str,
+        /// The offending value.
+        value: f64,
+    },
 }
 
 impl fmt::Display for BetSizingError {
@@ -92,6 +99,9 @@ impl fmt::Display for BetSizingError {
             }
             BetSizingError::LengthMismatch { name, len, expected } => {
                 write!(f, "input '{name}' has length {len}, expected {expected}")
+            }
+            BetSizingError::NonFinite { name, value } => {
+                write!(f, "input '{name}' must be finite, got {value}")
             }
         }
     }
@@ -658,15 +668,65 @@ pub fn bet_size_budget(
 
 /// CDF at `x` of a two-Gaussian mixture `p1 N(mu1, sigma1) + (1 - p1) N(mu2, sigma2)`.
 ///
-/// Standard deviations are floored at `1e-8`.
+/// Standard deviations are floored at `1e-8`. `x` may be infinite.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `mu1` or `mu2` is `NaN`.
-pub fn cdf_mixture(mu1: f64, mu2: f64, sigma1: f64, sigma2: f64, p1: f64, x: f64) -> f64 {
-    let n1 = Normal::new(mu1, sigma1.max(1e-8)).unwrap();
-    let n2 = Normal::new(mu2, sigma2.max(1e-8)).unwrap();
+/// [`BetSizingError::NonFinite`] if a parameter is not finite or `x` is `NaN`.
+///
+/// ```
+/// use openquant::bet_sizing::{cdf_mixture, BetSizingError};
+///
+/// // Symmetric around 0, so half the mass lies below it.
+/// assert!((cdf_mixture(-1.0, 1.0, 1.0, 1.0, 0.5, 0.0)? - 0.5).abs() < 1e-12);
+/// assert!(matches!(
+///     cdf_mixture(f64::NAN, 1.0, 1.0, 1.0, 0.5, 0.0),
+///     Err(BetSizingError::NonFinite { name: "mu1", .. })
+/// ));
+/// # Ok::<(), BetSizingError>(())
+/// ```
+pub fn cdf_mixture(
+    mu1: f64,
+    mu2: f64,
+    sigma1: f64,
+    sigma2: f64,
+    p1: f64,
+    x: f64,
+) -> Result<f64, BetSizingError> {
+    check_mixture(&[mu1, mu2, sigma1, sigma2, p1])?;
+    if x.is_nan() {
+        return Err(BetSizingError::NonFinite { name: "x", value: x });
+    }
+    Ok(mixture_cdf_unchecked(&[mu1, mu2, sigma1, sigma2, p1], x))
+}
+
+/// Rejects a mixture `[mu1, mu2, sigma1, sigma2, p1]` with a non-finite entry.
+fn check_mixture(fit: &[f64; 5]) -> Result<(), BetSizingError> {
+    const NAMES: [&str; 5] = ["mu1", "mu2", "sigma1", "sigma2", "p1"];
+    match NAMES.iter().zip(fit).find(|(_, v)| !v.is_finite()) {
+        Some((name, value)) => Err(BetSizingError::NonFinite { name, value: *value }),
+        None => Ok(()),
+    }
+}
+
+/// The mixture CDF for a fit that passed [`check_mixture`] (finite means, so `Normal::new`
+/// cannot fail).
+fn mixture_cdf_unchecked(fit: &[f64; 5], x: f64) -> f64 {
+    let [mu1, mu2, sigma1, sigma2, p1] = *fit;
+    let n1 = Normal::new(mu1, sigma1.max(1e-8)).expect("finite mean and positive deviation");
+    let n2 = Normal::new(mu2, sigma2.max(1e-8)).expect("finite mean and positive deviation");
     p1 * n1.cdf(x) + (1.0 - p1) * n2.cdf(x)
+}
+
+/// [`single_bet_size_mixed`] for a fit that passed [`check_mixture`] and a non-`NaN` `c`.
+fn bet_size_mixed_unchecked(c: f64, fit: &[f64; 5]) -> f64 {
+    let c0 = mixture_cdf_unchecked(fit, 0.0);
+    let cdf = mixture_cdf_unchecked(fit, c);
+    if c >= 0.0 {
+        (cdf - c0) / (1.0 - c0)
+    } else {
+        (cdf - c0) / c0
+    }
 }
 
 fn normal_pdf(x: f64, mu: f64, sigma: f64) -> f64 {
@@ -759,17 +819,15 @@ fn fit_two_normal_mixture_em(
 /// With `F` the mixture CDF ([`cdf_mixture`]) and `fit` = `[mu1, mu2, sigma1, sigma2, p1]`,
 /// returns `(F(c) - F(0)) / (1 - F(0))` for `c >= 0` and `(F(c) - F(0)) / F(0)` otherwise.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `fit[0]` or `fit[1]` is `NaN`.
-pub fn single_bet_size_mixed(c: f64, fit: &[f64; 5]) -> f64 {
-    let c0 = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], 0.0);
-    let cdf = cdf_mixture(fit[0], fit[1], fit[2], fit[3], fit[4], c);
-    if c >= 0.0 {
-        (cdf - c0) / (1.0 - c0)
-    } else {
-        (cdf - c0) / c0
+/// [`BetSizingError::NonFinite`] if an entry of `fit` is not finite or `c` is `NaN`.
+pub fn single_bet_size_mixed(c: f64, fit: &[f64; 5]) -> Result<f64, BetSizingError> {
+    check_mixture(fit)?;
+    if c.is_nan() {
+        return Err(BetSizingError::NonFinite { name: "c", value: c });
     }
+    Ok(bet_size_mixed_unchecked(c, fit))
 }
 
 /// Reserve bet sizes under a given mixture fit, with the net concurrency kept in each row.
@@ -779,21 +837,20 @@ pub fn single_bet_size_mixed(c: f64, fit: &[f64; 5]) -> f64 {
 ///
 /// # Errors
 ///
-/// [`BetSizingError::LengthMismatch`] if `side` and `t1` differ in length.
-///
-/// # Panics
-///
-/// Panics if `fit[0]` or `fit[1]` is `NaN`.
+/// - [`BetSizingError::NonFinite`] if an entry of `fit` is not finite.
+/// - [`BetSizingError::LengthMismatch`] if `side` and `t1` differ in length.
 pub fn bet_size_reserve_with_fit(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
     fit: &[f64; 5],
 ) -> Result<Vec<ReserveBetSizeRow>, BetSizingError> {
+    check_mixture(fit)?;
     Ok(get_concurrent_sides(t1, side)?
         .into_iter()
         .map(|(ts, l, s)| {
+            // Active counts, so `c_t` is never NaN.
             let c_t = l - s;
-            let b = single_bet_size_mixed(c_t, fit);
+            let b = bet_size_mixed_unchecked(c_t, fit);
             (ts, l, s, c_t, b)
         })
         .collect())
@@ -819,6 +876,8 @@ pub type MixtureParams = [f64; 5];
 ///
 /// - [`BetSizingError::EmptyInput`] if `t1` is empty.
 /// - [`BetSizingError::LengthMismatch`] if `side` and `t1` differ in length.
+/// - [`BetSizingError::NonFinite`] if the fitted mixture is not finite (not expected: the
+///   concurrencies are finite counts).
 pub fn bet_size_reserve_full(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],
@@ -833,11 +892,12 @@ pub fn bet_size_reserve_full(
     let concurrent = get_concurrent_sides(t1, side)?;
     let c_t: Vec<f64> = concurrent.iter().map(|(_, l, s)| l - s).collect();
     let fit = fit_two_normal_mixture_em(&c_t, fit_runs, epsilon, max_iter);
+    check_mixture(&fit)?;
     let events = concurrent
         .into_iter()
         .zip(c_t)
         .map(|((ts, l, s), c)| {
-            let b = single_bet_size_mixed(c, &fit);
+            let b = bet_size_mixed_unchecked(c, &fit);
             (ts, l, s, c, b)
         })
         .collect();
@@ -853,11 +913,8 @@ pub fn bet_size_reserve_full(
 ///
 /// # Errors
 ///
-/// [`BetSizingError::LengthMismatch`] if `side` and `t1` differ in length.
-///
-/// # Panics
-///
-/// Panics if `fit[0]` or `fit[1]` is `NaN`.
+/// - [`BetSizingError::NonFinite`] if an entry of `fit` is not finite.
+/// - [`BetSizingError::LengthMismatch`] if `side` and `t1` differ in length.
 pub fn bet_size_reserve(
     t1: &[(NaiveDateTime, NaiveDateTime)],
     side: &[f64],

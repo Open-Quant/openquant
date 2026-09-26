@@ -208,3 +208,35 @@ def test_align_calendar_reports_off_grid_bars():
     assert out[-1] == [False, False, True, False]
     assert col_report == core_report
     assert len(_core.data.align_calendar(*cols, 86_400)) == 9
+
+
+def test_quality_report_counts_nulls():
+    # Issue #194: null_counts was always 0, because the rows with nulls were dropped first.
+    frame = _daily_frame([f"2024-09-{d:02d}" for d in (2, 3, 4, 5, 6)]).with_columns(
+        pl.Series("close", [1.0, None, 3.0, None, 5.0]),
+        pl.Series("volume", [1.0, 1.0, None, 1.0, 1.0]),
+        pl.Series("ts", ["2024-09-02", "2024-09-03", "2024-09-04", "2024-09-05", "not a date"]),
+    )
+    want = {
+        "ts": 1,  # a timestamp that does not parse
+        "symbol": 0,
+        "open": 0,
+        "high": 0,
+        "low": 0,
+        "close": 2,
+        "volume": 1,
+        "adj_close": 2,  # filled from close
+    }
+    report = openquant.data.data_quality_report(frame)
+    assert report["null_counts"] == want
+    assert report["row_count"] == 1  # only 2024-09-02 has no null
+    assert openquant.data.quality_failures(report) == [
+        f"nulls in { {k: v for k, v in want.items() if v} }"
+    ]
+
+    _, cleaned_report = openquant.data.clean_ohlcv(frame, return_report=True)
+    assert cleaned_report["null_counts"] == want
+    assert cleaned_report["row_count"] == 1
+
+    clean = openquant.data.data_quality_report(_daily_frame(["2024-09-02", "2024-09-03"]))
+    assert set(clean["null_counts"].values()) == {0}

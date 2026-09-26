@@ -27,8 +27,13 @@
 //! | `"minimum_standard_deviation"` | `1 - sd_L / (sd_L + sd_R)` |
 //! | `"expected_shortfall"` | `1 - es_L / (es_L + es_R)` |
 //! | `"conditional_drawdown_risk"` | `1 - cdd_L / (cdd_L + cdd_R)` |
-//! | `"sharpe_ratio"` | `sr_L / (sr_L + sr_R)`, falling back to minimum variance outside `[0, 1]` |
+//! | `"sharpe_ratio"` | `sr_L / (sr_L + sr_R)` when both are `>= 0` and not both 0; otherwise minimum variance |
 //! | `"equal_weighting"` | `0.5` |
+//!
+//! The Sharpe-ratio share is only meaningful when neither side's Sharpe ratio is negative. With
+//! both negative the raw ratio still lies in `[0, 1]` but favours the *worse* side (`-1` against
+//! `-3` would give the better, left side 0.25), and with mixed signs it leaves `[0, 1]`. Every
+//! such split, and a split where both are 0, uses the minimum-variance share instead.
 //!
 //! What is **not** implemented: Raffinot's gap-statistic choice of the number of clusters.
 //! With `optimal_num_clusters = None` there is no cut and every merge is split down to single
@@ -96,7 +101,8 @@ pub enum HcaaError {
     /// (checked only when it is needed).
     #[error("unknown returns method: {0}")]
     UnknownReturns(String),
-    /// `"sharpe_ratio"` was requested with neither `expected_asset_returns` nor prices.
+    /// `"sharpe_ratio"` was requested with neither `expected_asset_returns` nor a return
+    /// history (`asset_returns` or `asset_prices`) to estimate them from.
     #[error("the sharpe_ratio metric needs expected returns")]
     MissingExpectedReturnsForSharpe,
     /// A tail metric (`"expected_shortfall"` or `"conditional_drawdown_risk"`) was requested
@@ -176,9 +182,16 @@ pub enum HcaaLinkage {
     /// Mean distance over all pairs of members (UPGMA): between single and complete.
     Average,
     /// Ward's minimum-variance criterion, scipy's `method="ward"` (R's `ward.D2`): merge the
-    /// pair whose union least increases the within-cluster sum of squares. The default: it is
-    /// the default of every reference implementation of HCAA (mlfinlab, R HierPortfolios,
-    /// jduarte00), and the linkage secondary sources attribute to Raffinot (2017). The distances are treated as Euclidean, which they are:
+    /// pair whose union least increases the within-cluster sum of squares. The default: the
+    /// published method and its reference implementations (mlfinlab, R HierPortfolios,
+    /// jduarte00) use Ward. It builds compact, similar-sized clusters, where single linkage
+    /// chains and can give one asset a large share under `"equal_weighting"` or
+    /// `"minimum_standard_deviation"`. On universes with many near-copies of one exposure
+    /// (share classes, several trackers of one index) Ward isolates that group at the root and
+    /// can give it about half the capital under those two metrics; deduplicate the universe,
+    /// use `"minimum_variance"`, or choose [`Complete`](Self::Complete) or
+    /// [`Single`](Self::Single). `Single` reproduces this module's results from before #197.
+    /// The distances are treated as Euclidean, which they are:
     /// `sqrt(2 (1 - rho_ij))` is the Euclidean distance between the two assets' standardised
     /// return series (scaled to unit length), and the distance of distances is Euclidean by
     /// construction.
@@ -301,8 +314,8 @@ impl HierarchicalClusteringAssetAllocation {
     /// - `covariance_matrix` — optional `N x N` covariance; if `None` it is the sample
     ///   covariance (denominator `T - 1`) of the returns.
     /// - `expected_asset_returns` — `N` expected returns for `"sharpe_ratio"`; if `None` they
-    ///   are estimated (annualised by 252) from the returns, but **only when `asset_prices`
-    ///   is supplied**. Ignored by other metrics.
+    ///   are estimated (annualised by 252) from the return history, `asset_returns` or the
+    ///   returns of `asset_prices`. Ignored by other metrics.
     /// - `allocation_metric` — one of `"minimum_variance"`, `"minimum_standard_deviation"`,
     ///   `"sharpe_ratio"`, `"equal_weighting"`, `"expected_shortfall"`,
     ///   `"conditional_drawdown_risk"` (see the [module table](self)).
@@ -326,7 +339,7 @@ impl HierarchicalClusteringAssetAllocation {
     ///   the covariance is not `N x N`, or `expected_asset_returns` does not have length `N`
     ///   (checked only for `"sharpe_ratio"`).
     /// - [`HcaaError::MissingExpectedReturnsForSharpe`] for `"sharpe_ratio"` with neither
-    ///   `expected_asset_returns` nor `asset_prices`.
+    ///   `expected_asset_returns` nor a return history (only a covariance matrix).
     /// - [`HcaaError::UnknownReturns`] if expected returns must be estimated and the method
     ///   given to [`new`](Self::new) is unknown.
     /// - [`HcaaError::MissingReturnsForTailRisk`] for a tail metric without a return history.
@@ -436,7 +449,7 @@ impl HierarchicalClusteringAssetAllocation {
                     ));
                 }
                 mu.to_vec()
-            } else if asset_prices.is_none() {
+            } else if returns_owned.nrows() == 0 {
                 return Err(HcaaError::MissingExpectedReturnsForSharpe);
             } else if self.calculate_expected_returns.eq_ignore_ascii_case("mean") {
                 mean_expected_returns(&returns_owned)
@@ -729,9 +742,10 @@ fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64
         "sharpe_ratio" => {
             let left_sr = cluster_sharpe(m.expected, m.cov, left)?;
             let right_sr = cluster_sharpe(m.expected, m.cov, right)?;
-            let raw = left_sr / (left_sr + right_sr + f64::EPSILON);
-            if (0.0..=1.0).contains(&raw) {
-                raw
+            // The share is only meaningful with no negative Sharpe ratio: two negatives
+            // give a ratio in [0, 1] that favours the worse side (#185).
+            if left_sr >= 0.0 && right_sr >= 0.0 && left_sr + right_sr > 0.0 {
+                left_sr / (left_sr + right_sr)
             } else {
                 1.0 - left_var / (left_var + right_var + f64::EPSILON)
             }

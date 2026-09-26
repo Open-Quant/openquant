@@ -14,6 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Restore-only: reuses the cache ci.yml saves on main for the same build
+      # without adding another entry to the repository's cache budget.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
       - name: Format/Lint/Test (fast)
         run: |
           cargo fmt --all -- --check
@@ -34,5 +40,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Restore-only: reuses the cache ci.yml saves on main for the same build
+      # without adding another entry to the repository's cache budget.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
       - name: Long SADF test
         run: cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored

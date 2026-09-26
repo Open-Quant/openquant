@@ -32,6 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Restore-only: reuses the cache ci.yml saves on main for the same build
+      # without adding another entry to the repository's cache budget.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
       - name: List known-finding tests to skip
         run: echo "FINDING_SKIPS=$(python3 scripts/ci/finding_skip_args.py)" >> "$GITHUB_ENV"
       - name: Full Rust suite, including ignored tests (except known findings)
@@ -93,6 +99,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Restore-only: reuses the cache ci.yml saves on main for the same build
+      # without adding another entry to the repository's cache budget.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: python-${{ matrix.python-version }}
+          save-if: false
       - uses: astral-sh/setup-uv@v5
       - name: Create virtual environment + dev dependencies
         run: |

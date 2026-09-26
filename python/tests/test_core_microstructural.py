@@ -138,3 +138,18 @@ def test_sigma_mapping_rejects_oversized_alphabet():
 def test_invalid_input_raises_value_error(call):
     with pytest.raises(ValueError):
         call()
+
+
+def test_encoding_edge_cases_raise_instead_of_dropping_values():
+    # #185 item 16.
+    codebook = microstructural.quantile_mapping([1.0, 2.0, 3.0, 4.0, 5.0], 2)
+    with pytest.raises(ValueError, match="NaN"):
+        microstructural.encode_array([1.0, float("nan")], codebook)
+    with pytest.raises(ValueError, match="codebook"):
+        microstructural.encode_array([1.0], [])
+    with pytest.raises(ValueError, match="step"):
+        microstructural.sigma_mapping([0.0, 1.0], float("nan"))
+    with pytest.raises(ValueError, match="empty"):
+        microstructural.sigma_mapping([], 0.5)
+    with pytest.raises(ValueError, match="window"):
+        microstructural.get_bvc_buy_volume([10.0, 11.0, 10.0], [100.0] * 3, 0)
