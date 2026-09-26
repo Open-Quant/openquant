@@ -47,7 +47,10 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 
-use crate::cross_validation::{ml_cross_val_score, Scoring, SimpleClassifier};
+use crate::cross_validation::{
+    check_prediction_count, check_score_inputs, ml_cross_val_score, CrossValidationError, Scoring,
+    SimpleClassifier,
+};
 
 /// Errors returned by the feature-importance functions.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -76,6 +79,11 @@ pub enum FeatureImportanceError {
     /// The rows of `x` do not all have the same length.
     #[error("ragged x rows")]
     RaggedX,
+    /// `splits`, `sample_weight` or the model's predictions do not fit `x`: a split index is
+    /// not a row, `sample_weight` does not have one entry per row, or the model returned the
+    /// wrong number of predictions for a test fold. See the wrapped error.
+    #[error(transparent)]
+    CrossValidation(#[from] CrossValidationError),
 }
 
 /// Importance of one feature.
@@ -196,11 +204,11 @@ pub fn mean_decrease_impurity(
 /// - [`FeatureImportanceError::LengthMismatch`] (`"feature_names"`) if the first row of `x`
 ///   does not have one entry per feature name.
 /// - [`FeatureImportanceError::RaggedX`] if the rows of `x` differ in length.
-///
-/// # Panics
-///
-/// If a split index is out of range for `x`, if `sample_weight` is shorter than an index it is
-/// read at, or if `model` returns fewer predictions than rows.
+/// - [`FeatureImportanceError::CrossValidation`] wrapping
+///   [`CrossValidationError::SplitIndexOutOfRange`] if a split index is not a row of `x`,
+///   [`CrossValidationError::LengthMismatch`] if `sample_weight` does not have one entry per
+///   row, or [`CrossValidationError::PredictionCountMismatch`] if `model` does not return one
+///   prediction per test row.
 ///
 /// ```
 /// use openquant::cross_validation::{Scoring, SimpleClassifier};
@@ -242,6 +250,7 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
     seed: u64,
 ) -> Result<BTreeMap<String, ImportanceStats>, FeatureImportanceError> {
     validate_xy(x, y, feature_names)?;
+    check_score_inputs(x.len(), y.len(), sample_weight, splits)?;
 
     let n_features = feature_names.len();
     let mut per_feature = vec![Vec::new(); n_features];
@@ -257,12 +266,12 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
         let y_test = vals(y, test_idx);
         let sw_test = sample_weight.map(|sw| vals(sw, test_idx));
 
-        let base = score_model(model, &x_test, &y_test, sw_test.as_deref(), scoring);
+        let base = score_model(model, &x_test, &y_test, sw_test.as_deref(), scoring)?;
 
         for (j, scores) in per_feature.iter_mut().enumerate() {
             let mut x_perm = x_test.clone();
             permute_col(&mut x_perm, j, &mut rng);
-            let perm = score_model(model, &x_perm, &y_test, sw_test.as_deref(), scoring);
+            let perm = score_model(model, &x_perm, &y_test, sw_test.as_deref(), scoring)?;
             let imp = match scoring {
                 Scoring::NegLogLoss => {
                     if -perm == 0.0 {
@@ -302,11 +311,9 @@ pub fn mean_decrease_accuracy<C: SimpleClassifier>(
 /// - [`FeatureImportanceError::LengthMismatch`] (`"feature_names"`) if the first row of `x`
 ///   does not have one entry per feature name.
 /// - [`FeatureImportanceError::RaggedX`] if the rows of `x` differ in length.
-///
-/// # Panics
-///
-/// If a split index is out of range for `x`, if `sample_weight` is shorter than an index it is
-/// read at, or if `clf` returns fewer predictions than rows.
+/// - [`FeatureImportanceError::CrossValidation`] wrapping the [`ml_cross_val_score`] error if
+///   a split index is not a row of `x`, `sample_weight` does not have one entry per row, or
+///   `clf` does not return one prediction per test row.
 ///
 /// ```
 /// use openquant::cross_validation::{Scoring, SimpleClassifier};
@@ -348,7 +355,7 @@ pub fn single_feature_importance<C: SimpleClassifier>(
     let mut out = BTreeMap::new();
     for (j, name) in feature_names.iter().enumerate() {
         let xj: Vec<Vec<f64>> = x.iter().map(|r| vec![r[j]]).collect();
-        let scores = ml_cross_val_score(clf, &xj, y, sample_weight, splits, scoring);
+        let scores = ml_cross_val_score(clf, &xj, y, sample_weight, splits, scoring)?;
         // Snippet 8.4 takes `.std()` of the numpy array cvScore returns: ddof = 0.
         let (mean, std) = mean_std(&scores, 0);
         out.insert(
@@ -371,11 +378,9 @@ pub fn single_feature_importance<C: SimpleClassifier>(
 ///
 /// # Errors
 ///
-/// [`FeatureImportanceError::RaggedFeatureRows`] if the rows differ in length.
-///
-/// # Panics
-///
-/// If `feature_rows` is non-empty but its rows have no columns.
+/// - [`FeatureImportanceError::RaggedFeatureRows`] if the rows differ in length.
+/// - [`FeatureImportanceError::Empty`] (`"feature columns"`) if `feature_rows` is non-empty
+///   but its rows have no columns.
 ///
 /// ```
 /// use openquant::feature_importance::get_orthogonal_features;
@@ -415,10 +420,8 @@ pub fn get_orthogonal_features(
 /// - [`FeatureImportanceError::LengthMismatch`] (`"feature_importance_mean"`) if the
 ///   importance vector does not have one entry per column of the first row.
 /// - [`FeatureImportanceError::RaggedFeatureRows`] if the rows differ in length.
-///
-/// # Panics
-///
-/// If the rows have no columns (and `feature_importance_mean` is empty).
+/// - [`FeatureImportanceError::Empty`] (`"feature columns"`) if the rows have no columns (and
+///   `feature_importance_mean` is empty).
 ///
 /// ```
 /// use openquant::feature_importance::feature_pca_analysis;
@@ -518,6 +521,9 @@ fn compute_pca(
     if feature_rows.iter().any(|r| r.len() != feature_rows[0].len()) {
         return Err(FeatureImportanceError::RaggedFeatureRows);
     }
+    if feature_rows[0].is_empty() {
+        return Err(FeatureImportanceError::Empty("feature columns"));
+    }
     let x_std = standardize(feature_rows);
     let x = to_dmatrix(&x_std);
     let dot = x.transpose() * &x;
@@ -586,10 +592,11 @@ fn score_model<C: SimpleClassifier>(
     y_test: &[f64],
     sample_weight: Option<&[f64]>,
     scoring: Scoring,
-) -> f64 {
-    match scoring {
+) -> Result<f64, CrossValidationError> {
+    Ok(match scoring {
         Scoring::Accuracy => {
             let pred = model.predict(x_test);
+            check_prediction_count(y_test.len(), pred.len())?;
             let mut num = 0.0;
             let mut den = 0.0;
             for i in 0..y_test.len() {
@@ -607,6 +614,7 @@ fn score_model<C: SimpleClassifier>(
         }
         Scoring::NegLogLoss => {
             let probs = model.predict_proba(x_test);
+            check_prediction_count(y_test.len(), probs.len())?;
             let mut loss = 0.0;
             let mut den = 0.0;
             let eps = 1e-15;
@@ -624,6 +632,7 @@ fn score_model<C: SimpleClassifier>(
         }
         Scoring::F1 => {
             let pred = model.predict(x_test);
+            check_prediction_count(y_test.len(), pred.len())?;
             let mut tp = 0.0;
             let mut fp = 0.0;
             let mut fnn = 0.0;
@@ -647,7 +656,7 @@ fn score_model<C: SimpleClassifier>(
                 0.0
             }
         }
-    }
+    })
 }
 
 /// Shuffles one column of `x` in place, as AFML Snippet 8.3 does with `np.random.shuffle`.

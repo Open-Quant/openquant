@@ -10,7 +10,7 @@ Every public submodule registered on ``openquant._core`` must be
 
 Mechanism for (b) is a file naming convention: a submodule ``<name>`` is
 covered when ``python/tests/test_core_<name>.py`` exists and defines at least
-one ``test_*`` function that mentions ``<name>``. The eight submodules that
+one ``test_*`` function that mentions ``<name>``. The submodules that
 predate this convention are covered by older files, listed explicitly in
 ``LEGACY_TEST_FILES``; do not add new entries there.
 
@@ -34,7 +34,6 @@ TESTS_DIR = Path(__file__).resolve().parent
 LEGACY_TEST_FILES = {
     "bars": "test_bars_module.py",
     "data": "test_data_module.py",
-    "filters": "test_bindings_contract.py",
     "labeling": "test_bindings_contract.py",
     "pipeline": "test_pipeline_api.py",
     "portfolio": "test_bindings_contract.py",

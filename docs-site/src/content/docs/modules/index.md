@@ -151,7 +151,7 @@ For the AFML chapter each module implements, see
 - [`risk`](/modules/risk-metrics/) — `calculate_value_at_risk`, `calculate_expected_shortfall`, `calculate_conditional_drawdown_risk`, `calculate_variance`, `calculate_value_at_risk_from_matrix`, `calculate_expected_shortfall_from_matrix`, `calculate_conditional_drawdown_risk_from_matrix`
 - [`sample_weights`](/modules/sample-weights/) — `get_weights_by_return`, `get_weights_by_time_decay`
 - [`sampling`](/modules/sampling/) — `get_ind_matrix`, `seq_bootstrap`, `get_ind_mat_average_uniqueness`, `get_ind_mat_label_uniqueness`, `bootstrap_loop_run`, `get_av_uniqueness_from_triple_barrier`, `num_concurrent_events`
-- [`sb_bagging`](/modules/sb-bagging/) — `fit_predict_sb_classifier`, `fit_predict_sb_regressor`
+- [`sb_bagging`](/modules/sb-bagging/) — `fit_predict_sb_classifier`, `fit_predict_sb_regressor`, `SequentiallyBootstrappedBaggingClassifier`
 - [`strategy_risk`](/modules/strategy-risk/) — `sharpe_symmetric`, `implied_precision_symmetric`, `implied_frequency_symmetric`, `sharpe_asymmetric`, `implied_precision_asymmetric`, `implied_frequency_asymmetric`, `estimate_strategy_failure_probability`
 - [`streaming_hpc`](/modules/streaming-hpc/) — `run_streaming_pipeline`, `generate_synthetic_flash_crash_stream`
 - [`structural_breaks`](/modules/structural-breaks/) — `get_chow_type_stat`, `get_chu_stinchcombe_white_statistics`, `get_sadf`

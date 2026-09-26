@@ -110,7 +110,7 @@ fn test_ml_cross_val_score_accuracy() {
     let pkf = PurgedKFold::new(3, info_sets.clone(), 0.0).unwrap();
     let splits = pkf.split(x.len()).unwrap();
     let mut clf = MajorityClassifier { prob: 0.5 };
-    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::Accuracy);
+    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::Accuracy).unwrap();
     assert_eq!(scores.len(), 3);
     for s in scores {
         assert!((0.0..=1.0).contains(&s));
@@ -125,7 +125,7 @@ fn test_ml_cross_val_score_neg_log_loss() {
     let pkf = PurgedKFold::new(4, info_sets.clone(), 0.0).unwrap();
     let splits = pkf.split(x.len()).unwrap();
     let mut clf = MajorityClassifier { prob: 0.5 };
-    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::NegLogLoss);
+    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::NegLogLoss).unwrap();
     assert_eq!(scores.len(), 4);
     for s in scores {
         assert!(s.is_finite());
@@ -140,7 +140,7 @@ fn test_ml_cross_val_score_f1() {
     let pkf = PurgedKFold::new(4, info_sets, 0.0).unwrap();
     let splits = pkf.split(x.len()).unwrap();
     let mut clf = MajorityClassifier { prob: 0.5 };
-    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::F1);
+    let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::F1).unwrap();
     assert_eq!(scores.len(), 4);
     for s in scores {
         assert!((0.0..=1.0).contains(&s));
@@ -831,4 +831,45 @@ fn test_purged_kfold_and_backtesting_engine_train_on_the_same_samples() {
         }
     }
     assert!(compared.0 > 100 && compared.1 > 100, "{compared:?}");
+}
+
+/// Returns a fixed number of probabilities, whatever it is asked to score.
+struct FixedCount(usize);
+
+impl SimpleClassifier for FixedCount {
+    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}
+    fn predict_proba(&self, _x: &[Vec<f64>]) -> Vec<f64> {
+        vec![1.0; self.0]
+    }
+}
+
+/// #184 item 3: an out-of-range split index used to panic, and too few predictions were
+/// silently truncated by `zip` while the score still divided by the test length (accuracy 1/3
+/// for a model that got its one scored row right). Both are now typed errors.
+#[test]
+fn ml_cross_val_score_rejects_bad_indices_lengths_and_prediction_counts() {
+    use openquant::cross_validation::CrossValidationError as Cv;
+    let x: Vec<Vec<f64>> = (0..6).map(|i| vec![i as f64]).collect();
+    let y = [1.0; 6];
+    let good = vec![(vec![0, 1, 2], vec![3, 4, 5])];
+
+    let bad_index = vec![(vec![0, 9], vec![3])];
+    let out = std::panic::catch_unwind(|| {
+        ml_cross_val_score(&mut FixedCount(1), &x, &y, None, &bad_index, Scoring::Accuracy)
+    })
+    .expect("must not panic");
+    assert_eq!(out.unwrap_err(), Cv::SplitIndexOutOfRange { index: 9, n_rows: 6 });
+
+    let out = ml_cross_val_score(&mut FixedCount(1), &x, &y, None, &good, Scoring::Accuracy);
+    assert_eq!(out.unwrap_err(), Cv::PredictionCountMismatch { expected: 3, got: 1 });
+
+    let out = ml_cross_val_score(&mut FixedCount(3), &x, &y[..5], None, &good, Scoring::F1);
+    assert_eq!(out.unwrap_err(), Cv::LengthMismatch { name: "y", len: 5, expected: 6 });
+
+    let sw = [1.0; 2];
+    let out = ml_cross_val_score(&mut FixedCount(3), &x, &y, Some(&sw), &good, Scoring::F1);
+    assert_eq!(out.unwrap_err(), Cv::LengthMismatch { name: "sample_weight", len: 2, expected: 6 });
+
+    let ok = ml_cross_val_score(&mut FixedCount(3), &x, &y, None, &good, Scoring::Accuracy);
+    assert_eq!(ok.unwrap(), vec![1.0]);
 }
