@@ -455,8 +455,9 @@ pub fn solve_with_adapter(
         return Err(CombinatorialOptimizationError::ObjectiveNotFinite);
     }
     let tolerance = 1e-9 * value.abs().max(1.0);
-    // `!(<=)` also rejects a NaN report.
-    if !((result.best_objective - value).abs() <= tolerance) {
+    let error = (result.best_objective - value).abs();
+    // A NaN report gives a NaN error, which must be rejected too.
+    if error.is_nan() || error > tolerance {
         return Err(CombinatorialOptimizationError::InvalidAdapterResult(
             "best_objective does not match the objective at best_decision",
         ));
