@@ -23,7 +23,7 @@
     "astro": "^5.5.0"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.6",
+    "@astrojs/starlight": "^0.42.3",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
   }
