@@ -499,15 +499,15 @@ fn validate_input(
             input.close.len(),
         ));
     }
-    if let Some(model_sides) = input.model_sides {
-        if model_sides.len() != input.close.len() {
-            return Err(PipelineError::LengthMismatch(
-                "model_sides",
-                model_sides.len(),
-                "close",
-                input.close.len(),
-            ));
-        }
+    if let Some(model_sides) = input.model_sides
+        && model_sides.len() != input.close.len()
+    {
+        return Err(PipelineError::LengthMismatch(
+            "model_sides",
+            model_sides.len(),
+            "close",
+            input.close.len(),
+        ));
     }
     if input.asset_prices.nrows() < 2 {
         return Err(PipelineError::InvalidParameter("asset_prices rows must be >= 2"));
