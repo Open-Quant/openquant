@@ -24,7 +24,7 @@ CASES = {
     ),
     "ensemble_invalid": (
         lambda: ensemble.bagging_ensemble_variance(-1.0, 0.5, 10),
-        "single_estimator_variance must be non-negative",
+        "single_estimator_variance must be finite and non-negative",
     ),
     "synthetic_bt": (
         lambda: synthetic_bt.calibrate_ou_params([1.0, 1.0]),
