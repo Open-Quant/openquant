@@ -153,7 +153,7 @@ fn periods_per_year_must_be_positive_and_finite() {
     let close = [100.0, 102.0, 100.0, 102.0];
     let probs = [0.9; 4];
     let asset_names = vec!["A".to_string()];
-    let asset_prices = DMatrix::from_column_slice(3, 1, &[100.0, 101.0, 102.0]);
+    let asset_prices = DMatrix::from_column_slice(4, 1, &[100.0, 101.0, 102.0, 103.0]);
     for bad in [0.0, -252.0, f64::NAN, f64::INFINITY] {
         let input = ResearchPipelineInput {
             timestamps: &timestamps,

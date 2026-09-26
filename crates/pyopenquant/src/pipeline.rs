@@ -36,21 +36,21 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 ///     Positive closing prices of the traded instrument, one per bar.
 /// model_probabilities : list[float]
 ///     Probability of the predicted class at each bar, in `[0, 1]`, known at that bar's
-///     close. Only values at CUSUM events are used; the range is not validated.
+///     close. Only values at CUSUM events are used, but every value must be in `[0, 1]`.
 /// asset_prices : list[list[float]]
 ///     Prices for the portfolio stage, one inner list per observation (oldest first, at
-///     least 2 rows) and one column per asset. Need not align with `timestamps`.
+///     least 2 rows, one per entry of `timestamps`) and one column per asset.
 /// model_sides : list[float] | None, default None
 ///     Side of the prediction at each bar (typically +1/-1); None means always long.
 /// asset_names : list[str] | None, default None
 ///     One name per column of `asset_prices`; defaults to `asset_0`, `asset_1`, ...
 /// cusum_threshold : float, default 0.001
-///     CUSUM threshold on cumulative log returns of `close`; must be > 0.
+///     CUSUM threshold on cumulative log returns of `close`; must be finite and > 0.
 /// num_classes : int, default 2
 ///     Number of classes of the model behind `model_probabilities`; must be >= 2.
 /// step_size : float, default 0.1
-///     Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]`; a step
-///     <= 0 leaves the sizes unrounded.
+///     Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]`; must be
+///     finite and > 0.
 /// risk_free_rate : float, default 0.0
 ///     Annual risk-free rate, for the max-Sharpe allocation and for `realized_sharpe`.
 /// confidence_level : float, default 0.05
@@ -88,7 +88,10 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 /// Raises
 /// ------
 /// ValueError
-///     If a timestamp does not parse; `asset_prices` is empty or ragged; `timestamps`,
+///     If a value is outside the range given under Parameters (a probability outside
+///     `[0, 1]`, `cusum_threshold` or `step_size` not finite and > 0, or `asset_prices`
+///     without one row per timestamp); a timestamp does not parse; `asset_prices` is empty
+///     or ragged; `timestamps`,
 ///     `close` or `model_probabilities` is empty; `close` differs in length from
 ///     `timestamps`, `model_probabilities` or `model_sides`, or `asset_names` from the
 ///     number of assets; `asset_prices` has fewer than 2 rows, `cusum_threshold <= 0`,

@@ -22,9 +22,8 @@ def aggregate_classification_probability_mean(
 ) -> tuple[list[float], list[int]]:
     """Mean predicted probability per observation, and the label it implies at `threshold`.
 
-    The averaged probability is what bet sizing (AFML Chapter 10) takes as input. Only the
-    averaged probabilities are range-checked: individual entries outside `[0, 1]` are accepted
-    as long as their mean lies inside it.
+    The averaged probability is what bet sizing (AFML Chapter 10) takes as input. Every input
+    probability must lie in `[0, 1]`.
 
     Parameters
     ----------
@@ -43,8 +42,8 @@ def aggregate_classification_probability_mean(
     ------
     ValueError
         If there are no model rows, the first row is empty, the rows differ in length,
-        `threshold` is outside `[0, 1]` or NaN, or a mean probability is outside `[0, 1]` or
-        NaN.
+        `threshold` is outside `[0, 1]` or NaN, or any input probability is outside `[0, 1]`
+        or NaN.
     """
 
 def aggregate_classification_vote(per_model_predictions: Sequence[Sequence[int]]) -> list[int]:
@@ -128,8 +127,8 @@ def bagging_ensemble_variance(
     Parameters
     ----------
     single_estimator_variance : float
-        Common variance `sigma2` of one estimator's predictions; must be non-negative (NaN is
-        not rejected and yields NaN).
+        Common variance `sigma2` of one estimator's predictions; must be finite and
+        non-negative.
     average_correlation : float
         Average pairwise correlation `rho` between estimators, in `[-1, 1]`, e.g. from
         `average_pairwise_prediction_correlation`.
@@ -144,7 +143,8 @@ def bagging_ensemble_variance(
     Raises
     ------
     ValueError
-        If `single_estimator_variance` is negative, `average_correlation` is outside `[-1, 1]`
+        If `single_estimator_variance` is negative, NaN or infinite, `average_correlation` is
+        outside `[-1, 1]`
         or NaN, or `n_estimators` is 0.
     """
 

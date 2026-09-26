@@ -221,3 +221,33 @@ fn test_pairwise_correlation_and_strategy_recommendation() {
     assert_eq!(strong_diverse.recommended, EnsembleMethod::Bagging);
     assert!(strong_diverse.expected_variance_reduction > 0.0);
 }
+
+/// #186 item 21: only the *averaged* probabilities were range-checked, so 1.4 and -0.4 were
+/// accepted because they average to 0.5.
+#[test]
+fn test_probability_mean_rejects_each_out_of_range_input() {
+    let invalid = EnsembleError::Invalid { name: "probabilities", requirement: "in [0,1]" };
+    for bad in [1.4, -0.4, f64::NAN] {
+        let rows = [vec![bad, 0.2], vec![1.0 - bad, 0.4]];
+        assert_eq!(
+            aggregate_classification_probability_mean(&rows, 0.5).unwrap_err(),
+            invalid,
+            "{bad}"
+        );
+    }
+}
+
+/// #186 item 21: a `NaN` (or infinite) single-estimator variance used to pass and return `NaN`.
+#[test]
+fn test_bagging_variance_rejects_non_finite_variance() {
+    for bad in [f64::NAN, f64::INFINITY, -1.0] {
+        assert_eq!(
+            bagging_ensemble_variance(bad, 0.5, 10).unwrap_err(),
+            EnsembleError::Invalid {
+                name: "single_estimator_variance",
+                requirement: "finite and non-negative",
+            },
+            "{bad}"
+        );
+    }
+}
