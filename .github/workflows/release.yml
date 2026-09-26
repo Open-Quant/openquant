@@ -12,7 +12,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # Restore-only: reuses the cache ci.yml saves on main for the same build
       # without adding another entry to the repository's cache budget.
@@ -38,7 +38,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # Restore-only: reuses the cache ci.yml saves on main for the same build
       # without adding another entry to the repository's cache budget.

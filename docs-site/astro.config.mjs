@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { unified } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
@@ -11,9 +12,14 @@ export default defineConfig({
   base: '/openquant',
   output: 'static',
   markdown: {
-    // remarkApiReference must run before remarkBaseUrl: its links are base-relative.
-    remarkPlugins: [remarkMath, remarkApiReference(), remarkBaseUrl({ base: '/openquant' })],
-    rehypePlugins: [rehypeKatex],
+    // Astro 7 defaults to the Sätteri Markdown processor, which does not run remark/rehype
+    // plugins. These pages rely on remark-math/rehype-katex and the two local remark plugins,
+    // so keep the unified (remark) processor and hand the plugins to it.
+    processor: unified({
+      // remarkApiReference must run before remarkBaseUrl: its links are base-relative.
+      remarkPlugins: [remarkMath, remarkApiReference(), remarkBaseUrl({ base: '/openquant' })],
+      rehypePlugins: [rehypeKatex],
+    }),
   },
   integrations: [
     starlight({
@@ -98,17 +104,17 @@ export default defineConfig({
         },
         {
           label: 'Setup',
-          autogenerate: { directory: 'setup' },
+          items: [{ autogenerate: { directory: 'setup' } }],
         },
         {
           label: 'Workflows',
-          autogenerate: { directory: 'workflows' },
+          items: [{ autogenerate: { directory: 'workflows' } }],
         },
         {
           // The research gallery (runbooks/index.md, generated from the executed
           // notebooks by scripts/docs/generate_site_pages.py) and one page per runbook.
           label: 'Research',
-          autogenerate: { directory: 'runbooks' },
+          items: [{ autogenerate: { directory: 'runbooks' } }],
         },
         {
           label: 'Modules',
