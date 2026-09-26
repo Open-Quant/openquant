@@ -13,7 +13,8 @@ sidebar:
 Every notebook under `notebooks/python/` is committed with its outputs and executed in CI, so a
 reader takes its numbers as evidence. This contract makes that evidence checkable: a reader knows
 where to find the claim, the data behind it and the decision, and anyone can rerun it and get the
-same numbers. `just notebooks-lint` checks the structural rules on every pull request.
+same numbers. `just notebooks-lint` checks the structural rules on every pull request. How to run
+the notebooks, and what else CI checks, is on [Notebook Research Workflow](/workflows/notebook-research-workflow/).
 
 ## Two kinds of notebook
 
@@ -27,7 +28,7 @@ A notebook is either a **runbook** (a research notebook) or an **API tour**. Its
 | May claim | Whatever the hypothesis, controls and trial count support | Nothing about performance. Its numbers illustrate the API; they are not evidence |
 | Forbidden sections | None | `## Hypothesis`, `## Promotion decision`, `## Self-review checklist` |
 | Reproducibility footer | Required | Required |
-| Docs page | One under [Runbooks](/runbooks/fracdiff-stationarity-memory/) | None required |
+| Docs page | One under Runbooks | None required |
 
 The notebooks today:
 

@@ -19,11 +19,6 @@ This workflow complements the `OQ-nbr` track and defines notebook behavior expec
 - Explicit trial registry for multiple-testing awareness.
 - Deterministic artifact bundle per run.
 
-Every notebook under `notebooks/python/` follows the [notebook contract](/workflows/research-notebook-contract/):
-a runbook's sections run Setup, Hypothesis, Data, Method, Results, Analysis, Promotion decision,
-Self-review checklist and Reproducibility, an API tour makes no claims, and both end with a
-reproducibility footer. `just notebooks-lint` enforces it in CI.
-
 ## Promotion Baseline
 
 A notebook result is promotion-eligible only when:

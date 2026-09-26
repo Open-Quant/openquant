@@ -4,13 +4,25 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 
 ## Notebooks
 
-- `01_event_labeling_and_pipeline.ipynb`
-- `02_purged_cv_and_seq_bootstrap.ipynb`
-- `03_feature_diagnostics.ipynb`
-- `04_portfolio_construction.ipynb`
-- `05_risk_overlays_and_reality_check.ipynb`
-- `07_feature_engineering_discovery_loop.ipynb` (candidate feature generation + screening)
-- `08_algo_wheel_experiments.ipynb` (config-wheel experiment ranking)
+Every notebook follows the notebook contract (docs site: Workflows > Notebook contract,
+`docs-site/src/content/docs/workflows/research-notebook-contract.md`), checked by
+`just notebooks-lint`. A notebook is either an **API tour** (title `# API tour: ...`: shows how a
+few calls fit together on small synthetic inputs and claims nothing) or a **runbook** (title
+`# Runbook: ...`: a pre-registered hypothesis, controls, a trial registry and a promotion
+decision). Both end with an `nbrepro.footer(...)` reproducibility cell.
+
+API tours:
+
+- `01_event_labeling_and_pipeline.ipynb` (`pipeline.run_mid_frequency_pipeline_frames`, CUSUM events)
+- `02_purged_cv_and_seq_bootstrap.ipynb` (indicator matrix, average uniqueness, sequential bootstrap)
+- `03_feature_diagnostics.ipynb` (`viz` payloads for feature importance and regimes)
+- `04_portfolio_construction.ipynb` (inverse-variance, minimum-volatility and maximum-Sharpe weights)
+- `05_risk_overlays_and_reality_check.ipynb` (`research.run_flywheel_iteration`, drawdown payload)
+- `07_feature_engineering_discovery_loop.ipynb` (`feature_diagnostics.feature_screen_report`)
+- `08_algo_wheel_experiments.ipynb` (`research.run_flywheel_grid`)
+
+Runbooks:
+
 - `09_fracdiff_stationarity_memory.ipynb` (runbook #49: FFD d-sweep, ADF vs memory, checked against simulated series of known memory; SYNTHETIC by default, `OPENQUANT_RUNBOOK_SOURCE` for your own file)
 - `10_hrp_vs_ivp_cla_oos.ipynb` (runbook, #51: HRP vs inverse-variance and CLA out of sample, AFML §16.6 Monte Carlo on SYNTHETIC data; `OPENQUANT_RUNBOOK_RUNS=10000` for the book's run count)
 - `11_meta_labeling_triple_barrier.ipynb` (runbook, #47: CUSUM events, triple-barrier meta-labels and a meta-model in purged k-fold, primary vs meta on precision, F1 and deflated Sharpe net of costs; SYNTHETIC paths with a planted signal plus the `fetch` sample as a no-signal control; `OPENQUANT_RUNBOOK_SOURCE` for your own file)
@@ -63,6 +75,23 @@ uv run --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells
   notebooks/python/08_algo_wheel_experiments.ipynb \
   --out notebooks/python/_executed/08_algo_wheel_experiments.ipynb
 ```
+
+## Check the notebook contract (`just notebooks-lint`)
+
+```bash
+just notebooks-lint                                   # every NN_*.ipynb
+just notebooks-lint notebooks/python/11_meta_labeling_triple_barrier.ipynb
+```
+
+`scripts/lint_notebooks.py` (standard library only) checks the title, the section headings, the
+`nbrepro.footer(...)` last cell and its committed output, and that no committed output holds an
+error, a machine path or a package version on stdout. CI runs it in the `python-lint` job.
+
+The footer (`nbrepro.py`) prints the data hash and the seed on stdout and the git commit and
+package versions on stderr, which `just notebooks-verify` ignores, so a dependency bump does not
+make a notebook stale. Under `just notebooks-run` it prints that the containing commit pins them,
+so re-running does not rewrite every footer; run a notebook any other way and it prints the real
+commit and versions.
 
 ## Smoke run (CI-friendly)
 
