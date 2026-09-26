@@ -221,8 +221,8 @@ def run_synthetic_otr_workflow(
     profit_taking_grid : list[float] | None, default None
         Profit-taking widths to try, each finite and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
     stop_loss_grid : list[float] | None, default None
-        Stop-loss widths to try, as positive numbers, each finite and > 0. `None` currently
-        builds `-0.25, -0.5, ..., -5.0`, which the core rejects, so pass a positive grid.
+        Stop-loss widths to try, as positive numbers (distance below the entry), each finite
+        and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
     max_holding_steps : int, default 252
         Maximum holding period in steps (capped by the path length).
     annualization_factor : float, default 252.0

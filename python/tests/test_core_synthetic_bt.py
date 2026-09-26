@@ -139,3 +139,16 @@ def test_synthetic_bt_rejects_invalid_inputs():
         synthetic_bt.evaluate_rule_on_paths([[0.0, 1.0]], -1.0, 1.0, 2, 1.0)
     with pytest.raises(ValueError, match="response_surface cannot be empty"):
         synthetic_bt.detect_no_stable_optimum([], 0.99, *DEFAULT_CRITERIA.values())
+
+
+def test_run_synthetic_otr_workflow_documented_default_call():
+    # Issue #194: the default stop-loss grid was negative, so calling the workflow without
+    # grids always raised ValueError. Both default grids are now 0.25, 0.5, ..., 5.0.
+    historical = _ou_paths(0.75, 0.5, 2.0, 1.0, 0.0, 1, 300, 9)[0]
+    result = synthetic_bt.run_synthetic_otr_workflow(historical)
+
+    widths = [0.25 * i for i in range(1, 21)]
+    surface = result["response_surface"]
+    assert len(surface) == 400
+    assert sorted({p["stop_loss"] for p in surface}) == pytest.approx(widths)
+    assert sorted({p["profit_taking"] for p in surface}) == pytest.approx(widths)

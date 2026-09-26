@@ -323,8 +323,8 @@ fn sbt_detect_no_stable_optimum(
 /// profit_taking_grid : list[float] | None, default None
 ///     Profit-taking widths to try, each finite and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
 /// stop_loss_grid : list[float] | None, default None
-///     Stop-loss widths to try, as positive numbers, each finite and > 0. `None` currently
-///     builds `-0.25, -0.5, ..., -5.0`, which the core rejects, so pass a positive grid.
+///     Stop-loss widths to try, as positive numbers (distance below the entry), each finite
+///     and > 0. `None` uses `0.25, 0.5, ..., 5.0`.
 /// max_holding_steps : int, default 252
 ///     Maximum holding period in steps (capped by the path length).
 /// annualization_factor : float, default 252.0
@@ -397,7 +397,7 @@ fn sbt_run_synthetic_otr_workflow(
         profit_taking_grid: profit_taking_grid
             .unwrap_or_else(|| (1..=20).map(|i| i as f64 * 0.25).collect()),
         stop_loss_grid: stop_loss_grid
-            .unwrap_or_else(|| (1..=20).map(|i| i as f64 * -0.25).collect()),
+            .unwrap_or_else(|| (1..=20).map(|i| i as f64 * 0.25).collect()),
         max_holding_steps,
         annualization_factor,
         stability_criteria: openquant::synthetic_backtesting::StabilityCriteria {
