@@ -2,7 +2,7 @@
 title: "strategy_risk"
 description: "How precise and how frequent a strategy's bets must be to reach a target Sharpe ratio, and the probability that it falls short."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -149,8 +149,10 @@ let needed = implied_precision_asymmetric(2.0, 260.0, payout)?;
 assert!((needed - 0.7222).abs() < 1e-4);
 assert!((sharpe_asymmetric(needed, 260.0, payout)? - 2.0).abs() < 1e-6);
 
-// Precision of exactly one half never reaches a positive target, at any frequency.
+// Precision of exactly one half never reaches a positive target, at any frequency,
+// and below one half the Sharpe ratio is negative, so no frequency reaches one.
 assert!(matches!(implied_frequency_symmetric(0.5, 1.0), Err(StrategyRiskError::InvalidInput(_))));
+assert!(matches!(implied_frequency_symmetric(0.45, 2.0), Err(StrategyRiskError::NoValidRoot(_))));
 ```
 
 ## What to watch for
@@ -165,8 +167,20 @@ assert!(matches!(implied_frequency_symmetric(0.5, 1.0), Err(StrategyRiskError::I
   large loss moves $\pi_-$, and with it $p^*$, a long way.
 - **A zero outcome counts as a loss.** Outcomes `<= 0` go into $\pi_-$ and are not winners in
   the bootstrap. A record with many scratched trades looks worse than it is.
-- **The record must contain both wins and losses**, and the mean loss must be negative;
-  otherwise the function returns `InvalidInput` rather than guessing.
+- **The record must contain at least one win and one loss**, otherwise
+  `estimate_strategy_failure_probability` returns `InvalidInput` rather than guessing. A win
+  is an outcome `> 0` and a loss one `<= 0`, so there $\pi_- \le 0 < \pi_+$ by construction
+  (§15.4.1); $\pi_-$ is zero only when every loss is a scratch. The closed-form functions
+  need only $\pi_+ > \pi_-$ and do not check signs: the Sharpe ratio of a binary bet is
+  defined for any two distinct payouts, and if both are positive it is simply positive at
+  every precision.
+- **A positive target is out of reach when the mean payoff is not positive.** The
+  `implied_frequency_*` formulas come from squaring the Sharpe ratio, so they return the same
+  $n$ for a mean payoff of $-\mu$ as for $+\mu$. When $(\pi_+-\pi_-)p+\pi_- < 0$ (or
+  $p < 0.5$ with symmetric payouts) the Sharpe ratio is negative at every frequency, and the
+  functions return `NoValidRoot` instead of that $n$. Before
+  [#168](https://github.com/Open-Quant/openquant/issues/168) they returned it: precision
+  0.45 with a target of 2 gave 396 bets a year, the answer for precision 0.55.
 - **The bootstrap resamples the past.** The failure probability is the chance of falling
   short *if precision stays what it was*. It does not price the risk that the edge decays,
   which is the larger one.

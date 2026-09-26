@@ -66,3 +66,23 @@ def test_cla_turning_points_start_at_max_return_asset():
     out = cla.allocate_cla(expected_returns=MU, covariance_matrix=COV)
     assert out["weights"][0] == pytest.approx([0.0, 1.0], abs=1e-9)
     assert len(out["weights"]) >= 2
+
+
+def test_cla_errors_name_their_cause():
+    # Mirrors crates/openquant/tests/cla.rs::test_infeasible_bounds_are_reported_as_such and
+    # test_singular_covariance_is_reported_as_such (#168). These used to read "inputs
+    # disagree on the number of assets" and "invalid asset prices: ...".
+    with pytest.raises(ValueError, match="infeasible weight bounds: the lower bounds sum"):
+        cla.allocate_cla(expected_returns=MU, covariance_matrix=COV, weight_bounds_lower=0.6)
+    with pytest.raises(ValueError, match="infeasible weight bounds: a lower bound exceeds"):
+        cla.allocate_cla(
+            expected_returns=MU,
+            covariance_matrix=COV,
+            weight_bounds_lower=0.5,
+            weight_bounds_upper=0.4,
+        )
+    with pytest.raises(ValueError, match="covariance of the free assets is singular"):
+        cla.allocate_cla(
+            expected_returns=[0.05, 0.10],
+            covariance_matrix=[[0.04, 0.04], [0.04, 0.04]],
+        )
