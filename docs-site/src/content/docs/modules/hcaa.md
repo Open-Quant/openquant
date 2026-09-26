@@ -2,7 +2,7 @@
 title: "hcaa"
 description: "Hierarchical allocation down the cluster tree, cut into a chosen number of clusters, with a choice of risk measure: variance, standard deviation, expected shortfall, conditional drawdown, Sharpe ratio or equal splits."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -17,6 +17,7 @@ citation:
 rust_api:
   - "HierarchicalClusteringAssetAllocation"
   - "HcaaError"
+  - "HcaaDistance"
 python_api:
   - "hcaa.allocate_hcaa"
 sidebar:
@@ -41,12 +42,10 @@ the leaf list was halved at its midpoint, as HRP does.
 
 ## The metrics
 
-The tree is single linkage on the pairwise correlation distance, the tree of HRP's
-`distance="correlation"` option. HRP's default instead clusters on the distance between rows
-of the distance matrix, as AFML's Snippet 16.4 does (see
-[which distance is clustered](/modules/hrp/#which-distance-is-clustered)). Weight starts at
-the root and is
-handed down it. At each of the top $k-1$ merges, where $k$ is `optimal_num_clusters`, the
+The tree is single linkage on the correlation distance $d_{ij}=\sqrt{2(1-\rho_{ij})}$, by
+default on $d$ itself as pairwise distances: the tree of HRP's `distance="correlation"`
+option, not of HRP's default (see [which distance is clustered](#which-distance-is-clustered)).
+Weight starts at the root and is handed down it. At each of the top $k-1$ merges, where $k$ is `optimal_num_clusters`, the
 node's weight is split between its two children, the left scaled by $\alpha$ and the right by
 $1-\alpha$. Below that cut each subtree is one cluster, and its weight is shared equally among
 its assets under `"equal_weighting"` and by inverse variance under every other metric. To score
@@ -134,6 +133,54 @@ splits give it, bonds a half and the others a quarter, shared equally inside. Wi
 splits continue inside each group, which depends on the order in which single linkage happened
 to merge three nearly identical assets, and the weights inside a group come out unequal.
 
+## Which distance is clustered
+
+`distance=` (Python) or `HcaaDistance` (Rust, set with `with_distance` or the `distance` field)
+chooses the matrix the single-linkage tree is built on. The options are the same as
+[HRP's](/modules/hrp/#which-distance-is-clustered); the default is not.
+
+| `distance=` (Python) | `HcaaDistance::` (Rust) | Tree built on |
+| --- | --- | --- |
+| `"correlation"` (default) | `Correlation` (default) | $d_{ij}$, pairwise, as mlfinlab's HCAA |
+| `"distance_of_distances"` | `DistanceOfDistances` | $\tilde d_{ij}=\sqrt{\sum_n (d_{ni}-d_{nj})^2}$, as AFML Snippet 16.4 and HRP's default |
+
+**Why pairwise is the default.** mlfinlab's HCAA, the implementation this module was ported
+from, calls `linkage(squareform(d))`, which clusters on $d$ itself. Raffinot's method builds
+on Mantegna's (1999) correlation tree, which is built on $d$ directly. Implementations disagree, though: the R package
+HierPortfolios clusters its HCAA on $\tilde d$, and the paper's full text was not available to
+check which it prescribes. The measurement below agrees with the choice: on the book's Monte Carlo the
+pairwise tree gives HCAA lower out-of-sample variance, unlike HRP.
+
+AFML §16.5 Monte Carlo (Snippets 16.4 and 16.5: 10 assets, 260-day window, monthly rebalance,
+10,000 runs, seeds `[51, k]`, the generator and backtest of the
+[HRP runbook](/runbooks/hrp-vs-ivp-cla-oos/)), SYNTHETIC data, HCAA with `"minimum_variance"`:
+
+| | $d$ (default) | $\tilde d$ | $d$, 5 clusters | $\tilde d$, 5 clusters |
+| --- | ---: | ---: | ---: | ---: |
+| HCAA mean OOS variance ×1e4 | **3.049** | 3.154 | 3.275 | 3.364 |
+| IVP / HCAA, mean OOS variance | **1.625** | 1.571 | 1.513 | 1.473 |
+| CLA / HCAA, mean OOS variance | **1.672** | 1.616 | 1.557 | 1.516 |
+| HRP ($\tilde d$, its default) / HCAA | **1.178** | 1.139 | 1.097 | 1.068 |
+| HRP ($d$) / HCAA | **1.250** | 1.208 | 1.164 | 1.133 |
+| runs where HCAA beats IVP | 87.8% | **90.4%** | 87.0% | 90.1% |
+| runs where HCAA beats CLA | **73.9%** | 72.2% | 70.9% | 69.7% |
+| HCAA turnover per rebalance | 0.107 | 0.087 | 0.110 | **0.077** |
+| HCAA effective number of assets | 6.78 | 7.06 | 6.90 | 7.15 |
+
+For reference, HRP's mean OOS variance ×1e4 is 3.592 ($\tilde d$) and 3.812 ($d$), CLA's 5.098
+and IVP's 4.955; turnover is 0.122 and 0.216 for HRP, 0.187 for CLA and 0.074 for IVP. The
+HRP figures reproduce that page's table exactly. Head to head, $\tilde d$ has 3.4% more mean OOS
+variance than $d$ with no cut (paired mean log ratio +0.068, t = 34; $d$ lower in 66% of runs)
+and 2.7% more with 5 clusters (t = 30). With `"minimum_standard_deviation"` the gap is much
+larger: 3.757 for $d$ against 5.025 for $\tilde d$, which is no better than IVP. What
+$\tilde d$ buys is stability: about 20% less turnover with `"minimum_variance"` and 40% less
+with `"minimum_standard_deviation"` (0.126 against 0.208). The 10 bps cost model changes no
+variance at 4 significant digits.
+
+In this simulation every HCAA variant with `"minimum_variance"` has lower OOS variance than
+HRP. That is one synthetic design with five independent assets and five noisy copies, where the
+tree's own branches are the right split and HRP's midpoint split of the leaf list is not.
+
 ## From Rust
 
 ```rust
@@ -190,10 +237,13 @@ assert!(matches!(
 - **`"sharpe_ratio"` brings back the problem HRP was built to avoid.** It depends on expected
   returns, the least reliable input in portfolio construction, and a mean of daily returns is
   a very noisy estimate of one.
+- **The default tree is not HRP's.** HCAA clusters on pairwise distances by default and HRP on
+  distances between columns of the distance matrix. Pass `distance="distance_of_distances"`
+  for HRP's tree; on the Monte Carlo above it lowers turnover and raises variance.
 - **Results differ from [HRP](/modules/hrp/) even with `"minimum_variance"`.** HRP halves the
   ordered leaf list at its midpoint, which can cut across a branch of the tree; this module
   splits only at the tree's own branches. They agree when every branch happens to divide
-  the list in half and HRP is given the same tree (`distance="correlation"`).
+  the list in half and both use the same tree (the same `distance=`).
 
 ## Related modules
 

@@ -276,7 +276,8 @@ export const apiInventory = {
     ],
     "openquant::hcaa": [
       "allocate",
-      "new"
+      "new",
+      "with_distance"
     ],
     "openquant::hpc_parallel": [
       "is_empty",

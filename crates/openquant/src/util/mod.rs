@@ -12,6 +12,7 @@
 
 pub mod fast_ewma;
 pub mod input_error;
+pub(crate) mod linkage;
 pub(crate) mod qp;
 pub(crate) mod resample;
 /// Volatility estimators used by labeling and risk code (AFML Snippet 3.1 and range-based

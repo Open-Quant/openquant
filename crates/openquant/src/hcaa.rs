@@ -5,11 +5,16 @@
 //! Portfolio Management 44(2); AFML Chapter 16 (§16.4, the tree and quasi-diagonalisation,
 //! Snippets 16.1–16.2).
 //!
-//! The tree is single linkage on the pairwise correlation distance `sqrt(2 (1 - rho))`, the
-//! tree of HRP's [`HrpDistance::Correlation`](crate::hrp::HrpDistance::Correlation) option;
-//! HRP's default instead clusters on the distance between rows of that distance matrix, as
-//! AFML's Snippet 16.4 does. Weight starts at 1 at the root. At each of the top `k - 1` merges (`k` = `optimal_num_clusters`)
-//! the node's weight is split between its children, the left one receiving a share `alpha`
+//! The tree is single linkage on the correlation distance `d = sqrt(2 (1 - rho))`. Which
+//! matrix is clustered is set by [`HcaaDistance`]: by default `d` itself, pairwise (Mantegna's
+//! 1999 distance, which Raffinot builds on, and what mlfinlab's HCAA clusters on); or, with
+//! [`HcaaDistance::DistanceOfDistances`], the Euclidean distance between columns of `d`, which
+//! is what AFML's Snippet 16.4 clusters on and [`crate::hrp`]'s default. The two trees are the
+//! same as HRP's [`HrpDistance`](crate::hrp::HrpDistance) options of the same names (HRP's
+//! `d` is half of this one, which does not change a single-linkage tree).
+//!
+//! Weight starts at 1 at the root. At each of the top `k - 1` merges
+//! (`k` = `optimal_num_clusters`) the node's weight is split between its children, the left one receiving a share `alpha`
 //! set by `allocation_metric`; below that cut each subtree is one cluster whose weight is
 //! shared equally (`"equal_weighting"`) or by inverse variance (every other metric). Each side
 //! of a split is scored as its inverse-variance portfolio:
@@ -66,6 +71,7 @@
 //! ```
 #![deny(missing_docs)]
 
+use crate::util::linkage::{distance_of_distances, quasi_diagonalization, single_linkage_children};
 use crate::util::resample::{freq_step, resample_prices};
 use nalgebra::DMatrix;
 
@@ -106,6 +112,42 @@ pub enum HcaaError {
         /// The number of assets.
         assets: usize,
     },
+    /// A distance name given to [`HcaaDistance`]'s `FromStr` is not `"correlation"` or
+    /// `"distance_of_distances"`.
+    #[error("unknown distance: {0} (expected \"correlation\" or \"distance_of_distances\")")]
+    UnknownDistance(String),
+}
+
+/// Which distance the single-linkage tree is built on.
+///
+/// Both start from the correlation distance `d_ij = sqrt(2 (1 - rho_ij))`. The options and
+/// their names match [`HrpDistance`](crate::hrp::HrpDistance), but the default differs: HCAA
+/// keeps the pairwise tree its references use, HRP follows AFML's Snippet 16.4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HcaaDistance {
+    /// Cluster on `d` itself, as a pairwise distance matrix. The default: this is Mantegna's
+    /// (1999) correlation distance, which Raffinot (2017) builds on, and what mlfinlab's HCAA
+    /// clusters on (`linkage(squareform(d))`).
+    #[default]
+    Correlation,
+    /// Cluster on the Euclidean distance between columns of `d`,
+    /// `d~_ij = sqrt(sum_n (d_ni - d_nj)^2)`: two assets are close when they are at similar
+    /// distances from every asset. This is AFML §16.4.1's second step (Snippet 16.4), the
+    /// default of [`crate::hrp`], and what the R package HierPortfolios' HCAA clusters on.
+    DistanceOfDistances,
+}
+
+impl std::str::FromStr for HcaaDistance {
+    type Err = HcaaError;
+
+    /// Parses `"correlation"` or `"distance_of_distances"` (case-insensitive).
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name.to_ascii_lowercase().as_str() {
+            "correlation" => Ok(Self::Correlation),
+            "distance_of_distances" => Ok(Self::DistanceOfDistances),
+            _ => Err(HcaaError::UnknownDistance(name.to_string())),
+        }
+    }
 }
 
 /// HCAA allocator; call [`allocate`](Self::allocate), then read the public fields.
@@ -121,6 +163,9 @@ pub struct HierarchicalClusteringAssetAllocation {
     /// Single-linkage merges in SciPy linkage convention: row `i` merges the two listed nodes
     /// (smaller id first) into node `N + i`, where ids below `N` are assets.
     pub clusters: Vec<[usize; 2]>,
+    /// The distance the tree is built on; set it before calling [`allocate`](Self::allocate)
+    /// (or build with [`with_distance`](Self::with_distance)).
+    pub distance: HcaaDistance,
     calculate_expected_returns: String,
 }
 
@@ -141,8 +186,25 @@ impl HierarchicalClusteringAssetAllocation {
             weights: Vec::new(),
             ordered_indices: Vec::new(),
             clusters: Vec::new(),
+            distance: HcaaDistance::default(),
             calculate_expected_returns: calculate_expected_returns.to_string(),
         }
+    }
+
+    /// Returns this allocator set to cluster on `distance` (the default is
+    /// [`HcaaDistance::Correlation`]).
+    ///
+    /// ```
+    /// use openquant::hcaa::{HcaaDistance, HierarchicalClusteringAssetAllocation};
+    ///
+    /// let model = HierarchicalClusteringAssetAllocation::new("mean")
+    ///     .with_distance(HcaaDistance::DistanceOfDistances);
+    /// assert_eq!(model.distance, HcaaDistance::DistanceOfDistances);
+    /// assert_eq!("correlation".parse(), Ok(HcaaDistance::Correlation));
+    /// ```
+    pub fn with_distance(mut self, distance: HcaaDistance) -> Self {
+        self.distance = distance;
+        self
     }
 
     /// Compute HCAA weights (Raffinot 2017) and store them with the tree in `self`.
@@ -318,8 +380,13 @@ impl HierarchicalClusteringAssetAllocation {
             });
         }
 
-        let corr = cov2corr(&covariance_owned)?;
-        self.clusters = single_linkage_children(&corr);
+        let distances = corr_to_distances(&cov2corr(&covariance_owned)?);
+        self.clusters = match self.distance {
+            HcaaDistance::Correlation => single_linkage_children(&distances),
+            HcaaDistance::DistanceOfDistances => {
+                single_linkage_children(&distance_of_distances(&distances))
+            }
+        };
         self.ordered_indices = quasi_diagonalization(n_assets, &self.clusters, 2 * n_assets - 2);
         let inputs = MetricInputs {
             expected: &expected_owned,
@@ -438,84 +505,9 @@ fn cov2corr(covariance: &DMatrix<f64>) -> Result<DMatrix<f64>, HcaaError> {
     Ok(corr)
 }
 
-fn single_linkage_children(corr: &DMatrix<f64>) -> Vec<[usize; 2]> {
-    #[derive(Clone)]
-    struct Cluster {
-        id: usize,
-        members: Vec<usize>,
-    }
-
-    let n = corr.nrows();
-    let mut distance = DMatrix::zeros(n, n);
-    for i in 0..n {
-        for j in 0..n {
-            let c = corr[(i, j)].clamp(-1.0, 1.0);
-            distance[(i, j)] = (2.0 * (1.0 - c)).max(0.0).sqrt();
-        }
-    }
-
-    let mut clusters: Vec<Cluster> = (0..n).map(|i| Cluster { id: i, members: vec![i] }).collect();
-    let mut next_id = n;
-    let mut children: Vec<[usize; 2]> = Vec::with_capacity(n.saturating_sub(1));
-    let eps = 1e-12;
-
-    while clusters.len() > 1 {
-        let mut best_i = 0usize;
-        let mut best_j = 1usize;
-        let mut best_d = f64::INFINITY;
-        let mut best_pair_ids = (
-            clusters[best_i].id.min(clusters[best_j].id),
-            clusters[best_i].id.max(clusters[best_j].id),
-        );
-
-        for i in 0..clusters.len() {
-            for j in i + 1..clusters.len() {
-                let mut d = f64::INFINITY;
-                for &a in &clusters[i].members {
-                    for &b in &clusters[j].members {
-                        d = d.min(distance[(a, b)]);
-                    }
-                }
-                let ids = (clusters[i].id.min(clusters[j].id), clusters[i].id.max(clusters[j].id));
-                let better = d + eps < best_d || ((d - best_d).abs() <= eps && ids < best_pair_ids);
-                if better {
-                    best_i = i;
-                    best_j = j;
-                    best_d = d;
-                    best_pair_ids = ids;
-                }
-            }
-        }
-
-        let (lo, hi) = if best_i < best_j { (best_i, best_j) } else { (best_j, best_i) };
-        let right = clusters.remove(hi);
-        let left = clusters.remove(lo);
-        let mut members = left.members;
-        members.extend(right.members);
-        let left_id = left.id.min(right.id);
-        let right_id = left.id.max(right.id);
-        children.push([left_id, right_id]);
-        clusters.push(Cluster { id: next_id, members });
-        next_id += 1;
-    }
-
-    children
-}
-
-fn quasi_diagonalization(
-    num_assets: usize,
-    clusters: &[[usize; 2]],
-    curr_index: usize,
-) -> Vec<usize> {
-    if curr_index < num_assets {
-        return vec![curr_index];
-    }
-    let row = curr_index - num_assets;
-    let left = clusters[row][0];
-    let right = clusters[row][1];
-    let mut out = quasi_diagonalization(num_assets, clusters, left);
-    out.extend(quasi_diagonalization(num_assets, clusters, right));
-    out
+/// `d_ij = sqrt(2 (1 - rho_ij))`, with `rho` clamped to `[-1, 1]`.
+fn corr_to_distances(corr: &DMatrix<f64>) -> DMatrix<f64> {
+    corr.map(|c| (2.0 * (1.0 - c.clamp(-1.0, 1.0))).max(0.0).sqrt())
 }
 
 fn inverse_variance_weights(cov: &DMatrix<f64>, indices: &[usize]) -> Result<Vec<f64>, HcaaError> {
