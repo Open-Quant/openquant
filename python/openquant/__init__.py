@@ -78,7 +78,12 @@ _CORE_REEXPORTS = [
 # only works once they are registered with the import system.
 for _name in _CORE_REEXPORTS:
     _sys.modules.setdefault(f"{__name__}.{_name}", getattr(_core, _name))
-del _name
+# The same for every compiled submodule under its own name, so that
+# `import openquant._core.labeling` works and stubtest can check each stub module.
+for _name, _module in vars(_core).items():
+    if isinstance(_module, type(_sys)):
+        _sys.modules.setdefault(f"{__name__}._core.{_name}", _module)
+del _name, _module
 
 __all__ = [
     *_CORE_REEXPORTS,
