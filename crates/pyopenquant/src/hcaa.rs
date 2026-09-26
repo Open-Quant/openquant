@@ -13,7 +13,8 @@ use crate::helpers::{matrix_from_rows, to_py_err};
     confidence_level=0.05,
     optimal_num_clusters=None,
     resample_by=None,
-    calculate_expected_returns="mean"
+    calculate_expected_returns="mean",
+    distance=None
 ))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -28,13 +29,19 @@ fn hcaa_allocate(
     optimal_num_clusters: Option<usize>,
     resample_by: Option<String>,
     calculate_expected_returns: &str,
+    distance: Option<String>,
 ) -> PyResult<(Vec<f64>, Vec<usize>)> {
+    let distance: openquant::hcaa::HcaaDistance = match distance {
+        Some(name) => name.parse().map_err(to_py_err)?,
+        None => openquant::hcaa::HcaaDistance::default(),
+    };
     let prices_m = asset_prices.map(matrix_from_rows).transpose()?;
     let returns_m = asset_returns.map(matrix_from_rows).transpose()?;
     let cov_m = covariance_matrix.map(matrix_from_rows).transpose()?;
 
     let mut hcaa =
-        openquant::hcaa::HierarchicalClusteringAssetAllocation::new(calculate_expected_returns);
+        openquant::hcaa::HierarchicalClusteringAssetAllocation::new(calculate_expected_returns)
+            .with_distance(distance);
     hcaa.allocate(
         &asset_names,
         prices_m.as_ref(),
