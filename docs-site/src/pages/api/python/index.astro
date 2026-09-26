@@ -1,0 +1,67 @@
+---
+/** Index of the generated Python API reference (see [slug].astro). */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import reference from '../../../data/pythonApiReference.json';
+import { inline, summary } from '../../../lib/docstring';
+import { PY_REF_BANNER } from '../../../lib/pythonReference';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const publicModules = reference.modules.filter((m) => !m.import.startsWith('openquant._core.'));
+const wrapped = reference.modules.filter((m) => m.import.startsWith('openquant._core.'));
+const count = (m: (typeof reference.modules)[number]) =>
+  m.functions.length + m.classes.length;
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Python API reference',
+    description:
+      'Every public function in the openquant Python package, with its signature and docstring, generated from the built extension.',
+    status: 'generated',
+    banner: { content: PY_REF_BANNER },
+  }}
+  headings={[
+    { depth: 2, slug: 'modules', text: 'Modules' },
+    { depth: 2, slug: 'compiled-internals', text: 'Compiled modules behind the wrappers' },
+  ]}
+>
+  <p>
+    Import the package as <code>openquant</code>. Modules marked <em>compiled</em> are Rust
+    bindings; <code>help()</code> on any of their functions prints the same signature and text as
+    below, and type checkers read the shipped <code>.pyi</code> stubs. For the Rust crate itself
+    see the <a href={`${base}/api/rust/openquant/`}>rustdoc reference</a>.
+  </p>
+
+  <h2 id="modules">Modules</h2>
+  <table>
+    <thead><tr><th>Module</th><th>Kind</th><th>Items</th><th>Summary</th></tr></thead>
+    <tbody>
+      {
+        publicModules.map((m) => (
+          <tr>
+            <td><a href={`${base}/api/python/${m.slug}/`}><code>{m.import}</code></a></td>
+            <td>{m.kind}</td>
+            <td>{count(m)}</td>
+            <td set:html={inline(summary(m.doc))} />
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+
+  <h2 id="compiled-internals">Compiled modules behind the wrappers</h2>
+  <p>
+    These compiled modules have a pure-Python module of the same name in front of them (for
+    example <code>openquant.bars</code> wraps <code>openquant._core.bars</code>). The wrappers are
+    the supported interface; the compiled functions are listed for completeness.
+  </p>
+  <ul>
+    {
+      wrapped.map((m) => (
+        <li>
+          <a href={`${base}/api/python/${m.slug}/`}><code>{m.import}</code></a> ({count(m)})
+        </li>
+      ))
+    }
+  </ul>
+</StarlightPage>

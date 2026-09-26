@@ -88,6 +88,31 @@ fn distribution_from(key: &str, spec: &Bound<'_, PyAny>) -> PyResult<RandomParam
     }
 }
 
+/// Expand a parameter grid into every combination of its values (AFML section 9.2).
+///
+/// These are the candidates a purged grid search evaluates, in the order the Rust
+/// `grid_search` evaluates them: keys are iterated in sorted name order, with the last key
+/// varying fastest. Fit and score each candidate on purged folds (e.g.
+/// `openquant.cross_validation.purged_kfold_splits`) with your own model.
+///
+/// Parameters
+/// ----------
+/// param_grid : dict[str, list[int | float | bool]]
+///     Parameter name to the values to try. Values must be Python `int`, `float` or `bool`
+///     (subclasses such as `numpy.float64` are accepted; `numpy.int64` and `numpy.bool_` are
+///     not, so convert them with `int()` or `bool()`).
+///
+/// Returns
+/// -------
+/// list[dict[str, int | float | bool]]
+///     One dict per combination, each with every key of `param_grid`; values keep their
+///     Python type.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a value is not an int, float or bool, or if the core rejects the grid (no keys, or a
+///     key with no values).
 #[pyfunction(name = "expand_param_grid")]
 fn ht_expand_param_grid<'py>(
     py: Python<'py>,
@@ -103,6 +128,42 @@ fn ht_expand_param_grid<'py>(
     param_sets_to_py(py, expand_param_grid(&grid).map_err(to_py_err)?)
 }
 
+/// Draw the `n_iter` parameter sets a randomized search evaluates (AFML section 9.3).
+///
+/// Each draw samples every key of `param_space` in sorted name order from one random generator
+/// seeded with `seed`, so the same inputs always give the same sets, in the order the Rust
+/// `randomized_search` evaluates them. Fit and score each set on purged folds with your own
+/// model.
+///
+/// Parameters
+/// ----------
+/// param_space : dict[str, tuple]
+///     Parameter name to a distribution spec, as a tuple or list:
+///
+///     - `("choice", [values])`: uniform choice among the values (each an `int`, `float` or
+///       `bool`, with the same rules as `expand_param_grid`).
+///     - `("uniform", low, high)`: float uniform in `[low, high)`; finite, `low < high`.
+///     - `("log_uniform", low, high)`: float whose logarithm is uniform in
+///       `[ln low, ln high)` (AFML section 9.3.1); `0 < low < high`.
+///     - `("int", low, high)`: integer uniform in `[low, high]`, both inclusive; `low <= high`.
+/// n_iter : int
+///     Number of parameter sets to draw; must be positive.
+/// seed : int
+///     Seed of the random generator.
+///
+/// Returns
+/// -------
+/// list[dict[str, int | float | bool]]
+///     `n_iter` dicts, in draw order, each with every key of `param_space`. `uniform` and
+///     `log_uniform` give floats, `int` gives ints, and `choice` keeps the chosen value's type.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If a spec is malformed (unknown kind or wrong number of items) or a choice value is not
+///     an int, float or bool, or if the core rejects the space (no keys, `n_iter == 0`, an
+///     empty choice list, non-finite or unordered `uniform` bounds, non-positive or unordered
+///     `log_uniform` bounds, or `int` with `low > high`).
 #[pyfunction(name = "sample_param_sets")]
 fn ht_sample_param_sets<'py>(
     py: Python<'py>,
@@ -117,6 +178,39 @@ fn ht_sample_param_sets<'py>(
     param_sets_to_py(py, sample_param_sets(&space, n_iter, seed).map_err(to_py_err)?)
 }
 
+/// Score binary predictions, optionally sample-weighted (AFML Snippet 9.1).
+///
+/// Scoring the test fold with its sample weights is the correction Snippet 9.1 makes to
+/// scikit-learn. Every score is higher-is-better. Samples with weight 0 are skipped. Hard
+/// predictions use `probability >= 0.5` for class 1. Log loss clips probabilities to
+/// `[1e-15, 1 - 1e-15]`; AFML section 9.4 recommends it for strategies that size bets by
+/// probability.
+///
+/// Parameters
+/// ----------
+/// y_true : list[float]
+///     Labels, each 0.0 or 1.0.
+/// probabilities : list[float]
+///     Predicted probability of class 1 per sample, finite and in `[0, 1]`.
+/// sample_weight : list[float] | None, default None
+///     Non-negative weight per sample; None weights every sample 1.
+/// scoring : str, default "neg_log_loss"
+///     One of `"neg_log_loss"` (weighted mean log-likelihood of the true label, at most 0),
+///     `"accuracy"` (weighted share of labels matched) or `"balanced_accuracy"` (mean of the
+///     weighted per-class recalls, over the classes present).
+///
+/// Returns
+/// -------
+/// float
+///     The score.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `scoring` is not one of the names above, or if the core rejects the input (empty
+///     `y_true`, `probabilities` or `sample_weight` of a different length, a negative weight,
+///     a probability not finite or outside `[0, 1]`, a label other than 0 or 1, or weights
+///     summing to 0).
 #[pyfunction(name = "classification_score")]
 #[pyo3(signature = (y_true, probabilities, sample_weight=None, scoring="neg_log_loss"))]
 fn ht_classification_score(

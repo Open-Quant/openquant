@@ -78,6 +78,18 @@ py-lint:
     uv run --python .venv/bin/python ruff format --check python/
     uv run --python .venv/bin/python mypy
 
+# Regenerate the API reference artefacts after changing a binding: the .pyi stubs (from the
+# Rust source), the rustdoc/API inventory, and the docs site's Python reference (from the
+# built extension, so run py-develop first).
+py-api-docs:
+    uv run --python .venv/bin/python python scripts/generate_python_stubs.py
+    uv run --python .venv/bin/python python scripts/generate_api_inventory.py
+    uv run --python .venv/bin/python python scripts/generate_python_api_reference.py
+
+# Check the stubs against the built extension (names, parameters, defaults).
+py-stubtest:
+    uv run --python .venv/bin/python python -m mypy.stubtest openquant._core
+
 py-setup:
     uv venv --python 3.13 .venv
     uv sync --group dev
@@ -99,8 +111,10 @@ notebook-smoke:
 
 # Execute every notebooks/python/NN_*.ipynb in a Jupyter kernel (nbclient), in
 # place, and re-export docs-site/public/figures/notebooks/. Fails on any cell
-# error. Needs the extension built first (`just py-develop`). Extra arguments go
-# to the runner, e.g. `just notebooks-run --only 11` or `--check`.
+# error. Needs the extension built first (`just py-develop-release` runs them far
+# faster than `just py-develop`). Extra arguments go to the runner, e.g.
+# `just notebooks-run --only 11`, `--check`, or `--jobs 0` (one notebook per CPU
+# at a time, as CI runs them).
 notebooks-run *args:
     uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/run_notebooks.py {{args}}
 

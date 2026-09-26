@@ -1,8 +1,26 @@
 name: CI
 
-# Every job here runs on every pull request, with no path filter, so any of
-# them can be made a required status check. Pushes run only on main: a branch
-# push that also has a PR would otherwise run the whole workflow twice.
+# The workflow has no trigger-level path filter, so every job reports on every
+# pull request and any of them can be made a required status check. Pushes run
+# only on main: a branch push that also has a PR would otherwise run the whole
+# workflow twice.
+#
+# Docs-only pull requests: the `changes` job lists the PR's files, and when all
+# of them are documentation (see its case statement) the Rust-heavy jobs are
+# skipped with a job-level `if:`. A job skipped that way still reports, as
+# "skipped", which branch protection counts as passing. docs-checks and
+# python-lint always run: docs-checks compiles the documented Rust examples and
+# executes the Python ones against the built extension. `ci-success` depends on
+# every job and fails if any failed or was cancelled; it is the one check to
+# require (a skipped matrix job reports under its unexpanded name, so
+# "python (3.11)" would never report on a docs-only PR).
+#
+# Rust caching: Swatinem/rust-cache, one `shared-key` per build flavour
+# (profile + features + Python version), so jobs that build the same thing share
+# one cache and jobs that build different things do not overwrite each other.
+# Caches are SAVED only from main (`save-if`); pull requests restore main's.
+# GitHub scopes a PR's own caches to that PR, so saving them would help only that
+# PR's reruns while pushing main's caches out of the repository's 10 GB budget.
 on:
   push:
     branches: [main]
@@ -19,7 +37,56 @@ defaults:
     shell: bash
 
 jobs:
-  lint-test:
+  # Lists the pull request's changed files and decides whether any of them can
+  # affect the Rust build, the extension or the notebooks. Anything not
+  # recognised as documentation counts as code, and so does every non-PR event.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - name: Classify changed files
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Old and new names, so a file moved out of crates/ still counts as code.
+          if ! files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+                --jq '.[] | .filename, (.previous_filename // empty)')"; then
+            echo "could not list the changed files; running everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              # Markdown under these is still code: a crate can include_str! it,
+              # and the notebooks' outputs and figures are verified.
+              crates/* | python/* | vendor/* | notebooks/* | docs-site/public/figures/notebooks/*) kind=code ;;
+              docs/* | docs-site/* | *.md | *.mdx) kind=docs ;;
+              *) kind=code ;;
+            esac
+            echo "$kind  $f"
+            if [ "$kind" = code ]; then code=true; fi
+          done <<< "$files"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  # lint, doctests and tests were one serial job (lint-test). They build
+  # different things (check metadata, the lib for doctests, all-features test
+  # binaries), so each has its own cache.
+  lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
@@ -29,38 +96,85 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       # missing_docs is enforced per module (#![deny(missing_docs)] at the top of each
       # documented file) until the last modules are documented; this gate catches broken
-      # intra-doc links crate-wide and runs every doctest.
+      # intra-doc links crate-wide. The doctests run in the doctests job.
       - name: Rustdoc (broken intra-doc links)
         run: cargo doc -p openquant --no-deps
         env:
           RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links
-      - name: Doctests
-        run: cargo test -p openquant --doc
-      # test_sadf_test is #[ignore]d for runtime (about an hour in debug); it and
-      # every other ignored test except known FINDING tests run in nightly.yml.
-      - name: Tests (fast)
-        run: cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
 
-  bench-compile:
-    # Compiles all four benches (perf_hotspots, synthetic_ticker_pipeline,
-    # hpc_parallel_scaling, streaming_hpc_scaling) so none can rot unnoticed.
+  doctests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: doctests
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Doctests
+        run: cargo test -p openquant --doc
+
+  tests:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # test_sadf_test is #[ignore]d for runtime (about an hour in debug); it and
+      # every other ignored test except known FINDING tests run in nightly-validation.yml.
+      - name: Tests (fast)
+        run: cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
+
+  bench-compile:
+    # Compiles all four benches (perf_hotspots, synthetic_ticker_pipeline,
+    # hpc_parallel_scaling, streaming_hpc_scaling) so none can rot unnoticed.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Shared with benchmark-regression.yml, which builds two of these benches
+      # in the same profile but never runs on main, so never saves.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: bench
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Compile every benchmark target
         run: cargo bench -p openquant --no-run
 
   python:
     name: python (${{ matrix.python-version }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -74,16 +188,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v5
-      - name: Cache cargo registry + build artifacts
-        uses: actions/cache@v4
+      # One cache per Python version: PyO3 and everything above it are built
+      # against the interpreter.
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-py${{ matrix.python-version }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-py${{ matrix.python-version }}-
+          shared-key: python-${{ matrix.python-version }}
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Create virtual environment
         run: uv venv --python ${{ matrix.python-version }} .venv
       # --locked fails if uv.lock is out of date with pyproject.toml.
@@ -96,6 +207,10 @@ jobs:
         run: uv run --no-sync python -c "import openquant; print('openquant bindings import ok')"
       - name: Python tests
         run: uv run --no-sync pytest python/tests -q
+      # The .pyi stubs (python/openquant/_core/) against the real extension: every
+      # function, parameter name, kind and default must match.
+      - name: Stubtest
+        run: uv run --no-sync python -m mypy.stubtest openquant._core
       # Notebook, experiment and Rust-example smokes need the same built
       # extension, so they run here once (on the development Python) instead
       # of rebuilding it in a separate workflow.
@@ -118,12 +233,16 @@ jobs:
         run: |
           uv venv --python 3.13 .venv
           uv sync --locked --group dev --no-install-project
+      # The stubs are generated from crates/pyopenquant/src; this fails if a binding's
+      # signature, types or docstring changed without regenerating them.
+      - name: Python stubs up to date
+        run: uv run --no-sync python scripts/generate_python_stubs.py --check
       - name: Ruff lint
         run: uv run --no-sync ruff check python/
       - name: Ruff format check
         run: uv run --no-sync ruff format --check python/
-      # Type-checks python/openquant and python/tests (see [tool.mypy]). The
-      # compiled openquant._core has no stubs yet and is treated as Any.
+      # Type-checks python/openquant and python/tests (see [tool.mypy]), with the
+      # compiled openquant._core typed by its generated .pyi stubs.
       - name: Mypy
         run: uv run --no-sync mypy
 
@@ -144,12 +263,26 @@ jobs:
       # check:examples cargo-checks every documented Rust example against the
       # real crate, so this job needs a toolchain as well as bun.
       - uses: dtolnay/rust-toolchain@stable
+      # rustdoc, the doc-example `cargo check` and the debug extension build
+      # below all land in this one cache.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install docs dependencies
         run: bun install --frozen-lockfile
         working-directory: docs-site
       - name: Build docs
         run: bun run build
         working-directory: docs-site
+      # Rustdoc into dist/api/rust/ so check:links can prove the module pages' rustdoc
+      # links resolve.
+      - name: Build and stage rustdoc
+        run: bun run stage:rustdoc
+        working-directory: docs-site
+      # Also fails on a #[pyfunction] without a docstring (outside the allowlist in
+      # scripts/pyopenquant_bindings.py).
       - name: Check API inventory drift
         run: bun run check:api-drift
         working-directory: docs-site
@@ -187,3 +320,22 @@ jobs:
       - name: Check documented Python examples run
         run: bun run check:python-examples
         working-directory: docs-site
+      # The Python reference pages are rendered from a JSON snapshot of the built
+      # extension's signatures and docstrings; fail if it no longer matches.
+      - name: Check Python API reference is current
+        run: bun run check:python-reference
+        working-directory: docs-site
+
+  # The single check to require in branch protection: passes when every job
+  # above passed or was skipped for a docs-only PR, fails otherwise.
+  ci-success:
+    if: always()
+    needs: [changes, lint, doctests, tests, bench-compile, python, python-lint, docs-checks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' > /dev/null

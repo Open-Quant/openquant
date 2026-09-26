@@ -54,6 +54,13 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      # Restores the bench-profile cache ci.yml's bench-compile saves on main.
+      # This workflow never runs on main, so it never saves (see ci.yml).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: bench
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Resolve base revision
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -69,10 +76,21 @@ jobs:
           echo "base: $base  head: $(git rev-parse HEAD)"
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
       # Build both trees before timing either, so compilation does not overlap
-      # a measurement.
-      - name: Build benchmarks (base and head)
+      # a measurement. Head first, then its target/ (restored dependencies plus
+      # this build) is copied under the base worktree, so the base build reuses
+      # every dependency instead of compiling them a second time.
+      #
+      # The trees keep separate target dirs: cargo hashes a workspace member by
+      # its path relative to the workspace root, so in one shared dir base and
+      # head would overwrite each other's openquant. The copy carries head's
+      # openquant artifacts, and cargo's mtime check could take them as fresh
+      # for base's older checkout, so they are cleaned before the base build.
+      - name: Build benchmarks (head, then base)
         run: |
-          (cd "$RUNNER_TEMP/base" && cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run)
+          cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run
+          cp -a target "$RUNNER_TEMP/base/target"
+          cd "$RUNNER_TEMP/base"
+          cargo clean -p openquant --release
           cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline --no-run
       - name: Run benchmarks on base
         working-directory: ${{ runner.temp }}/base

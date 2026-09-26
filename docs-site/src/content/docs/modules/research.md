@@ -3,7 +3,7 @@ title: "research"
 description: "Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-08-31'
+last_generated: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,6 +13,10 @@ rust_api:
   - "make_synthetic_futures_dataset"
   - "run_flywheel_iteration"
   - "ResearchDataset"
+python_api:
+  - "research.make_synthetic_futures_dataset"
+  - "research.run_flywheel_iteration"
+  - "research.ResearchDataset"
 sidebar:
   badge: Module
 ---
@@ -77,20 +81,6 @@ print(result["summary"])
 
 - Over-optimizing on synthetic data — the data generator has known dynamics; validate on real data before deployment.
 - Ignoring cost estimates — gross Sharpe is misleading for high-turnover strategies.
-
-## API Reference
-
-### Python API
-
-- `research.make_synthetic_futures_dataset`
-- `research.run_flywheel_iteration`
-- `research.ResearchDataset`
-
-### Key Functions
-
-- `make_synthetic_futures_dataset`
-- `run_flywheel_iteration`
-- `ResearchDataset`
 
 ## Risk Notes and Caveats
 
