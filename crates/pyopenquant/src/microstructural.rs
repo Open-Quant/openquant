@@ -146,8 +146,8 @@ fn ms_sigma_mapping(array: Vec<f64>, step: f64) -> PyResult<Vec<(f64, char)>> {
 }
 
 #[pyfunction(name = "encode_array")]
-fn ms_encode_array(array: Vec<f64>, encoding: Vec<(f64, char)>) -> String {
-    openquant::microstructural_features::encode_array(&array, &encoding)
+fn ms_encode_array(array: Vec<f64>, encoding: Vec<(f64, char)>) -> PyResult<String> {
+    openquant::microstructural_features::encode_array(&array, &encoding).map_err(to_py_err)
 }
 
 // --- Entropy ---
