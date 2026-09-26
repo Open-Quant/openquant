@@ -20,7 +20,7 @@ statrs = "0.16"
 rand_distr = "0.4"
 nalgebra = "0.32"
 csv = "1"
-polars = { version = "0.46", default-features = false, features = ["strings", "lazy"] }
+polars = { version = "0.55", default-features = false, features = ["strings", "lazy"] }
 thiserror = "2"
 
 [dev-dependencies]
