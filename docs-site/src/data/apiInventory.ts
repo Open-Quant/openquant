@@ -818,10 +818,12 @@ export const apiInventory = {
       "get_weights_ffd": "fn"
     },
     "openquant::hcaa": {
+      "HcaaDistance": "enum",
       "HcaaError": "enum",
       "HierarchicalClusteringAssetAllocation": "struct",
       "HierarchicalClusteringAssetAllocation::allocate": "method",
-      "HierarchicalClusteringAssetAllocation::new": "method"
+      "HierarchicalClusteringAssetAllocation::new": "method",
+      "HierarchicalClusteringAssetAllocation::with_distance": "method"
     },
     "openquant::hpc_parallel": {
       "AsyncParallelHandle": "struct",

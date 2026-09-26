@@ -4,18 +4,18 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 
 /// Hierarchical Clustering-based Asset Allocation weights (Raffinot, 2017).
 ///
-/// Builds a single-linkage tree on the correlation distance `sqrt(2 (1 - rho))` (AFML
-/// section 16.4, Snippets 16.1-16.2) and splits weight down it from the root. At each of
-/// the top `optimal_num_clusters - 1` merges the left child receives a share `alpha` set
-/// by `allocation_metric`, each side scored as its inverse-variance portfolio:
-/// `"minimum_variance"`, `"minimum_standard_deviation"`, `"expected_shortfall"` and
-/// `"conditional_drawdown_risk"` give `1 - risk_L / (risk_L + risk_R)`; `"sharpe_ratio"`
-/// gives `sr_L / (sr_L + sr_R)` (minimum variance outside `[0, 1]`); `"equal_weighting"`
-/// gives 0.5. Below the cut each cluster's weight is shared equally (`"equal_weighting"`)
-/// or by inverse variance (every other metric). Raffinot's gap-statistic choice of the
-/// cluster count is not implemented: None means no cut. Returns from prices are simple
-/// returns; estimated expected returns are annualised by 252 periods, while covariance and
-/// tail measures are per-period.
+/// Builds a single-linkage tree from the correlation distance `d = sqrt(2 (1 - rho))` (AFML
+/// section 16.4, Snippets 16.1-16.2; see `distance`) and splits weight down it from the
+/// root. At each of the top `optimal_num_clusters - 1` merges the left child receives a
+/// share `alpha` set by `allocation_metric`, each side scored as its inverse-variance
+/// portfolio: `"minimum_variance"`, `"minimum_standard_deviation"`, `"expected_shortfall"`
+/// and `"conditional_drawdown_risk"` give `1 - risk_L / (risk_L + risk_R)`;
+/// `"sharpe_ratio"` gives `sr_L / (sr_L + sr_R)` (minimum variance outside `[0, 1]`);
+/// `"equal_weighting"` gives 0.5. Below the cut each cluster's weight is shared equally
+/// (`"equal_weighting"`) or by inverse variance (every other metric). Raffinot's
+/// gap-statistic choice of the cluster count is not implemented: None means no cut. Returns
+/// from prices are simple returns; estimated expected returns are annualised by 252
+/// periods, while covariance and tail measures are per-period.
 ///
 /// Parameters
 /// ----------
@@ -47,6 +47,11 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// calculate_expected_returns : str, default "mean"
 ///     How expected returns are estimated from prices for `"sharpe_ratio"`: `"mean"` or
 ///     `"exponential"` (exponentially weighted, span 500); case-insensitive.
+/// distance : str | None, default None
+///     Distance the tree is built on (case-insensitive): `"correlation"` (the default when
+///     None; cluster on `d` itself, Mantegna's correlation distance, as Raffinot and
+///     mlfinlab do) or `"distance_of_distances"` (the Euclidean distance between columns
+///     of `d`, as AFML Snippet 16.4 and the HRP default compute).
 ///
 /// Returns
 /// -------
@@ -57,12 +62,12 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// Raises
 /// ------
 /// ValueError
-///     If a matrix is empty or ragged, or the core rejects the input (e.g. no prices,
-///     returns or covariance given, empty `asset_names`, too few rows, a zero price, a
-///     non-positive covariance diagonal, an unknown `allocation_metric` or
-///     `calculate_expected_returns`, mismatched shapes, `"sharpe_ratio"` without expected
-///     returns or prices, a tail metric without a return history, or
-///     `optimal_num_clusters` of 0 or above `N`).
+///     If `distance` is not `"correlation"` or `"distance_of_distances"`, a matrix is empty
+///     or ragged, or the core rejects the input (e.g. no prices, returns or covariance
+///     given, empty `asset_names`, too few rows, a zero price, a non-positive covariance
+///     diagonal, an unknown `allocation_metric` or `calculate_expected_returns`, mismatched
+///     shapes, `"sharpe_ratio"` without expected returns or prices, a tail metric without a
+///     return history, or `optimal_num_clusters` of 0 or above `N`).
 #[pyfunction(name = "allocate_hcaa")]
 #[pyo3(signature = (
     asset_names,
