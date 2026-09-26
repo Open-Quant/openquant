@@ -147,3 +147,36 @@ fn invalid_config_rejected() {
     .expect_err("invalid thread count");
     assert!(matches!(err, HpcParallelError::InvalidConfig(_)));
 }
+
+/// #184 item 6: the linear boundary `i * atom_count / molecules` overflowed `usize` (a panic
+/// in debug builds, a wrong boundary in release). It is now formed in `u128`.
+#[test]
+fn linear_partition_of_huge_counts_is_exact() {
+    let parts =
+        std::panic::catch_unwind(|| partition_atoms(usize::MAX, 3, PartitionStrategy::Linear))
+            .expect("must not panic")
+            .unwrap();
+    let ends: Vec<usize> = parts.iter().map(|p| p.end).collect();
+    let third = usize::MAX / 3; // usize::MAX = 2^64 - 1 is divisible by 3.
+    assert_eq!(ends, [third, 2 * third, usize::MAX]);
+}
+
+/// #184 item 6: a panicking callback used to panic out of `run_parallel` (out of
+/// `thread::scope` in threaded mode), leaving `WorkerPanic` unreachable. It is now caught.
+#[test]
+fn panicking_callback_returns_worker_panic() {
+    let atoms: Vec<u32> = (0..20).collect();
+    for mode in [ExecutionMode::Serial, ExecutionMode::Threaded { num_threads: 3 }] {
+        let cfg = config(mode, PartitionStrategy::Linear, 2);
+        let out = std::panic::catch_unwind(|| {
+            run_parallel(&atoms, cfg, |chunk: &[u32]| {
+                if chunk.contains(&7) {
+                    panic!("boom");
+                }
+                Ok::<u32, String>(chunk.iter().sum())
+            })
+        })
+        .expect("run_parallel must not panic");
+        assert_eq!(out.unwrap_err(), HpcParallelError::WorkerPanic, "{mode:?}");
+    }
+}

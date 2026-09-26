@@ -338,59 +338,88 @@ impl VpinState {
     /// ratio. Each completed bucket, once `support_buckets` exist, records one VPIN value in
     /// the CDF history. Zero total volume changes nothing.
     ///
-    /// The loop runs once per bucket filled, so an event of volume `Q` costs about
-    /// `Q / bucket_volume` iterations. If `buy_volume + sell_volume` overflows to infinity the
-    /// loop never ends.
+    /// The cost is bounded whatever the volume: at most `support_buckets + cdf_lookback + 2`
+    /// buckets are processed one by one. Every whole bucket an event fills has the same
+    /// toxicity `|buy - sell| / (buy + sell)`, and only the last `support_buckets +
+    /// cdf_lookback` completed buckets can still affect the window or the CDF history, so
+    /// the earlier ones are skipped.
     ///
     /// # Errors
     ///
     /// [`StreamingHpcError::InvalidEvent`] (`"buy_volume"` or `"sell_volume"`) if either
-    /// volume is negative or not finite; the state is then unchanged.
+    /// volume is negative or not finite, or (`"buy_volume + sell_volume must be finite"`) if
+    /// their sum overflows to infinity (which used to loop forever); the state is then
+    /// unchanged.
     pub fn update(
         &mut self,
-        mut buy_volume: f64,
+        buy_volume: f64,
         sell_volume: f64,
     ) -> Result<Option<f64>, StreamingHpcError> {
         validate_non_negative_finite("buy_volume", buy_volume)?;
         validate_non_negative_finite("sell_volume", sell_volume)?;
-        let mut remaining = buy_volume + sell_volume;
-        if remaining == 0.0 {
+        let total = buy_volume + sell_volume;
+        if !total.is_finite() {
+            return Err(StreamingHpcError::InvalidEvent("buy_volume + sell_volume must be finite"));
+        }
+        if total == 0.0 {
             return Ok(self.current());
         }
-        while remaining > 0.0 {
-            let capacity = self.cfg.bucket_volume - self.current_bucket_volume;
-            let take = remaining.min(capacity);
-            if take <= 0.0 {
-                break;
-            }
-            // Preserve buy/sell ratio within partial fill.
-            let ratio_buy = if remaining > 0.0 { buy_volume / remaining } else { 0.5 };
-            let used_buy = take * ratio_buy;
-            let used_sell = take - used_buy;
+        // The event is spread over buckets at its own buy/sell ratio, so each unit of it adds
+        // `imbalance_rate` of absolute imbalance.
+        let imbalance_rate = (buy_volume - sell_volume).abs() / total;
+        let bucket = self.cfg.bucket_volume;
 
-            self.current_bucket_volume += take;
-            self.current_bucket_abs_imbalance += (used_buy - used_sell).abs();
+        // 1. Top up the partly filled bucket.
+        let take = total.min(bucket - self.current_bucket_volume);
+        self.current_bucket_volume += take;
+        self.current_bucket_abs_imbalance += take * imbalance_rate;
+        if !self.bucket_is_full() {
+            return Ok(self.current());
+        }
+        self.complete_bucket();
+        let mut remaining = (total - take).max(0.0);
 
-            buy_volume -= used_buy;
-            remaining -= take;
+        // 2. Whole buckets. Only the last `support_buckets + cdf_lookback` can still be in the
+        //    window or have recorded a VPIN that is still in the history.
+        let whole = (remaining / bucket).floor();
+        let replay = (self.cfg.support_buckets + self.cfg.cdf_lookback) as f64;
+        for _ in 0..(whole.min(replay) as usize) {
+            self.current_bucket_abs_imbalance = bucket * imbalance_rate;
+            self.complete_bucket();
+        }
+        remaining = (remaining - whole * bucket).max(0.0);
 
-            if self.current_bucket_volume >= self.cfg.bucket_volume - 1e-12 {
-                let toxicity = self.current_bucket_abs_imbalance / self.cfg.bucket_volume;
-                self.window.push_back(toxicity);
-                self.window_sum += toxicity;
-                if self.window.len() > self.cfg.support_buckets {
-                    if let Some(expired) = self.window.pop_front() {
-                        self.window_sum -= expired;
-                    }
-                }
-                self.current_bucket_volume = 0.0;
-                self.current_bucket_abs_imbalance = 0.0;
-                if let Some(vpin) = self.current() {
-                    self.record_vpin(vpin);
-                }
+        // 3. The remainder starts a new bucket (or, after rounding, completes one more).
+        if remaining > 0.0 {
+            self.current_bucket_volume = remaining.min(bucket);
+            self.current_bucket_abs_imbalance = self.current_bucket_volume * imbalance_rate;
+            if self.bucket_is_full() {
+                self.complete_bucket();
             }
         }
         Ok(self.current())
+    }
+
+    fn bucket_is_full(&self) -> bool {
+        self.current_bucket_volume >= self.cfg.bucket_volume - 1e-12
+    }
+
+    /// Closes the current bucket: its toxicity enters the window, the bucket is reset, and the
+    /// VPIN (once defined) is recorded in the CDF history.
+    fn complete_bucket(&mut self) {
+        let toxicity = self.current_bucket_abs_imbalance / self.cfg.bucket_volume;
+        self.window.push_back(toxicity);
+        self.window_sum += toxicity;
+        if self.window.len() > self.cfg.support_buckets {
+            if let Some(expired) = self.window.pop_front() {
+                self.window_sum -= expired;
+            }
+        }
+        self.current_bucket_volume = 0.0;
+        self.current_bucket_abs_imbalance = 0.0;
+        if let Some(vpin) = self.current() {
+            self.record_vpin(vpin);
+        }
     }
 
     /// Current VPIN, the mean toxicity of the last `support_buckets` completed buckets, or

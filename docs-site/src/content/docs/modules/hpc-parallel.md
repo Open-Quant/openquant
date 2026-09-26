@@ -2,7 +2,7 @@
 title: "hpc_parallel"
 description: "AFML's atoms and molecules: split a job into contiguous chunks of equal work, run a callback over each in serial or on threads, and get the outputs back in order."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-09-25'
 audience:
   - quant-dev
   - platform-engineering
@@ -151,9 +151,10 @@ where the callback takes a `molecule` argument and `mpPandasObj` concatenates wh
 - **A failing callback does not cancel the run.** In threaded mode every molecule still
   executes, and the first error to arrive is returned once all have finished; in serial mode
   the run stops at the first error. Either way no partial outputs are returned.
-- **A panicking callback panics the caller.** `run_parallel` propagates the panic rather than
-  returning `WorkerPanic`; only `dispatch_async`'s `wait()` turns a panic into
-  `HpcParallelError::WorkerPanic`.
+- **A panicking callback is an error, not a crash.** `run_parallel` catches the panic per
+  molecule and returns `HpcParallelError::WorkerPanic`, as `dispatch_async`'s `wait()` does.
+  The panic message is still printed by the panic hook. In threaded mode the other
+  molecules still run, so a callback must not depend on state a panic could leave broken.
 - **Progress is recorded, not reported.** `progress_every` controls how often a
   `ProgressSnapshot` is appended to `metrics.progress`, which you read after the run. Nothing
   is printed while it runs, unlike the book's `reportProgress`.

@@ -168,7 +168,8 @@ pub enum BacktestError {
     /// public API.
     #[error("k cannot exceed n")]
     CombinationSizeTooLarge,
-    /// C(n_groups, test_groups) fits in `u128` but not in `usize`.
+    /// C(n_groups, test_groups), or the CPCV path count derived from it, does not fit in
+    /// `usize`.
     #[error("combination count overflowed usize")]
     CombinationCountOverflow,
     /// A split tests a group outside `0..n_groups`. Internal invariant; not reachable through
@@ -503,14 +504,8 @@ pub struct CpcvResult {
 ///
 /// - [`BacktestError::Invalid`] when `n_groups < 2` or `test_groups == 0`.
 /// - [`BacktestError::TestGroupsNotBelowGroups`] when `test_groups >= n_groups`.
-/// - [`BacktestError::CombinationCountOverflow`] when C(N, k) fits in `u128` but not in
-///   `usize`.
-///
-/// # Panics
-///
-/// The binomial coefficient is computed as a `u128` product of `k` numerator terms, which
-/// overflows for large inputs (for example `cpcv_path_count(200, 100)`): that panics in debug
-/// builds and wraps silently in release. The final `C(N, k) * k` can likewise overflow `usize`.
+/// - [`BacktestError::CombinationCountOverflow`] when C(N, k) does not fit in `usize` (for
+///   example `cpcv_path_count(200, 100)`).
 ///
 /// ```
 /// use openquant::backtesting_engine::cpcv_path_count;
@@ -523,7 +518,9 @@ pub struct CpcvResult {
 pub fn cpcv_path_count(n_groups: usize, test_groups: usize) -> Result<usize, BacktestError> {
     validate_cpcv_params(n_groups, test_groups)?;
     let total = n_choose_k(n_groups, test_groups)?;
-    Ok((total * test_groups) / n_groups)
+    // k/N · C(N, k) <= C(N, k), so only the intermediate product needs the wider type.
+    let paths = (total as u128 * test_groups as u128) / n_groups as u128;
+    usize::try_from(paths).map_err(|_| BacktestError::CombinationCountOverflow)
 }
 
 /// Runs a walk-forward backtest with an expanding training window (AFML §12.2).
@@ -546,10 +543,8 @@ pub fn cpcv_path_count(n_groups: usize, test_groups: usize) -> Result<usize, Bac
 /// - [`BacktestError::EmptySplitReturns`] or [`BacktestError::NonFiniteSplitReturns`] for
 ///   the evaluator's output, and any error the evaluator returns, unchanged.
 ///
-/// # Panics
-///
-/// `start + test_size` and `start + step_size` are unchecked, so a `test_size` or
-/// `step_size` near `usize::MAX` overflows (a panic in debug builds).
+/// A `test_size` or `step_size` too large to add to a block start (up to `usize::MAX`) is
+/// handled as "past the end of the data": the block is clipped, or the layout stops.
 ///
 /// ```
 /// use chrono::{Duration, NaiveDate};
@@ -622,7 +617,7 @@ where
     let mut split_id = 0;
 
     while start < n_samples {
-        let stop = (start + config.test_size).min(n_samples);
+        let stop = start.saturating_add(config.test_size).min(n_samples);
         let test_indices: Vec<usize> = (start..stop).collect();
         if test_indices.is_empty() {
             break;
@@ -647,7 +642,11 @@ where
             embargo_count,
         });
         split_id += 1;
-        start += config.step_size;
+        // An overflowing start is past every sample, so the layout is complete.
+        match start.checked_add(config.step_size) {
+            Some(next) => start = next,
+            None => break,
+        }
     }
 
     if split_defs.is_empty() {
@@ -1078,14 +1077,17 @@ fn n_choose_k(n: usize, k: usize) -> Result<usize, BacktestError> {
         return Err(BacktestError::CombinationSizeTooLarge);
     }
     let k_eff = k.min(n - k);
-    let mut numerator: u128 = 1;
-    let mut denominator: u128 = 1;
+    // After step i, `comb` is C(n, i + 1): exact, since C(n, i) * (n - i) is divisible by
+    // i + 1. Each step is checked, so an overflow is reported rather than wrapped.
+    let mut comb: usize = 1;
     for i in 0..k_eff {
-        numerator *= (n - i) as u128;
-        denominator *= (i + 1) as u128;
+        let wide = (comb as u128)
+            .checked_mul((n - i) as u128)
+            .ok_or(BacktestError::CombinationCountOverflow)?
+            / (i + 1) as u128;
+        comb = usize::try_from(wide).map_err(|_| BacktestError::CombinationCountOverflow)?;
     }
-    let comb = numerator / denominator;
-    usize::try_from(comb).map_err(|_| BacktestError::CombinationCountOverflow)
+    Ok(comb)
 }
 
 fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {

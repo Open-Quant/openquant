@@ -42,6 +42,14 @@ def test_cpcv_path_count_matches_phi_formula():
         bt.cpcv_path_count(4, 4)
 
 
+def test_cpcv_path_count_large_is_exact_or_overflow_error():
+    # Rust: cpcv_path_count_is_exact_or_reports_overflow (#184): used to overflow the u128
+    # numerator, panicking in debug builds and returning a wrong count in release.
+    assert bt.cpcv_path_count(67, 33) == comb(67, 33) * 33 // 67
+    with pytest.raises(ValueError, match="overflow"):
+        bt.cpcv_path_count(200, 100)
+
+
 def test_cpcv_split_and_path_counts_match_combinatorics():
     # Rust: cpcv_split_and_path_counts_match_combinatorics
     for n_groups in range(2, 10):

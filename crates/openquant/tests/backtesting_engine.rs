@@ -145,3 +145,41 @@ fn cpcv_enforces_purge_embargo_and_returns_path_distribution() {
     assert!(result.diagnostics.anti_leakage.total_purged > 0);
     assert!(result.diagnostics.anti_leakage.total_embargoed > 0);
 }
+
+/// #184 item 4: `n_choose_k` multiplied the `u128` numerator unchecked, so these panicked in
+/// debug builds and wrapped to a wrong count in release. Now exact where the count fits, and
+/// `CombinationCountOverflow` where it does not.
+#[test]
+fn cpcv_path_count_is_exact_or_reports_overflow() {
+    use openquant::backtesting_engine::BacktestError;
+    // Values from Python's math.comb(n, k) * k // n.
+    assert_eq!(cpcv_path_count(62, 31).unwrap(), 232_714_176_627_630_544);
+    assert_eq!(cpcv_path_count(66, 33).unwrap(), 3_609_714_217_008_132_870);
+    assert_eq!(cpcv_path_count(67, 33).unwrap(), 7_007_092_303_604_022_630);
+    for (n, k) in [(68, 34), (200, 100), (10_000, 5_000)] {
+        let out = std::panic::catch_unwind(|| cpcv_path_count(n, k)).expect("must not panic");
+        assert_eq!(out.unwrap_err(), BacktestError::CombinationCountOverflow, "({n}, {k})");
+    }
+}
+
+/// #184 item 4: `start + test_size` and `start += step_size` overflowed (a panic in debug
+/// builds) for sizes near `usize::MAX`. They now mean "to the end of the data".
+#[test]
+fn walk_forward_handles_huge_test_and_step_sizes() {
+    let data = build_data(24);
+    let config = WalkForwardConfig {
+        min_train_size: 10,
+        test_size: usize::MAX,
+        step_size: usize::MAX,
+        pct_embargo: 0.0,
+    };
+    let wf = std::panic::catch_unwind(|| {
+        run_walk_forward(&data, &run_cfg(BacktestMode::WalkForward), &config, |split| {
+            Ok(split.test_indices.iter().map(|i| data.returns[*i]).collect())
+        })
+    })
+    .expect("must not panic")
+    .expect("one split to the end of the data");
+    assert_eq!(wf.splits.len(), 1);
+    assert_eq!(wf.splits[0].test_indices, (10..24).collect::<Vec<_>>());
+}

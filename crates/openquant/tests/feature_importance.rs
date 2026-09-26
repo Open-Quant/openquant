@@ -224,3 +224,68 @@ fn mda_is_reproducible_for_a_seed() {
     assert_eq!(a.to_bits(), b.to_bits());
     assert_ne!(a.to_bits(), c.to_bits());
 }
+
+/// Returns a fixed number of probabilities, whatever it is asked to score.
+struct FixedCount(usize);
+
+impl SimpleClassifier for FixedCount {
+    fn fit(&mut self, _x: &[Vec<f64>], _y: &[f64], _sample_weight: Option<&[f64]>) {}
+    fn predict_proba(&self, _x: &[Vec<f64>]) -> Vec<f64> {
+        vec![0.5; self.0]
+    }
+}
+
+/// #184 item 2: these inputs used to panic (index out of bounds). They are now typed errors.
+#[test]
+fn bad_splits_weights_predictions_and_columns_are_errors_not_panics() {
+    use openquant::cross_validation::CrossValidationError as Cv;
+    use openquant::feature_importance::FeatureImportanceError as Fi;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    let x: Vec<Vec<f64>> = (0..6).map(|i| vec![i as f64, 1.0]).collect();
+    let y = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0];
+    let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+    let good = vec![(vec![0, 1, 2], vec![3, 4, 5])];
+    let out_of_range = vec![(vec![0, 1, 2], vec![3, 4, 6])];
+    let short_weight = [1.0; 4];
+
+    type Case<'a> = (&'a [(Vec<usize>, Vec<usize>)], Option<&'a [f64]>, usize, Fi);
+    let cases: [Case; 3] = [
+        (
+            &out_of_range,
+            None,
+            3,
+            Fi::CrossValidation(Cv::SplitIndexOutOfRange { index: 6, n_rows: 6 }),
+        ),
+        (
+            &good,
+            Some(&short_weight),
+            3,
+            Fi::CrossValidation(Cv::LengthMismatch { name: "sample_weight", len: 4, expected: 6 }),
+        ),
+        (&good, None, 1, Fi::CrossValidation(Cv::PredictionCountMismatch { expected: 3, got: 1 })),
+    ];
+    for (splits, sw, n_pred, expected) in cases {
+        for scoring in [Scoring::Accuracy, Scoring::NegLogLoss, Scoring::F1] {
+            let mda = catch_unwind(AssertUnwindSafe(|| {
+                let mut model = FixedCount(n_pred);
+                mean_decrease_accuracy(&mut model, &x, &y, &names, splits, sw, scoring, 1)
+            }))
+            .expect("MDA must not panic");
+            assert_eq!(mda.unwrap_err(), expected);
+            let sfi = catch_unwind(AssertUnwindSafe(|| {
+                let mut model = FixedCount(n_pred);
+                single_feature_importance(&mut model, &x, &y, &names, splits, sw, scoring)
+            }))
+            .expect("SFI must not panic");
+            assert_eq!(sfi.unwrap_err(), expected);
+        }
+    }
+
+    // Rows with no columns: PCA used to panic slicing the eigenvector columns.
+    let no_cols = vec![Vec::<f64>::new(); 3];
+    let pca = catch_unwind(|| get_orthogonal_features(&no_cols, 0.95)).expect("must not panic");
+    assert_eq!(pca.unwrap_err(), Fi::Empty("feature columns"));
+    let corr = catch_unwind(|| feature_pca_analysis(&no_cols, &[], 0.95)).expect("must not panic");
+    assert_eq!(corr.unwrap_err(), Fi::Empty("feature columns"));
+}

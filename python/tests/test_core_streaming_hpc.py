@@ -166,3 +166,16 @@ def test_streaming_hpc_rejects_invalid_config():
         streaming_hpc.generate_synthetic_flash_crash_stream(events=0)
     with pytest.raises(ValueError, match="crash_start_fraction"):
         streaming_hpc.generate_synthetic_flash_crash_stream(events=100, crash_start_fraction=1.5)
+
+
+def test_vpin_rejects_overflowing_volume_and_handles_huge_volume():
+    # Rust: vpin_update_is_bounded_for_huge_or_overflowing_volume (#184). A buy + sell sum
+    # that overflows to +inf used to loop forever; a huge finite one cost one iteration per
+    # bucket. (An infinite loop here would hang the test run, holding the GIL.)
+    cfg = dict(PIPELINE_CFG, bucket_volume=100.0, support_buckets=8, cdf_lookback=20)
+    cfg["vpin_cdf_threshold"] = 0.9
+    with pytest.raises(ValueError, match="must be finite"):
+        streaming_hpc.run_streaming_pipeline([(0, 100.0, 1.7e308, 1.7e308, 0)], **cfg)
+    report = streaming_hpc.run_streaming_pipeline([(0, 100.0, 4e17, 6e17, 0)], **cfg)
+    assert report["snapshots"][-1][VPIN] == pytest.approx(0.2, abs=1e-12)
+    assert report["snapshots"][-1][VPIN_CDF] == 0.5
