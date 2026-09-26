@@ -47,7 +47,7 @@ fn ef3m_most_likely_parameters(
     epsilon=1e-5,
     factor=5.0,
     n_runs=1,
-    variant=1,
+    variant=2,
     max_iter=100_000
 ))]
 fn ef3m_fit_m2n(
