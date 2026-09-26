@@ -65,7 +65,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use std::fmt::{Display, Formatter};
 

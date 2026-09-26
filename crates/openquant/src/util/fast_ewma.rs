@@ -16,7 +16,6 @@
 //! // window 3 gives alpha = 0.5: 5 = (0.5*3 + 6) / 1.5 and 9 = (0.25*3 + 0.5*6 + 12) / 1.75.
 //! assert_eq!(ewma(&[3.0, 6.0, 12.0], 3).unwrap(), vec![3.0, 5.0, 9.0]);
 //! ```
-#![deny(missing_docs)]
 
 use super::InputError;
 

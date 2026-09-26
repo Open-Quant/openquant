@@ -29,7 +29,6 @@
 //! assert!(diffed[0].is_nan());
 //! assert_eq!(&diffed[1..], &[1.0, 1.0, 1.0, 1.0]);
 //! ```
-#![deny(missing_docs)]
 
 /// Returns the first `size` fractional-differencing weights for order `diff_amt` (AFML
 /// Snippet 5.1).

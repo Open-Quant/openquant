@@ -105,13 +105,13 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      # missing_docs is enforced per module (#![deny(missing_docs)] at the top of each
-      # documented file) until the last modules are documented; this gate catches broken
-      # intra-doc links crate-wide. The doctests run in the doctests job.
-      - name: Rustdoc (broken intra-doc links)
+      # Every public item of the openquant crate must be documented (lib.rs also sets
+      # #![deny(missing_docs)], so clippy catches it too) and every intra-doc link must
+      # resolve. The doctests run in the doctests job.
+      - name: Rustdoc (missing docs, broken intra-doc links)
         run: cargo doc -p openquant --no-deps
         env:
-          RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links
+          RUSTDOCFLAGS: -D missing_docs -D rustdoc::broken_intra_doc_links
 
   doctests:
     needs: changes
@@ -301,6 +301,13 @@ jobs:
       # beyond the runner's python3, same as check:api-drift above.
       - name: Check docs coverage
         run: bun run check:coverage
+        working-directory: docs-site
+      # The research gallery, the performance page and the changelog page are
+      # rendered from the executed notebooks, benchmarks/ and CHANGELOG.md by
+      # scripts/docs/generate_site_pages.py; fail if a page disagrees with its
+      # source. Standard-library Python, like check:coverage.
+      - name: Check generated pages are current
+        run: bun run check:generated-pages
         working-directory: docs-site
       - name: Check documented Rust examples compile
         run: bun run check:examples

@@ -47,7 +47,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};

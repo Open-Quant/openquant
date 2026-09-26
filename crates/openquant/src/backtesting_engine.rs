@@ -94,7 +94,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::cross_validation::{embargo_width, embargo_windows};
 use chrono::NaiveDateTime;

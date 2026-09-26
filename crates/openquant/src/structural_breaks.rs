@@ -1,31 +1,124 @@
+//! Structural break tests (AFML chapter 17).
+//!
+//! A structural break is a change of regime: a mean-reverting series starts trending, a quiet
+//! market turns explosive. AFML treats break statistics as *features*, one number per bar
+//! saying how strongly the recent past looks like a different regime. This module implements
+//! three of the chapter's tests:
+//!
+//! - [`get_sadf`]: the supremum augmented Dickey-Fuller test for explosiveness (§17.4.2,
+//!   Snippets 17.1-17.4) and the sub/super-martingale tests for trends of a given shape
+//!   (§17.4.3).
+//! - [`get_chow_type_stat`]: the Chow-type Dickey-Fuller test for a single switch from a
+//!   random walk to an explosive process (§17.4.1).
+//! - [`get_chu_stinchcombe_white_statistics`]: the Chu-Stinchcombe-White CUSUM test on levels
+//!   (§17.3.2).
+//!
+//! Conventions:
+//!
+//! - Inputs are **log prices**, oldest first, except that the `sm_poly_2`, `sm_exp` and
+//!   `sm_power` models of [`get_sadf`] take a logarithm themselves and so want positive
+//!   prices.
+//! - Outputs are shorter than the input: each function documents which bar its first value
+//!   belongs to.
+//! - No critical values are supplied for SADF; they depend on the sample length and
+//!   `min_length` and come from simulation (Phillips, Shi and Yu, 2015).
+//!
+//! ```
+//! use openquant::structural_breaks::{get_sadf, SadfLags};
+//!
+//! // A log price whose increments compound: explosive by construction.
+//! let mut y = vec![4.0_f64];
+//! for t in 1..120 {
+//!     let wobble = if t % 2 == 0 { 0.002 } else { -0.002 };
+//!     y.push(y[t - 1] + 0.0005 * 1.05_f64.powi(t as i32) + wobble);
+//! }
+//!
+//! let sadf = get_sadf(&y, "linear", true, 20, SadfLags::Fixed(1))?;
+//! // One lag uses two leading bars; the first statistic then needs min_length more.
+//! assert_eq!(sadf.len(), y.len() - 2 - 20);
+//! assert!(*sadf.last().unwrap() > 3.0);
+//! # Ok::<(), openquant::structural_breaks::StructuralBreakError>(())
+//! ```
+
+use nalgebra::DMatrix;
+
+/// Error returned by the structural break tests.
 #[derive(Debug, thiserror::Error)]
 pub enum StructuralBreakError {
+    /// The CUSUM `test_type` is neither `"one_sided"` nor `"two_sided"`.
     #[error("unknown test type: {0}")]
     InvalidTestType(String),
+    /// The SADF `model` is not one of those listed on [`get_sadf`].
     #[error("unknown model: {0}")]
     InvalidModel(String),
+    /// Reserved for a requested option that is not implemented; no function currently
+    /// returns it.
     #[error("not implemented: {0}")]
     NotImplemented(&'static str),
+    /// The series is too short for the requested lags and window, or a regression was given
+    /// no rows (see each function's `# Errors`).
     #[error("the series is too short for the requested lags and window")]
     InputTooShort,
+    /// A bar index passed to [`_get_values_diff`] is past the end of the series.
     #[error("index out of bounds")]
     IndexOutOfBounds,
 }
 
+/// Result alias for this module's functions.
 pub type StructuralBreakResult<T> = Result<T, StructuralBreakError>;
 
+/// Output of [`get_chu_stinchcombe_white_statistics`]: one entry per bar from bar 2 on.
 #[derive(Debug, Clone)]
 pub struct ChuStinchcombeWhiteResult {
+    /// Critical value `sqrt(4.6 + ln(t - n))` at the reference bar `n` that maximises the
+    /// statistic for bar `t` (AFML §17.3.2, `b_alpha = 4.6`).
     pub critical_value: Vec<f64>,
+    /// The CUSUM statistic `S_t = max_n S_{n,t}` for bar `t`, maximised over reference bars
+    /// `n < t`.
     pub stat: Vec<f64>,
 }
 
+/// The lagged differences included in the ADF regressions of [`get_sadf`].
 #[derive(Debug, Clone)]
 pub enum SadfLags {
+    /// Lags `1..=L`: the usual augmented Dickey-Fuller specification with `L` lagged
+    /// differences.
     Fixed(usize),
+    /// An explicit list of lag numbers, e.g. `vec![1, 5]` for the first and fifth lagged
+    /// difference only.
     Array(Vec<usize>),
 }
 
+/// Chow-type Dickey-Fuller statistics for a switch from a random walk to an explosive process
+/// (AFML §17.4.1).
+///
+/// For each candidate break the function fits `Δy_t = δ y_{t-1} D_t + ε_t` without an
+/// intercept, with the dummy `D_t` zero for the first `k` differences and one afterwards, and
+/// reports the `t`-statistic of `δ`. Candidates run from `k = min_length` to
+/// `k = n - min_length - 1`, so the output has `n - 2 * min_length` values and value `i`
+/// belongs to a break at bar `min_length + i`. The largest value marks the estimated break
+/// date. A singular regression gives `NaN`.
+///
+/// `log_prices` are log prices, oldest first. A series of at most `2 * min_length` prices
+/// returns an empty vector rather than an error. The test assumes the series *stays* explosive after
+/// the break; a later collapse weakens it (§17.4.2 prefers [`get_sadf`] for that reason).
+///
+/// # Errors
+///
+/// [`StructuralBreakError::InputTooShort`] only in the degenerate case `min_length == 0` with
+/// a single price.
+///
+/// ```
+/// use openquant::structural_breaks::get_chow_type_stat;
+///
+/// let y: Vec<f64> = (0..60).map(|t| 4.0 + 0.001 * 1.08_f64.powi(t)).collect();
+/// let chow = get_chow_type_stat(&y, 20)?;
+/// assert_eq!(chow.len(), y.len() - 2 * 20);
+///
+/// // Too short a series is not an error: it returns nothing.
+/// assert!(get_chow_type_stat(&y[..30], 20)?.is_empty());
+/// # Ok::<(), openquant::structural_breaks::StructuralBreakError>(())
+/// ```
 pub fn get_chow_type_stat(
     _log_prices: &[f64],
     _min_length: usize,
@@ -59,6 +152,34 @@ pub fn get_chow_type_stat(
     Ok(stats)
 }
 
+/// Chu-Stinchcombe-White CUSUM test on levels (AFML §17.3.2).
+///
+/// For each bar `t` and every earlier reference bar `n`, the statistic is
+/// `S_{n,t} = (y_t - y_n) / (σ_t sqrt(t - n))`, where `σ_t²` is the mean of the squared
+/// first differences up to bar `t`. `S_t` is the maximum over `n`, returned with the critical
+/// value `sqrt(4.6 + ln(t - n))` at the maximising `n`. The output vectors have `n - 2`
+/// entries, for bars 2 onwards.
+///
+/// `log_prices` are log prices, oldest first. `test_type` is `"one_sided"` (`y_t - y_n`,
+/// sensitive to rises) or `"two_sided"` (`|y_t - y_n|`). The statistic follows the book and
+/// is unchanged by rescaling the series; mlfinlab divides by `σ_t²` rather than `σ_t`.
+///
+/// # Errors
+///
+/// - [`StructuralBreakError::InputTooShort`] if `log_prices` has fewer than 3 values.
+/// - [`StructuralBreakError::InvalidTestType`] for any other `test_type`.
+///
+/// ```
+/// use openquant::structural_breaks::get_chu_stinchcombe_white_statistics;
+///
+/// let y = [0.0, 0.01, -0.01, 0.0, 0.05, 0.10];
+/// let res = get_chu_stinchcombe_white_statistics(&y, "one_sided")?;
+/// assert_eq!(res.stat.len(), y.len() - 2);
+/// assert_eq!(res.critical_value.len(), y.len() - 2);
+/// // The late jump shows up as the largest statistic.
+/// assert!(res.stat[3] > res.stat[0]);
+/// # Ok::<(), openquant::structural_breaks::StructuralBreakError>(())
+/// ```
 pub fn get_chu_stinchcombe_white_statistics(
     _log_prices: &[f64],
     _test_type: &str,
@@ -122,6 +243,34 @@ pub fn get_chu_stinchcombe_white_statistics(
 /// The `sm_*` models ignore `add_const`, take the absolute value because a trend of either
 /// sign is of interest (§17.4.3), and need a positive series when they take logs. Windows
 /// whose regression is singular are skipped; a row with no usable window is `-inf`.
+///
+/// `lags` sets the lagged differences in the ADF models; for the `sm_*` models it only sets
+/// where the output starts. The output has `rows - min_length` values, where
+/// `rows = series.len() - max_lag - 1`, and is empty when `rows <= min_length`. Cost is
+/// `O(n²)` regressions, so compute it on sampled bars. The `(t - t0)^φ` window penalty of
+/// §17.4.3 is not implemented (`φ = 0`).
+///
+/// # Errors
+///
+/// - [`StructuralBreakError::InvalidModel`] for a `model` not in the table.
+/// - [`StructuralBreakError::InputTooShort`] if `series` has fewer than 2 values, is no
+///   longer than `max_lag + 1`, or `min_length == 0` (a window must have at least one row).
+///
+/// ```
+/// use openquant::structural_breaks::{get_sadf, SadfLags, StructuralBreakError};
+///
+/// let prices: Vec<f64> = (0..60).map(|t| 100.0 * 1.01_f64.powi(t) + (t % 3) as f64).collect();
+/// let smt = get_sadf(&prices, "sm_exp", false, 20, SadfLags::Fixed(1))?;
+/// assert_eq!(smt.len(), prices.len() - 2 - 20);
+/// // The sub/super-martingale statistic is an absolute t-ratio.
+/// assert!(smt.iter().all(|v| *v >= 0.0));
+///
+/// assert!(matches!(
+///     get_sadf(&prices, "cubic", true, 20, SadfLags::Fixed(1)),
+///     Err(StructuralBreakError::InvalidModel(_))
+/// ));
+/// # Ok::<(), StructuralBreakError>(())
+/// ```
 pub fn get_sadf(
     _series: &[f64],
     _model: &str,
@@ -149,6 +298,25 @@ pub fn get_sadf(
     Ok(sadf_values)
 }
 
+/// The price change used by the CUSUM test: `series[index] - series[ind]` for
+/// `"one_sided"`, its absolute value for `"two_sided"`.
+///
+/// A helper of [`get_chu_stinchcombe_white_statistics`], public (with mlfinlab's
+/// underscore-prefixed name) so that tests can check it directly.
+///
+/// # Errors
+///
+/// - [`StructuralBreakError::IndexOutOfBounds`] if `index` or `ind` is past the end of
+///   `series`.
+/// - [`StructuralBreakError::InvalidTestType`] for any other `test_type`.
+///
+/// ```
+/// use openquant::structural_breaks::_get_values_diff;
+///
+/// assert_eq!(_get_values_diff("one_sided", &[1.0, 3.0], 0, 1)?, -2.0);
+/// assert_eq!(_get_values_diff("two_sided", &[1.0, 3.0], 0, 1)?, 2.0);
+/// # Ok::<(), openquant::structural_breaks::StructuralBreakError>(())
+/// ```
 pub fn _get_values_diff(
     test_type: &str,
     series: &[f64],
@@ -164,6 +332,33 @@ pub fn _get_values_diff(
     }
 }
 
+/// Ordinary least squares of `y` on `x` without an added intercept (AFML Snippet 17.4,
+/// `getBetas`).
+///
+/// `x` holds one row per observation and `y` one single-element row per observation.
+/// Returns `(coefficients, covariance)`: the coefficient vector `(XᵀX)⁻¹ Xᵀy` and its
+/// covariance matrix `(XᵀX)⁻¹ s²`, with `s² = eᵀe / (rows - cols)`. If `XᵀX` is singular both
+/// are all `NaN`, which is how the SADF search recognises a window to skip.
+///
+/// A helper of [`get_sadf`] and [`get_chow_type_stat`], public (with mlfinlab's
+/// underscore-prefixed name) so that tests can check it directly.
+///
+/// # Errors
+///
+/// [`StructuralBreakError::InputTooShort`] if `x` or `y` has no rows or an empty row, or its
+/// rows differ in length.
+///
+/// ```
+/// use openquant::structural_breaks::_get_betas;
+///
+/// // y = 2 x exactly: slope 2, zero residual variance.
+/// let x = vec![vec![1.0], vec![2.0], vec![3.0]];
+/// let y = vec![vec![2.0], vec![4.0], vec![6.0]];
+/// let (beta, cov) = _get_betas(&x, &y)?;
+/// assert!((beta[0] - 2.0).abs() < 1e-12);
+/// assert!(cov[0][0].abs() < 1e-12);
+/// # Ok::<(), openquant::structural_breaks::StructuralBreakError>(())
+/// ```
 pub fn _get_betas(
     _x: &[Vec<f64>],
     _y: &[Vec<f64>],
@@ -387,4 +582,3 @@ fn matrix_to_vec(matrix: DMatrix<f64>) -> Vec<Vec<f64>> {
     }
     rows
 }
-use nalgebra::DMatrix;

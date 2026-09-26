@@ -38,7 +38,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 /// Errors returned by the codependence measures.
 #[derive(Debug, thiserror::Error)]

@@ -46,7 +46,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::linkage::{distance_of_distances, quasi_diagonalization, single_linkage_children};
 use crate::util::resample::{freq_step, resample_prices};

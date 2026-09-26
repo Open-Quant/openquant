@@ -78,7 +78,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::linkage::{
     distance_of_distances, linkage_children, quasi_diagonalization, Linkage,

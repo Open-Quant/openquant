@@ -61,7 +61,6 @@
 //! assert!((best.transaction_costs[0] - 0.01).abs() < 1e-12);
 //! assert_eq!(best.trajectories_evaluated, 4);
 //! ```
-#![deny(missing_docs)]
 
 use nalgebra::DMatrix;
 

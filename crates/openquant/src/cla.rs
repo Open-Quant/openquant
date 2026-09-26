@@ -50,7 +50,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::resample::{freq_step, resample_prices};
 use chrono::NaiveDate;

@@ -42,7 +42,6 @@
 //!     assert!(step.iter().zip(&truth).all(|(a, b)| (a - b).abs() < 1e-9));
 //! }
 //! ```
-#![deny(missing_docs)]
 
 use crate::util::InputError;
 use rand::Rng;
