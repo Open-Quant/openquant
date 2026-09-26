@@ -14,15 +14,15 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 /// `step_size` (Snippet 10.3) and held on every bar until the next event; (3) max-Sharpe
 /// mean-variance weights of `asset_prices` are computed (Markowitz, not AFML); (4)
 /// historical VaR, expected shortfall and conditional drawdown at risk of the strategy are
-/// computed, plus an annualised Sharpe ratio (AFML section 14.7.1); (5) the equity curve,
+/// computed, plus a Sharpe ratio annualised with `periods_per_year` (AFML section 14.7.1); (5) the equity curve,
 /// drawdowns and time under water are built (AFML Snippet 14.4). No labelling or model
 /// fitting happens here; probabilities and sides are inputs, one per bar.
 ///
 /// The signal is applied with a one-bar lag: the strategy return over bar `i` is
 /// `signal[i - 1] * (close[i] / close[i - 1] - 1)`. The portfolio stage is independent of
-/// the backtest (its weights are reported, not traded) and annualises with 252 periods, so
-/// `risk_free_rate` is an annual rate there but a per-bar rate in `realized_sharpe`; only 0
-/// means the same in both. `confidence_level` is the lower-tail probability for VaR and
+/// the backtest (its weights are reported, not traded). `risk_free_rate` is an annual rate
+/// in both the allocation and `realized_sharpe` (which subtracts
+/// `risk_free_rate / periods_per_year` per bar). `confidence_level` is the lower-tail probability for VaR and
 /// expected shortfall (0.05 = worst 5% of per-bar returns); CDaR uses
 /// `1 - confidence_level`.
 ///
@@ -30,7 +30,8 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 /// ----------
 /// timestamps : list[str]
 ///     Bar timestamps as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is
-///     accepted), oldest first. Their order is not checked.
+///     accepted), oldest first. Their order is not enforced;
+///     `leakage_checks["timestamps_increasing"]` reports it.
 /// close : list[float]
 ///     Positive closing prices of the traded instrument, one per bar.
 /// model_probabilities : list[float]
@@ -51,9 +52,13 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 ///     Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]`; a step
 ///     <= 0 leaves the sizes unrounded.
 /// risk_free_rate : float, default 0.0
-///     Annual rate for the max-Sharpe allocation, per-bar rate for `realized_sharpe`.
+///     Annual risk-free rate, for the max-Sharpe allocation and for `realized_sharpe`.
 /// confidence_level : float, default 0.05
 ///     Lower-tail probability for VaR and expected shortfall, in `[0, 1]`.
+/// periods_per_year : float, default 252.0
+///     Bars a year of `close` and rows a year of `asset_prices` (252 for daily bars, about
+///     `252 * 390` for one-minute bars). Annualises `realized_sharpe` and the portfolio's
+///     return, risk and Sharpe ratio; must be finite and > 0.
 ///
 /// Returns
 /// -------
@@ -70,13 +75,15 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 ///     - `risk`: `value_at_risk` (signed per-bar return, negative is a loss),
 ///       `expected_shortfall` (mean of returns strictly below VaR, NaN when none are),
 ///       `conditional_drawdown_risk` (in equity units) and `realized_sharpe`
-///       (annualised with 252 bars a year).
+///       (annualised with `periods_per_year`).
 ///     - `backtest`: `timestamps`, `strategy_returns` (one shorter than `close`),
 ///       `equity_curve` (starts at 1), `drawdowns` and `time_under_water_years` (one per
 ///       drawdown, in 365.25-day years).
-///     - `leakage_checks`: booleans `inputs_aligned`, `event_indices_sorted` and
-///       `has_forward_look_bias`. These are structural and take fixed values (True, True,
-///       False); they do not detect look-ahead in the caller's probabilities or sides.
+///     - `leakage_checks`: booleans `timestamps_increasing` (the timestamps strictly
+///       increase) and `event_indices_sorted`, computed from the data, plus the deprecated
+///       constants `inputs_aligned` (always True: mismatched lengths raise) and
+///       `has_forward_look_bias` (always False: the pipeline does not detect look-ahead in
+///       the caller's probabilities or sides).
 ///
 /// Raises
 /// ------
@@ -85,7 +92,8 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
 ///     `close` or `model_probabilities` is empty; `close` differs in length from
 ///     `timestamps`, `model_probabilities` or `model_sides`, or `asset_names` from the
 ///     number of assets; `asset_prices` has fewer than 2 rows, `cusum_threshold <= 0`,
-///     `num_classes < 2` or `confidence_level` is outside `[0, 1]`; the CUSUM filter
+///     `num_classes < 2`, `confidence_level` is outside `[0, 1]` or `periods_per_year` is
+///     not finite and > 0; the CUSUM filter
 ///     finds no event; or the max-Sharpe optimisation fails.
 #[pyfunction(name = "run_mid_frequency_pipeline")]
 #[pyo3(signature = (
@@ -99,7 +107,8 @@ use crate::helpers::{format_naive_datetimes, matrix_from_rows, parse_naive_datet
     num_classes=2,
     step_size=0.1,
     risk_free_rate=0.0,
-    confidence_level=0.05
+    confidence_level=0.05,
+    periods_per_year=252.0
 ))]
 // Python keyword signature.
 #[allow(clippy::too_many_arguments)]
@@ -116,6 +125,7 @@ fn pipeline_run_mid_frequency_pipeline(
     step_size: f64,
     risk_free_rate: f64,
     confidence_level: f64,
+    periods_per_year: f64,
 ) -> PyResult<PyObject> {
     let timestamps = parse_naive_datetimes(timestamps)?;
     let asset_prices = matrix_from_rows(asset_prices)?;
@@ -138,6 +148,7 @@ fn pipeline_run_mid_frequency_pipeline(
         step_size,
         risk_free_rate,
         confidence_level,
+        periods_per_year,
     };
     let out = run_mid_frequency_pipeline(input, &config).map_err(to_py_err)?;
 
@@ -180,9 +191,15 @@ fn pipeline_run_mid_frequency_pipeline(
     root.set_item("backtest", backtest)?;
 
     let leakage_checks = PyDict::new(py);
-    leakage_checks.set_item("inputs_aligned", out.leakage_checks.inputs_aligned)?;
+    // `inputs_aligned` and `has_forward_look_bias` are deprecated constants, kept so existing
+    // readers of the dict don't break (#185).
+    #[allow(deprecated)]
+    let (inputs_aligned, has_forward_look_bias) =
+        (out.leakage_checks.inputs_aligned, out.leakage_checks.has_forward_look_bias);
+    leakage_checks.set_item("inputs_aligned", inputs_aligned)?;
+    leakage_checks.set_item("timestamps_increasing", out.leakage_checks.timestamps_increasing)?;
     leakage_checks.set_item("event_indices_sorted", out.leakage_checks.event_indices_sorted)?;
-    leakage_checks.set_item("has_forward_look_bias", out.leakage_checks.has_forward_look_bias)?;
+    leakage_checks.set_item("has_forward_look_bias", has_forward_look_bias)?;
     root.set_item("leakage_checks", leakage_checks)?;
 
     Ok(root.into_pyobject(py).unwrap().into_any().unbind())

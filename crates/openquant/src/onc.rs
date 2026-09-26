@@ -23,6 +23,8 @@
 //!   absolute correlations first if a series and its mirror image should cluster together.
 //! - Member indices in [`OncResult::clusters`] and the order of
 //!   [`OncResult::silhouette_scores`] refer to the original row order.
+//! - The result has at least two clusters unless every row of the matrix is the same (for
+//!   example all ones), which gives one cluster of every item.
 //! - k-means is seeded from a fixed value, the repetition number and `k`, so results are
 //!   deterministic; there is no seed parameter. Cost grows at least as `N^3` (every `k`,
 //!   `repeat` times, quadratic silhouettes), plus the recursion.
@@ -130,8 +132,9 @@ pub fn check_improve_clusters<T: Clone>(
 /// per candidate `k`. The number of clusters is chosen by the silhouette t-statistic; see the
 /// [module documentation](self) for the full procedure. The search starts at `k = 2`, so a
 /// matrix with no structure still comes back partitioned: a low mean silhouette is the sign
-/// that the clusters are not real. (Degenerate inputs whose rows are identical, such as an
-/// all-ones matrix, can come back as a single cluster.)
+/// that the clusters are not real. The exception is a matrix whose rows are all identical,
+/// such as all ones: there is nothing to separate, every k-means centroid is the same point,
+/// and the result is one cluster of every item, each scoring a silhouette of 0.
 ///
 /// # Errors
 ///

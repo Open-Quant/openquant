@@ -90,15 +90,20 @@ pub enum MicrostructuralError {
     /// [`quantile_mapping`] was asked for zero letters or more than 256.
     #[error("num_letters out of range")]
     NumLettersOutOfRange,
-    /// [`quantile_mapping`] received an empty array.
+    /// [`quantile_mapping`] or [`sigma_mapping`] received an empty array.
     #[error("array must not be empty")]
     EmptyArray,
-    /// [`quantile_mapping`] received a `NaN`.
+    /// [`quantile_mapping`], [`sigma_mapping`] or [`encode_array`] received a `NaN` value.
     #[error("array must not contain NaN")]
     NanInArray,
-    /// [`sigma_mapping`] received a zero or negative step.
-    #[error("step must be positive")]
+    /// [`sigma_mapping`] received a step that is not a positive finite number (zero,
+    /// negative, `NaN` or infinite).
+    #[error("step must be positive and finite")]
     NonPositiveStep,
+    /// [`encode_array`] or [`MicrostructuralFeaturesGenerator::new_from_csv`] received a
+    /// codebook that is empty or has a `NaN` value, so some value would have no letter.
+    #[error("invalid codebook: {0}")]
+    InvalidCodebook(&'static str),
     /// [`sigma_mapping`] would need more than 256 letters.
     #[error("Length of dictionary exceeds ASCII table")]
     DictionaryTooLong,
@@ -763,10 +768,8 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Result<Vec
 ///
 /// `Δp_t` is the close-to-close change and `σ_Δp` the sample standard deviation of the last
 /// `window` changes (including the current one, floored at `1e-12`); `Φ` is the standard
-/// normal CDF. Values are `NaN` until `window` changes are available (index `window`), and
-/// everywhere when `window == 1`. `window == 0` is not rejected: the standard deviation then
-/// degenerates to the `1e-12` floor and every bar after the first gets a value, so pass
-/// `window >= 2`.
+/// normal CDF. Values are `NaN` until `window` changes are available (index `window`).
+/// `window` must be at least 2, the fewest changes a sample standard deviation needs.
 ///
 /// ```
 /// use openquant::microstructural_features::get_bvc_buy_volume;
@@ -783,13 +786,21 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Result<Vec
 ///
 /// # Errors
 ///
-/// [`InputError::LengthMismatch`] if `volume.len() != close.len()`.
+/// - [`InputError::LengthMismatch`] if `volume.len() != close.len()`.
+/// - [`InputError::OutOfRange`] if `window < 2`.
 pub fn get_bvc_buy_volume(
     close: &[f64],
     volume: &[f64],
     window: usize,
 ) -> Result<Vec<f64>, InputError> {
     same_length("volume", volume, close.len())?;
+    if window < 2 {
+        return Err(InputError::OutOfRange {
+            name: "window",
+            value: window as f64,
+            expected: "at least 2",
+        });
+    }
     let mut out = vec![f64::NAN; close.len()];
     let norm = Normal::new(0.0, 1.0).unwrap();
     let mut diff = vec![f64::NAN; close.len()];
@@ -859,7 +870,7 @@ fn ascii_table() -> Vec<char> {
 /// # fn main() -> Result<(), openquant::microstructural_features::MicrostructuralError> {
 /// let codebook = quantile_mapping(&[1.0, 2.0, 3.0, 4.0, 5.0], 2)?;
 /// assert_eq!(codebook, vec![(1.0, '\u{0}'), (5.0, '\u{1}')]);
-/// assert_eq!(encode_array(&[1.2, 4.9], &codebook), "\u{0}\u{1}");
+/// assert_eq!(encode_array(&[1.2, 4.9], &codebook)?, "\u{0}\u{1}");
 /// # Ok(())
 /// # }
 /// ```
@@ -908,9 +919,8 @@ fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
 /// Builds a fixed-width codebook for [`encode_array`] (AFML §18.5): values `min, min + step,
 /// …` strictly below `max(array)`, lettered from character 0 upward.
 ///
-/// `NaN`s in `array` are ignored when taking the minimum and maximum. An empty array, or
-/// one whose values are all equal, gives an empty codebook (which [`encode_array`] turns
-/// into an empty string). A `NaN` `step` is not rejected and yields a one-entry codebook.
+/// Like [`quantile_mapping`], it rejects an empty array and `NaN` values, and never returns
+/// an empty codebook: an array whose values are all equal gives the one entry `(min, '\0')`.
 ///
 /// ```
 /// use openquant::microstructural_features::sigma_mapping;
@@ -923,36 +933,60 @@ fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
 ///
 /// # Errors
 ///
-/// - [`MicrostructuralError::NonPositiveStep`] if `step <= 0`.
+/// - [`MicrostructuralError::NonPositiveStep`] if `step` is not a positive finite number
+///   (`NaN` included).
+/// - [`MicrostructuralError::EmptyArray`] if `array` is empty.
+/// - [`MicrostructuralError::NanInArray`] if `array` contains `NaN`.
 /// - [`MicrostructuralError::DictionaryTooLong`] if more than 256 letters would be needed.
 pub fn sigma_mapping(array: &[f64], step: f64) -> Result<Vec<(f64, char)>, MicrostructuralError> {
-    if step <= 0.0 {
+    if !(step > 0.0 && step.is_finite()) {
         return Err(MicrostructuralError::NonPositiveStep);
+    }
+    if array.is_empty() {
+        return Err(MicrostructuralError::EmptyArray);
+    }
+    if array.iter().any(|v| v.is_nan()) {
+        return Err(MicrostructuralError::NanInArray);
     }
     let table = ascii_table();
     let mut out: Vec<(f64, char)> = Vec::new();
-    let mut i = 0usize;
     let mut val = array.iter().cloned().fold(f64::INFINITY, f64::min);
     let max_val = array.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    while val < max_val {
-        if i >= table.len() {
+    // The minimum always gets a letter, so a constant array has a one-entry codebook.
+    loop {
+        if out.len() >= table.len() {
             return Err(MicrostructuralError::DictionaryTooLong);
         }
-        out.push((val, table[i]));
-        i += 1;
+        out.push((val, table[out.len()]));
         val += step;
+        if val >= max_val {
+            break;
+        }
     }
     Ok(out)
 }
 
-fn find_nearest(enc: &[(f64, char)], value: f64) -> Option<char> {
-    let mut best = None;
-    let mut dist = f64::INFINITY;
-    for (k, c) in enc {
+fn check_codebook(encoding: &[(f64, char)]) -> Result<(), MicrostructuralError> {
+    if encoding.is_empty() {
+        return Err(MicrostructuralError::InvalidCodebook("the codebook is empty"));
+    }
+    if encoding.iter().any(|(v, _)| v.is_nan()) {
+        return Err(MicrostructuralError::InvalidCodebook("a codebook value is NaN"));
+    }
+    Ok(())
+}
+
+/// The letter of the entry nearest `value`, the first on ties. `encoding` is non-empty and
+/// NaN-free, and `value` is not NaN, so there always is one (an infinite `value` still has
+/// a nearest entry: the first with the smallest, possibly infinite, distance).
+fn find_nearest(enc: &[(f64, char)], value: f64) -> char {
+    let mut best = enc[0].1;
+    let mut dist = (enc[0].0 - value).abs();
+    for (k, c) in &enc[1..] {
         let d = (k - value).abs();
         if d < dist {
             dist = d;
-            best = Some(*c);
+            best = *c;
         }
     }
     best
@@ -961,17 +995,22 @@ fn find_nearest(enc: &[(f64, char)], value: f64) -> Option<char> {
 /// Encodes each value as the letter of the nearest codebook value (the first on ties), using
 /// a codebook from [`quantile_mapping`] or [`sigma_mapping`] (AFML §18.5).
 ///
-/// Values with no nearest entry (`NaN`s, or any value when the codebook is empty) are
-/// skipped, so the string can be shorter than `array`. See [`quantile_mapping`] for an
-/// example.
-pub fn encode_array(array: &[f64], encoding: &[(f64, char)]) -> String {
-    let mut s = String::new();
-    for v in array {
-        if let Some(c) = find_nearest(encoding, *v) {
-            s.push(c);
-        }
+/// The string has exactly one letter per value: nothing is dropped. See [`quantile_mapping`]
+/// for an example.
+///
+/// # Errors
+///
+/// - [`MicrostructuralError::InvalidCodebook`] if `encoding` is empty or has a `NaN` value.
+/// - [`MicrostructuralError::NanInArray`] if `array` contains `NaN`.
+pub fn encode_array(
+    array: &[f64],
+    encoding: &[(f64, char)],
+) -> Result<String, MicrostructuralError> {
+    check_codebook(encoding)?;
+    if array.iter().any(|v| v.is_nan()) {
+        return Err(MicrostructuralError::NanInArray);
     }
-    s
+    Ok(array.iter().map(|v| find_nearest(encoding, *v)).collect())
 }
 
 fn parse_datetime(s: &str) -> Result<NaiveDateTime, chrono::ParseError> {
@@ -1099,9 +1138,9 @@ fn match_length(message: &[char], start: usize, window: usize) -> usize {
 /// For each point `i`, `L_i` is one plus the length of the longest substring starting at `i`
 /// that also starts within the preceding look-back window; the estimate is the mean of
 /// `log₂(n + 1) / L_i`. With `window == 0` the window expands (`n = i`, points
-/// `1..=len/2`); otherwise the points run from `w` to `len − w` with
-/// `w = min(window, len/2)`, while the look-back and the `log₂(window + 1)` numerator use
-/// the unclamped `window`. Messages shorter than 2 characters return 0.
+/// `1..=len/2`); otherwise the window is first clamped to `w = min(window, len/2)`, as in
+/// Snippet 18.4, and `w` sets the points (`w` to `len − w`), the look-back and the
+/// `log₂(w + 1)` numerator. Messages shorter than 2 characters return 0.
 ///
 /// ```
 /// use openquant::microstructural_features::get_konto_entropy;
@@ -1110,6 +1149,8 @@ fn match_length(message: &[char], start: usize, window: usize) -> usize {
 /// // Points 1 and 2 match 1 and 2 characters back: (log2(2)/2 + log2(3)/3) / 2.
 /// let h = get_konto_entropy("aaaa", 0);
 /// assert!((h - (0.5 + 3f64.log2() / 3.0) / 2.0).abs() < 1e-12);
+/// // A window of 5 on 4 characters is clamped to 2: point 2 matches "aa", log2(3) / 3.
+/// assert!((get_konto_entropy("aaaa", 5) - 3f64.log2() / 3.0).abs() < 1e-12);
 /// ```
 pub fn get_konto_entropy(message: &str, window: usize) -> f64 {
     let message: Vec<char> = message.chars().collect();
@@ -1117,11 +1158,12 @@ pub fn get_konto_entropy(message: &str, window: usize) -> f64 {
     if message.len() < 2 {
         return 0.0;
     }
+    // Snippet 18.4 reassigns `window = min(window, len/2)` before using it anywhere.
+    let window = window.min(message.len() / 2);
     let points: Vec<usize> = if window == 0 {
         (1..=message.len() / 2).collect()
     } else {
-        let w = window.min(message.len() / 2);
-        (w..=message.len() - w).collect()
+        (window..=message.len() - window).collect()
     };
     let mut sum = 0.0;
     let mut num = 0.0;
@@ -1228,12 +1270,16 @@ impl MicrostructuralFeaturesGenerator {
     /// - [`MicrostructuralError::PriceNotFloat`], [`MicrostructuralError::VolumeNotNumeric`]
     ///   or [`MicrostructuralError::TimestampNotDatetime`] if its price, volume or timestamp
     ///   does not parse.
+    /// - [`MicrostructuralError::InvalidCodebook`] if a codebook is empty or has a `NaN`.
     pub fn new_from_csv(
         trades_path: &str,
         tick_num_series: &[usize],
         volume_encoding: Option<Vec<(f64, char)>>,
         pct_encoding: Option<Vec<(f64, char)>>,
     ) -> Result<Self, MicrostructuralError> {
+        for encoding in volume_encoding.iter().chain(pct_encoding.iter()) {
+            check_codebook(encoding)?;
+        }
         // validate header
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(true)
@@ -1310,13 +1356,13 @@ impl MicrostructuralFeaturesGenerator {
 
     fn encode_entropy_features(&self, message: &str, out: &mut Vec<f64>) {
         out.push(get_shannon_entropy(message));
-        // A bar whose ticks all fall outside the encoding yields an empty message.
+        // Every bar has at least one tick, so messages are non-empty; NaN is a safety net.
         out.push(get_plug_in_entropy(message, 1).unwrap_or(f64::NAN));
         out.push(get_lempel_ziv_entropy(message));
         out.push(get_konto_entropy(message, 0));
     }
 
-    fn bar_features(&self, date_time: NaiveDateTime) -> Result<Vec<f64>, InputError> {
+    fn bar_features(&self, date_time: NaiveDateTime) -> Result<Vec<f64>, MicrostructuralError> {
         let mut features = vec![
             date_time.and_utc().timestamp_millis() as f64,
             get_avg_tick_size(&self.trade_size),
@@ -1333,11 +1379,11 @@ impl MicrostructuralFeaturesGenerator {
         self.encode_entropy_features(&tick_msg, &mut features);
 
         if let Some(enc) = &self.volume_encoding {
-            let msg = encode_array(&self.trade_size, enc);
+            let msg = encode_array(&self.trade_size, enc)?;
             self.encode_entropy_features(&msg, &mut features);
         }
         if let Some(enc) = &self.pct_encoding {
-            let msg = encode_array(&self.log_ret, enc);
+            let msg = encode_array(&self.log_ret, enc)?;
             self.encode_entropy_features(&msg, &mut features);
         }
         Ok(features)
@@ -1357,6 +1403,8 @@ impl MicrostructuralFeaturesGenerator {
     /// - [`MicrostructuralError::ShortRow`] if a row has fewer than three columns.
     /// - [`MicrostructuralError::Input`] if a feature function rejects its inputs (not
     ///   expected, since the per-bar buffers always have equal lengths).
+    /// - [`MicrostructuralError::NanInArray`] if a codebook is set and a trade size or log
+    ///   return to encode is `NaN` (a `NaN` volume, or a non-positive price).
     pub fn get_features_from_csv(
         &mut self,
         trades_path: &str,
