@@ -42,8 +42,18 @@ const NOTES = {
     'A human has read this page end to end and checked it against the code.',
 };
 
+// A generated page names its own source in `generated_from`; the default note
+// describes the module pages generated from moduleDocs.ts.
+const generatedFrom = entry.data.generated_from;
+const statusNote =
+  status === 'generated' && generatedFrom && generatedFrom !== 'src/data/moduleDocs.ts'
+    ? `Assembled automatically from <code>${generatedFrom}</code>. No human has reviewed this page.`
+    : status
+      ? NOTES[status]
+      : undefined;
+
 const label = status ? LABELS[status] : undefined;
-const note = banner?.content ?? (status ? NOTES[status] : undefined);
+const note = banner?.content ?? statusNote;
 ---
 
 {
