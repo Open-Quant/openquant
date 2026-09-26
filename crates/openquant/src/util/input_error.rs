@@ -1,15 +1,58 @@
 //! The error returned by functions whose only failure mode is an invalid argument.
+//!
+//! [`InputError`] is shared by modules that validate their arguments but have no richer error
+//! type of their own (for example [`crate::util::fast_ewma`], [`crate::sampling`],
+//! [`crate::ef3m`] and [`crate::backtest_statistics`]). Each variant names the offending
+//! argument, so the [`Display`](std::fmt::Display) message can be shown to a user as is.
+//!
+//! ```
+//! use openquant::util::fast_ewma::ewma;
+//! use openquant::util::InputError;
+//!
+//! let err = ewma(&[1.0, 2.0], 0).unwrap_err();
+//! assert_eq!(
+//!     err,
+//!     InputError::OutOfRange { name: "window", value: 0.0, expected: "a positive integer" }
+//! );
+//! assert_eq!(err.to_string(), "'window' is 0, expected a positive integer");
+//! ```
+#![deny(missing_docs)]
 
 use std::fmt;
 
+/// An argument was rejected before any computation ran.
+///
+/// `name` is the argument (or, for rows of a matrix, a short description of it) as it appears
+/// in the function signature.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputError {
     /// `name` must contain at least `min` values.
-    TooShort { name: &'static str, len: usize, min: usize },
+    TooShort {
+        /// The argument that was too short.
+        name: &'static str,
+        /// Its actual length.
+        len: usize,
+        /// The minimum length the function needs.
+        min: usize,
+    },
     /// `name` must be as long as the series it is paired with.
-    LengthMismatch { name: &'static str, len: usize, expected: usize },
+    LengthMismatch {
+        /// The argument whose length is wrong.
+        name: &'static str,
+        /// Its actual length.
+        len: usize,
+        /// The length it must have to match its partner.
+        expected: usize,
+    },
     /// `name` holds a value outside the range the function is defined on.
-    OutOfRange { name: &'static str, value: f64, expected: &'static str },
+    OutOfRange {
+        /// The argument that is out of range.
+        name: &'static str,
+        /// The offending value (converted to `f64` for integer arguments).
+        value: f64,
+        /// A human-readable description of the accepted range.
+        expected: &'static str,
+    },
 }
 
 impl fmt::Display for InputError {

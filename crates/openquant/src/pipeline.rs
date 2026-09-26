@@ -1,3 +1,113 @@
+//! End-to-end mid-frequency research pipeline: CUSUM events, bet sizing, a max-Sharpe
+//! portfolio, tail-risk metrics and a single-asset backtest in one call.
+//!
+//! [`run_mid_frequency_pipeline`] chains existing modules rather than implementing a new
+//! method, so it has no AFML snippet of its own. Its stages follow the book:
+//!
+//! 1. **Events** — the symmetric CUSUM filter on `close` (AFML §2.5.2.1, Snippet 2.4; see
+//!    [`crate::filters::cusum_filter_indices`]).
+//! 2. **Signals** — the model probability and side at each event are turned into a bet size
+//!    `2 Phi(z) - 1` (AFML §10.3, Snippet 10.1; [`crate::bet_sizing::get_signal`]) and rounded to
+//!    multiples of `step_size` (Snippet 10.3; [`crate::bet_sizing::discrete_signal`]). The size
+//!    set at an event is held on every bar until the next event.
+//! 3. **Portfolio** — max-Sharpe mean-variance weights of `asset_prices`
+//!    ([`crate::portfolio_optimization::allocate_max_sharpe`]; Markowitz, 1952, not AFML).
+//! 4. **Risk** — historical VaR and expected shortfall of the strategy's per-bar returns and
+//!    conditional drawdown at risk of its equity curve ([`crate::risk_metrics::RiskMetrics`]),
+//!    plus the annualised Sharpe ratio (AFML §14.7.1).
+//! 5. **Backtest** — the equity curve, drawdowns and time under water (AFML Snippet 14.4;
+//!    [`crate::backtest_statistics::drawdown_and_time_under_water`]).
+//!
+//! No triple-barrier labelling, meta-labelling or model fitting happens here: the model's
+//! probabilities and sides are inputs, one per bar.
+//!
+//! # Conventions
+//!
+//! - `timestamps`, `close`, `model_probabilities` and `model_sides` are aligned, one entry per
+//!   bar, oldest first. `close` must be positive prices. `model_probabilities[i]` is the
+//!   probability of the predicted class and `model_sides[i]` its side (`+1`/`-1`), both known
+//!   at the close of bar `i`; without sides every bet is long.
+//! - The signal is applied with a one-bar lag: the strategy's simple return over bar `i` is
+//!   `timeline_signal[i - 1] * (close[i] / close[i - 1] - 1)`, so an event at bar `i` trades
+//!   from bar `i + 1`. There is one strategy return per bar after the first, and the equity
+//!   curve starts at 1 and compounds them.
+//! - `asset_prices` is rows = observations (oldest first), columns = assets, in the order of
+//!   `asset_names`. Its expected returns and covariance are annualised with 252 periods a
+//!   year, so `risk_free_rate` is an annual rate there. The portfolio stage is independent of
+//!   the backtest: its weights are reported, not traded, and its rows need not match
+//!   `timestamps`.
+//! - `confidence_level` is the lower-tail probability for VaR and expected shortfall (0.05
+//!   looks at the worst 5% of per-bar returns); CDaR is computed at the upper-tail level
+//!   `1 - confidence_level`. All three are per-bar quantities, not annualised.
+//! - `realized_sharpe` annualises per-bar returns with 252 bars a year, whatever the bar
+//!   spacing, and subtracts `risk_free_rate` per bar.
+//! - The [`LeakageChecks`] are structural, not tests of the data: misaligned inputs are
+//!   rejected with an error rather than flagged, CUSUM events are always in increasing order,
+//!   and `has_forward_look_bias` is always `false` because the one-bar lag above is built in.
+//!   Whether `model_probabilities` themselves were fitted without look-ahead is the caller's
+//!   responsibility.
+//!
+//! # Example
+//!
+//! Four 2% moves (up, up, down, down) each trip a 1% CUSUM filter. With probability 0.9 the
+//! bet size is `2 Phi(1.333) - 1 = 0.818`, which a step of 1 rounds to a full bet, long for the
+//! first two events and short for the last two. The one-bar lag means the first down move is
+//! still held long.
+//!
+//! ```
+//! use chrono::NaiveDate;
+//! use nalgebra::DMatrix;
+//! use openquant::pipeline::{
+//!     run_mid_frequency_pipeline, ResearchPipelineConfig, ResearchPipelineInput,
+//! };
+//!
+//! let timestamps: Vec<_> = (1..=5)
+//!     .map(|d| NaiveDate::from_ymd_opt(2024, 1, d).unwrap().and_hms_opt(16, 0, 0).unwrap())
+//!     .collect();
+//! let close = [100.0, 102.0, 104.04, 101.9592, 99.920016];
+//! let probabilities = [0.9; 5];
+//! let sides = [1.0, 1.0, 1.0, -1.0, -1.0];
+//! let asset_prices = DMatrix::from_column_slice(5, 1, &[100.0, 101.0, 102.0, 103.0, 104.0]);
+//! let asset_names = vec!["A".to_string()];
+//! let input = ResearchPipelineInput {
+//!     timestamps: &timestamps,
+//!     close: &close,
+//!     model_probabilities: &probabilities,
+//!     model_sides: Some(&sides),
+//!     asset_prices: &asset_prices,
+//!     asset_names: &asset_names,
+//! };
+//! let config = ResearchPipelineConfig {
+//!     cusum_threshold: 0.01,
+//!     step_size: 1.0,
+//!     ..ResearchPipelineConfig::default()
+//! };
+//! let out = run_mid_frequency_pipeline(input, &config)?;
+//!
+//! assert_eq!(out.events.indices, [1, 2, 3, 4]);
+//! assert_eq!(out.signals.event_signal, [1.0, 1.0, -1.0, -1.0]);
+//! assert_eq!(out.signals.timeline_signal, [0.0, 1.0, 1.0, -1.0, -1.0]);
+//! // Returns are 0 (flat), +2% (long up), -2% (long down, the lag), +2% (short down).
+//! let expected = [0.0, 0.02, -0.02, 0.02];
+//! for (r, e) in out.backtest.strategy_returns.iter().zip(expected) {
+//!     assert!((r - e).abs() < 1e-12);
+//! }
+//! assert!((out.backtest.equity_curve[4] - 1.02 * 0.98 * 1.02).abs() < 1e-12);
+//! // One 2% drawdown from the high at bar 2, under water for the last two days.
+//! assert!((out.backtest.drawdowns[0] - 0.02).abs() < 1e-12);
+//! assert!((out.backtest.time_under_water_years[0] - 2.0 / 365.25).abs() < 1e-12);
+//! // The 5% "higher" quantile of [-0.02, 0, 0.02, 0.02] is 0; the returns below it average -0.02.
+//! assert!(out.risk.value_at_risk.abs() < 1e-12);
+//! assert!((out.risk.expected_shortfall + 0.02).abs() < 1e-12);
+//! // Mean 0.005, sample std 0.01915: 0.2611 per bar, 4.145 annualised with 252 bars.
+//! assert!((out.risk.realized_sharpe - 4.1451).abs() < 1e-4);
+//! // A single asset takes the whole portfolio.
+//! assert!((out.portfolio.weights[0] - 1.0).abs() < 1e-9);
+//! assert!(!out.leakage_checks.has_forward_look_bias);
+//! # Ok::<(), openquant::pipeline::PipelineError>(())
+//! ```
+#![deny(missing_docs)]
+
 use chrono::NaiveDateTime;
 use nalgebra::DMatrix;
 
@@ -7,12 +117,28 @@ use crate::filters::{cusum_filter_indices, Threshold};
 use crate::portfolio_optimization::allocate_max_sharpe;
 use crate::risk_metrics::{RiskMetrics, RiskMetricsError};
 
+/// Parameters of [`run_mid_frequency_pipeline`].
+///
+/// The [`Default`] is `cusum_threshold = 0.001`, `num_classes = 2`, `step_size = 0.1`,
+/// `risk_free_rate = 0.0`, `confidence_level = 0.05`.
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineConfig {
+    /// CUSUM filter threshold `h` on cumulative log returns of `close` (AFML Snippet 2.4), e.g.
+    /// 0.001 for 0.1%. Must be > 0; a NaN or infinite threshold is not rejected and simply
+    /// produces no events ([`PipelineError::NoEvents`]).
     pub cusum_threshold: f64,
+    /// Number of classes `K` of the model behind `model_probabilities`; the bet size is 0 at
+    /// probability `1/K` (AFML Snippet 10.1). Must be >= 2.
     pub num_classes: usize,
+    /// Bet sizes are rounded to multiples of this step and clamped to `[-1, 1]` (AFML Snippet
+    /// 10.3). A step <= 0 is not rejected and leaves the sizes unrounded.
     pub step_size: f64,
+    /// Risk-free rate used twice, in two units: as an **annual** rate by the max-Sharpe
+    /// allocation (whose returns are annualised with 252 periods) and as a **per-bar** rate by
+    /// `realized_sharpe`. Only 0 (the default) means the same thing in both.
     pub risk_free_rate: f64,
+    /// Lower-tail probability for VaR and expected shortfall, in `[0, 1]` (0.05 = worst 5% of
+    /// per-bar returns). CDaR uses `1 - confidence_level`.
     pub confidence_level: f64,
 }
 
@@ -28,80 +154,153 @@ impl Default for ResearchPipelineConfig {
     }
 }
 
+/// Borrowed inputs of [`run_mid_frequency_pipeline`].
+///
+/// `timestamps`, `close`, `model_probabilities` and `model_sides` are aligned per bar, oldest
+/// first, and must have the same length.
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineInput<'a> {
+    /// Bar timestamps in increasing order; used for event timestamps and time under water.
+    /// Their order is not checked.
     pub timestamps: &'a [NaiveDateTime],
+    /// Positive closing prices of the traded instrument, one per bar.
     pub close: &'a [f64],
+    /// Probability of the predicted class at each bar, in `[0, 1]`, known at that bar's close.
+    /// Only the values at CUSUM events are used. The range is not validated.
     pub model_probabilities: &'a [f64],
+    /// Side of the prediction at each bar (typically `+1`/`-1`); `None` means always long.
     pub model_sides: Option<&'a [f64]>,
+    /// Prices for the portfolio stage: rows = observations (oldest first, at least 2),
+    /// columns = assets (at least 1). Not aligned with `timestamps`.
     pub asset_prices: &'a DMatrix<f64>,
+    /// One name per column of `asset_prices`, copied to [`PortfolioStage::asset_names`].
     pub asset_names: &'a [String],
 }
 
+/// CUSUM events and the model outputs sampled at them, one entry per event.
 #[derive(Debug, Clone)]
 pub struct EventSelectionStage {
+    /// 0-based bar positions of the events, in increasing order.
     pub indices: Vec<usize>,
+    /// `timestamps[i]` for each event position `i`.
     pub timestamps: Vec<NaiveDateTime>,
+    /// `model_probabilities[i]` for each event position `i`.
     pub probabilities: Vec<f64>,
+    /// `model_sides[i]` for each event position `i`, or `1.0` when no sides were given.
     pub sides: Vec<f64>,
 }
 
+/// Bet sizes at events and forward-filled onto the bar timeline.
 #[derive(Debug, Clone)]
 pub struct SignalStage {
+    /// Discretised bet size in `[-1, 1]` at each event (side times size, rounded to
+    /// `step_size`).
     pub event_signal: Vec<f64>,
+    /// Bet size on every bar: 0 before the first event, then the size of the latest event at or
+    /// before the bar. Same length as `close`.
     pub timeline_signal: Vec<f64>,
 }
 
+/// Max-Sharpe mean-variance allocation of `asset_prices` (annualised with 252 periods).
+///
+/// Reported only: these weights are not used by the backtest.
 #[derive(Debug, Clone)]
 pub struct PortfolioStage {
+    /// Asset names, in column order of `asset_prices`.
     pub asset_names: Vec<String>,
+    /// Portfolio weights, one per asset, summing to 1.
     pub weights: Vec<f64>,
+    /// Annualised portfolio volatility.
     pub portfolio_risk: f64,
+    /// Annualised expected portfolio return.
     pub portfolio_return: f64,
+    /// Annualised Sharpe ratio of the portfolio, net of `risk_free_rate` (annual).
     pub portfolio_sharpe: f64,
 }
 
+/// Tail-risk and performance metrics of the strategy's per-bar returns.
 #[derive(Debug, Clone)]
 pub struct RiskStage {
+    /// Historical VaR: the "higher" `confidence_level`-quantile of the per-bar strategy
+    /// returns, as a signed return (negative is a loss), not annualised.
     pub value_at_risk: f64,
+    /// Mean of the per-bar returns strictly below `value_at_risk`; NaN when none are.
     pub expected_shortfall: f64,
+    /// Conditional drawdown at risk of the equity curve at level `1 - confidence_level`, in
+    /// equity units (the curve starts at 1).
     pub conditional_drawdown_risk: f64,
+    /// Sharpe ratio of the per-bar returns annualised with 252 bars a year (AFML §14.7.1);
+    /// NaN with fewer than two returns, infinite or NaN when they are constant.
     pub realized_sharpe: f64,
 }
 
+/// Single-asset backtest of `timeline_signal` on `close`.
 #[derive(Debug, Clone)]
 pub struct BacktestStage {
+    /// A copy of the input timestamps, aligned with `equity_curve`.
     pub timestamps: Vec<NaiveDateTime>,
+    /// Simple strategy return over each bar after the first,
+    /// `timeline_signal[i - 1] * (close[i] / close[i - 1] - 1)`; one shorter than `close`.
     pub strategy_returns: Vec<f64>,
+    /// Compounded equity, starting at 1 on the first bar; same length as `close`.
     pub equity_curve: Vec<f64>,
+    /// Relative drawdown `1 - trough / peak` for each high-water mark that was followed by a
+    /// dip (AFML Snippet 14.4).
     pub drawdowns: Vec<f64>,
+    /// Time under water in years (365.25 days) for each entry of `drawdowns`, from its
+    /// high-water mark to the next one with a drawdown or the end of the series.
     pub time_under_water_years: Vec<f64>,
 }
 
+/// Structural leakage guards of the run.
+///
+/// These describe the pipeline's construction rather than test the data: an output only
+/// exists when the inputs passed validation, so the flags take fixed values in practice.
 #[derive(Debug, Clone)]
 pub struct LeakageChecks {
+    /// Always `true`: misaligned inputs are rejected with [`PipelineError::LengthMismatch`]
+    /// instead of producing an output.
     pub inputs_aligned: bool,
+    /// Whether the event positions are non-decreasing; always `true` for CUSUM events.
     pub event_indices_sorted: bool,
+    /// Always `false`: signals are applied with a one-bar lag. It does not detect look-ahead
+    /// in the caller's `model_probabilities` or `model_sides`.
     pub has_forward_look_bias: bool,
 }
 
+/// Output of [`run_mid_frequency_pipeline`], one field per stage.
 #[derive(Debug, Clone)]
 pub struct ResearchPipelineOutput {
+    /// CUSUM events and the model outputs at them.
     pub events: EventSelectionStage,
+    /// Bet sizes at events and on the bar timeline.
     pub signals: SignalStage,
+    /// Max-Sharpe allocation of `asset_prices`.
     pub portfolio: PortfolioStage,
+    /// VaR, expected shortfall, CDaR and Sharpe ratio of the strategy.
     pub risk: RiskStage,
+    /// Strategy returns, equity curve, drawdowns and time under water.
     pub backtest: BacktestStage,
+    /// Structural leakage guards.
     pub leakage_checks: LeakageChecks,
 }
 
+/// Errors returned by [`run_mid_frequency_pipeline`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum PipelineError {
+    /// The named input (`timestamps`, `close` or `model_probabilities`) is empty.
     EmptyInput(&'static str),
+    /// Two inputs disagree in length: `(name_a, len_a, name_b, len_b)`.
     LengthMismatch(&'static str, usize, &'static str, usize),
+    /// A parameter or the shape of `asset_prices` is invalid; the message names it.
     InvalidParameter(&'static str),
+    /// The CUSUM filter found no event, so there is nothing to size or trade.
     NoEvents,
+    /// The max-Sharpe allocation failed; carries the `Debug` form of the
+    /// [`crate::portfolio_optimization::AllocError`].
     PortfolioAllocation(String),
+    /// A risk metric failed. Validation rejects the same conditions first, so this is not
+    /// expected in practice.
     Risk(RiskMetricsError),
 }
 
@@ -128,6 +327,23 @@ impl From<RiskMetricsError> for PipelineError {
     }
 }
 
+/// Runs the events → signals → portfolio → risk → backtest pipeline on one instrument (see the
+/// [module documentation](self) for the stages and conventions, and for a worked example).
+///
+/// # Errors
+///
+/// - [`PipelineError::EmptyInput`] if `timestamps`, `close` or `model_probabilities` is empty.
+/// - [`PipelineError::LengthMismatch`] if `close` and `timestamps`, `model_probabilities` and
+///   `close`, `model_sides` and `close`, or `asset_names` and the columns of `asset_prices`
+///   differ in length.
+/// - [`PipelineError::InvalidParameter`] if `asset_prices` has fewer than 2 rows or no
+///   columns, `cusum_threshold <= 0`, `num_classes < 2`, or `confidence_level` is outside
+///   `[0, 1]` (NaN included).
+/// - [`PipelineError::NoEvents`] if the CUSUM filter selects no bar (including when `close` has
+///   a single bar).
+/// - [`PipelineError::PortfolioAllocation`] if the max-Sharpe optimisation on `asset_prices`
+///   fails.
+/// - [`PipelineError::Risk`] is part of the signature but not reachable after validation.
 pub fn run_mid_frequency_pipeline(
     input: ResearchPipelineInput<'_>,
     config: &ResearchPipelineConfig,
