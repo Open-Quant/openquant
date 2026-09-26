@@ -15,7 +15,7 @@ EVENTS = [
 
 def _setup_events():
     # Same pipeline as crates/openquant/tests/sample_weights.rs::setup_events
-    path = "filters/dollar_bar_sample.csv"
+    path = "shared/dollar_bar_sample.csv"
     (close,) = load_csv_columns(path, ["close"])
     timestamps = load_timestamps(path)
 

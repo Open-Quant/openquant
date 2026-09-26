@@ -26,7 +26,7 @@ fn dates(n: usize, start: &str, days: i64) -> Vec<NaiveDateTime> {
 
 fn load_dollar_bar_sample() -> Vec<(NaiveDateTime, f64)> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/backtest_statistics/dollar_bar_sample.csv");
+        .join("../../tests/fixtures/shared/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();
     let mut rows: Vec<(NaiveDateTime, f64)> = Vec::new();
     for rec in rdr.records() {

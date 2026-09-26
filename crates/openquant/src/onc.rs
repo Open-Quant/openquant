@@ -56,6 +56,7 @@
 //! # }
 //! ```
 
+use crate::util::stats;
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -344,19 +345,10 @@ fn cluster_kmeans_base(
 }
 
 fn tstat(values: &[f64]) -> f64 {
-    if values.is_empty() {
+    // Population deviation (ddof = 0).
+    let (Some(mean), Some(std)) = (stats::mean(values), stats::std_dev(values, 0)) else {
         return 0.0;
-    }
-    let mean = values.iter().sum::<f64>() / values.len() as f64;
-    let var = values
-        .iter()
-        .map(|v| {
-            let d = *v - mean;
-            d * d
-        })
-        .sum::<f64>()
-        / values.len() as f64;
-    let std = var.sqrt();
+    };
     if std <= 1e-12 {
         if mean > 0.0 {
             f64::INFINITY

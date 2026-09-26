@@ -41,7 +41,7 @@ fn parse_ts(value: &str) -> NaiveDateTime {
 
 fn load_close() -> Vec<(NaiveDateTime, f64)> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/filters/dollar_bar_sample.csv")
+        .join("../../tests/fixtures/shared/dollar_bar_sample.csv")
         .canonicalize()
         .expect("fixture dir");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(&path).expect("read csv");

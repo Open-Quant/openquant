@@ -43,6 +43,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::util::stats;
 use nalgebra::{DMatrix, SymmetricEigen};
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
@@ -783,15 +784,7 @@ fn nan_mean_std(v: &[f64], ddof: usize) -> (f64, f64) {
 /// Mean and standard deviation with `ddof` delta degrees of freedom (divide by `n - ddof`).
 /// The deviation is 0 when there are no more than `ddof` values (pandas would give NaN).
 fn mean_std(v: &[f64], ddof: usize) -> (f64, f64) {
-    if v.is_empty() {
-        return (0.0, 0.0);
-    }
-    let mean = v.iter().sum::<f64>() / v.len() as f64;
-    if v.len() <= ddof {
-        return (mean, 0.0);
-    }
-    let var = v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / (v.len() - ddof) as f64;
-    (mean, var.sqrt())
+    (stats::mean(v).unwrap_or(0.0), stats::std_dev(v, ddof).unwrap_or(0.0))
 }
 
 fn standardize(rows: &[Vec<f64>]) -> Vec<Vec<f64>> {

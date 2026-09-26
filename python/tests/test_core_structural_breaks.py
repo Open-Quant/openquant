@@ -9,7 +9,7 @@ REFERENCE = load_json("structural_breaks/reference.json")
 
 
 def _log_prices():
-    (close,) = load_csv_columns("structural_breaks/dollar_bar_sample.csv", ["close"])
+    (close,) = load_csv_columns("shared/dollar_bar_sample.csv", ["close"])
     return [math.log(v) for v in close]
 
 
@@ -107,7 +107,7 @@ def test_sadf_pointwise_reference_values(model):
 def test_sadf_martingale_statistic_ignores_the_trend_sign(model):
     # AFML 17.4.3 takes |beta| / se (#166): the reciprocal series negates log y and so beta,
     # and must give the same, non-negative statistic.
-    (close,) = load_csv_columns("structural_breaks/dollar_bar_sample.csv", ["close"])
+    (close,) = load_csv_columns("shared/dollar_bar_sample.csv", ["close"])
     prices = list(close[:60])
     up = structural_breaks.get_sadf(prices, model, True, 20, 1)
     down = structural_breaks.get_sadf([1.0 / p for p in prices], model, True, 20, 1)

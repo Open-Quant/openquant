@@ -43,6 +43,7 @@
 //! }
 //! ```
 
+use crate::util::stats;
 use crate::util::InputError;
 use rand::Rng;
 use std::collections::{BTreeMap, HashSet};
@@ -727,9 +728,8 @@ pub fn most_likely_parameters(
         }
 
         let n = vals.len() as f64;
-        let mean = vals.iter().sum::<f64>() / n;
-        let var = vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n.max(1.0);
-        let std = var.sqrt().max(1e-12);
+        // Population deviation (ddof = 0).
+        let std = stats::std_dev(&vals, 0).unwrap_or(0.0).max(1e-12);
         let h = (std * n.powf(-1.0 / 5.0)).max(1e-6);
 
         let steps = res.max(10);

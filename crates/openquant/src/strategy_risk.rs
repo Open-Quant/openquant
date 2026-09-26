@@ -48,6 +48,7 @@
 //! # }
 //! ```
 
+use crate::util::stats;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use statrs::distribution::{ContinuousCDF, Normal};
@@ -468,24 +469,14 @@ fn validate_precision(precision: f64) -> Result<(), StrategyRiskError> {
     Ok(())
 }
 
+/// Mean of `values`, `NaN` when empty.
 fn mean(values: &[f64]) -> f64 {
-    values.iter().sum::<f64>() / values.len() as f64
+    stats::mean(values).unwrap_or(f64::NAN)
 }
 
+/// Sample standard deviation (ddof = 1), 0 with fewer than two values.
 fn std_dev(values: &[f64]) -> f64 {
-    if values.len() < 2 {
-        return 0.0;
-    }
-    let mu = mean(values);
-    let var = values
-        .iter()
-        .map(|v| {
-            let d = *v - mu;
-            d * d
-        })
-        .sum::<f64>()
-        / (values.len() as f64 - 1.0);
-    var.sqrt()
+    stats::std_dev(values, 1).unwrap_or(0.0)
 }
 
 fn silverman_bandwidth(samples: &[f64]) -> f64 {

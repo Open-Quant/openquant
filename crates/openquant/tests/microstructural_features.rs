@@ -83,7 +83,7 @@ type DollarBarColumns = (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>);
 
 fn load_dollar_bars() -> DollarBarColumns {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/microstructural_features/dollar_bar_sample.csv");
+        .join("../../tests/fixtures/shared/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();
     let mut close = Vec::new();
     let mut high = Vec::new();

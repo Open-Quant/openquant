@@ -38,6 +38,7 @@
 //! # }
 //! ```
 
+use crate::util::stats;
 use crate::util::InputError;
 use chrono::NaiveDateTime;
 use statrs::distribution::{ContinuousCDF, Normal};
@@ -271,10 +272,9 @@ pub fn drawdown_and_time_under_water(
 /// `entries_per_year` is the number of return periods per year (252 for daily). Nothing is
 /// validated: an empty slice or a single return gives `NaN`, constant returns give infinity.
 pub fn sharpe_ratio(returns: &[f64], entries_per_year: f64, risk_free_rate: f64) -> f64 {
-    let mean = returns.iter().sum::<f64>() / returns.len() as f64;
-    let var =
-        returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (returns.len() as f64 - 1.0);
-    let std = var.sqrt();
+    // Fewer than two returns leave the deviation undefined: `NaN`, as documented.
+    let mean = stats::mean(returns).unwrap_or(f64::NAN);
+    let std = stats::std_dev(returns, 1).unwrap_or(f64::NAN);
     ((mean - risk_free_rate) / std) * entries_per_year.sqrt()
 }
 
@@ -355,12 +355,7 @@ pub fn deflated_sharpe_ratio(
         sd * ((1.0 - EULER_GAMMA) * norm.inverse_cdf(1.0 - 1.0 / n)
             + EULER_GAMMA * norm.inverse_cdf(1.0 - 1.0 / n * (-1.0f64).exp()))
     } else {
-        let sd = {
-            let mean = sr_estimates.iter().sum::<f64>() / sr_estimates.len() as f64;
-            (sr_estimates.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
-                / sr_estimates.len() as f64)
-                .sqrt()
-        };
+        let sd = stats::std_dev(sr_estimates, 0).unwrap_or(f64::NAN);
         let n = sr_estimates.len() as f64;
         let norm = Normal::new(0.0, 1.0).unwrap();
         sd * ((1.0 - EULER_GAMMA) * norm.inverse_cdf(1.0 - 1.0 / n)

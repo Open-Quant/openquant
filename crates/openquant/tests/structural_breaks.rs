@@ -29,7 +29,7 @@ fn assert_rel(got: f64, want: f64, rel: f64, what: &str) {
 
 fn load_close_prices() -> Vec<f64> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/structural_breaks/dollar_bar_sample.csv");
+        .join("../../tests/fixtures/shared/dollar_bar_sample.csv");
     let mut rdr = ReaderBuilder::new().has_headers(true).from_path(path).unwrap();
     let mut close = Vec::new();
     for rec in rdr.records() {

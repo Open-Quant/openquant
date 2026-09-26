@@ -54,6 +54,7 @@
 //! # }
 //! ```
 
+use crate::util::stats;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use rand_distr::{Distribution, StandardNormal};
@@ -605,17 +606,9 @@ pub fn run_synthetic_otr_workflow(
     )
 }
 
+/// Sample standard deviation (ddof = 1), 0 with fewer than two values.
 fn std_dev(values: &[f64]) -> f64 {
-    if values.len() < 2 {
-        return 0.0;
-    }
-    let mean = values.iter().sum::<f64>() / values.len() as f64;
-    let mut ss = 0.0;
-    for v in values {
-        let d = *v - mean;
-        ss += d * d;
-    }
-    (ss / (values.len() as f64 - 1.0)).sqrt()
+    stats::std_dev(values, 1).unwrap_or(0.0)
 }
 
 fn median_sorted(sorted: &[f64]) -> f64 {

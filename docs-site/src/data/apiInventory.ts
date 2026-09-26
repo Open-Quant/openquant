@@ -429,6 +429,14 @@ export const apiInventory = {
     "openquant::util::fast_ewma": [
       "ewma"
     ],
+    "openquant::util::stats": [
+      "covariance",
+      "mean",
+      "quantile",
+      "quantile_sorted",
+      "std_dev",
+      "variance"
+    ],
     "openquant::util::volatility": [
       "get_daily_vol",
       "get_garman_class_vol",
@@ -1082,6 +1090,15 @@ export const apiInventory = {
     },
     "openquant::util::input_error": {
       "InputError": "enum"
+    },
+    "openquant::util::stats": {
+      "QuantileMethod": "enum",
+      "covariance": "fn",
+      "mean": "fn",
+      "quantile": "fn",
+      "quantile_sorted": "fn",
+      "std_dev": "fn",
+      "variance": "fn"
     },
     "openquant::util::volatility": {
       "get_daily_vol": "fn",

@@ -1,5 +1,5 @@
 {
-  "source": "AFML snippet 3.1 in pandas 3.0.6 on tests/fixtures/filters/dollar_bar_sample.csv",
+  "source": "AFML snippet 3.1 in pandas 3.0.6 on tests/fixtures/shared/dollar_bar_sample.csv",
   "lookback": 100,
   "n_bars": 1000,
   "n_values": 960,

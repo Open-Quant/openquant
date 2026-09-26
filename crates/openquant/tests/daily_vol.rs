@@ -36,7 +36,7 @@ fn fixtures() -> std::path::PathBuf {
 fn load_close() -> Vec<(NaiveDateTime, f64)> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_path(fixtures().join("filters/dollar_bar_sample.csv"))
+        .from_path(fixtures().join("shared/dollar_bar_sample.csv"))
         .unwrap();
     rdr.deserialize::<Row>()
         .map(|row| {
