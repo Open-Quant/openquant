@@ -147,6 +147,26 @@ fn test_ml_cross_val_score_f1() {
     }
 }
 
+#[test]
+fn test_an_empty_test_fold_scores_nan_under_every_rule() {
+    // #185 item 10: F1 used to return 0.0 for an empty fold, which averages in as a real score.
+    let x: Vec<Vec<f64>> = (0..6).map(|i| vec![i as f64]).collect();
+    let y: Vec<f64> = vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+    let splits = vec![((0..6).collect::<Vec<usize>>(), Vec::new())];
+    for scoring in [Scoring::Accuracy, Scoring::NegLogLoss, Scoring::F1] {
+        let mut clf = MajorityClassifier { prob: 0.5 };
+        let scores = ml_cross_val_score(&mut clf, &x, &y, None, &splits, scoring).unwrap();
+        assert_eq!(scores.len(), 1);
+        assert!(scores[0].is_nan(), "empty fold should score NaN, got {}", scores[0]);
+    }
+    // A non-empty fold with no positive predictions is still a genuine F1 of 0.
+    // Trained on negatives only, it predicts 0 for every positive test row.
+    let splits = vec![(vec![1, 3, 5], vec![0, 2, 4])];
+    let mut clf = MajorityClassifier { prob: 0.0 };
+    let f1 = ml_cross_val_score(&mut clf, &x, &y, None, &splits, Scoring::F1).unwrap();
+    assert_eq!(f1, vec![0.0]);
+}
+
 fn spans_intersect(a: (NaiveDateTime, NaiveDateTime), b: (NaiveDateTime, NaiveDateTime)) -> bool {
     a.0 <= b.1 && b.0 <= a.1
 }
