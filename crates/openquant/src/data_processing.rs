@@ -239,7 +239,10 @@ fn require_ohlcv_columns(df: &DataFrame) -> Result<(), DataProcessingError> {
 fn sort_ohlcv_df(df: &DataFrame) -> Result<DataFrame, DataProcessingError> {
     df.sort(
         ["symbol", "ts_us"],
-        SortMultipleOptions::new().with_order_descending_multi([false, false]),
+        // A stable sort, so "first" and "last" of a duplicated key follow the input order.
+        SortMultipleOptions::new()
+            .with_order_descending_multi([false, false])
+            .with_maintain_order(true),
     )
     .map_err(|e| DataProcessingError::frame("polars sort failed", e))
 }
@@ -519,8 +522,12 @@ pub fn align_calendar_df(
     let calendar = df!("symbol" => cal_symbols, "ts_us" => cal_ts)
         .map_err(|e| DataProcessingError::frame("calendar df build failed", e))?;
 
+    // Polars does not keep the left order of a join unless asked; the calendar is already
+    // sorted by `(symbol, ts_us)`, which is the documented output order.
+    let mut join_args = JoinArgs::new(JoinType::Left);
+    join_args.maintain_order = MaintainOrderJoin::Left;
     let mut out = calendar
-        .left_join(&cleaned, ["symbol", "ts_us"], ["symbol", "ts_us"])
+        .join(&cleaned, ["symbol", "ts_us"], ["symbol", "ts_us"], join_args, None)
         .map_err(|e| DataProcessingError::frame("calendar join failed", e))?;
 
     let mut missing = out
