@@ -304,7 +304,8 @@ pub struct SequentiallyBootstrappedBaggingClassifier {
     /// Keep already fitted estimators and add up to `n_estimators` on the next `fit`
     /// (default `false`). Cannot be combined with `oob_score`.
     pub warm_start: bool,
-    /// Present for parity with mlfinlab's parameters; currently unused.
+    /// Ignored: nothing is logged. Kept only so existing code still compiles.
+    #[deprecated(note = "ignored: the classifier logs nothing")]
     pub verbose: usize,
     /// Seed of the random stream; a `fit` seeds its stream with `random_state` plus the
     /// number of estimators already fitted.
@@ -324,6 +325,7 @@ pub struct SequentiallyBootstrappedBaggingClassifier {
 impl SequentiallyBootstrappedBaggingClassifier {
     /// Creates an unfitted classifier with default settings and the given seed.
     pub fn new(random_state: u64) -> Self {
+        #[allow(deprecated)]
         Self {
             n_estimators: 10,
             max_samples: MaxSamples::Float(1.0),

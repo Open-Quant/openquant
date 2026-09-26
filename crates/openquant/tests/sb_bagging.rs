@@ -63,11 +63,10 @@ fn test_sb_bagging_not_tree_base_estimator() {
 }
 
 #[test]
-fn test_sb_bagging_non_sample_weights_with_verbose() {
+fn test_sb_bagging_non_sample_weights_with_bootstrap_features() {
     let (x, y, _, ind) = synthetic_dataset();
     let mut sb = SequentiallyBootstrappedBaggingClassifier::new(1);
     sb.supports_sample_weight = false;
-    sb.verbose = 2;
     sb.n_estimators = 8;
     sb.max_features = MaxFeatures::Float(0.2);
     sb.bootstrap_features = true;
