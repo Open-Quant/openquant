@@ -83,10 +83,10 @@ stage 2  4 dollar bars
 stage 2  diagnostics: {'n_bars': 4.0, 'lag1_return_autocorr': 0.0, 'lag1_sq_return_autocorr': 0.0, 'return_std': 0.0}
 stage 3  207 CUSUM events
 stage 3  leakage checks: {'inputs_aligned': True, 'timestamps_increasing': True, 'event_indices_sorted': True, 'has_forward_look_bias': False}
-stage 4  realized_sharpe -0.3277   VaR(5%) -0.000201   ES(5%) -0.000330
-stage 4  weights {'CL': 0.237, 'NG': 0.313, 'RB': 0.215, 'GC': 0.234}   portfolio_sharpe 1.8291
+stage 4  realized_sharpe -6.4725   VaR(5%) -0.000201   ES(5%) -0.000330
+stage 4  weights {'CL': 0.237, 'NG': 0.313, 'RB': 0.215, 'GC': 0.234}   portfolio_sharpe 36.1214
 stage 4  turnover 9.40   cost 0.003441
-stage 4  gross -0.001254 -> net -0.004695   net_sharpe -1.0885
+stage 4  gross -0.001254 -> net -0.004695   net_sharpe -23.8478
 stage 4  promotion gates:
            passed_realized_sharpe     False
            passed_net_sharpe          False
@@ -101,7 +101,7 @@ Four things in that output are worth pausing on.
 roughly 43% of bars here. On real data that ratio is your event-rate
 knob, and it trades statistical power against label overlap.
 
-**`portfolio_sharpe` 1.83 sits next to `realized_sharpe` -0.33.** These
+**`portfolio_sharpe` 36.1 sits next to `realized_sharpe` -6.47.** These
 answer different questions and are not comparable. The first is the
 allocator's in-sample optimum across the four assets, scored on the same
 sample it was fitted to and so flattering by construction; the second is
@@ -177,7 +177,7 @@ The parameters worth knowing:
 | `num_classes` | `2` | The null probability `get_signal` tests against, `1/num_classes`. |
 | `step_size` | `0.1` | Position quantisation. Larger suppresses churn at the cost of tracking. |
 | `risk_free_rate` | `0.0` | Annual rate, subtracted in both the allocation and `realized_sharpe` (as `risk_free_rate / periods_per_year` per bar). |
-| `periods_per_year` | `252.0` | Bars a year. Annualises `realized_sharpe` and the portfolio figures; `run_flywheel_iteration` keeps 252 on its one-minute bars, so its Sharpe ratios are annual in units of 252 bars. |
+| `periods_per_year` | `None` | Bars a year. Annualises `realized_sharpe`, `realized_vol`, `net_sharpe` and the portfolio figures. `None` derives it from the timestamps (252 for daily bars; 390 × 252 = 98,280 for one-minute bars on a 6.5-hour session); the synthetic dataset carries 98,280. The Rust config and `openquant._core` default to 252. |
 | `confidence_level` | `0.05` | Tail level for VaR, ES and CDaR. |
 
 ### Stage 4 — costs, and the promotion decision

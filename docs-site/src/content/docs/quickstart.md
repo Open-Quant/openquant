@@ -100,10 +100,10 @@ leakage checks:
   has_forward_look_bias    False
 
 summary:
-  portfolio_sharpe               1.281305
-  portfolio_return               0.017837
-  portfolio_risk                 0.013921
-  realized_sharpe               -0.136778
+  portfolio_sharpe              25.303744
+  portfolio_return               6.956303
+  portfolio_risk                 0.274912
+  realized_sharpe               -2.701140
   value_at_risk                 -0.000209
   expected_shortfall            -0.000312
   conditional_drawdown_risk      0.002713
@@ -112,11 +112,11 @@ summary:
   event_indices_sorted           1.000000
   has_forward_look_bias          0.000000
   turnover                       3.600000
-  realized_vol                   0.001884
+  realized_vol                   0.037197
   estimated_cost                 0.001314
   gross_total_return            -0.000197
   net_total_return              -0.001511
-  net_sharpe                    -1.485917
+  net_sharpe                   -20.589471
 
 promotion gates:
   passed_realized_sharpe     False
@@ -156,12 +156,21 @@ spread and a volatility-scaled slippage term. `net_sharpe` is recomputed
 after that charge. For a mid-frequency strategy this gap is usually the
 whole story.
 
-**`portfolio_sharpe` is not your strategy's Sharpe.** It reads 1.28 above
-while `realized_sharpe` is -0.14. They answer different questions:
+**`portfolio_sharpe` is not your strategy's Sharpe.** It reads 25.3 above
+while `realized_sharpe` is -2.70. They answer different questions:
 `portfolio_sharpe` is the in-sample optimum of the allocator across the
 four synthetic assets, and `realized_sharpe` is what the traded strategy
 actually returned. Reading the first as the second is the single easiest
 way to convince yourself you have found something.
+
+**Every Sharpe ratio and volatility here is annualised for one-minute
+bars.** The synthetic bars are one minute apart, so the loop annualises
+with `dataset.periods_per_year` = 390 bars a session × 252 sessions =
+98,280 bars a year (a Sharpe ratio scales with its square root). On your
+own data the factor is derived from the timestamps; pass
+`config={"periods_per_year": ...}` to override it. A three-hour sample
+annualised to a year is noisy, which is part of why these magnitudes look
+extreme.
 
 ## Next
 
