@@ -210,14 +210,14 @@ fn test_feature_generator_function() {
     }
     let volume_enc = quantile_mapping(&volume_vals, 10).unwrap();
     let pct_enc = quantile_mapping(&log_ret, 10).unwrap();
-    let mut gen = MicrostructuralFeaturesGenerator::new_from_csv(
+    let mut r#gen = MicrostructuralFeaturesGenerator::new_from_csv(
         load_tick_data_path().to_str().unwrap(),
         &tick_num,
         Some(volume_enc.clone()),
         Some(pct_enc.clone()),
     )
     .unwrap();
-    let feats = gen.get_features_from_csv(load_tick_data_path().to_str().unwrap()).unwrap();
+    let feats = r#gen.get_features_from_csv(load_tick_data_path().to_str().unwrap()).unwrap();
     assert!(!feats.is_empty());
     // basic shape and a few value checks vs Python expectations
     // columns order: date_time(ts), avg_tick_size, tick_rule_sum, vwap, kyle, amihud, hasbrouck, entropies...
@@ -230,13 +230,13 @@ fn test_feature_generator_function() {
 #[test]
 fn test_csv_format_validation() {
     // ensure valid csv passes
-    let gen = MicrostructuralFeaturesGenerator::new_from_csv(
+    let r#gen = MicrostructuralFeaturesGenerator::new_from_csv(
         load_tick_data_path().to_str().unwrap(),
         &[1, 2, 3],
         None,
         None,
     );
-    assert!(gen.is_ok());
+    assert!(r#gen.is_ok());
 }
 
 #[test]
@@ -272,14 +272,14 @@ fn test_feature_generator_emits_one_row_per_tick_threshold() {
     }
     std::fs::write(&path, csv).unwrap();
 
-    let mut gen = MicrostructuralFeaturesGenerator::new_from_csv(
+    let mut r#gen = MicrostructuralFeaturesGenerator::new_from_csv(
         path.to_str().unwrap(),
         &[10, 20, 30],
         None,
         None,
     )
     .unwrap();
-    let feats = gen.get_features_from_csv(path.to_str().unwrap()).unwrap();
+    let feats = r#gen.get_features_from_csv(path.to_str().unwrap()).unwrap();
     std::fs::remove_file(&path).ok();
 
     let avg_tick_sizes: Vec<f64> = feats.iter().map(|row| row[1]).collect();

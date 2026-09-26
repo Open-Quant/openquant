@@ -120,13 +120,13 @@ fn check_common(
     if feature_names.is_empty() {
         return Err(PyValueError::new_err("feature_names cannot be empty"));
     }
-    if let Some(sw) = sample_weight {
-        if sw.len() != n {
-            return Err(PyValueError::new_err(format!(
-                "sample_weight has {} values, expected {n}",
-                sw.len()
-            )));
-        }
+    if let Some(sw) = sample_weight
+        && sw.len() != n
+    {
+        return Err(PyValueError::new_err(format!(
+            "sample_weight has {} values, expected {n}",
+            sw.len()
+        )));
     }
     Ok(())
 }

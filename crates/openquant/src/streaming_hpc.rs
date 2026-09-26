@@ -410,10 +410,10 @@ impl VpinState {
         let toxicity = self.current_bucket_abs_imbalance / self.cfg.bucket_volume;
         self.window.push_back(toxicity);
         self.window_sum += toxicity;
-        if self.window.len() > self.cfg.support_buckets {
-            if let Some(expired) = self.window.pop_front() {
-                self.window_sum -= expired;
-            }
+        if self.window.len() > self.cfg.support_buckets
+            && let Some(expired) = self.window.pop_front()
+        {
+            self.window_sum -= expired;
         }
         self.current_bucket_volume = 0.0;
         self.current_bucket_abs_imbalance = 0.0;
@@ -460,12 +460,12 @@ impl VpinState {
         self.history.push_back(vpin);
         let at = self.history_sorted.partition_point(|&x| x < vpin);
         self.history_sorted.insert(at, vpin);
-        if self.history.len() > self.cfg.cdf_lookback {
-            if let Some(expired) = self.history.pop_front() {
-                // Values are stored bit for bit, so the expired one is found exactly.
-                let at = self.history_sorted.partition_point(|&x| x < expired);
-                self.history_sorted.remove(at);
-            }
+        if self.history.len() > self.cfg.cdf_lookback
+            && let Some(expired) = self.history.pop_front()
+        {
+            // Values are stored bit for bit, so the expired one is found exactly.
+            let at = self.history_sorted.partition_point(|&x| x < expired);
+            self.history_sorted.remove(at);
         }
     }
 }
@@ -538,16 +538,15 @@ impl HhiState {
         entry.0 += 1;
         entry.1 += volume;
 
-        if self.window.len() > self.cfg.lookback_events {
-            if let Some((expired, expired_volume)) = self.window.pop_front() {
-                if let Some(entry) = self.venues.get_mut(&expired) {
-                    if entry.0 <= 1 {
-                        self.venues.remove(&expired);
-                    } else {
-                        entry.0 -= 1;
-                        entry.1 -= expired_volume;
-                    }
-                }
+        if self.window.len() > self.cfg.lookback_events
+            && let Some((expired, expired_volume)) = self.window.pop_front()
+            && let Some(entry) = self.venues.get_mut(&expired)
+        {
+            if entry.0 <= 1 {
+                self.venues.remove(&expired);
+            } else {
+                entry.0 -= 1;
+                entry.1 -= expired_volume;
             }
         }
         Ok(self.current())
