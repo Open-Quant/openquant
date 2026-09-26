@@ -26,7 +26,7 @@ deploy = "none"
 brief = "docs/design/production-readiness-brief.md"
 plan = "docs/design/production-readiness-slices.md"
 tracker = "33"
-spec = "openspec/changes/res-recover-stranded-work"
+spec = "openspec/changes/archive/2026-09-26-res-recover-stranded-work"
 decision = "docs/decisions/0002-stranded-work-outcomes.md"
 
 [bindings]
