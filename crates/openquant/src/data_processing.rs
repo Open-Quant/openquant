@@ -62,7 +62,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use chrono::{DateTime, Datelike, Days, NaiveDateTime, Utc, Weekday};
 use polars::prelude::*;

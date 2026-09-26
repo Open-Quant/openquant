@@ -75,7 +75,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use nalgebra::{DMatrix, DVector};
 

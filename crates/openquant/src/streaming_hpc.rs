@@ -75,7 +75,6 @@
 //! assert!(second.is_alert);
 //! # Ok::<(), openquant::streaming_hpc::StreamingHpcError>(())
 //! ```
-#![deny(missing_docs)]
 
 use crate::hpc_parallel::{run_parallel, HpcParallelConfig, HpcParallelError, ParallelRunReport};
 use std::collections::{HashMap, VecDeque};

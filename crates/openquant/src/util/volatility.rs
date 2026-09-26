@@ -1,9 +1,72 @@
+//! Volatility estimators: AFML's daily volatility target and three range-based estimators.
+//!
+//! - [`get_daily_vol`]: the exponentially weighted standard deviation of daily returns that
+//!   AFML uses to scale triple-barrier widths (§3.3, Snippet 3.1).
+//! - [`get_parkinson_vol`], [`get_garman_class_vol`], [`get_yang_zhang_vol`]: rolling
+//!   estimators from bar open, high, low and close, which extract more information per bar
+//!   than close-to-close returns.
+//!
+//! Conventions:
+//!
+//! - Inputs are ordered oldest first; prices are levels (not log prices) and must be positive.
+//! - Every estimator returns volatility **per bar** (per day for [`get_daily_vol`]), as a
+//!   standard deviation of returns, not annualised.
+//! - The rolling estimators return one value per input bar, `NaN` until the first full
+//!   window, and `NaN` for any window containing a `NaN` input.
+//!
+//! ```
+//! use openquant::util::volatility::{get_parkinson_vol, get_yang_zhang_vol};
+//!
+//! let open = [100.0, 101.0, 100.5, 102.0, 101.5];
+//! let high = [101.5, 102.0, 101.8, 103.0, 102.4];
+//! let low = [99.5, 100.2, 99.9, 101.1, 100.8];
+//! let close = [101.0, 100.6, 101.7, 101.4, 102.0];
+//!
+//! let parkinson = get_parkinson_vol(&high, &low, 3)?;
+//! assert!(parkinson[..2].iter().all(|v| v.is_nan()));
+//! assert!(parkinson[2] > 0.0 && parkinson[2] < 0.02);
+//!
+//! // Yang-Zhang needs the previous close, so its first `window` values are NaN.
+//! let yz = get_yang_zhang_vol(&open, &high, &low, &close, 3)?;
+//! assert!(yz[..3].iter().all(|v| v.is_nan()));
+//! assert!(yz[3] > 0.0);
+//! # Ok::<(), openquant::util::InputError>(())
+//! ```
+
 use super::input_error::same_length;
 use super::InputError;
 use chrono::{Duration, NaiveDateTime};
 
-/// Compute daily volatility via exponentially weighted std of daily returns.
-/// Mirrors mlfinlab.util.volatility.get_daily_vol with span `lookback`.
+/// Daily volatility: the exponentially weighted standard deviation of daily returns (AFML
+/// Snippet 3.1).
+///
+/// `close` is a timestamped price series, oldest first. For each bar the return is
+/// `price / previous - 1`, where `previous` is the price of the last bar strictly before one
+/// day earlier; bars with no such earlier bar are skipped, so the output starts about a day
+/// into the series and carries each remaining bar's timestamp. The returns are then smoothed
+/// with pandas' `ewm(span=lookback).std()` (`adjust=True`, bias-corrected), so the first
+/// returned value is `NaN`. The result is in return units per day, not annualised, and is
+/// the usual target for [`crate::labeling`]'s barrier widths. Mirrors mlfinlab's
+/// `get_daily_vol`.
+///
+/// Returns an empty vector when `close` has fewer than two bars or `lookback == 0`.
+///
+/// ```
+/// use chrono::{Duration, NaiveDate};
+/// use openquant::util::volatility::get_daily_vol;
+///
+/// let t0 = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(0, 0, 0).unwrap();
+/// let close: Vec<_> =
+///     (0..10).map(|i| (t0 + Duration::days(i), 100.0 * 1.01_f64.powi(i as i32))).collect();
+///
+/// let vol = get_daily_vol(&close, 5);
+/// // Day 0 and day 1 have no bar more than a day before them.
+/// assert_eq!(vol.len(), 8);
+/// assert_eq!(vol[0].0, close[2].0);
+/// assert!(vol[0].1.is_nan());
+/// // Every return is the same two-day 2.01%, so the spread is zero.
+/// assert!(vol[7].1.abs() < 1e-12);
+/// ```
 pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(NaiveDateTime, f64)> {
     if close.len() < 2 || lookback == 0 {
         return Vec::new();
@@ -54,9 +117,28 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
     out
 }
 
-/// Parkinson volatility estimator.
-/// Mirrors mlfinlab's `get_parksinson_vol` — note that upstream misspells
-/// "Parkinson"; this crate spells it correctly.
+/// Parkinson (1980) range-based volatility over a rolling window of `window` bars.
+///
+/// `sigma² = 1 / (4 ln 2) · mean(ln(H_i / L_i)²)` over the `window` bars ending at each bar.
+/// Returns `sigma` per bar (not annualised), one value per input bar, `NaN` for the first
+/// `window - 1` bars; `window == 0` gives all `NaN`. It ignores overnight gaps and assumes no
+/// drift. Mirrors mlfinlab's `get_parksinson_vol` (upstream misspells "Parkinson"; this crate
+/// spells it correctly).
+///
+/// # Errors
+///
+/// [`InputError`] if `low` differs in length from `high`.
+///
+/// ```
+/// use openquant::util::volatility::get_parkinson_vol;
+///
+/// // A constant 1% range: sigma = ln(1.01) / sqrt(4 ln 2) on every full window.
+/// let vol = get_parkinson_vol(&[101.0; 4], &[100.0; 4], 2)?;
+/// assert!(vol[0].is_nan());
+/// let expected = (1.01_f64).ln() / (4.0 * 2.0_f64.ln()).sqrt();
+/// assert!((vol[3] - expected).abs() < 1e-12);
+/// # Ok::<(), openquant::util::InputError>(())
+/// ```
 pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Result<Vec<f64>, InputError> {
     same_length("low", low, high.len())?;
     let estimator: Vec<f64> = high
@@ -70,8 +152,31 @@ pub fn get_parkinson_vol(high: &[f64], low: &[f64], window: usize) -> Result<Vec
     Ok(rolling_sqrt_mean(&estimator, window))
 }
 
-/// Garman-Klass volatility estimator.
-/// Mirrors mlfinlab.util.volatility.get_garman_class_vol.
+/// Garman-Klass (1980) volatility over a rolling window of `window` bars.
+///
+/// `sigma² = mean(0.5 ln(H_i / L_i)² - (2 ln 2 - 1) ln(C_i / O_i)²)` over the `window` bars
+/// ending at each bar. Returns `sigma` per bar (not annualised), one value per input bar,
+/// `NaN` for the first `window - 1` bars; `window == 0` gives all `NaN`. Like Parkinson it
+/// ignores overnight gaps. The name keeps mlfinlab's spelling (`get_garman_class_vol`).
+///
+/// # Errors
+///
+/// [`InputError`] if `high`, `low` or `close` differs in length from `open`.
+///
+/// ```
+/// use openquant::util::volatility::get_garman_class_vol;
+///
+/// let vol = get_garman_class_vol(
+///     &[100.0, 101.0, 100.5],
+///     &[101.5, 102.0, 101.8],
+///     &[99.5, 100.2, 99.9],
+///     &[101.0, 100.6, 101.7],
+///     2,
+/// )?;
+/// assert!(vol[0].is_nan());
+/// assert!(vol[1] > 0.0 && vol[2] > 0.0);
+/// # Ok::<(), openquant::util::InputError>(())
+/// ```
 pub fn get_garman_class_vol(
     open: &[f64],
     high: &[f64],

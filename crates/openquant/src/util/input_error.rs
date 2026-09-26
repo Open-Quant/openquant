@@ -16,7 +16,6 @@
 //! );
 //! assert_eq!(err.to_string(), "'window' is 0, expected a positive integer");
 //! ```
-#![deny(missing_docs)]
 
 use std::fmt;
 

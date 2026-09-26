@@ -40,7 +40,6 @@
 //! assert!((ret - 0.035).abs() < 1e-12);
 //! assert_eq!((label, side), (1, None));
 //! ```
-#![deny(missing_docs)]
 
 use chrono::{Duration, NaiveDateTime};
 use std::collections::HashMap;

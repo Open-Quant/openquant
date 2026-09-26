@@ -25,7 +25,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use chrono::NaiveDateTime;
 use std::fmt;

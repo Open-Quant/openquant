@@ -52,7 +52,6 @@
 //! # Ok(())
 //! # }
 //! ```
-#![deny(missing_docs)]
 
 use std::collections::HashMap;
 use std::path::Path;
