@@ -2,6 +2,7 @@
 """Stubs for ``openquant._core.filters``."""
 
 from collections.abc import Sequence
+from typing import Any
 
 __all__ = [
     "cusum_filter_indices",
@@ -10,22 +11,162 @@ __all__ = [
     "z_score_filter_timestamps",
 ]
 
-def cusum_filter_indices(close: Sequence[float], threshold: float) -> list[int]: ...
+def cusum_filter_indices(close: Sequence[float], threshold: Any) -> list[int]:
+    """Symmetric CUSUM filter returning event positions (AFML section 2.5.2.1, Snippet 2.4).
+
+    For each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are
+    updated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when
+    `S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the
+    accumulator that fired is reset to zero. The decision at bar `t` uses only data up to
+    `t`. Unlike AFML's snippet, which differences whatever series it is given, this always
+    takes log returns of prices.
+
+    Parameters
+    ----------
+    close : list[float]
+        Strictly positive close prices, oldest first.
+    threshold : float | Sequence[float]
+        CUSUM threshold `h` in log-return units: one number for every bar, or one value per
+        bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple
+        of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the
+        first return is at bar 1), so it may be NaN; every other value, and a scalar, must be
+        finite and non-negative.
+
+    Returns
+    -------
+    list[int]
+        0-based positions into `close` of the event bars, in increasing order; empty for
+        fewer than two prices.
+
+    Raises
+    ------
+    TypeError
+        If `threshold` is a string, or is neither a number nor a sequence of numbers.
+    ValueError
+        If a per-bar `threshold` does not have one value per price, or a threshold that is
+        read is negative or not finite.
+    """
+
 def cusum_filter_timestamps(
     close: Sequence[float],
     timestamps: Sequence[str],
-    threshold: float,
-) -> list[str]: ...
+    threshold: Any,
+) -> list[str]:
+    """Symmetric CUSUM filter returning event timestamps (AFML section 2.5.2.1, Snippet 2.4).
+
+    Runs `cusum_filter_indices` on `close` and maps each event position to its timestamp.
+
+    For each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are
+    updated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when
+    `S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the
+    accumulator that fired is reset to zero. The decision at bar `t` uses only data up to
+    `t`. Unlike AFML's snippet, which differences whatever series it is given, this always
+    takes log returns of prices.
+
+    Parameters
+    ----------
+    close : list[float]
+        Strictly positive close prices, oldest first.
+    timestamps : list[str]
+        One timestamp per price, as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is
+        accepted).
+    threshold : float | Sequence[float]
+        CUSUM threshold `h` in log-return units: one number for every bar, or one value per
+        bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple
+        of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the
+        first return is at bar 1), so it may be NaN; every other value, and a scalar, must be
+        finite and non-negative.
+
+    Returns
+    -------
+    list[str]
+        Timestamps of the event bars, in bar order, formatted as `"%Y-%m-%d %H:%M:%S"` (with
+        fractional seconds only when present).
+
+    Raises
+    ------
+    TypeError
+        If `threshold` is a string, or is neither a number nor a sequence of numbers.
+    ValueError
+        If a timestamp cannot be parsed, `close` and `timestamps` differ in length, a
+        per-bar `threshold` does not have one value per price, or a threshold that is read
+        is negative or not finite.
+    """
+
 def z_score_filter_indices(
     close: Sequence[float],
     mean_window: int,
     std_window: int,
     threshold: float,
-) -> list[int]: ...
+) -> list[int]:
+    """Rolling z-score filter returning event positions (ported from mlfinlab; not in AFML).
+
+    Bar `i` is an event when `close[i] >= mean + threshold * std`, where `mean` is the mean
+    of the last `mean_window` prices and `std` the sample standard deviation (ddof = 1, as
+    pandas) of the last `std_window` prices, both windows including bar `i`. Evaluation
+    starts at bar `max(mean_window, std_window) - 1`. The filter is one-sided (only upward
+    excursions fire), works on price levels and has no reset, so consecutive bars above the
+    band are consecutive events.
+
+    Parameters
+    ----------
+    close : list[float]
+        Close prices, oldest first.
+    mean_window : int
+        Number of prices in the rolling mean, including the current bar.
+    std_window : int
+        Number of prices in the rolling standard deviation, including the current bar.
+    threshold : float
+        Number of standard deviations above the rolling mean at which a bar fires.
+
+    Returns
+    -------
+    list[int]
+        0-based positions into `close` of the event bars, in increasing order; empty if
+        `close` is empty, both windows are zero, or `close` is shorter than the longer window.
+    """
+
 def z_score_filter_timestamps(
     close: Sequence[float],
     timestamps: Sequence[str],
     mean_window: int,
     std_window: int,
     threshold: float,
-) -> list[str]: ...
+) -> list[str]:
+    """Rolling z-score filter returning event timestamps (ported from mlfinlab; not in AFML).
+
+    Runs `z_score_filter_indices` on `close` and maps each event position to its timestamp.
+
+    Bar `i` is an event when `close[i] >= mean + threshold * std`, where `mean` is the mean
+    of the last `mean_window` prices and `std` the sample standard deviation (ddof = 1, as
+    pandas) of the last `std_window` prices, both windows including bar `i`. Evaluation
+    starts at bar `max(mean_window, std_window) - 1`. The filter is one-sided (only upward
+    excursions fire), works on price levels and has no reset, so consecutive bars above the
+    band are consecutive events.
+
+    Parameters
+    ----------
+    close : list[float]
+        Close prices, oldest first.
+    timestamps : list[str]
+        One timestamp per price, as `"%Y-%m-%d %H:%M:%S"` (an optional fractional second is
+        accepted).
+    mean_window : int
+        Number of prices in the rolling mean, including the current bar.
+    std_window : int
+        Number of prices in the rolling standard deviation, including the current bar.
+    threshold : float
+        Number of standard deviations above the rolling mean at which a bar fires.
+
+    Returns
+    -------
+    list[str]
+        Timestamps of the event bars, in bar order, formatted as `"%Y-%m-%d %H:%M:%S"` (with
+        fractional seconds only when present); empty in the cases where
+        `z_score_filter_indices` is.
+
+    Raises
+    ------
+    ValueError
+        If a timestamp cannot be parsed or `close` and `timestamps` differ in length.
+    """

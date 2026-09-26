@@ -7,7 +7,9 @@ public module it records each public function's signature and docstring:
 - compiled modules (``openquant._core.*``): names, ``__text_signature__`` and ``__doc__``
   come from the extension itself; the typed signature shown on the page comes from the
   generated stub (``python/openquant/_core/<module>.pyi``), and the two are cross-checked
-  so a stale stub fails here rather than rendering a wrong signature;
+  so a stale stub fails here rather than rendering a wrong signature. A compiled class
+  (a ``#[pyclass]``) is listed with its constructor's parameters as its signature, its
+  public methods, and its properties (shown as ``: <type>``);
 - pure-Python modules: members come from the imported module, their signatures from the
   source (so the text is exactly what was written, independent of the installed polars or
   numpy versions) and their docstrings from ``__doc__`` (never inherited, so the output
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import inspect
 import json
 import sys
@@ -44,6 +47,62 @@ def _stub_signatures(module: str) -> dict[str, str]:
         if isinstance(node, ast.FunctionDef):
             out[node.name] = _format_def(node)
     return out
+
+
+def _stub_classes(module: str) -> dict[str, ast.ClassDef]:
+    path = STUBS / f"{module}.pyi"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {node.name: node for node in tree.body if isinstance(node, ast.ClassDef)}
+
+
+def _is_property(node: ast.FunctionDef) -> bool:
+    return any(isinstance(d, ast.Name) and d.id == "property" for d in node.decorator_list)
+
+
+def compiled_class(name: str, cls: type, node: ast.ClassDef, import_path: str) -> dict:
+    """A compiled class's entry, cross-checked against the runtime type."""
+    defs = {sub.name: sub for sub in node.body if isinstance(sub, ast.FunctionDef)}
+    stub_public = {n for n in defs if not n.startswith("_")}
+    runtime_public = {n for n in vars(cls) if not n.startswith("_")}
+    if stub_public != runtime_public:
+        raise SystemExit(
+            f"{import_path}.{name}: stub and extension disagree on members "
+            f"(no stub: {sorted(runtime_public - stub_public)}, "
+            f"not in extension: {sorted(stub_public - runtime_public)}); "
+            "rebuild the extension and run scripts/generate_python_stubs.py"
+        )
+    signature = ""
+    ctor = defs.get("__new__")
+    if ctor is not None:
+        # The class line shows the constructor's parameters, without `-> Self`.
+        bare = copy.copy(ctor)
+        bare.returns = None
+        signature = _format_def(bare, drop_self=True)
+        runtime_sig = [p.name for p in inspect.signature(cls).parameters.values()]
+        stub_sig = [a.arg for a in ctor.args.posonlyargs + ctor.args.args][1:]
+        stub_sig += [a.arg for a in ctor.args.kwonlyargs]
+        if stub_sig != runtime_sig:
+            raise SystemExit(
+                f"{import_path}.{name}: stub constructor parameters {stub_sig} != runtime "
+                f"{runtime_sig}"
+            )
+    methods = []
+    for mname in sorted(stub_public):
+        sub = defs[mname]
+        doc = inspect.cleandoc(getattr(cls, mname).__doc__ or "")
+        if _is_property(sub):
+            ret = ast.unparse(sub.returns) if sub.returns is not None else "Any"
+            methods.append({"name": mname, "signature": f": {ret}", "doc": doc})
+        else:
+            methods.append(
+                {"name": mname, "signature": _format_def(sub, drop_self=True), "doc": doc}
+            )
+    return {
+        "name": name,
+        "signature": signature,
+        "doc": inspect.cleandoc(cls.__doc__ or ""),
+        "methods": methods,
+    }
 
 
 def _format_def(node: ast.FunctionDef | ast.AsyncFunctionDef, drop_self: bool = False) -> str:
@@ -104,7 +163,21 @@ def _runtime_param_names(func: Any) -> list[str]:
 
 def compiled_module(name: str, module: types.ModuleType, import_path: str, slug: str) -> dict:
     stub = _stub_signatures(name)
-    runtime = {n: f for n, f in vars(module).items() if not n.startswith("_") and callable(f)}
+    stub_classes = _stub_classes(name)
+    public = {n: f for n, f in vars(module).items() if not n.startswith("_") and callable(f)}
+    runtime = {n: f for n, f in public.items() if not isinstance(f, type)}
+    runtime_classes = {n: c for n, c in public.items() if isinstance(c, type)}
+    if set(runtime_classes) != set(stub_classes):
+        raise SystemExit(
+            f"openquant._core.{name}: stub and extension disagree on classes "
+            f"(no stub: {sorted(set(runtime_classes) - set(stub_classes))}, "
+            f"not in extension: {sorted(set(stub_classes) - set(runtime_classes))}); "
+            "rebuild the extension and run scripts/generate_python_stubs.py"
+        )
+    classes = [
+        compiled_class(cname, runtime_classes[cname], stub_classes[cname], import_path)
+        for cname in sorted(runtime_classes)
+    ]
     missing_stub = sorted(set(runtime) - set(stub))
     extra_stub = sorted(set(stub) - set(runtime))
     if missing_stub or extra_stub:
@@ -140,7 +213,7 @@ def compiled_module(name: str, module: types.ModuleType, import_path: str, slug:
         "kind": "compiled",
         "doc": inspect.cleandoc(module.__doc__ or ""),
         "functions": functions,
-        "classes": [],
+        "classes": classes,
     }
 
 

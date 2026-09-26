@@ -2,12 +2,162 @@
 """Stubs for ``openquant._core.sb_bagging``."""
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Self, final
 
 __all__ = [
+    "SequentiallyBootstrappedBaggingClassifier",
     "fit_predict_sb_classifier",
     "fit_predict_sb_regressor",
 ]
+
+@final
+class SequentiallyBootstrappedBaggingClassifier:
+    """Sequentially bootstrapped bagging classifier (AFML sections 4.5 and 6.3), as an object.
+
+    It has `fit`, `predict` and `predict_proba`, so it can be fitted on one set of rows and
+    scored on another (for example, out of fold under purged cross-validation).
+
+    `predict_proba` returns one `[P(y = 0), P(y = 1)]` row per input row, in the order of
+    `classes_` (`[0, 1]`), as scikit-learn classifiers do. The probability of class 1 is the
+    share of estimators voting 1, so `predict` is 1 exactly when it is at least 0.5.
+
+    **The sampling is real; the base learner is a sketch.** Each estimator draws
+    `max_samples` labels with the sequential bootstrap (AFML section 4.5), which favours
+    labels that overlap little with those already drawn, draws `max_features` feature
+    indices and keeps only the first, and fits a fixed one-feature learner on the drawn
+    rows: a stump whose threshold is the weighted mean of the feature over the drawn rows,
+    predicting 1 on whichever side had the higher weighted rate of `y == 1`. The
+    out-of-bag score stays optimistic when labels overlap, because a held-out label still
+    overlaps drawn labels in time; score the model under purged cross-validation instead.
+
+    Parameters
+    ----------
+    n_estimators : int, default 10
+        Number of estimators; must be positive (checked by `fit`).
+    max_samples : float, default 1.0
+        Labels drawn per estimator, as a fraction of the rows of `x` (rounded down); must be
+        positive, at most 1.0, and resolve to at least one row (checked by `fit`).
+    max_features : float, default 1.0
+        Feature indices drawn per estimator, as a fraction of the columns of `x` (rounded
+        down); must be positive, at most 1.0, and resolve to at least one column (checked by
+        `fit`). Only the first drawn index is used.
+    bootstrap_features : bool, default False
+        Draw feature indices with replacement instead of as a random permutation.
+    oob_score : bool, default False
+        Compute the out-of-bag accuracy (`oob_score_`) during `fit`.
+    random_state : int, default 42
+        Seed; the same seed and inputs reproduce a fit.
+    """
+
+    def __new__(
+        cls,
+        n_estimators: int = 10,
+        max_samples: float = 1.0,
+        max_features: float = 1.0,
+        bootstrap_features: bool = False,
+        oob_score: bool = False,
+        random_state: int = 42,
+    ) -> Self: ...
+    def fit(
+        self,
+        x: Sequence[Sequence[float]],
+        y: Sequence[int],
+        ind_mat: Sequence[Sequence[int]],
+        sample_weight: Sequence[float] | None = None,
+    ) -> Self:
+        """Fits the ensemble and returns the model, so calls can be chained.
+
+        Parameters
+        ----------
+        x : list[list[float]]
+            Features, one inner list per label (observation) and one column per feature.
+        y : list[int]
+            Class per row of `x`: 1 is the positive class and any other value counts as 0.
+        ind_mat : list[list[int]]
+            Bars x labels indicator matrix (as `sampling.get_ind_matrix` returns); its
+            columns correspond one-to-one with the rows of `x`.
+        sample_weight : list[float] | None, default None
+            One non-negative, finite weight per row of `x`, not all zero; None weighs rows
+            equally.
+
+        Returns
+        -------
+        SequentiallyBootstrappedBaggingClassifier
+            The fitted model (`self`).
+
+        Raises
+        ------
+        ValueError
+            If the inputs are empty, ragged or disagree on the number of rows, or a setting or
+            sample weight is out of range. A failed `fit` leaves the model unfitted.
+        """
+
+    def predict(self, x: Sequence[Sequence[float]]) -> list[int]:
+        """Predicted class (0 or 1) for each row of `x`, by majority vote; ties go to 1.
+
+        Parameters
+        ----------
+        x : list[list[float]]
+            Rows to score, with the column count of the matrix passed to `fit`.
+
+        Returns
+        -------
+        list[int]
+            One class per row of `x`.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fitted, or `x` is empty, ragged, or has a different
+            number of columns from the matrix passed to `fit`.
+        """
+
+    def predict_proba(self, x: Sequence[Sequence[float]]) -> list[list[float]]:
+        """`[P(y = 0), P(y = 1)]` for each row of `x`; the columns follow `classes_`.
+
+        `P(y = 1)` is the share of estimators voting 1.
+
+        Parameters
+        ----------
+        x : list[list[float]]
+            Rows to score, with the column count of the matrix passed to `fit`.
+
+        Returns
+        -------
+        list[list[float]]
+            One `[P(y = 0), P(y = 1)]` row per row of `x`; each row sums to 1.
+
+        Raises
+        ------
+        ValueError
+            If the model has not been fitted, or `x` is empty, ragged, or has a different
+            number of columns from the matrix passed to `fit`.
+        """
+
+    def __repr__(self) -> str: ...
+    @property
+    def classes_(self) -> list[int]:
+        """The class labels, `[0, 1]`: the column order of `predict_proba`."""
+
+    @property
+    def n_features_in_(self) -> int | None:
+        """Column count seen by the last successful `fit`; `None` before one."""
+
+    @property
+    def oob_score_(self) -> float | None:
+        """Out-of-bag accuracy from the last `fit` when `oob_score=True`, else `None`."""
+
+    @property
+    def estimators_samples_(self) -> list[list[int]]:
+        """Row indices each estimator was trained on, one list per estimator."""
+
+    @property
+    def n_estimators(self) -> int:
+        """Number of estimators set at construction."""
+
+    @property
+    def random_state(self) -> int:
+        """Seed set at construction."""
 
 def fit_predict_sb_classifier(
     x: Sequence[Sequence[float]],
@@ -18,7 +168,65 @@ def fit_predict_sb_classifier(
     max_features: float = 1.0,
     random_state: int = 42,
     sample_weight: Sequence[float] | None = None,
-) -> Any: ...
+) -> Any:
+    """Fits a sequentially bootstrapped bagging classifier and predicts the rows it was fitted on.
+
+    A one-call shortcut for `SequentiallyBootstrappedBaggingClassifier(..., oob_score=True)`
+    followed by `fit(x, y, ind_mat)` and `predict(x)`; use the class to score rows it was not
+    fitted on. Predictions are a majority vote of the estimators, ties going to 1.
+
+    **The sampling is real; the base learner is a sketch.** Each estimator draws
+    `max_samples` labels with the sequential bootstrap (AFML section 4.5), which favours
+    labels that overlap little with those already drawn, draws `max_features` feature
+    indices and keeps only the first, and fits a fixed one-feature learner on the drawn
+    rows: a stump whose threshold is the weighted mean of the feature over the drawn rows,
+    predicting 1 on whichever side had the higher weighted rate of `y == 1`. The
+    out-of-bag score stays optimistic when labels overlap, because a held-out label still
+    overlaps drawn labels in time; score the model under purged cross-validation instead.
+
+    Parameters
+    ----------
+    x : list[list[float]]
+        Features, one inner list per label (observation) and one column per feature.
+    y : list[int]
+        Class per row of `x`: 1 is the positive class and any other value counts as 0, so map
+        a -1/+1 encoding to 0/1 first.
+    ind_mat : list[list[int]]
+        Bars x labels indicator matrix (as `sampling.get_ind_matrix` returns): one inner list
+        per bar, one 0/1 entry per label. Its columns correspond one-to-one with the rows of
+        `x`.
+    n_estimators : int, default 10
+        Number of estimators; must be positive.
+    max_samples : float, default 1.0
+        Labels drawn per estimator, as a fraction of the rows of `x` (rounded down); must be
+        positive, at most 1.0, and resolve to at least one row.
+    max_features : float, default 1.0
+        Feature indices drawn per estimator, as a fraction of the columns of `x` (rounded
+        down); must be positive, at most 1.0, and resolve to at least one column. Only the
+        first drawn index is used, so values above one column change only the random stream.
+    random_state : int, default 42
+        Seed; the same seed and inputs reproduce a fit.
+    sample_weight : list[float] | None, default None
+        One non-negative, finite weight per row of `x`, not all zero; None weighs rows
+        equally. A row drawn twice counts twice.
+
+    Returns
+    -------
+    dict[str, Any]
+        `predictions`: the predicted class (0 or 1) for each row of `x` (in-sample).
+        `oob_score`: out-of-bag accuracy over the rows that at least one estimator did not
+        draw, each predicted by the estimators that did not draw it; None if every row was
+        drawn by every estimator.
+
+    Raises
+    ------
+    ValueError
+        If `x` is empty or ragged; `y`, `sample_weight` or the rows of `ind_mat` do not match
+        the rows of `x`, or `ind_mat` is empty; `n_estimators` is zero; `max_samples` or
+        `max_features` is out of range; or a sample weight is negative or not finite, or all
+        weights are zero.
+    """
+
 def fit_predict_sb_regressor(
     x: Sequence[Sequence[float]],
     y: Sequence[float],
@@ -28,4 +236,57 @@ def fit_predict_sb_regressor(
     max_features: float = 1.0,
     random_state: int = 42,
     sample_weight: Sequence[float] | None = None,
-) -> Any: ...
+) -> Any:
+    """Fits a sequentially bootstrapped bagging regressor and predicts the rows it was fitted on.
+
+    Predictions are the mean of the estimators' predictions.
+
+    **The sampling is real; the base learner is a sketch.** Each estimator draws
+    `max_samples` labels with the sequential bootstrap (AFML section 4.5), which favours
+    labels that overlap little with those already drawn, draws `max_features` feature
+    indices and keeps only the first, and fits a fixed one-feature learner on the drawn
+    rows: a weighted least-squares line. The out-of-bag score stays optimistic when labels
+    overlap, because a held-out label still overlaps drawn labels in time; score the model
+    under purged cross-validation instead.
+
+    Parameters
+    ----------
+    x : list[list[float]]
+        Features, one inner list per label (observation) and one column per feature.
+    y : list[float]
+        Target per row of `x`.
+    ind_mat : list[list[int]]
+        Bars x labels indicator matrix (as `sampling.get_ind_matrix` returns): one inner list
+        per bar, one 0/1 entry per label. Its columns correspond one-to-one with the rows of
+        `x`.
+    n_estimators : int, default 10
+        Number of estimators; must be positive.
+    max_samples : float, default 1.0
+        Labels drawn per estimator, as a fraction of the rows of `x` (rounded down); must be
+        positive, at most 1.0, and resolve to at least one row.
+    max_features : float, default 1.0
+        Feature indices drawn per estimator, as a fraction of the columns of `x` (rounded
+        down); must be positive, at most 1.0, and resolve to at least one column. Only the
+        first drawn index is used, so values above one column change only the random stream.
+    random_state : int, default 42
+        Seed; the same seed and inputs reproduce a fit.
+    sample_weight : list[float] | None, default None
+        One non-negative, finite weight per row of `x`, not all zero; None weighs rows
+        equally. A row drawn twice counts twice.
+
+    Returns
+    -------
+    dict[str, Any]
+        `predictions`: the predicted value for each row of `x` (in-sample). `oob_score`:
+        out-of-bag R^2 over the rows that at least one estimator did not draw, each predicted
+        by the mean of the estimators that did not draw it (0 when the scored targets are
+        constant); None if every row was drawn by every estimator.
+
+    Raises
+    ------
+    ValueError
+        If `x` is empty or ragged; `y`, `sample_weight` or the rows of `ind_mat` do not match
+        the rows of `x`, or `ind_mat` is empty; `n_estimators` is zero; `max_samples` or
+        `max_features` is out of range; or a sample weight is negative or not finite, or all
+        weights are zero.
+    """

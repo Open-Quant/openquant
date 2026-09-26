@@ -692,6 +692,7 @@ export const apiInventory = {
     "openquant::data_processing": {
       "AlignedOhlcvColumns": "struct",
       "AlignedOhlcvRow": "struct",
+      "CalendarAlignmentReport": "struct",
       "DataProcessingError": "enum",
       "DataQualityReport": "struct",
       "OhlcvColumns": "struct",
@@ -979,6 +980,7 @@ export const apiInventory = {
       "SequentiallyBootstrappedBaggingClassifier::fit": "method",
       "SequentiallyBootstrappedBaggingClassifier::new": "method",
       "SequentiallyBootstrappedBaggingClassifier::predict": "method",
+      "SequentiallyBootstrappedBaggingClassifier::predict_proba": "method",
       "SequentiallyBootstrappedBaggingRegressor": "struct",
       "SequentiallyBootstrappedBaggingRegressor::fit": "method",
       "SequentiallyBootstrappedBaggingRegressor::new": "method",

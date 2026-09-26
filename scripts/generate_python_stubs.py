@@ -4,7 +4,9 @@
 The stubs are derived from the PyO3 bindings in ``crates/pyopenquant/src``: each
 ``#[pyfunction]``'s Rust parameter and return types are mapped to Python types, its
 ``#[pyo3(signature = ...)]`` supplies the defaults, and its ``///`` doc comment becomes the
-stub's docstring (the same text the runtime ``__doc__`` carries).
+stub's docstring (the same text the runtime ``__doc__`` carries). A registered
+``#[pyclass]`` becomes a stub class: its ``#[new]`` is ``__new__``, its ``#[pymethods]``
+are methods and its ``#[getter]``s read-only properties.
 
 Arguments are typed by what PyO3 will *accept* (``Vec<f64>`` takes any sequence of numbers,
 so ``Sequence[float]``); results by what it *produces* (``list[float]``).
@@ -27,7 +29,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pyopenquant_bindings import BINDINGS, ROOT, Binding, _split_top, all_bindings, type_aliases
+from pyopenquant_bindings import (
+    BINDINGS,
+    ROOT,
+    Binding,
+    PyClass,
+    _split_top,
+    all_bindings,
+    all_classes,
+    type_aliases,
+)
 
 OUT_DIR = ROOT / "python" / "openquant" / "_core"
 HEADER = (
@@ -63,6 +74,9 @@ def py_type(rust: str, mode: str, aliases: dict[str, str], used: set[str]) -> st
         return py_type(aliases[t], mode, aliases, used)
     if t == "()":
         return "None"
+    if t == "Self":
+        used.add("Self")
+        return "Self"
     if t in FLOATS:
         return "float"
     if t in INTS:
@@ -88,6 +102,9 @@ def py_type(rust: str, mode: str, aliases: dict[str, str], used: set[str]) -> st
         head, args = g
         if head == "PyResult":
             return py_type(args[0], mode, aliases, used)
+        if head in {"PyRef", "PyRefMut"} and args and args[-1].strip() == "Self":
+            used.add("Self")
+            return "Self"
         if head == "Option":
             return f"{py_type(args[0], mode, aliases, used)} | None"
         if head == "Vec":
@@ -156,8 +173,14 @@ def _docstring(doc: str, indent: str) -> str:
     return "\n".join(out) + "\n"
 
 
-def render_function(b: Binding, aliases: dict[str, str], used: set[str]) -> str:
-    params: list[str] = []
+def render_function(
+    b: Binding,
+    aliases: dict[str, str],
+    used: set[str],
+    receiver: str | None = None,
+    indent: str = "",
+) -> str:
+    params: list[str] = [receiver] if receiver else []
     for i, p in enumerate(b.params):
         if b.keyword_only_from is not None and i == b.keyword_only_from:
             params.append("*")
@@ -179,19 +202,62 @@ def render_function(b: Binding, aliases: dict[str, str], used: set[str]) -> str:
             f"{b.file.name}:{b.line}: {b.name} returns Rust type {exc.args[0]!r} with no "
             "Python mapping; teach scripts/generate_python_stubs.py:py_type about it"
         ) from None
-    one_line = f"def {b.name}({', '.join(params)}) -> {ret}:"
+    one_line = f"{indent}def {b.name}({', '.join(params)}) -> {ret}:"
     if len(one_line) <= 99:
         head = one_line
     else:
-        head = f"def {b.name}(\n" + "".join(f"    {p},\n" for p in params) + f") -> {ret}:"
-    doc = _docstring(b.doc, "    ")
+        head = (
+            f"{indent}def {b.name}(\n"
+            + "".join(f"{indent}    {p},\n" for p in params)
+            + f"{indent}) -> {ret}:"
+        )
+    doc = _docstring(b.doc, indent + "    ")
     return head + ("\n" + doc if doc else " ...\n")
 
 
-def render_module(module: str, bindings: list[Binding]) -> str:
+def render_class(c: PyClass, aliases: dict[str, str], used: set[str]) -> str:
+    # Without #[pyclass(subclass)] a PyO3 class is final. A subclassable one has a native
+    # layout, so it cannot share a subclass with another native base (PEP 800).
+    if c.subclassable:
+        used.add("disjoint_base")
+        decorators = "@disjoint_base\n"
+    else:
+        used.add("final")
+        decorators = "@final\n"
+    out = [f"{decorators}class {c.name}:\n"]
+    doc = _docstring(c.doc, "    ")
+    if doc:
+        out.append(doc + "\n")
+    if c.ctor is not None:
+        ctor = Binding(**{**c.ctor.__dict__, "ret": "Self", "doc": ""})
+        out.append(render_function(ctor, aliases, used, receiver="cls", indent="    "))
+    for m in c.methods:
+        out.append(render_function(m, aliases, used, receiver="self", indent="    "))
+    for prop in c.properties:
+        try:
+            ret = py_type(prop.ret, "out", aliases, used)
+        except UnknownType as exc:
+            raise SystemExit(
+                f"{c.file.name}:{prop.line}: {c.name}.{prop.name} returns Rust type "
+                f"{exc.args[0]!r} with no Python mapping; teach py_type about it"
+            ) from None
+        pdoc = _docstring(prop.doc, "        ")
+        out.append(
+            f"    @property\n    def {prop.name}(self) -> {ret}:"
+            + ("\n" + pdoc if pdoc else " ...\n")
+        )
+    if len(out) == 1:
+        out.append("    ...\n")
+    return "\n".join(out)
+
+
+def render_module(module: str, bindings: list[Binding], classes: list[PyClass]) -> str:
     helper_aliases = type_aliases(BINDINGS / "helpers.rs")
     used: set[str] = set()
     funcs: list[str] = []
+    for c in sorted(classes, key=lambda x: x.name):
+        aliases = {**helper_aliases, **type_aliases(c.file)}
+        funcs.append(render_class(c, aliases, used))
     for b in sorted(bindings, key=lambda x: x.name):
         aliases = {**helper_aliases, **type_aliases(b.file)}
         funcs.append(render_function(b, aliases, used))
@@ -199,15 +265,18 @@ def render_module(module: str, bindings: list[Binding]) -> str:
     if "Sequence" in used or "Mapping" in used:
         names = ", ".join(sorted(n for n in ("Mapping", "Sequence") if n in used))
         imports.append(f"from collections.abc import {names}")
-    if "Any" in used:
-        imports.append("from typing import Any")
+    typing_names = sorted(n for n in ("Any", "Self", "final") if n in used)
+    if typing_names:
+        imports.append(f"from typing import {', '.join(typing_names)}")
+    if "disjoint_base" in used:
+        imports.append("\nfrom typing_extensions import disjoint_base")
     if "polars" in used:
         imports.append("\nimport polars")
     head = HEADER + '"""Stubs for ``openquant._core.' + module + '``."""\n\n'
     if imports:
         head += "\n".join(imports) + "\n\n"
-    # PyO3's add_function records every function in the module's __all__.
-    names = sorted(b.name for b in bindings)
+    # PyO3's add_function and add_class record every function and class in __all__.
+    names = sorted([b.name for b in bindings] + [c.name for c in classes])
     head += "__all__ = [\n" + "".join(f'    "{n}",\n' for n in names) + "]\n\n"
     return head + "\n".join(funcs)
 
@@ -243,7 +312,14 @@ def generate() -> dict[Path, str]:
     by_module: dict[str, list[Binding]] = {}
     for b in all_bindings():
         by_module.setdefault(b.module, []).append(b)
-    files = {OUT_DIR / f"{m}.pyi": render_module(m, bs) for m, bs in sorted(by_module.items())}
+    classes_by_module: dict[str, list[PyClass]] = {}
+    for c in all_classes():
+        by_module.setdefault(c.module, [])
+        classes_by_module.setdefault(c.module, []).append(c)
+    files = {
+        OUT_DIR / f"{m}.pyi": render_module(m, bs, classes_by_module.get(m, []))
+        for m, bs in sorted(by_module.items())
+    }
     files[OUT_DIR / "__init__.pyi"] = render_init(sorted(by_module))
     return {p: ruff_format(text, str(p.relative_to(ROOT))) for p, text in files.items()}
 

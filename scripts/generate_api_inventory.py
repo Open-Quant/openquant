@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pyopenquant_bindings import UNDOCUMENTED_ALLOWLIST, all_bindings  # noqa: E402
+from pyopenquant_bindings import UNDOCUMENTED_ALLOWLIST, documented_items  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 CRATES = ROOT / "crates"
@@ -128,19 +128,20 @@ def scan_rust_items() -> dict[str, dict[str, str]]:
 
 
 def check_binding_docstrings() -> list[str]:
-    """Every bound Python function needs a `///` doc comment (it becomes `__doc__`).
+    """Every bound Python function, class, method and property needs a `///` doc comment.
 
-    Modules in UNDOCUMENTED_ALLOWLIST are exempt, and the allowlist may only shrink: an entry
-    whose module is now fully documented, or that names no binding module, is an error too.
+    The comment becomes `__doc__`; a class's also documents its constructor. Modules in
+    UNDOCUMENTED_ALLOWLIST are exempt, and the allowlist may only shrink: an entry whose
+    module is now fully documented, or that names no binding module, is an error too.
     """
-    bindings = all_bindings()
-    modules = {b.file.stem for b in bindings}
+    items = documented_items()
+    modules = {path.stem for path, _, _, _ in items}
     errors: list[str] = []
     missing_by_module: dict[str, list[str]] = {}
-    for b in bindings:
-        if not b.doc.strip():
-            missing_by_module.setdefault(b.file.stem, []).append(
-                f"{b.file.relative_to(ROOT)}:{b.line}: {b.module}.{b.name}"
+    for path, line, name, doc in items:
+        if not doc.strip():
+            missing_by_module.setdefault(path.stem, []).append(
+                f"{path.relative_to(ROOT)}:{line}: {name}"
             )
     for stem, entries in sorted(missing_by_module.items()):
         if stem in UNDOCUMENTED_ALLOWLIST:

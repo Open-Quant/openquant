@@ -15,19 +15,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BINDINGS = ROOT / "crates" / "pyopenquant" / "src"
 
-# Binding files whose functions may still lack a docstring. Each entry is being changed by a
-# concurrent pull request, so its docstrings are left to a follow-up rather than written here
-# and conflicted there. This list must only shrink: the gate fails if a listed module has
-# become fully documented, so the entry is removed in the same change that documents it.
-UNDOCUMENTED_ALLOWLIST: dict[str, str] = {
-    "cla": "cla.rs is being rewritten for #168 (CLA dual-problem / Sharpe fix)",
-    "filters": "filters.rs has in-flight binding changes",
-    "sb_bagging": "sb_bagging.rs is being changed by #187",
-}
+# Binding files (by stem) whose functions, classes, methods or properties may still lack a
+# docstring, each with the reason. Every binding is documented, so it is empty; keep it
+# empty. It may only shrink: the gate fails if a listed module has become fully documented,
+# so an entry is removed in the same change that documents it.
+UNDOCUMENTED_ALLOWLIST: dict[str, str] = {}
 
 _REGISTER_MODULE_RE = re.compile(r'PyModule::new\(\s*py\s*,\s*"([A-Za-z0-9_]+)"\s*\)')
 _WRAP_RE = re.compile(r"wrap_pyfunction!\(\s*([A-Za-z0-9_]+)\s*,")
 _PYFN_NAME_RE = re.compile(r'#\[pyfunction(?:\(\s*name\s*=\s*"([A-Za-z0-9_]+)"\s*\))?\]')
+_ADD_CLASS_RE = re.compile(r"add_class::<\s*([A-Za-z0-9_]+)\s*>")
+_PYCLASS_RE = re.compile(r"#\[pyclass(?:\((.*)\))?\]$")
+_PYMETHODS_RE = re.compile(r"#\[pymethods\]$")
+_IMPL_RE = re.compile(r"\s*impl\s+([A-Za-z0-9_]+)\s*\{")
 _TYPE_ALIAS_RE = re.compile(
     r"^(?:pub(?:\([a-z]+\))?\s+)?type\s+([A-Za-z0-9_]+)\s*=\s*(.*?);", re.S | re.M
 )
@@ -51,6 +51,33 @@ class Binding:
     params: list[Param] = field(default_factory=list)
     ret: str = "()"
     keyword_only_from: int | None = None  # index of the first keyword-only parameter
+
+
+@dataclass
+class Property:
+    """A read-only attribute from a ``#[getter]``."""
+
+    name: str
+    rust_name: str
+    line: int
+    doc: str
+    ret: str
+
+
+@dataclass
+class PyClass:
+    """A ``#[pyclass]`` registered with ``add_class``, with its ``#[pymethods]``."""
+
+    module: str
+    name: str  # Python class name
+    rust_name: str
+    file: Path
+    line: int
+    doc: str  # the struct's doc comment: the class __doc__, which documents the constructor
+    subclassable: bool = False  # #[pyclass(subclass)]
+    ctor: Binding | None = None  # the #[new] method, named "__new__"
+    methods: list[Binding] = field(default_factory=list)  # instance methods, dunders included
+    properties: list[Property] = field(default_factory=list)
 
 
 def _split_top(text: str, sep: str = ",") -> list[str]:
@@ -146,60 +173,16 @@ def parse_file(path: Path) -> list[Binding]:
         return []
     module = module_m.group(1)
     registered = set(_WRAP_RE.findall(text))
-    offsets = [0]
-    for line in lines:
-        offsets.append(offsets[-1] + len(line) + 1)
+    offsets = _line_offsets(lines)
 
     out: list[Binding] = []
     for idx, line in enumerate(lines):
         m = _PYFN_NAME_RE.match(line.strip())
         if not m:
             continue
-        doc = _doc_above(lines, idx)
         # Attributes and doc lines between #[pyfunction] and `fn`.
-        pos = offsets[idx + 1]
-        sig_text: str | None = None
-        while True:
-            chunk = text[pos:].lstrip()
-            pos = len(text) - len(chunk)
-            if chunk.startswith("///"):
-                nl = text.index("\n", pos)
-                body = text[pos + 3 : nl]
-                doc = (doc + "\n" if doc else "") + (body[1:] if body.startswith(" ") else body)
-                pos = nl + 1
-            elif chunk.startswith("//"):
-                pos = text.index("\n", pos) + 1
-            elif chunk.startswith("#["):
-                end = _balanced(text, pos + 1, "[", "]")
-                attr = text[pos:end]
-                sm = re.match(r"#\[pyo3\(\s*signature\s*=\s*", attr)
-                if sm:
-                    open_at = pos + sm.end()
-                    sig_text = text[open_at + 1 : _balanced(text, open_at) - 1]
-                pos = end
-            else:
-                break
-        fm = re.match(r"(?:pub(?:\([a-z]+\))?\s+)?fn\s+([A-Za-z0-9_]+)\s*(<[^(]*>)?\s*", text[pos:])
-        if not fm:
-            raise SystemExit(f"{path}:{idx + 1}: could not find the fn after #[pyfunction]")
-        rust_name = fm.group(1)
-        open_at = pos + fm.end()
-        close_at = _balanced(text, open_at)
-        params_text = _strip_line_comments(text[open_at + 1 : close_at - 1])
-        rest = text[close_at:]
-        rm = re.match(r"\s*->\s*(.*?)\s*(?:where\b[^{]*)?\{", rest, re.S)
-        ret = " ".join(rm.group(1).split()) if rm else "()"
-        params: list[Param] = []
-        for p in _split_top(params_text):
-            if not p:
-                continue
-            p = re.sub(r"#\[[^\]]*\]\s*", "", p)
-            pname, ptype = p.split(":", 1)
-            pname = pname.strip().removeprefix("mut ").strip()
-            ptype = " ".join(ptype.split())
-            if re.match(r"Python\s*<", ptype):
-                continue
-            params.append(Param(pname, ptype))
+        pos, doc, _attrs, sig_text = _read_attrs(text, offsets[idx + 1], _doc_above(lines, idx))
+        rust_name, params, ret, _end = _read_fn(text, pos, f"{path}:{idx + 1}")
         binding = Binding(
             module=module,
             name=m.group(1) or rust_name,
@@ -215,6 +198,167 @@ def parse_file(path: Path) -> list[Binding]:
         if rust_name in registered:
             out.append(binding)
     return out
+
+
+def _line_offsets(lines: list[str]) -> list[int]:
+    offsets = [0]
+    for line in lines:
+        offsets.append(offsets[-1] + len(line) + 1)
+    return offsets
+
+
+def _read_attrs(text: str, pos: int, doc: str) -> tuple[int, str, list[str], str | None]:
+    """Consume doc comments, comments and attributes from ``pos`` up to the item they annotate.
+
+    Returns the position of the item, the doc (``doc`` extended by any ``///`` lines read),
+    the attributes read, and the text inside ``#[pyo3(signature = (...))]`` if present.
+    """
+    attrs: list[str] = []
+    sig_text: str | None = None
+    while True:
+        chunk = text[pos:].lstrip()
+        pos = len(text) - len(chunk)
+        if chunk.startswith("///"):
+            nl = text.index("\n", pos)
+            body = text[pos + 3 : nl]
+            doc = (doc + "\n" if doc else "") + (body[1:] if body.startswith(" ") else body)
+            pos = nl + 1
+        elif chunk.startswith("//"):
+            pos = text.index("\n", pos) + 1
+        elif chunk.startswith("#["):
+            end = _balanced(text, pos + 1, "[", "]")
+            attr = text[pos:end]
+            attrs.append(attr)
+            sm = re.match(r"#\[pyo3\(\s*signature\s*=\s*", attr)
+            if sm:
+                open_at = pos + sm.end()
+                sig_text = text[open_at + 1 : _balanced(text, open_at) - 1]
+            pos = end
+        else:
+            return pos, doc, attrs, sig_text
+
+
+_RECEIVER_RE = re.compile(r"^(?:&\s*(?:'[a-z_]+\s+)?(?:mut\s+)?|mut\s+)?self$")
+
+
+def _read_fn(text: str, pos: int, where: str) -> tuple[str, list[Param], str, int]:
+    """Parse the ``fn`` at ``pos``: its Rust name, parameters, return type and body end.
+
+    ``Python<'_>`` tokens and method receivers (``&self``, ``slf: PyRef<Self>``...) are not
+    Python parameters and are dropped.
+    """
+    fm = re.match(r"(?:pub(?:\([a-z]+\))?\s+)?fn\s+([A-Za-z0-9_]+)\s*(<[^(]*>)?\s*", text[pos:])
+    if not fm:
+        raise SystemExit(f"{where}: could not find the fn")
+    rust_name = fm.group(1)
+    open_at = pos + fm.end()
+    close_at = _balanced(text, open_at)
+    params_text = _strip_line_comments(text[open_at + 1 : close_at - 1])
+    rest = text[close_at:]
+    rm = re.match(r"\s*->\s*(.*?)\s*(?:where\b[^{]*)?\{", rest, re.S)
+    ret = " ".join(rm.group(1).split()) if rm else "()"
+    body_open = text.index("{", close_at)
+    body_end = _balanced(text, body_open, "{", "}")
+    params: list[Param] = []
+    for p in _split_top(params_text):
+        if not p:
+            continue
+        p = re.sub(r"#\[[^\]]*\]\s*", "", p)
+        if _RECEIVER_RE.match(p.strip()):
+            continue
+        pname, ptype = p.split(":", 1)
+        pname = pname.strip().removeprefix("mut ").strip()
+        ptype = " ".join(ptype.split())
+        if re.match(r"Python\s*<", ptype):
+            continue
+        if re.match(r"PyRef(?:Mut)?\s*<.*\bSelf\s*>$", ptype):
+            continue
+        params.append(Param(pname, ptype))
+    return rust_name, params, ret, body_end
+
+
+def parse_classes(path: Path) -> list[PyClass]:
+    """The ``#[pyclass]`` types of one binding file that its ``register`` adds to the module."""
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    module_m = _REGISTER_MODULE_RE.search(text)
+    if not module_m:
+        return []
+    module = module_m.group(1)
+    registered = set(_ADD_CLASS_RE.findall(text))
+    offsets = _line_offsets(lines)
+
+    classes: dict[str, PyClass] = {}
+    for idx, line in enumerate(lines):
+        m = _PYCLASS_RE.match(line.strip())
+        if not m:
+            continue
+        pos, doc, _attrs, _sig = _read_attrs(text, offsets[idx + 1], _doc_above(lines, idx))
+        sm = re.match(r"(?:pub(?:\([a-z]+\))?\s+)?struct\s+([A-Za-z0-9_]+)", text[pos:])
+        if not sm:
+            raise SystemExit(f"{path}:{idx + 1}: could not find the struct after #[pyclass]")
+        nm = re.search(r'\bname\s*=\s*"([A-Za-z0-9_]+)"', m.group(1) or "")
+        classes[sm.group(1)] = PyClass(
+            module=module,
+            name=nm.group(1) if nm else sm.group(1),
+            rust_name=sm.group(1),
+            file=path,
+            line=idx + 1,
+            doc=doc,
+            subclassable=bool(re.search(r"\bsubclass\b", m.group(1) or "")),
+        )
+
+    for idx, line in enumerate(lines):
+        if not _PYMETHODS_RE.match(line.strip()):
+            continue
+        im = _IMPL_RE.match(text, offsets[idx + 1])
+        if not im or im.group(1) not in classes:
+            raise SystemExit(f"{path}:{idx + 1}: #[pymethods] must precede `impl <pyclass> {{`")
+        _parse_methods(classes[im.group(1)], text, im.end(), path)
+    return [c for rust_name, c in classes.items() if rust_name in registered]
+
+
+def _parse_methods(cls: PyClass, text: str, pos: int, path: Path) -> None:
+    body_end = _balanced(text, pos - 1, "{", "}") - 1
+    while True:
+        pos, doc, attrs, sig_text = _read_attrs(text, pos, "")
+        if pos >= body_end:
+            return
+        line_no = text.count("\n", 0, pos) + 1
+        rust_name, params, ret, pos = _read_fn(text, pos, f"{path}:{line_no}")
+        flags = set()
+        for a in attrs:
+            fm = re.match(r"#\[([A-Za-z_]+)", a)
+            if fm:
+                flags.add(fm.group(1))
+        renamed = any(a.startswith("#[pyo3(") and re.search(r"\bname\s*=", a) for a in attrs)
+        if flags & {"staticmethod", "classmethod", "setter"} or renamed:
+            raise SystemExit(
+                f"{path}:{line_no}: staticmethod, classmethod, setter and pyo3(name = ...) "
+                "methods are not supported by scripts/pyopenquant_bindings.py yet"
+            )
+        if "getter" in flags:
+            getter = next(a for a in attrs if a.startswith("#[getter"))
+            gm = re.match(r"#\[getter\(\s*([A-Za-z0-9_]+)\s*\)\]", getter)
+            name = gm.group(1) if gm else rust_name.removeprefix("get_")
+            cls.properties.append(Property(name, rust_name, line_no, doc, ret))
+            continue
+        binding = Binding(
+            module=cls.module,
+            name="__new__" if "new" in flags else rust_name,
+            rust_name=rust_name,
+            file=path,
+            line=line_no,
+            doc=doc,
+            params=params,
+            ret=ret,
+        )
+        if sig_text is not None:
+            _apply_signature(binding, sig_text)
+        if "new" in flags:
+            cls.ctor = binding
+        else:
+            cls.methods.append(binding)
 
 
 def _apply_signature(binding: Binding, sig_text: str) -> None:
@@ -240,6 +384,30 @@ def all_bindings() -> list[Binding]:
     out: list[Binding] = []
     for path in sorted(BINDINGS.glob("*.rs")):
         out.extend(parse_file(path))
+    return out
+
+
+def all_classes() -> list[PyClass]:
+    out: list[PyClass] = []
+    for path in sorted(BINDINGS.glob("*.rs")):
+        out.extend(parse_classes(path))
+    return out
+
+
+def documented_items() -> list[tuple[Path, int, str, str]]:
+    """Every public bound item the docstring gate covers, as ``(file, line, name, doc)``.
+
+    Functions; classes, whose docstring also documents the constructor; and each class's
+    public methods and properties. Dunder methods and ``#[new]`` are not documented apart.
+    """
+    out = [(b.file, b.line, f"{b.module}.{b.name}", b.doc) for b in all_bindings()]
+    for c in all_classes():
+        out.append((c.file, c.line, f"{c.module}.{c.name}", c.doc))
+        for m in c.methods:
+            if not m.name.startswith("_"):
+                out.append((m.file, m.line, f"{c.module}.{c.name}.{m.name}", m.doc))
+        for prop in c.properties:
+            out.append((c.file, prop.line, f"{c.module}.{c.name}.{prop.name}", prop.doc))
     return out
 
 
