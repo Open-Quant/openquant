@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 chrono = "0.4"
-nalgebra = "0.32"
+nalgebra = "0.35"
 openquant = { path = "../openquant" }
 polars = { version = "0.46", default-features = false }
 pyo3 = { version = "0.23", features = ["extension-module"] }
