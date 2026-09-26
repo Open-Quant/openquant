@@ -61,6 +61,8 @@ def _dataset_from_cfg(cfg: dict) -> tuple[object, dict]:
         "seed": seed,
         "n_bars": n_bars,
         "asset_names": asset_names,
+        # One-minute bars: Sharpe ratios and volatility are annualised with 390 * 252 bars.
+        "periods_per_year": dataset.periods_per_year,
     }
     # Every manifest records the content hash of the exact data the run used.
     dataset_meta["hash"] = openquant.data.dataset_hash(_dataset_frame(dataset))
