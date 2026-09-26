@@ -51,8 +51,12 @@ Both follow-ups are linked as `discovered-from` `OQ-mef.10`.
 Update 2026-09-18: `OQ-ojp` landed in PR #14. `OQ-det` was closed without its commit
 (`27a2007`) being merged; recovery is tracked in GitHub issue #33.
 
+Update 2026-09-26: `OQ-det` was re-ported in PR #137 (issue #33). `experiments/run_pipeline.py`
+writes `equity_curve.svg` and `drawdown.svg` for every run, including grid sub-runs; the outcome
+is recorded in `docs/decisions/0002-stranded-work-outcomes.md`.
+
 ## Conclusion
 - Closed-issue claims for bindings, notebooks, pipeline, and CI smoke are materially present in tree.
-- Of the two acceptance-criteria gaps found, `OQ-ojp` is resolved (PR #14); `OQ-det` remains
-  open as GitHub issue #33 (see the 2026-09-18 update above).
+- Both acceptance-criteria gaps found are resolved: `OQ-ojp` in PR #14 and `OQ-det` in PR #137
+  (see the updates above).
 - `docs/project_status.md` has been updated to reflect this reconciled state.

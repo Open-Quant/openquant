@@ -6,8 +6,9 @@
 # / `gh label edit` by hand. Colors are hex without the leading '#'.
 #
 # Every backlog issue carries one track:* label and one priority label.
-# Entries marked "new" do not exist on GitHub yet; the rest match `gh label list`
-# (2026-09-24), with descriptions added where GitHub had none.
+# Every entry exists on GitHub and matches `gh label list` (2026-09-26) by name and color.
+# The track:* and priority labels have no description on GitHub; the descriptions here
+# are the intended ones, to apply with a sync.
 
 # --- Tracks: which part of the backlog an issue belongs to --------------------------
 - name: "track:code"
@@ -56,9 +57,25 @@
 - name: "documentation"
   color: "0075ca"
   description: "Improvements or additions to documentation"
-- name: "dependencies"  # new; Dependabot applies it (and creates it if missing)
+
+# --- Dependabot (created by Dependabot on its first pull request per ecosystem) --------
+# .github/dependabot.yml sets no labels, so Dependabot applies its defaults: "dependencies"
+# plus one label per package ecosystem. Descriptions are the ones Dependabot set.
+- name: "dependencies"
   color: "0366d6"
-  description: "Dependency updates"
+  description: "Pull requests that update a dependency file"
+- name: "github_actions"
+  color: "000000"
+  description: "Pull requests that update GitHub Actions code"
+- name: "javascript"
+  color: "168700"
+  description: "Pull requests that update javascript code"
+- name: "python:uv"
+  color: "2b67c6"
+  description: "Pull requests that update python:uv code"
+- name: "rust"
+  color: "000000"
+  description: "Pull requests that update rust code"
 
 # --- Triage (GitHub defaults) ----------------------------------------------------------
 - name: "good first issue"

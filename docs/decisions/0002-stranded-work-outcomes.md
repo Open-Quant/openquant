@@ -18,7 +18,7 @@ scikit-learn from Python.
 
 | Commit / branch | Content | Outcome | Reason |
 | --- | --- | --- | --- |
-| `59ac6fa` `feat/oq-nbr-4-validation` | `split_with_diagnostics`, CPCV splits, `count_train_test_overlaps`, `naive_kfold_splits` | **Re-ported** by hand (issue #33 pull request) | Needed by the validation bindings (#42). Adapted to typed errors and the #65 purge window. The original `cpcv_paths` returned C(N, k) splits, so it is now `cpcv_splits`, and `cpcv_paths` returns AFML §12.4's φ[N, k] paths. The original one-sided embargo was not taken; #134 owns that decision. Spec: `openspec/changes/res-recover-stranded-work`. |
+| `59ac6fa` `feat/oq-nbr-4-validation` | `split_with_diagnostics`, CPCV splits, `count_train_test_overlaps`, `naive_kfold_splits` | **Re-ported** by hand (issue #33 pull request) | Needed by the validation bindings (#42). Adapted to typed errors and the #65 purge window. The original `cpcv_paths` returned C(N, k) splits, so it is now `cpcv_splits`, and `cpcv_paths` returns AFML §12.4's φ[N, k] paths. The original one-sided embargo was not taken; #134 owns that decision. Spec: `openspec/changes/archive/2026-09-26-res-recover-stranded-work`. |
 | `27a2007` `feat/oq-det-plot-artifacts` | SVG equity and drawdown charts from `experiments/run_pipeline.py` | **Re-ported** | Small, dependency-free and deterministic. Now also written for every grid sub-run. The `tomli` fallback was dropped because the project requires Python ≥ 3.11. |
 | `25b7b24` `feat/oq-nbr-5-modeling-lab` | `notebook_modeling.rs`: threshold "primary" and "meta" models, a bagged-model wrapper; `sb_bagging` changes | **Dropped** | See decision 4 below. Its `sb_bagging` warm-up change was a workaround for the non-sequential bootstrap that #90 fixes properly (PR #125). |
 | `f31de34` `feat/afml-real-data-notebook` | 12 generated per-chapter notebooks (07–18), a generator, a runner, Stooq helpers | **Dropped** after mining (ideas below) | The numbering collides with `main`'s 07 and 08. Every notebook re-downloads Stooq data with no cache or recorded terms (RQ-011). Several cells show placeholder numbers or re-implement library functions (hard-coded feature importances, a Python FFD, lagged correlations as a "frontier"). The CDaR cell uses the input #102 corrected. The interpretation cells are fixed text, not read from the outputs. |
@@ -78,4 +78,4 @@ this list.
 
 - GitHub issue #33; `.ai-dlc/work/res-recover-stranded-work.toml`
 - `docs/design/production-readiness-brief.md` (RQ-002, unresolved decision 4)
-- `openspec/changes/res-recover-stranded-work`
+- `openspec/changes/archive/2026-09-26-res-recover-stranded-work`
