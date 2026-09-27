@@ -1650,7 +1650,7 @@ dependencies = [
  "nalgebra 0.35.0",
  "polars",
  "rand 0.8.5",
- "rand_distr 0.4.3",
+ "rand_distr 0.6.0",
  "serde",
  "serde_json",
  "statrs",
