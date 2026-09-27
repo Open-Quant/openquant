@@ -8,7 +8,7 @@ __all__ = [
     "get_onc_clusters",
 ]
 
-def get_onc_clusters(corr_mat: Sequence[Sequence[float]], repeat: int) -> Any:
+def get_onc_clusters(corr_mat: Sequence[Sequence[float]], repeat: int, seed: int = 42) -> Any:
     """Optimal Number of Clusters (ONC) partition of a correlation matrix.
 
     Not from AFML: López de Prado, Machine Learning for Asset Managers (2020), section 4.4,
@@ -17,9 +17,13 @@ def get_onc_clusters(corr_mat: Sequence[Sequence[float]], repeat: int) -> Any:
     for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each; the partition with the
     highest silhouette t-statistic `mean(S) / std(S)` wins. Clusters scoring below average
     are re-clustered and kept only if that improves their mean t-statistic. Negative
-    correlation means far apart. Results are deterministic (fixed seeds). The search starts
-    at `k = 2`, so a matrix with no structure is still partitioned; a low mean silhouette
-    is the sign the clusters are not real. Cost grows at least as `N^3`.
+    correlation means far apart. Each k-means run is one k-means++ initialisation (as
+    scikit-learn's KMeans), all drawn from one random stream seeded by `seed`, so results
+    are deterministic. ONC is a random search: clean structure comes back the same under
+    any seed, but on real data the partition can depend on the seed; compare a few seeds
+    and raise `repeat` before relying on one. The search starts at `k = 2`, so a matrix
+    with no structure is still partitioned; a low mean silhouette is the sign the clusters
+    are not real. Cost grows at least as `N^3`.
 
     Parameters
     ----------
@@ -28,6 +32,9 @@ def get_onc_clusters(corr_mat: Sequence[Sequence[float]], repeat: int) -> Any:
         diagonal are not checked.
     repeat : int
         Number of k-means initialisations per candidate `k`; must be positive.
+    seed : int, default 42
+        Seed of the random stream behind every k-means initialisation (the Rust
+        `DEFAULT_SEED` when omitted).
 
     Returns
     -------

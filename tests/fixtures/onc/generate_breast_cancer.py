@@ -11,17 +11,30 @@ silhouette_samples. The observation matrix is the correlation distance sqrt((1 -
 each row a point; for each k in 2..n-1 KMeans runs `repeat` times with a fresh random start
 (seeded here, so the script is reproducible), and the clustering with the highest
 mean(silhouette) / std(silhouette) is kept. Clusters whose t-statistic is below the average
-are re-clustered recursively, and the result is kept only if it improves.
+are re-clustered recursively (when more than one is; openquant, like mlfinlab, requires more
+than two), and the result is kept only if its mean cluster t-statistic beats that of the
+clusters it replaced (Snippet 4.2's tStatMean).
 
 Input: tests/fixtures/onc/breast_cancer.csv (scikit-learn's copy of the UCI data; the first line
 is scikit-learn's header, the last column the target), 30 features, sample correlation.
 
-The cluster sets are recorded. KMeans depends on its random starts, so the script runs ONC under
-several seeds and records only the clusters that every run finds ("stable_clusters"): those are a
-property of the data, not of a seed.
+KMeans depends on its random starts, and on this matrix so does ONC: the partition it returns
+depends on the seed (#218). The script runs ONC under 20 seeds with n_init = 50 restarts (the
+`repeat` of the Rust tests) and records every run, and three things that hold under all of them:
+
+- "finest_partition": the common refinement of the runs (two features share a group if every
+  run puts them in the same cluster). Every run is a coarsening of it: a run may merge its
+  groups but never splits one.
+- "stable_clusters": the clusters that every run returns exactly.
+- "min_clusters": the fewest clusters any run returns.
+
+Runs single-threaded (a few minutes) so that its output does not depend on the thread count.
 """
 import json
+import os
 from pathlib import Path
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import numpy as np
 import pandas as pd
@@ -82,25 +95,38 @@ def cluster_kmeans_top(corr0, max_num_clusters, n_init, rng):  # snippet 4.2
     corr_new, clstrs_new, silh_new = make_new_outputs(
         corr0, {i: clstrs[i] for i in clstrs if i not in redo}, clstrs2)
     new_tstat_mean = np.mean([np.mean(silh_new[clstrs_new[i]]) / np.std(silh_new[clstrs_new[i]]) for i in clstrs_new])
-    if new_tstat_mean <= tstat_mean:
+    redo_tstat_mean = np.mean([cluster_tstats[i] for i in redo])  # snippet 4.2: tStatMean
+    if new_tstat_mean <= redo_tstat_mean:
         return corr1, clstrs, silh
     return corr_new, clstrs_new, silh_new
 
 
+N_SEEDS, N_INIT = 20, 50
 runs = []
-for seed in range(5):
+for seed in range(N_SEEDS):
     rng = np.random.default_rng(seed)
-    _, clstrs, _ = cluster_kmeans_top(corr0, corr0.shape[1] - 1, 10, rng)
+    _, clstrs, _ = cluster_kmeans_top(corr0, corr0.shape[1] - 1, N_INIT, rng)
     runs.append(sorted(sorted(int(j) for j in members) for members in clstrs.values()))
-    print("seed", seed, len(runs[-1]), "clusters:", runs[-1])
+    print("seed", seed, len(runs[-1]), "clusters:", runs[-1], flush=True)
 
+
+def label_of(run, item):
+    return next(i for i, members in enumerate(run) if item in members)
+
+
+n = corr0.shape[1]
+signature = {j: tuple(label_of(r, j) for r in runs) for j in range(n)}
+finest = sorted(sorted(j for j in range(n) if signature[j] == sig) for sig in set(signature.values()))
 stable = [c for c in runs[0] if all(c in r for r in runs[1:])]
 out = {
     "source": "tests/fixtures/onc/generate_breast_cancer.py: MLAM snippets 4.1-4.2 with scikit-learn "
-              "KMeans/silhouette_samples, 5 seeds x 10 restarts",
+              f"KMeans/silhouette_samples, {N_SEEDS} seeds x {N_INIT} restarts",
     "corr_0_2": float(corr0.iloc[0, 2]),
     "runs": runs,
+    "finest_partition": finest,
     "stable_clusters": stable,
+    "min_clusters": min(len(r) for r in runs),
 }
 (HERE / "breast_cancer_reference.json").write_text(json.dumps(out, indent=2) + "\n")
-print("stable:", stable)
+print("finest:", finest)
+print("stable:", stable, "min clusters:", out["min_clusters"])

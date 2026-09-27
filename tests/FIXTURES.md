@@ -101,6 +101,7 @@ code or tests of any version.
 | `hrp/reference.json` | `hrp/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | see the docstring |
 | `hcaa/reference.json` | `hcaa/generate.py` | `portfolio_optimization/stock_prices.csv`, seeded covariance | Raffinot 2017 tree walk on scipy's single, complete, average and Ward linkage, both distances (see the docstring) |
 | `onc/silhouette_reference.json` | `onc/generate.py` | synthetic, seeded | see the docstring |
+| `onc/recluster_reference.json` | `onc/generate.py` | synthetic two-level factor model, seeded | scikit-learn silhouettes of the planted sub-groups; see the docstring |
 | `sample_weights/reference.json` | `sample_weights/generate.py` | `shared/dollar_bar_sample.csv` | see the docstring |
 | `volatility/daily_vol_reference.json` | `volatility/generate.py` | `shared/dollar_bar_sample.csv` | see the docstring |
 | `portfolio_optimization/qp_reference.json` | `portfolio_optimization/generate_qp_reference.py` | `expected_returns_weekly` and `covariance_weekly` from `mean_variance_fixture.json` | scipy SLSQP |
@@ -115,7 +116,7 @@ code or tests of any version.
 | `volatility/range_reference.json` | `volatility/generate_range.py` | `shared/dollar_bar_sample.csv` | Parkinson 1980, Garman & Klass 1980, Yang & Zhang 2000 |
 | `etf_trick/reference.json` | `etf_trick/generate.py` | the five `etf_trick/*.csv` | AFML section 2.4.1 (ETF trick), snippet 2.2 (roll gaps) |
 | `labeling/reference.json` | `labeling/generate.py` | `shared/dollar_bar_sample.csv` | AFML snippets 2.4, 3.1-3.5 |
-| `onc/breast_cancer_reference.json` | `onc/generate_breast_cancer.py` | `onc/breast_cancer.csv` | MLAM snippets 4.1-4.2 with scikit-learn KMeans; clusters found under every seed |
+| `onc/breast_cancer_reference.json` | `onc/generate_breast_cancer.py` | `onc/breast_cancer.csv` | MLAM snippets 4.1-4.2 with scikit-learn KMeans, 20 seeds x 50 restarts; what every run shares (finest common partition, clusters found by all, fewest clusters) |
 
 `portfolio_optimization/mean_variance_fixture.json` keeps only the blocks the tests read
 (`weights.inverse_variance`, `weights.min_volatility`, `expected_returns_weekly`,
@@ -150,7 +151,7 @@ of the fixtures above, or are derived by hand in a comment next to the assertion
 | `volatility_features.rs`, `test_core_volatility.py` | `volatility/range_reference.json` |
 | `etf_trick.rs`, `futures_roll.rs` | `etf_trick/reference.json` |
 | `labeling.rs` | `labeling/reference.json` |
-| `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json` |
+| `onc.rs`, `test_core_onc.py` | `onc/breast_cancer_reference.json`, `onc/recluster_reference.json` |
 | `hrp.rs`, `hcaa.rs` (leaf order) | `hrp/reference.json` (scipy single linkage: `hrp.rs` on the Snippet 16.4 distance of distances, `hcaa.rs` on pairwise distances, with `linkage=Single` since the HCAA default is Ward) |
 | `fast_ewma.rs`, `test_core_fast_ewma.py` | by hand: (21 * 1005 + 19 * 1205) / 40 = 1100 |
 | `sampling.rs` | by hand, AFML section 4.5.3's worked example (5/6, 3/4, 1; 6/7; 5/14, 3/14, 6/14) |

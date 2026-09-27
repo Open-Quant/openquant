@@ -10,7 +10,10 @@
 //! 1. Convert correlations to distances `d_ij = sqrt((1 - rho_ij) / 2)` (inputs clamped to
 //!    `[-1, 1]`) and represent each item by its row of that distance matrix.
 //! 2. Run k-means for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each, and keep the
-//!    partition with the highest t-statistic of the silhouettes, `mean(S) / std(S)`.
+//!    partition with the highest t-statistic of the silhouettes, `mean(S) / std(S)`; equal
+//!    t-statistics go to the higher mean silhouette. Each run is one k-means++ initialisation
+//!    (the greedy variant scikit-learn uses) followed by Lloyd's algorithm, as Snippet 4.1 runs
+//!    scikit-learn's `KMeans(n_init=1)` `n_init` times.
 //! 3. Compute that t-statistic per cluster. If more than two clusters score below the average,
 //!    pool their members, re-run the whole procedure on them, and keep the result only if its
 //!    mean cluster t-statistic beats that of the clusters it replaced
@@ -25,9 +28,16 @@
 //!   [`OncResult::silhouette_scores`] refer to the original row order.
 //! - The result has at least two clusters unless every row of the matrix is the same (for
 //!   example all ones), which gives one cluster of every item.
-//! - k-means is seeded from a fixed value, the repetition number and `k`, so results are
-//!   deterministic; there is no seed parameter. Cost grows at least as `N^3` (every `k`,
-//!   `repeat` times, quadratic silhouettes), plus the recursion.
+//! - One random stream, seeded with [`DEFAULT_SEED`] (or the seed given to
+//!   [`get_onc_clusters_with_seed`]), drives every initialisation, so results are deterministic.
+//! - ONC is a random search: the partition kept is the best of `repeat` k-means runs per `k`,
+//!   and a partition with a high t-statistic may be a k-means local optimum that few
+//!   initialisations reach. On clean structure any seed finds the same answer. On real data it
+//!   need not: on the 30 breast-cancer features of `tests/fixtures/onc`, `repeat = 50` returns
+//!   one of a handful of partitions depending on the seed, all of them coarsenings of the same
+//!   eight groups. Compare a few seeds, and raise `repeat`, before reading much into a
+//!   particular partition. Cost grows at least as `N^3` (every `k`, `repeat` times, quadratic
+//!   silhouettes), plus the recursion.
 //!
 //! ```
 //! use nalgebra::DMatrix;
@@ -59,9 +69,11 @@
 use crate::util::stats;
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
-use rand::seq::SliceRandom;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use std::collections::BTreeMap;
+
+/// Seed of the random stream [`get_onc_clusters`] uses.
+pub const DEFAULT_SEED: u64 = 42;
 
 /// Errors returned by [`get_onc_clusters`].
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -173,6 +185,51 @@ pub fn check_improve_clusters<T: Clone>(
 /// );
 /// ```
 pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncResult, OncError> {
+    get_onc_clusters_with_seed(corr_mat, repeat, DEFAULT_SEED)
+}
+
+/// [`get_onc_clusters`] with the seed of its random stream given explicitly.
+///
+/// `get_onc_clusters(corr, repeat)` is `get_onc_clusters_with_seed(corr, repeat, DEFAULT_SEED)`.
+/// The seed drives every k-means++ initialisation, including those of the re-clustering step, so
+/// a given `(corr_mat, repeat, seed)` always gives the same partition. Running a few seeds is
+/// the way to check whether a partition is a property of the data or of one random stream: see
+/// the [module documentation](self) on how the answer depends on `repeat`.
+///
+/// # Errors
+///
+/// As [`get_onc_clusters`].
+///
+/// ```
+/// use nalgebra::DMatrix;
+/// use openquant::onc::{get_onc_clusters, get_onc_clusters_with_seed, DEFAULT_SEED};
+///
+/// let block = |i: usize| i / 4;
+/// let corr = DMatrix::from_fn(12, 12, |i, j| {
+///     if i == j {
+///         1.0
+///     } else if block(i) == block(j) {
+///         0.7
+///     } else {
+///         0.1
+///     }
+/// });
+/// let default = get_onc_clusters(&corr, 5).unwrap();
+/// let seeded = get_onc_clusters_with_seed(&corr, 5, DEFAULT_SEED).unwrap();
+/// assert_eq!(seeded.clusters, default.clusters);
+/// // Clean blocks come back the same under any seed.
+/// for seed in 0..5 {
+///     let result = get_onc_clusters_with_seed(&corr, 5, seed).unwrap();
+///     let mut found: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+///     found.sort();
+///     assert_eq!(found, vec![vec![0, 1, 2, 3], vec![4, 5, 6, 7], vec![8, 9, 10, 11]]);
+/// }
+/// ```
+pub fn get_onc_clusters_with_seed(
+    corr_mat: &DMatrix<f64>,
+    repeat: usize,
+    seed: u64,
+) -> Result<OncResult, OncError> {
     if repeat == 0 {
         return Err(OncError::InvalidRepeat);
     }
@@ -180,7 +237,8 @@ pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncRes
         return Err(OncError::InvalidCorrelationMatrix);
     }
 
-    let state = cluster_kmeans_top(corr_mat, repeat)?;
+    let mut rng = StdRng::seed_from_u64(seed);
+    let state = cluster_kmeans_top(corr_mat, repeat, &mut rng)?;
     Ok(OncResult {
         ordered_correlation: state.ordered_correlation,
         clusters: state.clusters,
@@ -188,9 +246,13 @@ pub fn get_onc_clusters(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<OncRes
     })
 }
 
-fn cluster_kmeans_top(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<ClusterState, OncError> {
+fn cluster_kmeans_top(
+    corr_mat: &DMatrix<f64>,
+    repeat: usize,
+    rng: &mut StdRng,
+) -> Result<ClusterState, OncError> {
     let max_num_clusters = corr_mat.ncols().saturating_sub(1).max(2);
-    let base = cluster_kmeans_base(corr_mat, max_num_clusters, repeat)?;
+    let base = cluster_kmeans_base(corr_mat, max_num_clusters, repeat, rng)?;
 
     let mut cluster_quality: BTreeMap<usize, f64> = BTreeMap::new();
     for (k, members) in &base.clusters {
@@ -234,7 +296,7 @@ fn cluster_kmeans_top(corr_mat: &DMatrix<f64>, repeat: usize) -> Result<ClusterS
         vals.iter().sum::<f64>() / vals.len() as f64
     };
 
-    let top_state = cluster_kmeans_top(&corr_tmp, repeat)?;
+    let top_state = cluster_kmeans_top(&corr_tmp, repeat, rng)?;
     let mut top_clusters_global = BTreeMap::new();
     for (k, v) in top_state.clusters {
         let mapped: Vec<usize> = v.into_iter().map(|local_idx| keys_redo[local_idx]).collect();
@@ -297,26 +359,30 @@ fn cluster_kmeans_base(
     corr_mat: &DMatrix<f64>,
     max_num_clusters: usize,
     repeat: usize,
+    rng: &mut StdRng,
 ) -> Result<ClusterState, OncError> {
     let distance = corr_to_distance(corr_mat);
+    let points = Points::new(&distance);
+    let pairwise = pairwise_distances(&points);
 
     let mut best_labels: Option<Vec<usize>> = None;
     let mut best_silh: Option<Vec<f64>> = None;
 
-    for rep in 0..repeat {
+    for _ in 0..repeat {
         for num_clusters in 2..=max_num_clusters {
-            let labels = kmeans_labels(
-                &distance,
-                num_clusters,
-                42 + rep as u64 * 131 + num_clusters as u64,
-            )?;
-            let silh = silhouette_samples(&distance, &labels);
+            let labels = kmeans_labels(&points, num_clusters, rng)?;
+            let silh = silhouette_from_pairwise(&pairwise, &labels);
 
             let stat = tstat(&silh);
             let best_stat = best_silh.as_ref().map_or(f64::NEG_INFINITY, |s| tstat(s));
-            // A perfect clustering has zero silhouette variance, so its t-stat is +inf and
-            // nothing may replace it. Only a NaN incumbent is replaced unconditionally.
-            if best_stat.is_nan() || stat > best_stat {
+            // A perfect clustering has zero silhouette variance, so its t-stat is +inf and only
+            // another +inf may replace it. Only a NaN incumbent is replaced unconditionally.
+            // Equal t-stats go to the higher mean silhouette: with equal-sized exact blocks,
+            // merging whole blocks also gives every item the same silhouette (+inf), and which
+            // of the two k-means happened to find first must not decide.
+            let tie_better = stat == best_stat
+                && best_silh.as_ref().is_some_and(|b| mean_of(&silh) > mean_of(b));
+            if best_stat.is_nan() || stat > best_stat || tie_better {
                 best_labels = Some(labels);
                 best_silh = Some(silh);
             }
@@ -342,6 +408,10 @@ fn cluster_kmeans_base(
     }
 
     Ok(ClusterState { ordered_correlation: corr1, clusters, silhouette_scores: silh })
+}
+
+fn mean_of(values: &[f64]) -> f64 {
+    values.iter().sum::<f64>() / values.len() as f64
 }
 
 fn tstat(values: &[f64]) -> f64 {
@@ -393,101 +463,164 @@ fn corr_to_distance(corr: &DMatrix<f64>) -> DMatrix<f64> {
     distance
 }
 
-fn kmeans_labels(data: &DMatrix<f64>, k: usize, seed: u64) -> Result<Vec<usize>, OncError> {
-    let n = data.nrows();
-    let d = data.ncols();
-    if k < 2 || k > n {
-        return Err(OncError::ClusteringFailed);
+/// Items as rows of a row-major buffer, for the k-means inner loops.
+struct Points {
+    data: Vec<f64>,
+    n: usize,
+    d: usize,
+}
+
+impl Points {
+    fn new(m: &DMatrix<f64>) -> Self {
+        let (n, d) = m.shape();
+        let data = (0..n).flat_map(|i| (0..d).map(move |j| m[(i, j)])).collect();
+        Self { data, n, d }
     }
 
-    let mut rng = StdRng::seed_from_u64(seed);
-    let mut idx: Vec<usize> = (0..n).collect();
-    idx.shuffle(&mut rng);
-
-    let mut centroids = DMatrix::<f64>::zeros(k, d);
-    for c in 0..k {
-        let src = idx[c];
-        for j in 0..d {
-            centroids[(c, j)] = data[(src, j)];
-        }
+    fn row(&self, i: usize) -> &[f64] {
+        &self.data[i * self.d..(i + 1) * self.d]
     }
+}
 
-    let mut labels = vec![0usize; n];
-    let mut changed = true;
+fn squared_distance(a: &[f64], b: &[f64]) -> f64 {
+    a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum()
+}
 
-    for _ in 0..100 {
-        if !changed {
-            break;
+/// k-means++ seeding (Arthur and Vassilvitskii 2007) in its greedy form, as scikit-learn does:
+/// each new centre is the best of `2 + ln k` candidates drawn with probability proportional to
+/// the squared distance to the nearest centre chosen so far. Returns the centres' row indices.
+fn kmeans_plus_plus(points: &Points, k: usize, rng: &mut StdRng) -> Vec<usize> {
+    let n = points.n;
+    let mut centres = Vec::with_capacity(k);
+    centres.push(rng.gen_range(0..n));
+    let mut closest: Vec<f64> =
+        (0..n).map(|i| squared_distance(points.row(i), points.row(centres[0]))).collect();
+    let n_trials = 2 + (k as f64).ln() as usize;
+    for _ in 1..k {
+        let total: f64 = closest.iter().sum();
+        let mut best: Option<(f64, usize, Vec<f64>)> = None;
+        for _ in 0..n_trials {
+            let pick = if total > 0.0 {
+                let target = rng.r#gen::<f64>() * total;
+                let mut acc = 0.0;
+                closest
+                    .iter()
+                    .position(|w| {
+                        acc += w;
+                        acc > target
+                    })
+                    .unwrap_or(n - 1)
+            } else {
+                // Every point sits on a centre already: any choice is as good.
+                rng.gen_range(0..n)
+            };
+            let candidate = points.row(pick);
+            let updated: Vec<f64> = closest
+                .iter()
+                .enumerate()
+                .map(|(i, c)| c.min(squared_distance(points.row(i), candidate)))
+                .collect();
+            let potential: f64 = updated.iter().sum();
+            if best.as_ref().is_none_or(|(p, _, _)| potential < *p) {
+                best = Some((potential, pick, updated));
+            }
         }
-        changed = false;
+        let (_, pick, updated) = best.expect("at least two trials");
+        centres.push(pick);
+        closest = updated;
+    }
+    centres
+}
 
+/// Lloyd's algorithm from the given centres, until no label changes (at most 300 passes).
+fn lloyd(points: &Points, centres: &[usize]) -> Vec<usize> {
+    let (n, d, k) = (points.n, points.d, centres.len());
+    let mut centroids: Vec<f64> = centres.iter().flat_map(|&c| points.row(c).to_vec()).collect();
+    let mut labels = vec![usize::MAX; n];
+    let mut dist = vec![0.0; n];
+    for _ in 0..300 {
+        let mut changed = false;
         for i in 0..n {
+            let row = points.row(i);
             let mut best_c = 0usize;
             let mut best_dist = f64::INFINITY;
-            for c in 0..k {
-                let mut s = 0.0;
-                for j in 0..d {
-                    let diff = data[(i, j)] - centroids[(c, j)];
-                    s += diff * diff;
-                }
+            for (c, centroid) in centroids.chunks_exact(d).enumerate() {
+                let s = squared_distance(row, centroid);
                 if s < best_dist {
                     best_dist = s;
                     best_c = c;
                 }
             }
+            dist[i] = best_dist;
             if labels[i] != best_c {
                 labels[i] = best_c;
                 changed = true;
             }
         }
-
-        let mut sums = DMatrix::<f64>::zeros(k, d);
+        if !changed {
+            break;
+        }
+        let mut sums = vec![0.0; k * d];
         let mut counts = vec![0usize; k];
-        for i in 0..n {
-            let c = labels[i];
-            counts[c] += 1;
-            for j in 0..d {
-                sums[(c, j)] += data[(i, j)];
+        for (i, &label) in labels.iter().enumerate() {
+            counts[label] += 1;
+            for (s, x) in sums[label * d..(label + 1) * d].iter_mut().zip(points.row(i)) {
+                *s += x;
             }
         }
-
+        // An empty cluster takes the point farthest from its centroid, as in scikit-learn.
+        let mut taken = vec![false; n];
         for c in 0..k {
+            let centroid = &mut centroids[c * d..(c + 1) * d];
             if counts[c] == 0 {
-                let repl = idx[c % n];
-                for j in 0..d {
-                    centroids[(c, j)] = data[(repl, j)];
-                }
+                let far = (0..n)
+                    .filter(|&i| !taken[i])
+                    .max_by(|&a, &b| dist[a].total_cmp(&dist[b]).then(b.cmp(&a)))
+                    .unwrap_or(0);
+                taken[far] = true;
+                centroid.copy_from_slice(points.row(far));
             } else {
                 let inv = 1.0 / counts[c] as f64;
-                for j in 0..d {
-                    centroids[(c, j)] = sums[(c, j)] * inv;
+                for (x, s) in centroid.iter_mut().zip(&sums[c * d..(c + 1) * d]) {
+                    *x = s * inv;
                 }
             }
         }
     }
+    labels
+}
 
-    Ok(labels)
+/// One k-means run: k-means++ seeding, then Lloyd's algorithm.
+fn kmeans_labels(points: &Points, k: usize, rng: &mut StdRng) -> Result<Vec<usize>, OncError> {
+    if k < 2 || k > points.n {
+        return Err(OncError::ClusteringFailed);
+    }
+    Ok(lloyd(points, &kmeans_plus_plus(points, k, rng)))
 }
 
 fn silhouette_samples(data: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
-    let n = data.nrows();
-    let mut by_cluster: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (i, lbl) in labels.iter().copied().enumerate() {
-        by_cluster.entry(lbl).or_default().push(i);
-    }
+    silhouette_from_pairwise(&pairwise_distances(&Points::new(data)), labels)
+}
 
+/// Euclidean distances between the rows.
+fn pairwise_distances(points: &Points) -> DMatrix<f64> {
+    let n = points.n;
     let mut pairwise = DMatrix::zeros(n, n);
     for i in 0..n {
         for j in i..n {
-            let mut s = 0.0;
-            for c in 0..data.ncols() {
-                let diff = data[(i, c)] - data[(j, c)];
-                s += diff * diff;
-            }
-            let d = s.sqrt();
+            let d = squared_distance(points.row(i), points.row(j)).sqrt();
             pairwise[(i, j)] = d;
             pairwise[(j, i)] = d;
         }
+    }
+    pairwise
+}
+
+fn silhouette_from_pairwise(pairwise: &DMatrix<f64>, labels: &[usize]) -> Vec<f64> {
+    let n = pairwise.nrows();
+    let mut by_cluster: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (i, lbl) in labels.iter().copied().enumerate() {
+        by_cluster.entry(lbl).or_default().push(i);
     }
 
     let mut scores = vec![0.0; n];
@@ -548,7 +681,8 @@ mod tests {
             4,
             &[1.0, 0.9, 0.0, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.9, 0.0, 0.0, 0.9, 1.0],
         );
-        let state = cluster_kmeans_base(&corr, 3, 3).unwrap();
+        let state =
+            cluster_kmeans_base(&corr, 3, 3, &mut StdRng::seed_from_u64(DEFAULT_SEED)).unwrap();
         assert_eq!(state.clusters.len(), 2);
     }
 }

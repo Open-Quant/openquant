@@ -1,6 +1,6 @@
 use csv::ReaderBuilder;
 use nalgebra::DMatrix;
-use openquant::onc::{check_improve_clusters, get_onc_clusters};
+use openquant::onc::{check_improve_clusters, get_onc_clusters, get_onc_clusters_with_seed};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -58,36 +58,96 @@ fn load_breast_cancer_correlation() -> DMatrix<f64> {
     corr
 }
 
-fn contains_cluster(clusters: &BTreeMap<usize, Vec<usize>>, expected: &[usize]) -> bool {
-    let mut sorted_expected = expected.to_vec();
-    sorted_expected.sort_unstable();
-    clusters.values().any(|members| {
-        let mut sorted_members = members.clone();
-        sorted_members.sort_unstable();
-        sorted_members == sorted_expected
-    })
+fn breast_cancer_reference() -> serde_json::Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/onc/breast_cancer_reference.json");
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
+fn index_sets(value: &serde_json::Value) -> Vec<Vec<usize>> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect())
+        .collect()
+}
+
+fn sorted_clusters(clusters: &BTreeMap<usize, Vec<usize>>) -> Vec<Vec<usize>> {
+    let mut sets: Vec<Vec<usize>> = clusters
+        .values()
+        .map(|m| {
+            let mut m = m.clone();
+            m.sort_unstable();
+            m
+        })
+        .collect();
+    sets.sort();
+    sets
+}
+
+/// ONC on real data is a random search (see the module docs): on the breast-cancer features
+/// the partition it returns depends on the random stream. What does not depend on it, in
+/// scikit-learn's ONC (tests/fixtures/onc/generate_breast_cancer.py) and here, is that every
+/// run keeps each of the eight finest groups whole, i.e. returns one of their coarsenings, and
+/// finds the clusters that every reference run finds. Checked under several seeds, so that a
+/// change of random stream (a rand upgrade, #218/#219) cannot break it. With the random-point
+/// initialisation this replaced, most streams gave a two-cluster partition that splits the
+/// groups.
 #[test]
 fn test_get_onc_clusters() {
     let corr = load_breast_cancer_correlation();
-    let result = get_onc_clusters(&corr, 50).unwrap();
+    let reference = breast_cancer_reference();
+    let finest = index_sets(&reference["finest_partition"]);
+    let stable = index_sets(&reference["stable_clusters"]);
+    let min_clusters = reference["min_clusters"].as_u64().unwrap() as usize;
 
-    assert!(result.clusters.len() >= 5);
-    // The clusters that ONC (MLAM snippets 4.1-4.2, scikit-learn KMeans) finds under every seed:
-    // tests/fixtures/onc/generate_breast_cancer.py.
+    for seed in 0..3 {
+        let result = get_onc_clusters_with_seed(&corr, 50, seed).unwrap();
+        let found = sorted_clusters(&result.clusters);
+        assert!(found.len() >= min_clusters, "seed {seed}: {found:?}");
+        for group in &finest {
+            assert!(
+                found.iter().any(|c| group.iter().all(|i| c.contains(i))),
+                "seed {seed}: group {group:?} split in {found:?}"
+            );
+        }
+        for cluster in &stable {
+            assert!(found.contains(cluster), "seed {seed}: missing {cluster:?} in {found:?}");
+        }
+    }
+}
+
+/// #107: the re-clustering step (MLAM Snippet 4.2) must keep its partition when that scores
+/// higher. `recluster_reference.json` (tests/fixtures/onc/generate.py) is a two-level factor
+/// model whose first pass returns the eight planted sub-groups; re-clustering the ones below
+/// average gives a partition with a higher mean cluster t-stat, so that is what ONC must
+/// return, under any seed. With the comparison inverted it returned the first pass.
+#[test]
+fn test_onc_keeps_the_better_partition_after_reclustering() {
+    #[derive(serde::Deserialize)]
+    struct Reference {
+        corr: Vec<Vec<f64>>,
+        planted_clusters: Vec<Vec<usize>>,
+        silhouette: Vec<f64>,
+    }
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/onc/breast_cancer_reference.json");
-    let reference: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    for cluster in reference["stable_clusters"].as_array().unwrap() {
-        let members: Vec<usize> =
-            cluster.as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+        .join("../../tests/fixtures/onc/recluster_reference.json");
+    let r: Reference = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let n = r.corr.len();
+    let corr = DMatrix::from_fn(n, n, |i, j| r.corr[i][j]);
+    let planted: BTreeMap<usize, Vec<usize>> =
+        r.planted_clusters.iter().cloned().enumerate().collect();
+    let first_pass = mean_cluster_tstat(&planted, &r.silhouette);
+
+    for seed in 0..4 {
+        let result = get_onc_clusters_with_seed(&corr, 10, seed).unwrap();
+        let quality = mean_cluster_tstat(&result.clusters, &result.silhouette_scores);
         assert!(
-            contains_cluster(&result.clusters, &members),
-            "missing {members:?}; got {:?}",
-            result.clusters
+            quality > first_pass * 1.5,
+            "seed {seed}: mean cluster t-stat {quality}, first pass {first_pass}"
         );
+        assert!(result.clusters.len() < r.planted_clusters.len(), "seed {seed}");
     }
 }
 
@@ -98,34 +158,6 @@ fn test_check_redo_condition() {
     assert_eq!((1, 2, 3), check_improve_clusters(2.0, 3.0, (1, 2, 3), (4, 5, 6)));
     assert_eq!((1, 2, 3), check_improve_clusters(3.0, 3.0, (1, 2, 3), (4, 5, 6)));
     assert_eq!((4, 5, 6), check_improve_clusters(3.0, 2.0, (1, 2, 3), (4, 5, 6)));
-}
-
-/// Sample correlation of `t` observations of `sizes.len()` groups: each group shares one
-/// factor, plus idiosyncratic noise whose strength differs by group.
-fn noisy_block_correlation(seed: u64, sizes: &[usize], noise: &[f64], t: usize) -> DMatrix<f64> {
-    use rand::{rngs::StdRng, Rng, SeedableRng};
-    let mut rng = StdRng::seed_from_u64(seed);
-    let n: usize = sizes.iter().sum();
-    let mut x = DMatrix::<f64>::zeros(t, n);
-    let mut col = 0;
-    for (group, &size) in sizes.iter().enumerate() {
-        let factor: Vec<f64> = (0..t).map(|_| rng.r#gen::<f64>() - 0.5).collect();
-        for _ in 0..size {
-            for (r, f) in factor.iter().enumerate() {
-                x[(r, col)] = f + noise[group] * (rng.r#gen::<f64>() - 0.5);
-            }
-            col += 1;
-        }
-    }
-    let mean: Vec<f64> = (0..n).map(|j| x.column(j).mean()).collect();
-    let sd: Vec<f64> = (0..n)
-        .map(|j| (x.column(j).iter().map(|v| (v - mean[j]).powi(2)).sum::<f64>() / t as f64).sqrt())
-        .collect();
-    DMatrix::from_fn(n, n, |i, j| {
-        (0..t).map(|r| (x[(r, i)] - mean[i]) * (x[(r, j)] - mean[j])).sum::<f64>()
-            / t as f64
-            / (sd[i] * sd[j])
-    })
 }
 
 fn mean_cluster_tstat(clusters: &BTreeMap<usize, Vec<usize>>, silhouette: &[f64]) -> f64 {
@@ -144,18 +176,6 @@ fn mean_cluster_tstat(clusters: &BTreeMap<usize, Vec<usize>>, silhouette: &[f64]
         })
         .collect();
     tstats.iter().sum::<f64>() / tstats.len() as f64
-}
-
-#[test]
-fn test_onc_keeps_the_better_partition_after_reclustering() {
-    // Eight groups of four with increasing noise. The first pass finds six clusters, three of
-    // them below average quality, so ONC re-clusters those three. The re-clustered partition
-    // has a mean cluster t-stat of about 534 against the first pass's 2.5. It used to be
-    // discarded in favour of the first pass (#107).
-    let corr = noisy_block_correlation(25, &[4; 8], &[0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5], 200);
-    let result = get_onc_clusters(&corr, 3).unwrap();
-    let quality = mean_cluster_tstat(&result.clusters, &result.silhouette_scores);
-    assert!(quality > 100.0, "mean cluster t-stat {quality}");
 }
 
 /// Correlation matrix with `sizes.len()` planted blocks: `within` inside a block, `between`
@@ -180,12 +200,17 @@ fn block_correlation(sizes: &[usize], within: f64, between: f64) -> DMatrix<f64>
 #[test]
 fn test_onc_recovers_planted_blocks() {
     // Includes n = 30, the size the library used to special-case, and a perfectly separable
-    // case where every silhouette score is identical (zero variance, infinite t-stat).
-    for sizes in
+    // case where every silhouette score is identical (zero variance, infinite t-stat). Every
+    // seed must find the blocks: with six equal blocks, merging them three and three also
+    // gives every item the same silhouette, and before #218 the seeds that met that
+    // partition first returned it.
+    for (sizes, seed) in
         [vec![4, 4], vec![3, 5, 4], vec![10, 10, 10], vec![6, 9, 7, 8], vec![5, 5, 5, 5, 5, 5]]
+            .into_iter()
+            .flat_map(|sizes| (0..6).map(move |seed| (sizes.clone(), seed)))
     {
         let corr = block_correlation(&sizes, 0.9, 0.05);
-        let result = get_onc_clusters(&corr, 10).unwrap();
+        let result = get_onc_clusters_with_seed(&corr, 10, seed).unwrap();
 
         let mut got: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
         for members in &mut got {
@@ -199,7 +224,7 @@ fn test_onc_recovers_planted_blocks() {
             expected.push((start..start + size).collect::<Vec<usize>>());
             start += size;
         }
-        assert_eq!(got, expected, "block sizes {sizes:?}");
+        assert_eq!(got, expected, "block sizes {sizes:?}, seed {seed}");
     }
 }
 

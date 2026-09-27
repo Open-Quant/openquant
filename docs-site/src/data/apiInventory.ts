@@ -341,7 +341,8 @@ export const apiInventory = {
       "vwap"
     ],
     "openquant::onc": [
-      "get_onc_clusters"
+      "get_onc_clusters",
+      "get_onc_clusters_with_seed"
     ],
     "openquant::pipeline": [
       "infer_periods_per_year",
@@ -933,10 +934,12 @@ export const apiInventory = {
       "vwap": "fn"
     },
     "openquant::onc": {
+      "DEFAULT_SEED": "constant",
       "OncError": "enum",
       "OncResult": "struct",
       "check_improve_clusters": "fn",
-      "get_onc_clusters": "fn"
+      "get_onc_clusters": "fn",
+      "get_onc_clusters_with_seed": "fn"
     },
     "openquant::pipeline": {
       "BacktestStage": "struct",

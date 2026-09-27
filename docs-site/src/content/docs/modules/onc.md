@@ -14,6 +14,8 @@ citation:
   - "Rousseeuw, P. J. (1987). Silhouettes: a graphical aid to the interpretation and validation of cluster analysis. Journal of Computational and Applied Mathematics 20, 53–65."
 rust_api:
   - "get_onc_clusters"
+  - "get_onc_clusters_with_seed"
+  - "DEFAULT_SEED"
   - "check_improve_clusters"
   - "OncResult"
   - "OncError"
@@ -54,7 +56,9 @@ of the silhouettes, $q=\mathrm{E}[S_i]/\sqrt{\mathrm{V}[S_i]}$: high when silhou
 large *and* uniformly so.
 
 **Base clustering.** Run k-means for every $k$ from 2 to $N-1$, `repeat` times each with
-different initialisations, and keep the partition with the highest $q$.
+different initialisations, and keep the partition with the highest $q$. Each run is one
+k-means++ initialisation followed by Lloyd's algorithm, as the book's Snippet 4.1 does with
+scikit-learn's `KMeans(n_init=1)`. Equal $q$ goes to the higher mean silhouette.
 
 **Higher-level clustering.** Compute $q$ per cluster. Clusters below the average are pooled
 and the whole procedure is run again on just their members, on the view that a poor cluster
@@ -63,6 +67,8 @@ may be several real ones merged. The re-clustered partition is kept if it scores
 `get_onc_clusters(corr, repeat)` returns an `OncResult`: `clusters`, a map from cluster label
 to member indices; `silhouette_scores`, one per item in the original order; and
 `ordered_correlation`, the matrix permuted so that clusters are contiguous.
+`get_onc_clusters_with_seed(corr, repeat, seed)` is the same with the seed of the random stream
+given; from Python it is the `seed` argument, 42 by default.
 
 ## Recovering planted clusters
 
@@ -99,9 +105,9 @@ print(f"mean silhouette {sum(silhouettes) / len(silhouettes):.2f}")
 
 ```text
 planted groups: [1, 2, 0, 2, 1, 0, 2, 0, 0, 1, 0, 1]
-cluster 0: members [1, 3, 6]  planted group [2]
+cluster 0: members [0, 4, 9, 11]  planted group [1]
 cluster 1: members [2, 5, 7, 8, 10]  planted group [0]
-cluster 2: members [0, 4, 9, 11]  planted group [1]
+cluster 2: members [1, 3, 6]  planted group [2]
 mean silhouette 0.48
 ```
 
@@ -109,8 +115,8 @@ Nothing told the algorithm to look for three clusters, or that their sizes diffe
 returned three, and each holds exactly the members of one planted group.
 
 <figure>
-<img class="dark:sl-hidden" src="/figures/mlam4-onc-light.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes three, five and four, with near-zero correlation everywhere else." />
-<img class="light:sl-hidden" src="/figures/mlam4-onc-dark.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes three, five and four, with near-zero correlation everywhere else." />
+<img class="dark:sl-hidden" src="/figures/mlam4-onc-light.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes four, five and three, with near-zero correlation everywhere else." />
+<img class="light:sl-hidden" src="/figures/mlam4-onc-dark.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes four, five and three, with near-zero correlation everywhere else." />
 <figcaption>The example's correlation matrix, before and after. The right-hand panel is <code>ordered_correlation</code>.</figcaption>
 </figure>
 
@@ -147,9 +153,17 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
   the clusters it replaced, as in Snippet 4.2. Until
   [#107](https://github.com/Open-Quant/openquant/issues/107) was fixed the comparison was
   inverted, so on matrices that reached this step ONC returned the worse of its two partitions.
-- **Results are reproducible, and not tunable.** k-means is seeded from a fixed value, the
-  repetition number and $k$, so the same matrix always gives the same answer. `repeat` adds
-  initialisations; there is no seed parameter to vary.
+- **ONC is a random search, and on real data its answer can depend on the seed.** The
+  partition kept is the best of `repeat` k-means runs per $k$, and the best one may be a
+  k-means local optimum that few initialisations reach. The same matrix, `repeat` and seed
+  always give the same answer, and clean structure like the example above comes back the same
+  under any seed. Real data need not: on the 30 features of the breast-cancer data set, with
+  `repeat=50`, different seeds return eight, seven, six or five clusters, every one of them a
+  merger of the same eight groups; scikit-learn's ONC does the same. Run a few seeds, and
+  raise `repeat`, before reading much into one partition.
+  Until [#218](https://github.com/Open-Quant/openquant/issues/218) the initialisations were
+  $k$ random points instead of k-means++, and on that data most seeds returned a
+  two-cluster partition that split those groups.
 - **Cost grows as the cube of the number of items or worse.** Every $k$ up to $N-1$ is tried,
   `repeat` times, and each silhouette pass is quadratic. A few hundred items is comfortable;
   thousands is not, and the recursion multiplies it.

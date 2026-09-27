@@ -15,6 +15,13 @@ This script builds a sample correlation matrix from simulated returns with three
 factors (so, unlike an exact block matrix, every silhouette value is different), and records
 sklearn's silhouette value of every series under the planted labels. The Rust test asserts that
 ONC (a) recovers the planted clusters and (b) reports those silhouette values.
+
+It also writes recluster_reference.json for crates/openquant/tests/onc.rs: a two-level factor
+model (two groups of four sub-groups of three series; each series loads 1.0 on its group's
+factor and 0.8 on its sub-group's, plus 0.6 noise). ONC's first pass returns the eight planted
+sub-groups; enough of them score below average for the re-clustering step (MLAM Snippet 4.2)
+to run, and its partition has the higher mean cluster t-statistic. The file holds sklearn's
+silhouettes of the eight sub-groups, from which the test computes the first pass's score.
 """
 
 import json
@@ -51,5 +58,27 @@ def main():
     print("silhouette", np.round(silh, 4))
 
 
+def recluster_case():
+    rng = np.random.default_rng(1)
+    t, cols, labels = 500, [], []
+    for group in range(2):
+        f_group = rng.normal(size=t)
+        for sub in range(4):
+            f_sub = rng.normal(size=t)
+            for _ in range(3):
+                cols.append(1.0 * f_group + 0.8 * f_sub + 0.6 * rng.normal(size=t))
+                labels.append(group * 4 + sub)
+    labels = np.array(labels)
+    corr = np.corrcoef(np.array(cols).T, rowvar=False)
+    dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0.0, None))
+    out = {
+        "corr": corr.tolist(),
+        "planted_clusters": [np.flatnonzero(labels == k).tolist() for k in range(8)],
+        "silhouette": silhouette_samples(dist, labels).tolist(),
+    }
+    (HERE / "recluster_reference.json").write_text(json.dumps(out, indent=1) + "\n")
+
+
 if __name__ == "__main__":
+    recluster_case()
     main()

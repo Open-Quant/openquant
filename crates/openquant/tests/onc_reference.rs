@@ -8,7 +8,7 @@
 //! `docs/test-sensitivity-audit.md`.
 
 use nalgebra::DMatrix;
-use openquant::onc::get_onc_clusters;
+use openquant::onc::{get_onc_clusters, get_onc_clusters_with_seed};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -30,14 +30,20 @@ fn silhouette_scores_match_sklearn_on_planted_factor_clusters() {
     let r = reference();
     let n = r.corr.len();
     let corr = DMatrix::from_fn(n, n, |i, j| r.corr[i][j]);
-    let result = get_onc_clusters(&corr, 10).unwrap();
-
-    let mut got: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
-    for members in &mut got {
-        members.sort_unstable();
+    // The planted clusters are a property of the data, not of the random stream (#218).
+    for seed in 0..6 {
+        let result = get_onc_clusters_with_seed(&corr, 10, seed).unwrap();
+        let mut got: Vec<Vec<usize>> = result.clusters.values().cloned().collect();
+        for members in &mut got {
+            members.sort_unstable();
+        }
+        got.sort();
+        assert_eq!(
+            got, r.planted_clusters,
+            "seed {seed}: ONC did not recover the planted clusters"
+        );
     }
-    got.sort();
-    assert_eq!(got, r.planted_clusters, "ONC did not recover the planted clusters");
+    let result = get_onc_clusters(&corr, 10).unwrap();
 
     assert_eq!(result.silhouette_scores.len(), n);
     for (i, (g, w)) in result.silhouette_scores.iter().zip(&r.silhouette).enumerate() {
