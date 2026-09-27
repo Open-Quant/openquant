@@ -48,7 +48,7 @@ fn fit_line(x: &[f64], y: &[f64]) -> (f64, f64) {
 #[test]
 fn test_bias_variance_noise_recovers_known_label_noise() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
     use rand_distr::{Distribution, Normal};
 
     // AFML §6.2 simulation: y = f(x) + eps with Var(eps) = sigma^2 known. Each model is a line
@@ -68,7 +68,7 @@ fn test_bias_variance_noise_recovers_known_label_noise() {
     let n_train = 30;
     let preds: Vec<Vec<f64>> = (0..n_models)
         .map(|_| {
-            let x: Vec<f64> = (0..n_train).map(|_| rng.r#gen::<f64>()).collect();
+            let x: Vec<f64> = (0..n_train).map(|_| rng.random::<f64>()).collect();
             let y: Vec<f64> = x.iter().map(|&v| f(v) + normal.sample(&mut rng)).collect();
             let (a, b) = fit_line(&x, &y);
             x_test.iter().map(|&v| a + b * v).collect()

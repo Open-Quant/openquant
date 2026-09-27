@@ -7,7 +7,7 @@ use openquant::microstructural_features::{
     get_vpin, quantile_mapping, MicrostructuralFeaturesGenerator,
 };
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_distr::{Distribution, Normal};
 use serde::Deserialize;
 use std::path::Path;
@@ -297,8 +297,8 @@ fn test_trades_based_hasbrouck_lambda_recovers_lambda_under_balanced_flow() {
     let mut dollar_volume = Vec::with_capacity(n);
     let mut sides = Vec::with_capacity(n);
     for _ in 0..n {
-        let side = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
-        let dv: f64 = rng.gen_range(1e4..1e6);
+        let side = if rng.random_bool(0.5) { 1.0 } else { -1.0 };
+        let dv: f64 = rng.random_range(1e4..1e6);
         log_ret.push(lambda * side * dv.sqrt() + noise.sample(&mut rng));
         dollar_volume.push(dv);
         sides.push(side);

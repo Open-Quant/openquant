@@ -60,7 +60,7 @@
 //! ```
 
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 use crate::sampling::seq_bootstrap_with_rng;
 
@@ -277,7 +277,7 @@ pub fn bootstrap_sample_indices(
         return Err(EnsembleError::ZeroSampleCount);
     }
     let mut rng = StdRng::seed_from_u64(seed);
-    Ok((0..sample_size).map(|_| rng.gen_range(0..n_samples)).collect())
+    Ok((0..sample_size).map(|_| rng.random_range(0..n_samples)).collect())
 }
 
 /// Draws `sample_size` label indices with the sequential bootstrap (AFML §4.5.1, Snippets

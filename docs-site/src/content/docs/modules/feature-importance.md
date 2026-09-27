@@ -135,8 +135,8 @@ let mut model = MeanDiff { k: 4.0, w: vec![], b: 0.0 };
 let mda = mean_decrease_accuracy(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss, 42)?;
 let sfi = single_feature_importance(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss)?;
 
-assert!((mda["strong"].mean - 0.725).abs() < 1e-3);
-assert!((mda["weak"].mean - 0.187).abs() < 1e-3);
+assert!((mda["strong"].mean - 0.738).abs() < 1e-3);
+assert!((mda["weak"].mean - 0.215).abs() < 1e-3);
 assert!(mda["noise"].mean.abs() < 0.01);
 // Alone, the irrelevant feature scores a coin flip; the strong one is far better.
 assert!((sfi["noise"].mean + 0.696).abs() < 1e-3);
@@ -146,9 +146,9 @@ assert!((sfi["strong"].mean + 0.330).abs() < 1e-3);
 Printed to three decimals with their standard errors, the two results are:
 
 ```text
-strong  MDA +0.725 ± 0.017   SFI -0.330 ± 0.007
-weak    MDA +0.187 ± 0.018   SFI -0.666 ± 0.009
-noise   MDA -0.003 ± 0.003   SFI -0.696 ± 0.001
+strong  MDA +0.738 ± 0.014   SFI -0.330 ± 0.007
+weak    MDA +0.215 ± 0.027   SFI -0.666 ± 0.009
+noise   MDA -0.006 ± 0.002   SFI -0.696 ± 0.001
 ```
 
 The `±` is `ImportanceStats::std`, which despite the name is the standard error of the mean

@@ -45,7 +45,7 @@
 
 use crate::util::stats;
 use crate::util::InputError;
-use rand::Rng;
+use rand::RngExt;
 use std::collections::{BTreeMap, HashSet};
 
 /// An EF3M fitter for a mixture of two Gaussians: the target moments, the search settings,
@@ -369,7 +369,7 @@ impl M2N {
                 })
             }
         }
-        let p_1 = rand::thread_rng().gen_range(0.0..1.0);
+        let p_1 = rand::rng().random_range(0.0..1.0);
         self.iterate_from(mu_2, p_1);
         Ok(())
     }

@@ -89,15 +89,18 @@ fn mdi_standard_error_is_symmetric_for_mirrored_columns() {
 
 type Splits = Vec<(Vec<usize>, Vec<usize>)>;
 
-/// MDA shuffles each test-fold column with a seeded RNG (snippet 8.3's `np.random.shuffle`). A
-/// two-row column has only two orders, and a shuffle may leave it in place. With this seed the
-/// f0 column of fold A is swapped, which is the case the numbers below are worked for. (A seed
-/// that left it in place would give f0 an importance of 0 there instead of 1. Fold B scores 0
-/// for f0 in either order, and f1 is never read.)
-const SEED: u64 = 2;
+/// MDA shuffles each test-fold column with a seeded RNG (snippet 8.3's `np.random.shuffle`). In
+/// the data below every test fold has two rows, so a shuffle either swaps a column's two values
+/// or leaves them in place, and only one of those choices changes any score: whether fold A's f0
+/// is swapped (fold B scores 0 for f0 in either order, and f1 is never read). So under every
+/// seed each MDA below takes one of two hand-worked values, and which one depends only on that
+/// coin flip. The tests check every seed in `SEEDS` against the value for its outcome and that
+/// both outcomes occur, which keeps them independent of the random stream: they used to pin one
+/// seed picked for rand 0.8's shuffle, and rand 0.9 changed the shuffle (#219).
+const SEEDS: std::ops::Range<u64> = 0..32;
 
 /// Two folds whose test sets have two rows each, so "permute the column" can only mean "swap the
-/// two values" (given `SEED`, see above).
+/// two values" or "leave them".
 ///
 ///            f0   f1   y
 ///   row 0    +1   -1   1      fold A tests rows 0,1
@@ -113,76 +116,88 @@ fn mda_data() -> (Vec<Vec<f64>>, Vec<f64>, Splits) {
     (x, y, splits)
 }
 
+/// `(mean, std)` of f0's and f1's MDA under each seed of `SEEDS`.
+fn mda_by_seed(scoring: Scoring) -> Vec<((f64, f64), (f64, f64))> {
+    let (x, y, splits) = mda_data();
+    SEEDS
+        .map(|seed| {
+            let mda = mean_decrease_accuracy(
+                &mut SignOfFirstColumn,
+                &x,
+                &y,
+                &names(2),
+                &splits,
+                None,
+                scoring,
+                seed,
+            )
+            .unwrap();
+            ((mda["f0"].mean, mda["f0"].std), (mda["f1"].mean, mda["f1"].std))
+        })
+        .collect()
+}
+
+/// Checks that every seed gives one of the two hand-worked outcomes and that both occur.
+fn assert_two_outcomes(got: &[f64], unswapped: f64, swapped: f64, tol: f64) {
+    for (seed, g) in SEEDS.zip(got) {
+        assert!(
+            (g - unswapped).abs() < tol || (g - swapped).abs() < tol,
+            "seed {seed}: {g}, expected {unswapped} or {swapped}"
+        );
+    }
+    assert!(got.iter().any(|g| (g - swapped).abs() < tol), "no seed swapped fold A: {got:?}");
+    assert!(got.iter().any(|g| (g - unswapped).abs() < tol), "every seed swapped: {got:?}");
+}
+
 /// Accuracy scoring, importance = (base - permuted) / (1 - permuted):
-///   fold A: base predictions (1,0) vs y (1,0) -> 1.0; f0 swapped -> predictions (0,1) -> 0.0
-///           importance(f0) = (1 - 0) / (1 - 0) = 1
-///   fold B: base predictions (1,0) vs y (1,1) -> 0.5; f0 swapped -> (0,1) -> 0.5
+///   fold A: base predictions (1,0) vs y (1,0) -> 1.0
+///           f0 swapped -> predictions (0,1) -> 0.0: importance(f0) = (1 - 0) / (1 - 0) = 1
+///           f0 in place -> 1.0: denominator 0, importance 0 (as documented)
+///   fold B: base predictions (1,0) vs y (1,1) -> 0.5; f0 either way -> 0.5
 ///           importance(f0) = 0 / 0.5 = 0
-///   mean importance(f0) = 0.5.  f1 is never read, so its importance is exactly 0 in both folds.
+///   mean importance(f0) = 0.5 if fold A was swapped, else 0. f1 is never read, so its
+///   importance is exactly 0 in both folds.
 #[test]
 fn mda_accuracy_hand_worked() {
-    let (x, y, splits) = mda_data();
-    let mda = mean_decrease_accuracy(
-        &mut SignOfFirstColumn,
-        &x,
-        &y,
-        &names(2),
-        &splits,
-        None,
-        Scoring::Accuracy,
-        SEED,
-    )
-    .unwrap();
-    assert!((mda["f0"].mean - 0.5).abs() < 1e-15, "{}", mda["f0"].mean);
-    assert_eq!(mda["f1"].mean, 0.0);
-    assert_eq!(mda["f1"].std, 0.0);
+    let runs = mda_by_seed(Scoring::Accuracy);
+    let f0: Vec<f64> = runs.iter().map(|r| r.0 .0).collect();
+    assert_two_outcomes(&f0, 0.0, 0.5, 1e-15);
+    for (f0, f1) in runs {
+        assert!(f0.0.is_finite());
+        assert_eq!(f1, (0.0, 0.0));
+    }
 }
 
 /// Negative log-loss scoring, importance = (base - permuted) / (-permuted), i.e. with
 /// L = -score: (L_perm - L_base) / L_perm.
 ///   fold A: base probabilities (0.9, 0.1) vs y (1,0): L_base = -ln 0.9
 ///           swapped          (0.1, 0.9) vs y (1,0): L_perm = -ln 0.1
-///           importance(f0) = 1 - ln 0.9 / ln 0.1
+///           importance(f0) = 1 - ln 0.9 / ln 0.1 (0 if left in place)
 ///   fold B: y = (1,1), so swapping the two probabilities leaves the loss unchanged: 0
-///   mean importance(f0) = (1 - ln 0.9 / ln 0.1) / 2 = 0.4771212547...
+///   mean importance(f0) = (1 - ln 0.9 / ln 0.1) / 2 = 0.4771212547... if fold A was swapped
 #[test]
 fn mda_neg_log_loss_hand_worked() {
-    let (x, y, splits) = mda_data();
-    let mda = mean_decrease_accuracy(
-        &mut SignOfFirstColumn,
-        &x,
-        &y,
-        &names(2),
-        &splits,
-        None,
-        Scoring::NegLogLoss,
-        SEED,
-    )
-    .unwrap();
+    let runs = mda_by_seed(Scoring::NegLogLoss);
     let want = (1.0 - 0.9f64.ln() / 0.1f64.ln()) / 2.0;
+    let f0: Vec<f64> = runs.iter().map(|r| r.0 .0).collect();
     // two logs, a mean of two and a ratio: rounding only
-    assert!((mda["f0"].mean - want).abs() < 1e-14, "{} vs {want}", mda["f0"].mean);
-    assert_eq!(mda["f1"].mean, 0.0);
+    assert_two_outcomes(&f0, 0.0, want, 1e-14);
+    assert!(runs.iter().all(|r| r.1 .0 == 0.0));
 }
 
 /// Snippet 8.3 ends with `imp.std() * imp.shape[0] ** -0.5` on a pandas DataFrame (ddof = 1).
-/// Accuracy importances of f0 over the two folds are (1, 0): sample std = sqrt(0.5),
-/// standard error = sqrt(0.5) / sqrt(2) = 0.5. (Population std would give 0.5 / sqrt(2) = 0.3536.)
+/// When fold A is swapped the accuracy importances of f0 over the two folds are (1, 0): sample
+/// std = sqrt(0.5), standard error = sqrt(0.5) / sqrt(2) = 0.5. (Population std would give
+/// 0.5 / sqrt(2) = 0.3536.) Unswapped, they are (0, 0) and the standard error is 0.
 #[test]
 fn mda_standard_error_uses_sample_std_hand_worked() {
-    let (x, y, splits) = mda_data();
-    let mda = mean_decrease_accuracy(
-        &mut SignOfFirstColumn,
-        &x,
-        &y,
-        &names(2),
-        &splits,
-        None,
-        Scoring::Accuracy,
-        SEED,
-    )
-    .unwrap();
-    assert!((mda["f0"].std - 0.5).abs() < 1e-12, "{}", mda["f0"].std);
+    let runs = mda_by_seed(Scoring::Accuracy);
+    let std: Vec<f64> = runs.iter().map(|r| r.0 .1).collect();
+    assert_two_outcomes(&std, 0.0, 0.5, 1e-12);
+    // The standard error goes with the mean: 0.5 exactly when the mean is 0.5.
+    for (seed, r) in SEEDS.zip(&runs) {
+        assert_eq!(r.0 .0 == 0.5, (r.0 .1 - 0.5).abs() < 1e-12, "seed {seed}: {:?}", r.0);
+    }
 }
 
 /// SFI scores each feature alone (the classifier is shown a one-column matrix).

@@ -54,8 +54,8 @@
 //! ```
 
 use crate::util::InputError;
-use rand::distributions::{Distribution, WeightedIndex};
-use rand::{thread_rng, Rng};
+use rand::distr::{weighted::WeightedIndex, Distribution};
+use rand::Rng;
 
 /// Builds the indicator matrix of which labels span which bars (AFML Snippet 4.3).
 ///
@@ -263,7 +263,7 @@ pub fn seq_bootstrap(
     sample_length: Option<usize>,
     warmup_samples: Option<Vec<usize>>,
 ) -> Result<Vec<usize>, InputError> {
-    seq_bootstrap_with_rng(ind_mat, sample_length, warmup_samples, &mut thread_rng())
+    seq_bootstrap_with_rng(ind_mat, sample_length, warmup_samples, &mut rand::rng())
 }
 
 /// [`seq_bootstrap`] drawing from the supplied generator; a seeded generator gives a

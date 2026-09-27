@@ -7,7 +7,7 @@ use openquant::dynamic_allocation::{
     DynamicAllocationError, HorizonForecast,
 };
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 fn binomial(n: u64, k: u64) -> u64 {
     if k > n {
@@ -230,11 +230,11 @@ fn costs_can_keep_the_initial_position() {
 fn random_forecasts(rng: &mut StdRng, n: usize, h: usize) -> Vec<HorizonForecast> {
     (0..h)
         .map(|_| {
-            let a = DMatrix::from_fn(n, n, |_, _| rng.gen_range(-0.2..0.2));
+            let a = DMatrix::from_fn(n, n, |_, _| rng.random_range(-0.2..0.2));
             HorizonForecast {
-                mean: (0..n).map(|_| rng.gen_range(-0.05..0.05)).collect(),
+                mean: (0..n).map(|_| rng.random_range(-0.05..0.05)).collect(),
                 covariance: &a * a.transpose() + DMatrix::identity(n, n) * 0.01,
-                cost: (0..n).map(|_| rng.gen_range(0.0..0.01)).collect(),
+                cost: (0..n).map(|_| rng.random_range(0.0..0.01)).collect(),
             }
         })
         .collect()

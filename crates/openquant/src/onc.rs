@@ -69,7 +69,7 @@
 use crate::util::stats;
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use std::collections::BTreeMap;
 
 /// Seed of the random stream [`get_onc_clusters`] uses.
@@ -492,7 +492,7 @@ fn squared_distance(a: &[f64], b: &[f64]) -> f64 {
 fn kmeans_plus_plus(points: &Points, k: usize, rng: &mut StdRng) -> Vec<usize> {
     let n = points.n;
     let mut centres = Vec::with_capacity(k);
-    centres.push(rng.gen_range(0..n));
+    centres.push(rng.random_range(0..n));
     let mut closest: Vec<f64> =
         (0..n).map(|i| squared_distance(points.row(i), points.row(centres[0]))).collect();
     let n_trials = 2 + (k as f64).ln() as usize;
@@ -501,7 +501,7 @@ fn kmeans_plus_plus(points: &Points, k: usize, rng: &mut StdRng) -> Vec<usize> {
         let mut best: Option<(f64, usize, Vec<f64>)> = None;
         for _ in 0..n_trials {
             let pick = if total > 0.0 {
-                let target = rng.r#gen::<f64>() * total;
+                let target = rng.random::<f64>() * total;
                 let mut acc = 0.0;
                 closest
                     .iter()
@@ -512,7 +512,7 @@ fn kmeans_plus_plus(points: &Points, k: usize, rng: &mut StdRng) -> Vec<usize> {
                     .unwrap_or(n - 1)
             } else {
                 // Every point sits on a centre already: any choice is as good.
-                rng.gen_range(0..n)
+                rng.random_range(0..n)
             };
             let candidate = points.row(pick);
             let updated: Vec<f64> = closest

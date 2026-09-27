@@ -200,21 +200,21 @@ fn test_purged_kfold_purges_labels_overlapping_the_first_test_sample() {
 #[test]
 fn test_purged_kfold_no_train_label_overlaps_any_test_label() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let origin = NaiveDateTime::parse_from_str("2019-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let mut rng = StdRng::seed_from_u64(7);
     for _ in 0..200 {
-        let n = rng.gen_range(6..60);
-        let n_splits = rng.gen_range(2..=n.min(6));
+        let n = rng.random_range(6..60);
+        let n_splits = rng.random_range(2..=n.min(6));
         // Increasing start times with variable-length labels, as triple-barrier
         // events produce: an early label may outlive a later one.
         let mut minute = 0i64;
         let info_sets: Vec<_> = (0..n)
             .map(|_| {
-                minute += rng.gen_range(1..10);
+                minute += rng.random_range(1..10);
                 let s = origin + chrono::Duration::minutes(minute);
-                (s, s + chrono::Duration::minutes(rng.gen_range(0..40)))
+                (s, s + chrono::Duration::minutes(rng.random_range(0..40)))
             })
             .collect();
 
@@ -283,14 +283,14 @@ fn make_spans(
 
 /// Increasing starts with variable-length labels, as triple-barrier events produce.
 fn random_spans(rng: &mut rand::rngs::StdRng, n: usize) -> Vec<(NaiveDateTime, NaiveDateTime)> {
-    use rand::Rng;
+    use rand::RngExt;
     let origin = NaiveDateTime::parse_from_str("2019-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let mut minute = 0i64;
     (0..n)
         .map(|_| {
-            minute += rng.gen_range(1..10);
+            minute += rng.random_range(1..10);
             let s = origin + chrono::Duration::minutes(minute);
-            (s, s + chrono::Duration::minutes(rng.gen_range(0..40)))
+            (s, s + chrono::Duration::minutes(rng.random_range(0..40)))
         })
         .collect()
 }
@@ -447,13 +447,13 @@ fn test_cpcv_splits_and_diagnostics() {
 #[test]
 fn test_split_matches_snippet_7_3() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let mut rng = StdRng::seed_from_u64(33);
     for _ in 0..300 {
-        let n = rng.gen_range(4..80);
-        let n_splits = rng.gen_range(2..=n.min(8));
-        let pct_embargo = [0.0, 0.01, 0.05, 0.15, 0.4][rng.gen_range(0..5)];
+        let n = rng.random_range(4..80);
+        let n_splits = rng.random_range(2..=n.min(8));
+        let pct_embargo = [0.0, 0.01, 0.05, 0.15, 0.4][rng.random_range(0..5)];
         let info = random_spans(&mut rng, n);
 
         let pkf = PurgedKFold::new(n_splits, info.clone(), pct_embargo).unwrap();
@@ -583,14 +583,14 @@ fn test_cpcv_with_one_test_fold_is_purged_kfold() {
 #[test]
 fn test_cpcv_no_train_label_overlaps_any_test_label() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let mut rng = StdRng::seed_from_u64(12);
     for _ in 0..150 {
-        let n = rng.gen_range(8..60);
-        let n_splits = rng.gen_range(3..=n.min(7));
-        let k = rng.gen_range(1..n_splits);
-        let pct_embargo = [0.0, 0.02, 0.1][rng.gen_range(0..3)];
+        let n = rng.random_range(8..60);
+        let n_splits = rng.random_range(3..=n.min(7));
+        let k = rng.random_range(1..n_splits);
+        let pct_embargo = [0.0, 0.02, 0.1][rng.random_range(0..3)];
         let info = random_spans(&mut rng, n);
 
         let pkf = PurgedKFold::new(n_splits, info.clone(), pct_embargo).unwrap();
@@ -727,13 +727,13 @@ fn test_embargo_follows_snippet_7_3_with_variable_length_labels() {
 #[test]
 fn test_embargo_never_removes_samples_before_the_test_fold() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let mut rng = StdRng::seed_from_u64(134);
     for _ in 0..300 {
-        let n = rng.gen_range(4..80);
-        let n_splits = rng.gen_range(2..=n.min(8));
-        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.gen_range(0..4)];
+        let n = rng.random_range(4..80);
+        let n_splits = rng.random_range(2..=n.min(8));
+        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.random_range(0..4)];
         let info = random_spans(&mut rng, n);
 
         let with = PurgedKFold::new(n_splits, info.clone(), pct_embargo)
@@ -756,13 +756,13 @@ fn test_embargo_never_removes_samples_before_the_test_fold() {
 #[test]
 fn test_embargo_starts_where_the_purge_ends() {
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let mut rng = StdRng::seed_from_u64(73);
     for _ in 0..300 {
-        let n = rng.gen_range(4..80);
-        let n_splits = rng.gen_range(2..=n.min(8));
-        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.gen_range(0..4)];
+        let n = rng.random_range(4..80);
+        let n_splits = rng.random_range(2..=n.min(8));
+        let pct_embargo = [0.01, 0.05, 0.15, 0.4][rng.random_range(0..4)];
         let h = (pct_embargo * n as f64).ceil() as usize;
         let info = random_spans(&mut rng, n);
 
@@ -790,7 +790,7 @@ fn test_purged_kfold_and_backtesting_engine_train_on_the_same_samples() {
         BacktestRunConfig, BacktestSafeguards, CpcvConfig, CrossValidationConfig, SplitDefinition,
     };
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
 
     let run = |mode: BacktestMode| BacktestRunConfig {
         mode_provenance: format!("issue_134_{mode:?}"),
@@ -810,10 +810,10 @@ fn test_purged_kfold_and_backtesting_engine_train_on_the_same_samples() {
     let mut rng = StdRng::seed_from_u64(132);
     let mut compared = (0, 0);
     for _ in 0..200 {
-        let n = rng.gen_range(12..80);
-        let n_splits = rng.gen_range(3..=6);
-        let k = rng.gen_range(1..n_splits);
-        let pct_embargo = [0.0, 0.02, 0.05, 0.1][rng.gen_range(0..4)];
+        let n = rng.random_range(12..80);
+        let n_splits = rng.random_range(3..=6);
+        let k = rng.random_range(1..n_splits);
+        let pct_embargo = [0.0, 0.02, 0.05, 0.1][rng.random_range(0..4)];
         let info = random_spans(&mut rng, n);
         let data = BacktestData { returns: vec![0.001; n], label_spans: info.clone() };
         let pkf = PurgedKFold::new(n_splits, info, pct_embargo).unwrap();

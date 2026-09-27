@@ -12,7 +12,7 @@ use openquant::backtesting_engine::{
     WalkForwardConfig,
 };
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 type Span = (NaiveDateTime, NaiveDateTime);
 
@@ -51,8 +51,8 @@ fn random_labels(n: usize, seed: u64) -> BacktestData {
     let mut t = 0i64;
     let mut spans = Vec::with_capacity(n);
     for _ in 0..n {
-        t += rng.gen_range(0..3);
-        spans.push((day(t), day(t + rng.gen_range(0..7))));
+        t += rng.random_range(0..3);
+        spans.push((day(t), day(t + rng.random_range(0..7))));
     }
     BacktestData { returns: (0..n).map(|i| i as f64).collect(), label_spans: spans }
 }

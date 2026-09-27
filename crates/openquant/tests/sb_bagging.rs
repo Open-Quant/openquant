@@ -5,7 +5,7 @@ use openquant::sb_bagging::{
     SequentiallyBootstrappedBaggingRegressor,
 };
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 fn synthetic_dataset() -> (DMatrix<f64>, Vec<u8>, Vec<f64>, Vec<Vec<u8>>) {
     let n = 240usize;
@@ -254,7 +254,7 @@ fn test_estimators_are_sequentially_bootstrapped() {
 
     let mut rng = StdRng::seed_from_u64(7);
     let uniform: Vec<Vec<usize>> =
-        (0..300).map(|_| (0..n).map(|_| rng.gen_range(0..n)).collect()).collect();
+        (0..300).map(|_| (0..n).map(|_| rng.random_range(0..n)).collect()).collect();
     let standard = mean_uniqueness(&ind, &uniform);
 
     let mut clf = SequentiallyBootstrappedBaggingClassifier::new(7);
@@ -312,9 +312,10 @@ fn test_ind_mat_label_count_must_match_rows() {
 // A weak, noisy relationship, so that in-sample and out-of-bag scores differ.
 fn noisy_rows(n: usize) -> (DMatrix<f64>, Vec<u8>, Vec<f64>) {
     let mut rng = StdRng::seed_from_u64(11);
-    let x = DMatrix::from_fn(n, 1, |_, _| rng.gen_range(-1.0..1.0));
-    let y: Vec<u8> = (0..n).map(|r| u8::from(x[(r, 0)] + rng.gen_range(-1.0..1.0) > 0.0)).collect();
-    let y_reg: Vec<f64> = (0..n).map(|r| x[(r, 0)] + rng.gen_range(-1.0..1.0)).collect();
+    let x = DMatrix::from_fn(n, 1, |_, _| rng.random_range(-1.0..1.0));
+    let y: Vec<u8> =
+        (0..n).map(|r| u8::from(x[(r, 0)] + rng.random_range(-1.0..1.0) > 0.0)).collect();
+    let y_reg: Vec<f64> = (0..n).map(|r| x[(r, 0)] + rng.random_range(-1.0..1.0)).collect();
     (x, y, y_reg)
 }
 

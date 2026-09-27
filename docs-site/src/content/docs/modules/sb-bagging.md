@@ -91,12 +91,12 @@ print("same random_state, same predictions:", again["predictions"] == prediction
 ```
 
 ```text
-in-sample accuracy 0.725   out-of-bag accuracy 0.650
+in-sample accuracy 0.733   out-of-bag accuracy 0.733
 same random_state, same predictions: True
 ```
 
-`oob_score` scores each row only with the estimators that did not draw it, so it sits below
-the in-sample figure. It is still not an honest estimate of generalisation when labels
+`oob_score` scores each row only with the estimators that did not draw it, so it usually
+sits below the in-sample figure; on this small example the two happen to coincide. It is still not an honest estimate of generalisation when labels
 overlap (see below); score the model under
 [purged cross-validation](/modules/cross-validation/) for that.
 
