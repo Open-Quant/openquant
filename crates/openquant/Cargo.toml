@@ -15,7 +15,7 @@ readme = "../../README.md"
 [dependencies]
 chrono = "0.4"
 itertools = "0.15"
-rand = { version = "0.8", features = ["std"] }
+rand = { version = "0.10", features = ["std"] }
 statrs = "0.16"
 rand_distr = "0.4"
 nalgebra = "0.35"
