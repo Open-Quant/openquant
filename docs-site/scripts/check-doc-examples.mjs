@@ -72,6 +72,21 @@ walk(crateSrc);
 
 // --- 3. Emit a throwaway crate ---------------------------------------------
 
+// The snippets pass nalgebra/itertools/chrono values into `openquant`, so the scratch
+// crate must resolve the same major versions as `openquant` itself or every such call is
+// a type mismatch. Read the requirements from its manifest rather than pinning them here,
+// so a dependency bump there (e.g. a Dependabot PR) cannot drift from this gate.
+const openquantManifest = fs.readFileSync(path.join(repoRoot, 'crates/openquant/Cargo.toml'), 'utf8');
+const depsSection = openquantManifest.split(/^\[dependencies\]$/m)[1].split(/^\[/m)[0];
+function openquantDep(name) {
+  const m = depsSection.match(new RegExp(`^${name}\\s*=\\s*(?:"([^"]+)"|\\{[^}]*version\\s*=\\s*"([^"]+)")`, 'm'));
+  if (!m) {
+    console.error(`check:examples: no \`${name}\` in [dependencies] of crates/openquant/Cargo.toml`);
+    process.exit(1);
+  }
+  return m[1] ?? m[2];
+}
+
 fs.mkdirSync(path.join(outDir, 'src'), { recursive: true });
 
 fs.writeFileSync(
@@ -87,9 +102,9 @@ publish = false
 
 [dependencies]
 openquant = { path = ${JSON.stringify(path.join(repoRoot, 'crates/openquant'))} }
-chrono = "0.4"
-nalgebra = "0.32"
-itertools = "0.13"
+chrono = "${openquantDep('chrono')}"
+nalgebra = "${openquantDep('nalgebra')}"
+itertools = "${openquantDep('itertools')}"
 `,
   'utf8'
 );
