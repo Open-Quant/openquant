@@ -61,6 +61,7 @@ file disagree).
 
 ### Fixed
 
+- `onc`: k-means++ initialisation, as in MLAM Snippet 4.1; results were fragile to the random stream; `get_onc_clusters_with_seed` and a Python `seed` argument (#218) ([#224](https://github.com/Open-Quant/openquant/pull/224))
 - A binding default that always failed, ignored parameters and silent drops (#194) ([#202](https://github.com/Open-Quant/openquant/pull/202))
 - Input validation and minor cleanups from the rustdoc audit (#186) ([#204](https://github.com/Open-Quant/openquant/pull/204))
 - Docs/code mismatches in `pipeline`, `hcaa`, `onc`, `cross_validation`, `combinatorial_optimization`, `microstructural_features` and `streaming_hpc` (#185) ([#201](https://github.com/Open-Quant/openquant/pull/201))
