@@ -74,7 +74,7 @@ fn shpc_run_streaming_pipeline(
     vpin_cdf_threshold: f64,
     hhi_threshold: f64,
     cdf_lookback: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let stream_events: Vec<openquant::streaming_hpc::StreamEvent> = events
         .into_iter()
         .map(|(ts, price, buy_vol, sell_vol, venue)| openquant::streaming_hpc::StreamEvent {

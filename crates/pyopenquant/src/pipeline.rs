@@ -133,7 +133,7 @@ fn pipeline_run_mid_frequency_pipeline(
     risk_free_rate: f64,
     confidence_level: f64,
     periods_per_year: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let timestamps = parse_naive_datetimes(timestamps)?;
     let asset_prices = matrix_from_rows(asset_prices)?;
 
