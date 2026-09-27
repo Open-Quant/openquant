@@ -321,7 +321,7 @@ fn ens_recommend_bagging_vs_boosting(
     label_redundancy: f64,
     single_estimator_variance: f64,
     n_estimators: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let result = openquant::ensemble_methods::recommend_bagging_vs_boosting(
         base_estimator_accuracy,
         average_prediction_correlation,

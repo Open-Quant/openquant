@@ -244,14 +244,13 @@ fn dynamic_allocation_dynamic_optimal_portfolio(
     k: Option<usize>,
     initial_weights: Option<Vec<f64>>,
     max_trajectories: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     // The book's default: as many units of capital as assets.
     let units = k.unwrap_or_else(|| means.first().map_or(0, Vec::len));
     let horizons = forecasts(means, covariances, costs)?;
     let config = DynamicAllocationConfig { units, initial_weights, max_trajectories };
-    let result = py
-        .allow_threads(|| da::dynamic_optimal_portfolio(&horizons, &config))
-        .map_err(to_py_err)?;
+    let result =
+        py.detach(|| da::dynamic_optimal_portfolio(&horizons, &config)).map_err(to_py_err)?;
 
     let d = PyDict::new(py);
     d.set_item("weights", result.weights)?;

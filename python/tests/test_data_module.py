@@ -100,11 +100,10 @@ def _raw_df_frame() -> pl.DataFrame:
 
 
 def test_core_dataframe_bindings_accept_polars_frames():
-    # These take a polars DataFrame through pyo3-polars'
-    # `FromPyObject for PyDataFrame`, the code `vendor/pyo3-polars` patches.
-    # Unpatched 0.20.0 passes an integer `compat_level` to `Series.to_arrow`,
-    # which Python polars >= 1.32.3 rejects with a TypeError.
-    # See vendor/README.md.
+    # These take a polars DataFrame through pyo3-polars' `FromPyObject for PyDataFrame`
+    # and return one through `IntoPyObject`. pyo3-polars 0.20.0 passed an integer
+    # `compat_level` to `Series.to_arrow`, which Python polars >= 1.32.3 rejects, so it
+    # was vendored with a patch until 0.28 (#220), which uses `Series._export`/`_import`.
     from openquant import _core
 
     raw = _raw_df_frame()
@@ -122,6 +121,43 @@ def test_core_dataframe_bindings_accept_polars_frames():
     msft = aligned.filter(pl.col("symbol") == "MSFT")
     assert msft.height == 3
     assert msft["is_missing_bar"].to_list() == [False, True, False]
+
+
+def test_core_dataframe_bindings_round_trip_nulls_chunks_and_slices():
+    # #220: frames cross the Rust boundary through pyo3-polars' Series export. Nulls in
+    # price columns, multi-chunk columns and sliced frames must arrive unchanged, and the
+    # returned frame keeps the input dtypes.
+    from openquant import _core
+
+    raw = _raw_df_frame().with_columns(
+        pl.when(pl.col("symbol") == "MSFT").then(None).otherwise(pl.col("volume")).alias("volume")
+    )
+    chunked = pl.concat([raw.head(2), raw.tail(2)], rechunk=False)
+    assert chunked.n_chunks() == 2
+    padded = pl.concat([raw.head(1), raw, raw.tail(1)])
+    for frame in (raw, chunked, padded.slice(1, 4)):
+        cleaned, report = _core.data.clean_ohlcv_df(frame, True)
+        assert cleaned.schema == raw.schema
+        assert cleaned["symbol"].to_list() == ["AAPL", "MSFT", "MSFT"]
+        assert cleaned["ts_us"].to_list() == [raw["ts_us"][1], raw["ts_us"][3], raw["ts_us"][0]]
+        assert cleaned["close"].to_list() == [186.0, 371.5, 372.0]
+        assert cleaned["volume"].to_list() == [7100.0, None, None]
+        assert report["rows_removed_by_deduplication"] == 1
+
+    # The duplicated AAPL key keeps the first input row when keep_last is False.
+    first, _ = _core.data.clean_ohlcv_df(raw, False)
+    assert first["close"].to_list() == [185.9, 371.5, 372.0]
+
+    aligned = _core.data.align_calendar_df(chunked, 86_400)
+    assert aligned.columns == [*raw.columns, "is_missing_bar"]
+    assert aligned["is_missing_bar"].dtype == pl.Boolean
+    # A null volume is a price field of a present bar, not a missing bar.
+    msft = aligned.filter(pl.col("symbol") == "MSFT")
+    assert msft["volume"].to_list() == [None, None, None]
+    assert msft["is_missing_bar"].to_list() == [False, True, False]
+
+    with pytest.raises(ValueError, match="null symbol"):
+        _core.data.quality_report_df(raw.with_columns(pl.lit(None, pl.String).alias("symbol")))
 
 
 def _daily_frame(stamps: list[str], symbol: str = "AAA") -> pl.DataFrame:

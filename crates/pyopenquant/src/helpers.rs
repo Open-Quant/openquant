@@ -223,7 +223,7 @@ pub fn build_ohlcv_columns(
 pub fn report_to_pydict(
     py: Python<'_>,
     report: openquant::data_processing::DataQualityReport,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let out_report = PyDict::new(py);
     out_report.set_item("row_count", report.row_count)?;
     out_report.set_item("symbol_count", report.symbol_count)?;

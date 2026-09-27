@@ -6,7 +6,7 @@ use crate::helpers::{to_py_err, warn_deprecated};
 fn ou_params_to_dict(
     py: Python<'_>,
     p: &openquant::synthetic_backtesting::OuProcessParams,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let d = PyDict::new(py);
     d.set_item("phi", p.phi)?;
     d.set_item("intercept", p.intercept)?;
@@ -20,7 +20,7 @@ fn ou_params_to_dict(
 fn surface_point_to_dict(
     py: Python<'_>,
     p: &openquant::synthetic_backtesting::RuleSurfacePoint,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let d = PyDict::new(py);
     d.set_item("profit_taking", p.rule.profit_taking)?;
     d.set_item("stop_loss", p.rule.stop_loss)?;
@@ -35,7 +35,7 @@ fn surface_point_to_dict(
 fn diagnostics_to_dict(
     py: Python<'_>,
     d_in: &openquant::synthetic_backtesting::StabilityDiagnostics,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let d = PyDict::new(py);
     d.set_item("no_stable_optimum", d_in.no_stable_optimum)?;
     d.set_item("reason", &d_in.reason)?;
@@ -50,7 +50,7 @@ fn diagnostics_to_dict(
 fn otr_result_to_dict(
     py: Python<'_>,
     r: openquant::synthetic_backtesting::OtrSearchResult,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let d = PyDict::new(py);
     d.set_item("params", ou_params_to_dict(py, &r.params)?)?;
     let rule = PyDict::new(py);
@@ -58,7 +58,7 @@ fn otr_result_to_dict(
     rule.set_item("stop_loss", r.best_rule.stop_loss)?;
     d.set_item("best_rule", rule)?;
     d.set_item("best_point", surface_point_to_dict(py, &r.best_point)?)?;
-    let surface: Vec<PyObject> =
+    let surface: Vec<Py<PyAny>> =
         r.response_surface.iter().map(|p| surface_point_to_dict(py, p)).collect::<PyResult<_>>()?;
     d.set_item("response_surface", surface)?;
     d.set_item("diagnostics", diagnostics_to_dict(py, &r.diagnostics)?)?;
@@ -89,7 +89,7 @@ fn otr_result_to_dict(
 ///     If there are fewer than three prices, a price is not finite, the lagged prices are
 ///     constant, or the fit is exact (zero residual deviation).
 #[pyfunction(name = "calibrate_ou_params")]
-fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<PyObject> {
+fn sbt_calibrate_ou_params(py: Python<'_>, prices: Vec<f64>) -> PyResult<Py<PyAny>> {
     let params =
         openquant::synthetic_backtesting::calibrate_ou_params(&prices).map_err(to_py_err)?;
     ou_params_to_dict(py, &params)
@@ -238,7 +238,7 @@ fn sbt_evaluate_rule_on_paths(
     stop_loss: f64,
     max_holding_steps: usize,
     annualization_factor: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let rule = openquant::synthetic_backtesting::TradingRule { profit_taking, stop_loss };
     let result = openquant::synthetic_backtesting::evaluate_rule_on_paths(
         &paths,
@@ -294,7 +294,7 @@ fn sbt_detect_no_stable_optimum(
     min_peak_margin: f64,
     min_surface_std: f64,
     min_best_sharpe: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let surface: Vec<openquant::synthetic_backtesting::RuleSurfacePoint> = response_surface
         .into_iter()
         .map(|(pt, sl, sharpe, mean_ret, std_ret, win_rate, avg_hold)| {
@@ -412,7 +412,7 @@ fn sbt_run_synthetic_otr_workflow(
     min_peak_margin: Option<f64>,
     min_surface_std: Option<f64>,
     min_best_sharpe: Option<f64>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     // Omitted thresholds fall back to the Rust defaults, so the two surfaces cannot drift.
     let defaults = openquant::synthetic_backtesting::StabilityCriteria::default();
     let config = openquant::synthetic_backtesting::SyntheticBacktestConfig {
@@ -511,7 +511,7 @@ fn sbt_search_optimal_trading_rule(
     min_peak_margin: f64,
     min_surface_std: f64,
     min_best_sharpe: f64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let params = openquant::synthetic_backtesting::OuProcessParams {
         phi,
         intercept,

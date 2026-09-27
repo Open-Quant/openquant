@@ -167,3 +167,51 @@ fn gap_count_follows_the_bar_frequency() {
     let single = quality_report(&[bar("AAA", day(2, 0), 1.0)], 0);
     assert_eq!((single.inferred_interval_us, single.gap_interval_count), (None, 0));
 }
+
+/// #220: polars 0.55 neither keeps the left order of a join nor sorts stably unless asked.
+/// Keep-first/keep-last must follow the input order of duplicates, and aligned output must
+/// be sorted by `(symbol, timestamp)`, with enough rows that an unordered join would show.
+#[test]
+fn dedupe_keeps_input_order_and_alignment_output_is_sorted() {
+    let symbols = ["ZZZ", "MMM", "AAA", "QQQ"];
+    let mut rows = Vec::new();
+    // Interleaved symbols, descending time, every key three times with different closes.
+    for t in (0..200).rev() {
+        for (s, sym) in symbols.iter().enumerate() {
+            if (t + s) % 7 == 3 {
+                continue; // leave holes so alignment has missing bars
+            }
+            for copy in 0..3 {
+                rows.push(bar(sym, ts(60 * t as i64), (1000 * s + 10 * t + copy) as f64));
+            }
+        }
+    }
+
+    for keep_last in [false, true] {
+        let (clean, report) = clean_ohlcv_rows(&rows, keep_last);
+        assert_eq!(report.rows_removed_by_deduplication, rows.len() * 2 / 3);
+        let copy = if keep_last { 2.0 } else { 0.0 };
+        for row in &clean {
+            let s = symbols.iter().position(|sym| *sym == row.symbol).unwrap() as f64;
+            let t = (row.timestamp.and_utc().timestamp() / 60) as f64;
+            assert_eq!(row.close, 1000.0 * s + 10.0 * t + copy, "keep_last={keep_last}");
+        }
+        let keys: Vec<_> = clean.iter().map(|r| (r.symbol.clone(), r.timestamp)).collect();
+        assert!(keys.windows(2).all(|w| w[0] < w[1]), "clean output not sorted");
+    }
+
+    let (aligned, report) = align_calendar_rows(&rows, 60).expect("align");
+    assert!(report.off_grid_bars.is_empty());
+    let keys: Vec<_> = aligned.iter().map(|r| (r.symbol.clone(), r.timestamp)).collect();
+    assert!(keys.windows(2).all(|w| w[0] < w[1]), "aligned output not sorted");
+    for row in &aligned {
+        let s = symbols.iter().position(|sym| *sym == row.symbol).unwrap();
+        let t = (row.timestamp.and_utc().timestamp() / 60) as usize;
+        assert_eq!(row.is_missing_bar, (t + s) % 7 == 3);
+        if !row.is_missing_bar {
+            assert_eq!(row.close, Some((1000 * s + 10 * t + 2) as f64));
+        } else {
+            assert_eq!(row.close, None);
+        }
+    }
+}

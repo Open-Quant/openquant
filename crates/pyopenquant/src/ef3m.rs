@@ -82,7 +82,7 @@ fn ef3m_most_likely_parameters(
     py: Python<'_>,
     data: Vec<(f64, f64, f64, f64, f64, f64)>,
     res: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let rows: Vec<openquant::ef3m::FitResultRow> = data
         .into_iter()
         .map(|(mu_1, mu_2, sigma_1, sigma_2, p_1, error)| openquant::ef3m::FitResultRow {

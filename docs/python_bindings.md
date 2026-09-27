@@ -253,4 +253,4 @@ summary = openquant.pipeline.summarize_pipeline(pipe)
 
 - The binding layer is intentionally thin: Rust `openquant` remains the source of truth.
 - Polars-first adapters, plotting payload builders, and notebook flywheel helpers are included for research UX.
-- The extension builds against a patched `pyo3-polars` 0.20.0 in `vendor/pyo3-polars`, applied through `[patch.crates-io]` in the root `Cargo.toml`. Without it, polars `DataFrame` arguments fail on Python polars 1.32.3 and later. `vendor/README.md` describes the change. `crates/pyopenquant` is therefore `publish = false` and ships only as a wheel built from this repository.
+- polars `DataFrame` arguments and results cross the boundary through `pyo3-polars` 0.28 (polars 0.55, PyO3 0.29, all from crates.io), which uses Python polars' `Series._export`/`_import` and so needs Python polars 1.28.1 or later. `crates/pyopenquant` is `publish = false` and ships only as a wheel built with maturin.

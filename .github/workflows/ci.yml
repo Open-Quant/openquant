@@ -72,7 +72,7 @@ jobs:
             case "$f" in
               # Markdown under these is still code: a crate can include_str! it,
               # and the notebooks' outputs and figures are verified.
-              crates/* | python/* | vendor/* | notebooks/* | docs-site/public/figures/notebooks/*) kind=code ;;
+              crates/* | python/* | notebooks/* | docs-site/public/figures/notebooks/*) kind=code ;;
               docs/* | docs-site/* | *.md | *.mdx) kind=docs ;;
               *) kind=code ;;
             esac

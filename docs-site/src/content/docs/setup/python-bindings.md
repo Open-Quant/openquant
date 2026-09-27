@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -141,7 +141,7 @@ Only the first row requires the compile step. That is why editing a file
 under `python/openquant/` takes effect immediately, while editing
 anything under `crates/` needs `maturin develop` re-run.
 
-Runtime dependencies are `numpy>=1.26,<3`, `polars>=1.0,<2` and `pyarrow>=15,<20`
+Runtime dependencies are `numpy>=1.26,<3`, `polars>=1.28.1,<2` and `pyarrow>=15,<26`
 (`pyproject.toml`); `uv` installs them for you.
 
 ## Next
