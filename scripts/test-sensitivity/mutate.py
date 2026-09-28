@@ -166,7 +166,7 @@ def sync_copy():
     os.makedirs(WORK, exist_ok=True)
     for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml"):
         shutil.copy2(os.path.join(ROOT, name), os.path.join(WORK, name))
-    for d in ("crates", "vendor", "tests"):
+    for d in ("crates", "tests"):
         dst = os.path.join(WORK, d)
         if os.path.exists(dst):
             shutil.rmtree(dst)

@@ -51,7 +51,7 @@ fn onc_get_onc_clusters(
     corr_mat: Vec<Vec<f64>>,
     repeat: usize,
     seed: u64,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     // The Python default must stay the Rust default.
     const _: () = assert!(openquant::onc::DEFAULT_SEED == 42);
     let m = matrix_from_rows(corr_mat)?;

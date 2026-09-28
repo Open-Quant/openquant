@@ -18,9 +18,12 @@ crate-type = ["cdylib"]
 chrono = "0.4"
 nalgebra = "0.35"
 openquant = { path = "../openquant" }
-polars = { version = "0.46", default-features = false }
-pyo3 = { version = "0.23", features = ["extension-module"] }
-pyo3-polars = "0.20"
+polars = { version = "0.55", default-features = false }
+# No `extension-module` feature: PyO3 deprecates it, and with it the unit tests
+# (`cargo test --workspace`) cannot link. maturin >= 1.9.4 sets PYO3_BUILD_EXTENSION_MODULE
+# for the wheel build instead.
+pyo3 = "0.29"
+pyo3-polars = "0.28"
 rand = "0.10"
 
 [package.metadata.maturin]

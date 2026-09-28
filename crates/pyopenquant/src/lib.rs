@@ -35,7 +35,10 @@ mod volatility;
 
 use pyo3::prelude::*;
 
-#[pymodule]
+// PyO3 0.28 made modules declare free-threading support by default. The bindings are not
+// tested on a free-threaded (3.13t/3.14t) interpreter, so keep the pre-0.28 behaviour: such an
+// interpreter re-enables the GIL when it imports this module.
+#[pymodule(gil_used = true)]
 fn _core(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     risk::register(py, m)?;
     filters::register(py, m)?;
