@@ -1,7 +1,10 @@
 use openquant::sampling::{
     get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness,
     get_ind_mat_label_uniqueness, get_ind_matrix, num_concurrent_events, seq_bootstrap,
+    seq_bootstrap_with_rng,
 };
+use rand::rngs::StdRng;
+use rand::{RngExt, SeedableRng};
 
 fn setup_labels() -> (Vec<usize>, Vec<(usize, usize)>) {
     // price bars hourly range 0..=168 (per test_sampling)
@@ -92,32 +95,45 @@ fn test_seq_bootstrap_and_ind_matrix() {
     ind[5] = vec![0, 0, 1];
     let _ = seq_bootstrap(&ind, Some(3), Some(vec![1])).unwrap();
 
-    // Monte Carlo uniqueness comparison
-    let mut standard_unq = Vec::new();
-    let mut seq_unq = Vec::new();
-    for _ in 0..100 {
-        let boot_samp = seq_bootstrap(&ind, Some(3), None).unwrap();
-        let random_samp: Vec<usize> = (0..3).map(|_| rand::random_range(0..3usize)).collect();
-        standard_unq.push(
-            get_ind_mat_average_uniqueness(
-                &ind.iter()
-                    .map(|row| random_samp.iter().map(|c| row[*c]).collect())
-                    .collect::<Vec<Vec<u8>>>(),
-            )
-            .unwrap(),
-        );
-        seq_unq.push(
-            get_ind_mat_average_uniqueness(
-                &ind.iter()
-                    .map(|row| boot_samp.iter().map(|c| row[*c]).collect())
-                    .collect::<Vec<Vec<u8>>>(),
-            )
-            .unwrap(),
-        );
+    // Monte Carlo uniqueness comparison (AFML Snippet 4.9, section 4.5.3): on the book's
+    // three-label example the sequential bootstrap should give samples with a higher average
+    // uniqueness than the standard (uniform) bootstrap. The book reports roughly 0.6 vs 0.7.
+    //
+    // Enumerating every draw path gives the exact expectations for three draws:
+    //   standard:   E[u] = 0.64198, sd = 0.15635  (27 equally likely samples)
+    //   sequential: E[u] = 0.70564, sd = 0.13858
+    // so the true gap is 0.0637. With N draws per side the standard error of the difference
+    // of the two means is sqrt((0.15635^2 + 0.13858^2) / N). The old test used N = 100
+    // unseeded draws: SE = 0.0209, so the gap was only ~3.0 SE and `avg_seq >= avg_std`
+    // failed by chance about once in 900 runs (issue #223).
+    //
+    // Now both samplers are seeded, so the test is deterministic, and N = 20_000 keeps the
+    // tolerances sound for any seed (or a change of RNG algorithm): SE of the difference is
+    // 0.00148, so requiring a gap > 0.04 leaves a margin of 16 SE, and each mean is checked
+    // against its exact value to within 0.01 (> 9 SE of either mean, whose SEs are 0.00111
+    // and 0.00098).
+    const DRAWS: usize = 20_000;
+    let mut std_rng = StdRng::seed_from_u64(223);
+    let mut seq_rng = StdRng::seed_from_u64(49);
+    let mut standard_sum = 0.0;
+    let mut seq_sum = 0.0;
+    let columns = |samp: &[usize]| -> Vec<Vec<u8>> {
+        ind.iter().map(|row| samp.iter().map(|c| row[*c]).collect()).collect()
+    };
+    for _ in 0..DRAWS {
+        let boot_samp = seq_bootstrap_with_rng(&ind, Some(3), None, &mut seq_rng).unwrap();
+        let random_samp: Vec<usize> = (0..3).map(|_| std_rng.random_range(0..3usize)).collect();
+        standard_sum += get_ind_mat_average_uniqueness(&columns(&random_samp)).unwrap();
+        seq_sum += get_ind_mat_average_uniqueness(&columns(&boot_samp)).unwrap();
     }
-    let avg_seq = seq_unq.iter().sum::<f64>() / seq_unq.len() as f64;
-    let avg_std = standard_unq.iter().sum::<f64>() / standard_unq.len() as f64;
-    assert!(avg_seq >= avg_std);
+    let avg_seq = seq_sum / DRAWS as f64;
+    let avg_std = standard_sum / DRAWS as f64;
+    assert!((avg_std - 0.64198).abs() < 0.01, "standard bootstrap mean uniqueness {avg_std}");
+    assert!((avg_seq - 0.70564).abs() < 0.01, "sequential bootstrap mean uniqueness {avg_seq}");
+    assert!(
+        avg_seq - avg_std > 0.04,
+        "sequential ({avg_seq}) should beat standard ({avg_std}) average uniqueness"
+    );
 }
 
 #[test]
