@@ -2,7 +2,7 @@
 title: "evaluation"
 description: "Python research evaluation: probabilistic and deflated Sharpe ratios and minimum track record from a returns series, a trial registry that persists across runs, meta-labeling overlay metrics and the probability of strategy failure."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -197,7 +197,7 @@ for name, bets in (("primary alone", outcome), ("with overlay", taken)):
 ```text
 primary alone: precision 0.526  recall 1.000  F1 0.689
 with overlay:  precision 0.693  recall 0.688  F1 0.691  (261 of 500 bets taken)
-primary alone: P(annualised Sharpe < 1 over the next year) = 0.56
+primary alone: P(annualised Sharpe < 1 over the next year) = 0.55
 with overlay: P(annualised Sharpe < 1 over the next year) = 0.00
 ```
 

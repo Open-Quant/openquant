@@ -35,7 +35,7 @@
 //! ```
 
 use chrono::NaiveDateTime;
-use rand::Rng;
+use rand::RngExt;
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::fmt;
 
@@ -745,19 +745,19 @@ fn fit_two_normal_mixture_em(
     let mean = samples.iter().sum::<f64>() / n;
     let var = samples.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / n.max(1.0);
     let std = var.sqrt().max(1e-3);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let mut best_ll = f64::NEG_INFINITY;
     let mut best = [mean - std, mean + std, std, std, 0.5];
 
     for _ in 0..fit_runs.max(1) {
-        let x1 = samples[rng.gen_range(0..samples.len())];
-        let x2 = samples[rng.gen_range(0..samples.len())];
+        let x1 = samples[rng.random_range(0..samples.len())];
+        let x2 = samples[rng.random_range(0..samples.len())];
         let mut mu1 = x1.min(x2);
         let mut mu2 = x1.max(x2);
         let mut sigma1 = std;
         let mut sigma2 = std;
-        let mut p1 = rng.gen_range(0.25..0.75);
+        let mut p1 = rng.random_range(0.25..0.75);
         let mut prev_ll = f64::NEG_INFINITY;
 
         for _ in 0..max_iter.max(1) {

@@ -50,7 +50,7 @@
 
 use crate::util::stats;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use statrs::distribution::{ContinuousCDF, Normal};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -417,7 +417,7 @@ pub fn estimate_strategy_failure_probability(
     for _ in 0..cfg.bootstrap_iterations {
         let mut wins = 0usize;
         for _ in 0..bootstrap_draw_size {
-            let idx = rng.gen_range(0..bet_outcomes.len());
+            let idx = rng.random_range(0..bet_outcomes.len());
             if bet_outcomes[idx] > 0.0 {
                 wins += 1;
             }

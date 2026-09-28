@@ -170,6 +170,7 @@ file disagree).
 
 ### Dependencies
 
+- `rand` 0.8 → 0.10 and `rand_distr` 0.4 → 0.6, superseding #160. Seeded results change. `seq_bootstrap_with_rng` and `sample_log_uniform` now take a rand 0.10 generator (`R: rand::Rng`, the former `RngCore`), a public API change (#219) ([#225](https://github.com/Open-Quant/openquant/pull/225))
 - polars 0.55, PyO3 0.29 and pyo3-polars 0.28 from crates.io; the vendored pyo3-polars patch is gone and Python polars 1.28.1 or later is required (#220) ([#222](https://github.com/Open-Quant/openquant/pull/222))
 - The cargo minor/patch group, 4 updates ([#154](https://github.com/Open-Quant/openquant/pull/154))
 - The Python minor/patch group, 2 updates ([#152](https://github.com/Open-Quant/openquant/pull/152))

@@ -9,7 +9,7 @@ use csv::ReaderBuilder;
 use nalgebra::DMatrix;
 use openquant::hrp::{HierarchicalRiskParity, HrpDistance, HrpError};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -196,7 +196,7 @@ fn two_assets_closed_form() {
 fn uncorrelated_assets_get_inverse_variance_weights() {
     let mut rng = StdRng::seed_from_u64(40);
     for n in [2usize, 3, 5, 8, 13] {
-        let vars: Vec<f64> = (0..n).map(|_| rng.gen_range(0.01..4.0)).collect();
+        let vars: Vec<f64> = (0..n).map(|_| rng.random_range(0.01..4.0)).collect();
         let cov = DMatrix::from_fn(n, n, |i, j| if i == j { vars[i] } else { 0.0 });
         let inv_sum: f64 = vars.iter().map(|v| 1.0 / v).sum();
         let want: Vec<f64> = vars.iter().map(|v| (1.0 / v) / inv_sum).collect();

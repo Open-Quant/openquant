@@ -225,18 +225,21 @@ pub fn mean_decrease_impurity(
 ///     }
 /// }
 ///
-/// let y = [0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0];
-/// let splits = vec![((4..8).collect::<Vec<_>>(), (0..4).collect()), ((0..4).collect(), (4..8).collect())];
+/// let y = [0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0];
+/// let (a, b): (Vec<usize>, Vec<usize>) = ((0..8).collect(), (8..16).collect());
+/// let splits = vec![(b.clone(), a.clone()), (a, b)];
 /// let names: Vec<String> = ["signal", "noise"].map(String::from).to_vec();
 ///
-/// let x: Vec<Vec<f64>> = y.iter().enumerate().map(|(i, v)| vec![*v, i as f64 / 8.0]).collect();
+/// let x: Vec<Vec<f64>> = y.iter().enumerate().map(|(i, v)| vec![*v, i as f64 / 16.0]).collect();
 /// let mda = openquant::feature_importance::mean_decrease_accuracy(
 ///     &mut FirstColumn, &x, &y, &names, &splits, None, Scoring::Accuracy, 7,
 /// )?;
 /// // The model never reads the second column, so shuffling it changes nothing.
 /// assert_eq!(mda["noise"].mean, 0.0);
 /// assert_eq!(mda["noise"].std, 0.0);
-/// // Shuffling the first column costs every correct prediction it moves: (1 - s) / (1 - s) = 1.
+/// // Shuffling the first column costs every correct prediction it moves: (1 - s) / (1 - s) = 1
+/// // in each fold. (A shuffle can leave a fold's four 0s and four 1s where they were, one
+/// // chance in 70; that fold would score 0, the value given to a zero denominator.)
 /// assert_eq!(mda["signal"].mean, 1.0);
 /// # Ok::<(), FeatureImportanceError>(())
 /// ```

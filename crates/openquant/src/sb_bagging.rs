@@ -73,7 +73,7 @@
 use nalgebra::DMatrix;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 use crate::sampling::seq_bootstrap_with_rng;
 
@@ -251,7 +251,7 @@ fn sampled_features(
     bootstrap_features: bool,
 ) -> Vec<usize> {
     if bootstrap_features {
-        (0..max_features).map(|_| rng.gen_range(0..n_features)).collect()
+        (0..max_features).map(|_| rng.random_range(0..n_features)).collect()
     } else {
         let mut all: Vec<usize> = (0..n_features).collect();
         all.shuffle(rng);

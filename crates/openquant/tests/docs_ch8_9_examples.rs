@@ -67,8 +67,8 @@ fn feature_importance_page() -> Result<(), Box<dyn std::error::Error>> {
     let sfi =
         single_feature_importance(&mut model, &x, &y, &names, &splits, None, Scoring::NegLogLoss)?;
 
-    assert!((mda["strong"].mean - 0.725).abs() < 1e-3);
-    assert!((mda["weak"].mean - 0.187).abs() < 1e-3);
+    assert!((mda["strong"].mean - 0.738).abs() < 1e-3);
+    assert!((mda["weak"].mean - 0.215).abs() < 1e-3);
     assert!(mda["noise"].mean.abs() < 0.01);
     // Alone, the irrelevant feature scores a coin flip; the strong one is far better.
     assert!((sfi["noise"].mean + 0.696).abs() < 1e-3);

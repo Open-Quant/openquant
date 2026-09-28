@@ -97,7 +97,7 @@ fn test_seq_bootstrap_and_ind_matrix() {
     let mut seq_unq = Vec::new();
     for _ in 0..100 {
         let boot_samp = seq_bootstrap(&ind, Some(3), None).unwrap();
-        let random_samp: Vec<usize> = (0..3).map(|_| rand::random::<usize>() % 3).collect();
+        let random_samp: Vec<usize> = (0..3).map(|_| rand::random_range(0..3usize)).collect();
         standard_unq.push(
             get_ind_mat_average_uniqueness(
                 &ind.iter()

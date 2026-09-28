@@ -1649,8 +1649,8 @@ dependencies = [
  "itertools 0.15.0",
  "nalgebra 0.35.0",
  "polars",
- "rand 0.8.5",
- "rand_distr 0.4.3",
+ "rand 0.10.3",
+ "rand_distr 0.6.0",
  "serde",
  "serde_json",
  "statrs",
@@ -2492,7 +2492,7 @@ dependencies = [
  "polars",
  "pyo3",
  "pyo3-polars",
- "rand 0.8.5",
+ "rand 0.10.3",
 ]
 
 [[package]]

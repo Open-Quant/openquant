@@ -24,7 +24,7 @@ polars = { version = "0.55", default-features = false }
 # for the wheel build instead.
 pyo3 = "0.29"
 pyo3-polars = "0.28"
-rand = "0.8"
+rand = "0.10"
 
 [package.metadata.maturin]
 name = "openquant._core"

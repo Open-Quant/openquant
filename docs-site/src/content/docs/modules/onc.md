@@ -105,8 +105,8 @@ print(f"mean silhouette {sum(silhouettes) / len(silhouettes):.2f}")
 
 ```text
 planted groups: [1, 2, 0, 2, 1, 0, 2, 0, 0, 1, 0, 1]
-cluster 0: members [0, 4, 9, 11]  planted group [1]
-cluster 1: members [2, 5, 7, 8, 10]  planted group [0]
+cluster 0: members [2, 5, 7, 8, 10]  planted group [0]
+cluster 1: members [0, 4, 9, 11]  planted group [1]
 cluster 2: members [1, 3, 6]  planted group [2]
 mean silhouette 0.48
 ```
@@ -115,8 +115,8 @@ Nothing told the algorithm to look for three clusters, or that their sizes diffe
 returned three, and each holds exactly the members of one planted group.
 
 <figure>
-<img class="dark:sl-hidden" src="/figures/mlam4-onc-light.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes four, five and three, with near-zero correlation everywhere else." />
-<img class="light:sl-hidden" src="/figures/mlam4-onc-dark.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes four, five and three, with near-zero correlation everywhere else." />
+<img class="dark:sl-hidden" src="/figures/mlam4-onc-light.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes five, four and three, with near-zero correlation everywhere else." />
+<img class="light:sl-hidden" src="/figures/mlam4-onc-dark.svg" alt="Two heat maps of the same twelve by twelve correlation matrix. As given, high correlations are scattered across the matrix with no visible pattern. Reordered by ONC cluster, they form three solid blocks along the diagonal, of sizes five, four and three, with near-zero correlation everywhere else." />
 <figcaption>The example's correlation matrix, before and after. The right-hand panel is <code>ordered_correlation</code>.</figcaption>
 </figure>
 

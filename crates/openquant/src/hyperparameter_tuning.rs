@@ -60,7 +60,7 @@ use std::collections::BTreeMap;
 
 use chrono::NaiveDateTime;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{Rng, RngExt, SeedableRng};
 
 use crate::cross_validation::{PurgedKFold, SimpleClassifier};
 
@@ -262,7 +262,7 @@ pub fn sample_log_uniform<R: Rng + ?Sized>(
     }
     let log_low = low.ln();
     let log_high = high.ln();
-    let draw = rng.gen_range(log_low..log_high);
+    let draw = rng.random_range(log_low..log_high);
     Ok(draw.exp())
 }
 
@@ -576,14 +576,14 @@ fn sample_distribution<R: Rng + ?Sized>(
             if values.is_empty() {
                 return Err(TuningError::EmptyChoice);
             }
-            let idx = rng.gen_range(0..values.len());
+            let idx = rng.random_range(0..values.len());
             Ok(values[idx].clone())
         }
         RandomParamDistribution::Uniform { low, high } => {
             if !low.is_finite() || !high.is_finite() || low >= high {
                 return Err(TuningError::InvalidUniformBounds);
             }
-            Ok(HyperParamValue::Float(rng.gen_range(*low..*high)))
+            Ok(HyperParamValue::Float(rng.random_range(*low..*high)))
         }
         RandomParamDistribution::LogUniform { low, high } => {
             let v = sample_log_uniform(*low, *high, rng)?;
@@ -593,7 +593,7 @@ fn sample_distribution<R: Rng + ?Sized>(
             if low > high {
                 return Err(TuningError::InvalidIntRange);
             }
-            Ok(HyperParamValue::Int(rng.gen_range(*low..=*high)))
+            Ok(HyperParamValue::Int(rng.random_range(*low..=*high)))
         }
     }
 }
