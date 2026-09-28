@@ -41,21 +41,29 @@ def _cluster_sets(result):
 
 
 def test_get_onc_clusters_on_breast_cancer_fixture():
-    # Mirrors crates/openquant/tests/onc.rs::test_get_onc_clusters. CAVEAT: the library
-    # force-inserts exactly these three clusters for any 30x30 input
-    # (onc.rs::stabilize_breast_cancer_parity), so these assertions cannot fail; see
-    # test_onc_30_assets_clusters_depend_on_the_data below.
+    # Mirrors crates/openquant/tests/onc.rs::test_get_onc_clusters. On this data ONC's
+    # partition depends on the random stream (#218); every run, here and in scikit-learn's ONC
+    # (tests/fixtures/onc/generate_breast_cancer.py), merges whole groups of the finest common
+    # partition and finds the reference's stable clusters.
     corr = _load_breast_cancer_correlation()
     reference = load_json("onc/breast_cancer_reference.json")
     assert corr[0][2] == pytest.approx(reference["corr_0_2"], abs=1e-12)  # radius vs perimeter
 
-    result = onc.get_onc_clusters(corr, 50)
-    clusters = _cluster_sets(result)
+    for seed in (None, 1):
+        kwargs = {} if seed is None else {"seed": seed}
+        clusters = _cluster_sets(onc.get_onc_clusters(corr, 50, **kwargs))
+        assert len(clusters) >= reference["min_clusters"]
+        for group in reference["finest_partition"]:
+            assert any(set(group) <= set(c) for c in clusters), (seed, group, clusters)
+        for cluster in reference["stable_clusters"]:
+            assert cluster in clusters
 
-    assert len(clusters) >= 5
-    # The clusters ONC finds under every seed in tests/fixtures/onc/generate_breast_cancer.py.
-    for cluster in reference["stable_clusters"]:
-        assert cluster in clusters
+
+def test_onc_seed_is_reproducible_and_defaults_to_42():
+    corr = _block_correlation(12, 4, rho_in=0.6, rho_out=0.2)
+    default = onc.get_onc_clusters(corr, 3)
+    assert onc.get_onc_clusters(corr, 3, seed=42) == default
+    assert onc.get_onc_clusters(corr, 3, seed=7) == onc.get_onc_clusters(corr, 3, seed=7)
 
 
 def test_onc_output_is_a_consistent_reordering_of_the_input():
@@ -80,9 +88,10 @@ def test_onc_rejects_invalid_inputs():
         onc.get_onc_clusters([[1.0, 0.5], [0.5]], 5)
 
 
-@pytest.mark.parametrize("n, block_size", [(6, 3), (12, 4), (20, 5)])
-def test_onc_recovers_block_structure(n, block_size):
-    result = onc.get_onc_clusters(_block_correlation(n, block_size), 10)
+@pytest.mark.parametrize("seed", [0, 1, 2])
+@pytest.mark.parametrize("n, block_size", [(6, 3), (12, 4), (20, 5), (30, 5)])
+def test_onc_recovers_block_structure(n, block_size, seed):
+    result = onc.get_onc_clusters(_block_correlation(n, block_size), 10, seed=seed)
     expected = [list(range(start, start + block_size)) for start in range(0, n, block_size)]
     assert _cluster_sets(result) == expected
 

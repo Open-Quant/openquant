@@ -11,9 +11,13 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each; the partition with the
 /// highest silhouette t-statistic `mean(S) / std(S)` wins. Clusters scoring below average
 /// are re-clustered and kept only if that improves their mean t-statistic. Negative
-/// correlation means far apart. Results are deterministic (fixed seeds). The search starts
-/// at `k = 2`, so a matrix with no structure is still partitioned; a low mean silhouette
-/// is the sign the clusters are not real. Cost grows at least as `N^3`.
+/// correlation means far apart. Each k-means run is one k-means++ initialisation (as
+/// scikit-learn's KMeans), all drawn from one random stream seeded by `seed`, so results
+/// are deterministic. ONC is a random search: clean structure comes back the same under
+/// any seed, but on real data the partition can depend on the seed; compare a few seeds
+/// and raise `repeat` before relying on one. The search starts at `k = 2`, so a matrix
+/// with no structure is still partitioned; a low mean silhouette is the sign the clusters
+/// are not real. Cost grows at least as `N^3`.
 ///
 /// Parameters
 /// ----------
@@ -22,6 +26,9 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 ///     diagonal are not checked.
 /// repeat : int
 ///     Number of k-means initialisations per candidate `k`; must be positive.
+/// seed : int, default 42
+///     Seed of the random stream behind every k-means initialisation (the Rust
+///     `DEFAULT_SEED` when omitted).
 ///
 /// Returns
 /// -------
@@ -38,13 +45,17 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 ///     0, a non-square matrix or fewer than two rows, or NaN entries that leave no
 ///     candidate partition).
 #[pyfunction(name = "get_onc_clusters")]
+#[pyo3(signature = (corr_mat, repeat, seed=42))]
 fn onc_get_onc_clusters(
     py: Python<'_>,
     corr_mat: Vec<Vec<f64>>,
     repeat: usize,
+    seed: u64,
 ) -> PyResult<Py<PyAny>> {
+    // The Python default must stay the Rust default.
+    const _: () = assert!(openquant::onc::DEFAULT_SEED == 42);
     let m = matrix_from_rows(corr_mat)?;
-    let result = openquant::onc::get_onc_clusters(&m, repeat).map_err(to_py_err)?;
+    let result = openquant::onc::get_onc_clusters_with_seed(&m, repeat, seed).map_err(to_py_err)?;
 
     let d = PyDict::new(py);
 

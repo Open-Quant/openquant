@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-09-26'
+last_generated: '2026-09-27'
 audience:
   - quant-dev
   - platform-engineering
@@ -61,6 +61,7 @@ file disagree).
 
 ### Fixed
 
+- `onc`: k-means++ initialisation, as in MLAM Snippet 4.1; results were fragile to the random stream; `get_onc_clusters_with_seed` and a Python `seed` argument (#218) ([#224](https://github.com/Open-Quant/openquant/pull/224))
 - `data_processing`: `keep_last` keeps the last input row of a duplicated key (stable sort), and the calendar join keeps its order explicitly (#220) ([#222](https://github.com/Open-Quant/openquant/pull/222))
 - A binding default that always failed, ignored parameters and silent drops (#194) ([#202](https://github.com/Open-Quant/openquant/pull/202))
 - Input validation and minor cleanups from the rustdoc audit (#186) ([#204](https://github.com/Open-Quant/openquant/pull/204))
