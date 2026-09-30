@@ -3,7 +3,7 @@ title: "Research gallery"
 description: "Every research runbook in notebooks/python: its pre-registered hypothesis, figures, result and promotion decision, taken from the executed notebooks."
 status: generated
 generated_from: "notebooks/python/*.ipynb"
-last_generated: '2026-09-26'
+last_generated: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -428,8 +428,9 @@ price.
 
 What later runbooks should do instead:
 
-- **Evaluate memory-bearing features walk-forward** (or with CPCV *and* a null run through the
-  same splits). Purged k-fold removes label overlap, not a model's knowledge of where the price
+- **Evaluate memory-bearing features walk-forward** (`cross_validation.walk_forward_splits`,
+  added for #217), or with CPCV *and* a null run through the same splits
+  (`cross_validation.null_score_distribution`). Purged k-fold removes label overlap, not a model's knowledge of where the price
   went after the test fold, and on the `SYN_*` random walks it gave the level a net Sharpe ratio
   of 1.85.
 - **Judge on net returns against a null run**, not on pooled out-of-fold AUC, which stayed

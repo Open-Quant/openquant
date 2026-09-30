@@ -2,7 +2,7 @@
 title: Notebook contract
 description: The sections, reproducibility footer and committed-output rules every notebook under notebooks/python/ follows, what `just notebooks-lint` checks, and how a runbook differs from an API tour.
 status: authored
-last_authored: '2026-09-27'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering

@@ -2,7 +2,7 @@
 title: "Runbook: triple-barrier labeling and meta-labeling"
 description: "Does a meta-labeling model improve the precision, F1 and deflated Sharpe ratio of a primary model with a known, weak edge? CUSUM events, triple-barrier meta-labels, purged k-fold and a trial registry, on SYNTHETIC paths with a planted signal and a no-signal control."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
 afml_chapter:
@@ -216,6 +216,17 @@ The notebook asserts all four:
    change.
 3. Purged folds have zero train/test overlaps, and no embargoed event is trained on.
 4. A fold's fitted model is bit-identical when its test fold is replaced with noise.
+
+## Audit: features with memory (#217)
+
+Runbook 14 found that purged k-fold, which also fits a middle fold's model on the events after
+it, flatters features with memory even on random walks
+([`cross_validation`](/modules/cross-validation/#features-with-memory-a-bias-purging-does-not-remove)).
+The meta-model's features are slowly varying, so this runbook was checked. The zero-signal
+paths are already a null through the same splits, and the audit added a walk-forward Sharpe
+comparison to the Monte Carlo. Under the null meta gains nothing in either scheme (k-fold
+−0.03, $t$ = −0.7; walk-forward −0.01, $t$ = −0.3). With the signal the walk-forward gain is
+smaller but still clear (+0.08, $t$ = 2.3, against +0.14, $t$ = 2.7). **No conclusion changes.**
 
 ## Run it on your own data
 
