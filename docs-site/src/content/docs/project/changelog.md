@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-09-27'
+last_generated: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -121,6 +121,7 @@ file disagree).
 
 ### Documentation
 
+- Package metadata points at the real docs (rustdoc for the crate, a Changelog URL for Python); README and docs no longer present the PyPI name as decided (#58)
 - Rustdoc under `/api/rust/`, a generated Python reference, docstrings and `.pyi` stubs (#54) ([#192](https://github.com/Open-Quant/openquant/pull/192))
 - Rustdoc and doctests for the remaining `openquant` modules (#37) ([#180](https://github.com/Open-Quant/openquant/pull/180))
 - Rustdoc and doctests for 15 `openquant` modules (#37) ([#144](https://github.com/Open-Quant/openquant/pull/144))
