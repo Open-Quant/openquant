@@ -1,8 +1,15 @@
-"""Purged k-fold and combinatorial purged cross-validation (AFML chapters 7 and 12).
+"""Purged k-fold, walk-forward and combinatorial purged cross-validation (AFML chapters 7, 12).
 
-Every function returns indices, never fits a model: pass the splits to any estimator, for
+Every splitter returns indices, never fits a model: pass the splits to any estimator, for
 example ``sklearn.model_selection.cross_val_score(model, X, y, cv=splits)``. The splitting,
 purging and embargo are the Rust ``openquant::cross_validation`` code.
+
+**Features with memory.** Purged k-fold and CPCV fit the model for a middle fold on samples
+*after* it as well. Purging and the embargo remove overlapping labels, not that: a feature that
+carries the price level lets the model learn where the path went after the test fold, and it
+scores above chance on random walks (issue #217). Compare such features with
+:func:`walk_forward_splits`, and against :func:`null_score_distribution`, a no-signal null run
+through the same splits.
 
 Label spans are required. ``t0[i]`` is when sample ``i``'s label starts (usually the event
 time) and ``t1[i]`` when it is resolved (the triple-barrier touch). They may be numpy
@@ -12,7 +19,8 @@ or plain integers such as bar positions; samples must be in time order.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -26,6 +34,11 @@ __all__ = [
     "split_with_diagnostics",
     "cpcv_splits",
     "cpcv_paths",
+    "walk_forward_splits",
+    "walk_forward_split_with_diagnostics",
+    "null_score_distribution",
+    "null_p_value",
+    "bootstrap_returns",
     "naive_kfold_splits",
     "count_train_test_overlaps",
 ]
@@ -155,6 +168,126 @@ def cpcv_paths(n_splits: int, n_test_splits: int) -> np.ndarray:
     numbering matches :func:`openquant.backtesting_engine.run_cpcv`.
     """
     return np.asarray(_cv.cpcv_paths(int(n_splits), int(n_test_splits)), dtype=np.intp)
+
+
+def walk_forward_splits(
+    t0: Any, t1: Any, n_splits: int, pct_embargo: float = 0.0, min_train_folds: int = 1
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Walk-forward splits over the folds of :func:`purged_kfold_splits`, forward-only.
+
+    Fold ``g >= min_train_folds`` is tested exactly as in :func:`purged_kfold_splits`, but it
+    trains only on the samples *before* it whose label spans do not reach its window (purged).
+    No model sees a sample after its test fold, so the embargo, which only drops samples after
+    a test block, removes nothing. The first ``min_train_folds`` folds are never tested.
+
+    Use it to compare features with memory (price levels, weakly differenced prices, long
+    averages): purged k-fold and CPCV inflate them even on random walks (issue #217). Because
+    the folds are the k-fold folds, a feature can be scored fold for fold under both schemes.
+    """
+    return [
+        (d["train_indices"], d["test_indices"])
+        for d in walk_forward_split_with_diagnostics(t0, t1, n_splits, pct_embargo, min_train_folds)
+    ]
+
+
+def walk_forward_split_with_diagnostics(
+    t0: Any, t1: Any, n_splits: int, pct_embargo: float = 0.0, min_train_folds: int = 1
+) -> list[dict]:
+    """The splits of :func:`walk_forward_splits` as dicts, with the purged indices.
+
+    Each dict has the keys of :func:`split_with_diagnostics` plus ``test_fold_id``, the fold
+    tested. ``purged_indices`` lists the earlier samples purging removed; ``embargo_indices`` is
+    always empty; samples after the test fold are left out without being listed.
+    """
+    s0, s1 = _label_spans(t0, t1)
+    return [
+        _split_dict(d)
+        for d in _cv.walk_forward_splits(
+            s0, s1, int(n_splits), float(pct_embargo), int(min_train_folds)
+        )
+    ]
+
+
+def bootstrap_returns(
+    returns: Any, demean: bool = True
+) -> Callable[[np.random.Generator], np.ndarray]:
+    """A no-signal generator for :func:`null_score_distribution`: returns drawn i.i.d.
+
+    Each call draws ``len(returns)`` rows of ``returns`` with replacement (a 1-D array, or a
+    2-D array whose rows are drawn whole, keeping the cross-section of each bar). With
+    ``demean`` (the default) the mean return is subtracted first, per column, so the drawn
+    path is a driftless random walk with the returns' distribution: nothing in it predicts the
+    next return. Rebuild prices, features **and labels** from it.
+
+    Two tempting alternatives are wrong for features with memory. Permuting the labels alone
+    keeps every feature but cuts the link between a label and the path a level feature
+    records, so it cannot show the bias of issue #217. Shuffling the returns *without*
+    replacement fixes their sum, so every shuffled path ends where the real one does: a
+    random-walk bridge, which is mean-reverting, and on which a level feature scores above
+    chance even walk-forward.
+    """
+    arr = np.asarray(returns, dtype=float)
+    if arr.ndim not in (1, 2) or arr.shape[0] < 2:
+        raise ValueError("returns must be a 1-D or 2-D array with at least two rows")
+    if not np.isfinite(arr).all():
+        raise ValueError("returns must be finite")
+    if demean:
+        arr = arr - arr.mean(axis=0)
+
+    def draw(rng: np.random.Generator) -> np.ndarray:
+        return arr[rng.integers(0, arr.shape[0], size=arr.shape[0])]
+
+    return draw
+
+
+def null_score_distribution(
+    evaluate: Callable[[Any, Sequence[Any]], float],
+    splits: Sequence[Any],
+    make_null: Callable[[np.random.Generator], Any],
+    n_null: int = 100,
+    seed: int | Sequence[int] | None = 0,
+) -> np.ndarray:
+    """Scores of a pipeline on ``n_null`` no-signal datasets, all run through the same splits.
+
+    For each draw, ``make_null(rng)`` builds a dataset with no signal (for example
+    :func:`bootstrap_returns`, or a simulation of the same length), and
+    ``evaluate(data, splits)`` rebuilds features and labels from it, fits on each split's
+    training indices, scores on its test indices and returns one number. The splits are fixed,
+    so whatever the splitting scheme itself adds to the score (such as purged k-fold's bias
+    toward features with memory, issue #217) is in the null too. Compare the real score with
+    this distribution (:func:`null_p_value`), not with chance.
+
+    ``make_null`` must return data of the length ``splits`` indexes. ``seed`` seeds one
+    ``numpy.random.Generator`` passed to every call, so the distribution is reproducible.
+    Returns the ``n_null`` scores in draw order; a ``NaN`` score is kept, not dropped.
+    """
+    n_null = int(n_null)
+    if n_null < 1:
+        raise ValueError(f"n_null must be at least 1, got {n_null}")
+    splits = list(splits)
+    if not splits:
+        raise ValueError("splits cannot be empty")
+    rng = np.random.default_rng(seed)
+    out = np.empty(n_null)
+    for i in range(n_null):
+        out[i] = float(evaluate(make_null(rng), splits))
+    return out
+
+
+def null_p_value(observed: float, null: Any) -> float:
+    """One-sided p-value of ``observed`` against a null distribution: P(null >= observed).
+
+    With ``n`` finite null scores of which ``k`` are at least ``observed``, returns
+    ``(k + 1) / (n + 1)``, so it is never 0 and a null of 99 draws resolves 0.01. ``NaN``
+    null scores are ignored.
+    """
+    arr = np.asarray(null, dtype=float).ravel()
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        raise ValueError("null has no finite scores")
+    if not math.isfinite(observed):
+        raise ValueError(f"observed must be finite, got {observed}")
+    return float((np.count_nonzero(arr >= observed) + 1) / (arr.size + 1))
 
 
 def naive_kfold_splits(n_samples: int, n_splits: int) -> list[tuple[np.ndarray, np.ndarray]]:

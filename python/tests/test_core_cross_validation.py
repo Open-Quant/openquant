@@ -351,3 +351,125 @@ def test_embargo_starts_where_the_purge_ends():
             expected = list(range(resume, min(n, resume + width)))
             assert split["embargo_indices"].tolist() == expected
             assert not purged & set(expected)
+
+
+# ---------------------------------------------------------------------------------------
+# Walk-forward splits and the no-signal null (issue #217).
+# ---------------------------------------------------------------------------------------
+
+
+def test_walk_forward_splits_docs_example():
+    """Rust `walk_forward_splits` doctest: fold 2 trains on 0-12 only."""
+    t0, t1 = docs_spans()
+    splits = cv.walk_forward_splits(t0, t1, n_splits=5, pct_embargo=0.15)
+    assert len(splits) == 4
+    train, test = splits[1]
+    assert train.dtype == np.intp and test.dtype == np.intp
+    assert test.tolist() == list(range(16, 24))
+    assert train.tolist() == list(range(13))
+    d = cv.walk_forward_split_with_diagnostics(t0, t1, 5, 0.15)[1]
+    assert d["test_fold_id"] == 2 and d["split_id"] == 1
+    assert d["purged_indices"].tolist() == [13, 14, 15]
+    assert d["embargo_indices"].tolist() == []
+    assert d["test_ranges"] == [(16, 24)]
+    assert d["overlap_count_after_purge"] == 0
+
+
+@pytest.mark.parametrize("pct_embargo", [0.0, 0.05, 0.2])
+def test_walk_forward_is_kfold_cut_at_the_test_fold(pct_embargo):
+    """Rust `walk_forward_splits_are_the_kfold_splits_cut_at_the_test_fold`."""
+    t0, t1 = random_spans(np.random.default_rng(217), 120)
+    kfold = cv.purged_kfold_splits(t0, t1, 5, pct_embargo)
+    for min_train_folds in range(1, 5):
+        wf = cv.walk_forward_split_with_diagnostics(t0, t1, 5, pct_embargo, min_train_folds)
+        assert [d["test_fold_id"] for d in wf] == list(range(min_train_folds, 5))
+        for d in wf:
+            kf_train, kf_test = kfold[d["test_fold_id"]]
+            assert np.array_equal(d["test_indices"], kf_test)
+            assert np.array_equal(d["train_indices"], kf_train[kf_train < kf_test[0]])
+            assert overlapping_pairs(t0, t1, d["train_indices"], d["test_indices"]) == 0
+
+
+def test_walk_forward_rejects_invalid_min_train_folds():
+    t0, t1 = make_spans(10, 1, 2)
+    for bad in (0, 4, 5):
+        with pytest.raises(ValueError, match="min_train_folds"):
+            cv.walk_forward_splits(t0, t1, 4, 0.0, bad)
+
+
+def _logit_accuracy(x, y, splits):
+    """Mean test accuracy of a one-feature ridge logistic model over `splits`."""
+    accs = []
+    for train, test in splits:
+        mu, sd = x[train].mean(), x[train].std()
+        z = (x[train] - mu) / sd
+        b = np.zeros(2)
+        for _ in range(50):
+            p = 1.0 / (1.0 + np.exp(-(b[0] + b[1] * z)))
+            w = p * (1.0 - p)
+            grad = np.array([np.sum(p - y[train]), np.sum((p - y[train]) * z) + b[1]])
+            hess = np.array([[w.sum(), (w * z).sum()], [(w * z).sum(), (w * z * z).sum() + 1.0]])
+            step = np.linalg.solve(hess, grad)
+            b -= step
+            if np.abs(step).max() < 1e-10:
+                break
+        pred = b[0] + b[1] * (x[test] - mu) / sd >= 0.0
+        accs.append(np.mean(pred == (y[test] == 1)))
+    return float(np.mean(accs))
+
+
+def test_null_through_the_same_splits_shows_the_level_feature_bias():
+    """Issue #217: on bootstrapped (no-signal) returns, a logistic model on the price level beats
+    chance under purged k-fold but not walk-forward over the same folds. The null helper sees
+    the bias because it rebuilds the level *and* the labels from each null path."""
+    n, h = 500, 5
+    t = np.arange(n)
+    kfold = cv.purged_kfold_splits(t, t + h, 5, 0.01)
+    walk_forward = cv.walk_forward_splits(t, t + h, 5, 0.01)
+    rng = np.random.default_rng(217)
+    make_null = cv.bootstrap_returns(rng.standard_normal(n + h))
+
+    def evaluate(returns, splits):
+        price = np.r_[0.0, np.cumsum(returns)][: n + h]
+        y = (price[t + h] > price[t]).astype(float)
+        return _logit_accuracy(price[t], y, splits)
+
+    null_kf = cv.null_score_distribution(evaluate, kfold, make_null, n_null=150, seed=1)
+    null_wf = cv.null_score_distribution(evaluate, walk_forward, make_null, n_null=150, seed=1)
+    assert null_kf.shape == (150,)
+    se = lambda v: v.std(ddof=1) / np.sqrt(len(v))  # noqa: E731
+    # Measured: k-fold 0.522 (t = 5.1), walk-forward 0.492.
+    assert null_kf.mean() - 0.5 > 4 * se(null_kf)
+    assert null_wf.mean() < 0.5 + 2 * se(null_wf)
+    assert null_kf.mean() - null_wf.mean() > 0.02
+    # The same seed gives the same null.
+    again = cv.null_score_distribution(evaluate, kfold, make_null, n_null=150, seed=1)
+    assert np.array_equal(null_kf, again)
+    # Against its own k-fold null, a k-fold score of 0.52 is unremarkable.
+    assert cv.null_p_value(0.52, null_kf) > 0.05
+
+
+def test_null_helpers_validate_input():
+    make_null = cv.bootstrap_returns([0.1, -0.2, 0.4])
+    draw = make_null(np.random.default_rng(0))
+    assert draw.shape == (3,)
+    assert set(np.round(draw, 12)) <= {0.0, -0.3, 0.3}  # demeaned: 0.1 - 0.1, ...
+    raw = cv.bootstrap_returns([0.1, -0.2, 0.4], demean=False)(np.random.default_rng(0))
+    assert set(np.round(raw, 12)) <= {0.1, -0.2, 0.4}
+    panel = np.arange(12.0).reshape(6, 2)
+    rows = cv.bootstrap_returns(panel, demean=False)(np.random.default_rng(0))
+    assert rows.shape == (6, 2)
+    assert all(tuple(r) in set(map(tuple, panel.tolist())) for r in rows.tolist())
+    for bad in ([1.0], [[[1.0]]], [1.0, np.nan]):
+        with pytest.raises(ValueError):
+            cv.bootstrap_returns(bad)
+    with pytest.raises(ValueError, match="n_null"):
+        cv.null_score_distribution(lambda d, s: 0.0, [([0], [1])], make_null, n_null=0)
+    with pytest.raises(ValueError, match="splits"):
+        cv.null_score_distribution(lambda d, s: 0.0, [], make_null)
+    assert cv.null_p_value(1.0, [0.0, 0.5, 2.0, np.nan]) == pytest.approx(2 / 4)
+    assert cv.null_p_value(9.0, np.zeros(99)) == pytest.approx(0.01)
+    with pytest.raises(ValueError):
+        cv.null_p_value(0.5, [np.nan])
+    with pytest.raises(ValueError):
+        cv.null_p_value(np.nan, [0.1])

@@ -2,7 +2,7 @@
 title: "Runbook: CPCV backtest with PSR and deflated Sharpe"
 description: "Best-of-74 strategy selection judged by the naive PSR, the deflated Sharpe ratio, a walk-forward path and CPCV path distributions, on SYNTHETIC data with a no-signal control and a planted signal."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
 afml_chapter:
@@ -146,6 +146,15 @@ Keep two caveats with it. A DSR below 0.95 on a correlated grid is weak evidence
 and CPCV path spread is not a confidence interval. An effective-number-of-trials estimate for the
 registry is a worthwhile follow-up. The MA-crossover family itself has no edge on the data-layer
 sample, which is random walks.
+
+## Audit: features with memory (#217)
+
+Runbook 14 found that purged k-fold and CPCV flatter features with memory
+([`cross_validation`](/modules/cross-validation/#features-with-memory-a-bias-purging-does-not-remove)).
+This runbook fits no model on a feature: each split selects the configuration with the best
+training Sharpe ratio, and positions use past closes only. Its no-signal control is a null
+through the same CPCV splits and shows no inflation: CPCV mean path Sharpe ratio −0.088,
+walk-forward −0.077, true Sharpe ratio of the selection −0.091. **Not affected.**
 
 ## Run it on your own data
 

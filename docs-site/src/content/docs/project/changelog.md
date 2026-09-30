@@ -30,6 +30,7 @@ file disagree).
 
 ### Added
 
+- `cross_validation`: walk-forward splits over the purged k-fold folds, a no-signal null through any splits, and the purged k-fold bias toward features with memory documented; runbooks 11 to 14 audited, no conclusion changed (#217)
 - Runbook 14, fracdiff features against returns in a purged-CV classifier, net of costs (#209) ([#216](https://github.com/Open-Quant/openquant/pull/216))
 - Docs: a research gallery generated from the executed runbooks, a performance page generated from `benchmarks/`, and this changelog on the site; the governance stubs folded into one page (#55) ([#207](https://github.com/Open-Quant/openquant/pull/207))
 - `hcaa`: linkage option (single, complete, average, ward), Ward by default (#197) ([#203](https://github.com/Open-Quant/openquant/pull/203))

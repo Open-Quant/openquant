@@ -2,7 +2,7 @@
 title: Notebook contract
 description: The sections, reproducibility footer and committed-output rules every notebook under notebooks/python/ follows, what `just notebooks-lint` checks, and how a runbook differs from an API tour.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -68,7 +68,8 @@ for anything else. Runbooks 09 to 14 are the reference implementations.
 4. **Method.** The pipeline, with the AFML snippet or paper each step comes from; the cost model;
    the cross-validation scheme with its purge and embargo; and the trial grid. Record every
    configuration in an `openquant.evaluation.TrialRegistry` before selecting among them, including
-   configurations added after the first look (mark them post hoc).
+   configurations added after the first look (mark them post hoc). If any fitted feature has
+   memory (see below), say how the Method controls for it.
 5. **Results.** Tables and figures, with no interpretation beyond captions. Each result names the
    hypothesis it answers. Include the look-ahead and leakage checks as executed assertions, not
    prose.
@@ -80,12 +81,44 @@ for anything else. Runbooks 09 to 14 are the reference implementations.
    decision reached on synthetic data describes the *method*, and says so.
 8. **Self-review checklist.** A Markdown checklist, ticked or not, covering at least: no look-ahead
    (tested), trial count recorded and deflated against, costs included, seeds fixed, data
-   labelled, and what the notebook does not cover. An unticked item says why.
+   labelled, the null control for features with memory (below) where one applies, and what the
+   notebook does not cover. An unticked item says why.
 9. **Reproducibility.** The footer below, as the last cell.
 
 Every annualised statistic states its annualisation factor, which is the bar frequency of the
 data, not 252 unless the bars are daily. A Sharpe ratio annualised from one-minute synthetic bars
 is large and means little; say so next to it.
+
+## Features with memory: a null through the same splits
+
+Purged k-fold and CPCV fit the model for a middle fold on the samples after it as well. Purging
+and the embargo remove training labels that overlap the test fold; they do not remove what a
+model learns from the later samples. For a feature with memory (a price level, a weakly
+differenced price such as FFD at small $d$, a long moving average or volatility ratio) that is
+enough to score above chance on random walks: runbook 14 found purged 5-fold CV giving the log
+price an annualised net Sharpe ratio of 1.85 on the `SYN_*` sample
+([#217](https://github.com/Open-Quant/openquant/issues/217); the
+[`cross_validation` page](/modules/cross-validation/#features-with-memory-a-bias-purging-does-not-remove)
+explains the mechanism). So a runbook that fits a model on any such feature must:
+
+- **Run a no-signal null through the same splits,** with features *and* labels rebuilt from the
+  null data, and judge the result against that null, not against chance. The null is a
+  zero-signal version of the generator for simulated data, or
+  `cross_validation.bootstrap_returns` (demeaned returns drawn with replacement) for real data,
+  with `cross_validation.null_score_distribution` running the pipeline. Permuting the labels
+  alone, or shuffling the returns without replacement (which pins every path to the real end
+  point), is not this null.
+- **Or evaluate walk-forward,** with `cross_validation.walk_forward_splits`, which tests the same
+  folds with models fitted only on earlier samples. A runbook that compares features with
+  different memory (levels against returns, say) should report both schemes, and the null
+  through each.
+- **Not rest a conclusion on pooled out-of-fold AUC** for such features. It compares events at
+  different times and credits slowly varying scores even walk-forward; use accuracy, log loss or
+  net returns against the null.
+
+State in the Method which control the runbook uses, and tick it in the self-review checklist.
+Runbooks 11 to 14 were audited against this rule in
+[#217](https://github.com/Open-Quant/openquant/issues/217); their pages say what the audit found.
 
 ## The reproducibility footer
 

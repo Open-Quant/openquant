@@ -124,7 +124,7 @@ export const moduleDocs: ModuleDoc[] = [
     summary: "Purged k-fold cross-validation with an embargo, for overlapping labels.",
     handwritten: true,
     apiSurface: "both",
-    pythonApis: ["cross_validation.purged_kfold_splits", "cross_validation.split_with_diagnostics", "cross_validation.cpcv_splits", "cross_validation.cpcv_paths", "cross_validation.naive_kfold_splits", "cross_validation.count_train_test_overlaps"],
+    pythonApis: ["cross_validation.purged_kfold_splits", "cross_validation.split_with_diagnostics", "cross_validation.cpcv_splits", "cross_validation.cpcv_paths", "cross_validation.naive_kfold_splits", "cross_validation.count_train_test_overlaps", "cross_validation.walk_forward_splits", "cross_validation.walk_forward_split_with_diagnostics", "cross_validation.null_score_distribution", "cross_validation.null_p_value", "cross_validation.bootstrap_returns"],
   },
   {
     slug: "data-structures",
