@@ -2,7 +2,7 @@
 title: "Runbook: bet sizing from predicted probabilities"
 description: "Does sizing meta-labeled bets by their predicted probability (AFML Snippets 10.1-10.3) beat a flat 0.5 filter, net of costs and deflated by every sizing choice tried? A pre-registered test of runbook 11's post hoc finding, on fresh SYNTHETIC planted-signal paths and no-signal controls."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
 afml_chapter:
@@ -204,6 +204,15 @@ oracle, the shift and shuffle tests and the Snippet 10.4 illustration are not tr
 **Illustration (not a hypothesis).** The notebook also sizes the last six headline events from a
 price forecast, using `get_w`, `get_target_pos` and the #163-corrected `limit_price`
 (Snippet 10.4). The forecast is the expected barrier price implied by $p$.
+
+## Audit: features with memory (#217)
+
+This runbook fits runbook 11's slowly varying meta features on purged folds, so it was checked
+for the k-fold bias runbook 14 found
+([`cross_validation`](/modules/cross-validation/#features-with-memory-a-bias-purging-does-not-remove)).
+Its zero-signal paths already run through the same splits, k-fold and walk-forward: sized
+beats the filter in neither (+0.01, $t$ = 0.4; walk-forward +0.03, $t$ = 0.8), and with the
+signal walk-forward keeps a clear gain (+0.19, $t$ = 4.3). **No conclusion changes.**
 
 ## Run it on your own data
 

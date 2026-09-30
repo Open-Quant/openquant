@@ -1,4 +1,5 @@
-//! `openquant._core.cross_validation`: purged k-fold and CPCV splits as index lists.
+//! `openquant._core.cross_validation`: purged k-fold, walk-forward and CPCV splits as index
+//! lists.
 //!
 //! Nothing here takes a Python callable. The splitters return indices, so the caller fits
 //! whatever model it likes (scikit-learn or anything else) on them. The pure-Python
@@ -281,6 +282,78 @@ fn cv_cpcv_paths(n_splits: usize, n_test_splits: usize) -> PyResult<Vec<Vec<usiz
         .collect())
 }
 
+/// Walk-forward splits over the purged k-fold folds, each trained only on earlier samples.
+///
+/// The folds are those of `purged_kfold_splits`. Fold `g`, for `g >= min_train_folds`, is
+/// tested; its training set is every sample *before* the fold whose span does not overlap the
+/// fold's window (from its first start to its latest end, closed intervals). Nothing after the
+/// fold is trained on, so no model sees the future of its test fold, and the embargo (which
+/// only removes samples after a test block) removes nothing. The first `min_train_folds` folds
+/// are never tested.
+///
+/// Purged k-fold and CPCV also fit the model for a middle fold on the samples after it. With a
+/// feature that carries memory of the price level this inflates the score even on random walks
+/// (issue #217), which purging does not prevent; walk-forward does.
+///
+/// Parameters
+/// ----------
+/// t0 : list[int]
+///     Start of each sample's label span, as int64 nanoseconds since the epoch (plain integers
+///     such as bar positions also work; only the order of the values matters). One per sample,
+///     in time order.
+/// t1 : list[int]
+///     End of each sample's label span, in the same units as `t0`. Must be `>= t0`.
+/// n_splits : int
+///     Number of contiguous folds; `2 <= n_splits <= len(t0)`.
+/// pct_embargo : float
+///     Embargo fraction in `[0, 1)`, validated as for `purged_kfold_splits`; it removes nothing
+///     in walk-forward splits.
+/// min_train_folds : int
+///     Number of leading folds that only train; `1 <= min_train_folds < n_splits`.
+///
+/// Returns
+/// -------
+/// list[dict[str, Any]]
+///     One dict per tested fold, in fold order, with the keys of `split_with_diagnostics`:
+///
+///     - `split_id` (int): position of the split in the list.
+///     - `train_indices` (list[int]): sorted training indices, all before the test fold.
+///     - `test_indices` (list[int]): sorted test indices.
+///     - `test_ranges` (list[tuple[int, int]]): the test fold as one half-open block.
+///     - `purged_indices` (list[int]): earlier samples removed by purging.
+///     - `embargo_indices` (list[int]): always empty.
+///     - `overlap_count_after_purge` (int): always 0.
+///
+///     plus `test_fold_id` (int): the fold tested, numbered as in `purged_kfold_splits`.
+///
+/// Raises
+/// ------
+/// ValueError
+///     If `t0` and `t1` differ in length, or if the core rejects the input (e.g. no samples,
+///     `n_splits` below 2 or above the sample count, `pct_embargo` not a finite number in
+///     `[0, 1)`, a span that ends before it starts, or `min_train_folds` not in
+///     `[1, n_splits)`).
+#[pyfunction(name = "walk_forward_splits")]
+fn cv_walk_forward_splits<'py>(
+    py: Python<'py>,
+    t0: Vec<i64>,
+    t1: Vec<i64>,
+    n_splits: usize,
+    pct_embargo: f64,
+    min_train_folds: usize,
+) -> PyResult<Vec<Bound<'py, PyDict>>> {
+    let (cv, n) = purged_kfold(t0, t1, n_splits, pct_embargo)?;
+    cv.walk_forward_splits(n, min_train_folds)
+        .map_err(to_py_err)?
+        .into_iter()
+        .map(|w| {
+            let d = split_to_dict(py, w.split)?;
+            d.set_item("test_fold_id", w.test_fold_id)?;
+            Ok(d)
+        })
+        .collect()
+}
+
 /// Unpurged k-fold splits: contiguous test folds, every other sample trains.
 ///
 /// This is the baseline AFML section 7.3 warns against. It exists to measure leakage (for
@@ -357,6 +430,7 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cv_split_with_diagnostics, &m)?)?;
     m.add_function(wrap_pyfunction!(cv_cpcv_splits, &m)?)?;
     m.add_function(wrap_pyfunction!(cv_cpcv_paths, &m)?)?;
+    m.add_function(wrap_pyfunction!(cv_walk_forward_splits, &m)?)?;
     m.add_function(wrap_pyfunction!(cv_naive_kfold_splits, &m)?)?;
     m.add_function(wrap_pyfunction!(cv_count_train_test_overlaps, &m)?)?;
     parent.add_submodule(&m)?;

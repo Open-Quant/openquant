@@ -2,7 +2,7 @@
 title: "Runbook: fracdiff features against returns in a classifier"
 description: "Do fractionally differentiated features beat plain returns and integer differences as inputs of a purged-CV classifier, net of costs and deflated by every feature set tried? Runbook 09's open question, on SYNTHETIC paths with a planted signal of known strength and no-signal controls."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
 afml_chapter:
@@ -145,6 +145,18 @@ The notebook asserts, as executed code:
 **Trial count.** 8 per registry, all pre-registered, all deflated by. The Monte Carlo paths, the
 oracle and the post hoc walk-forward runs, which were made on the Monte Carlo paths only, are not
 trials.
+
+## Follow-up (#217)
+
+The bias this runbook found is now documented and tested in
+[`cross_validation`](/modules/cross-validation/#features-with-memory-a-bias-purging-does-not-remove):
+the model for a middle fold learns to fade the level against a training mean that includes the
+levels after the fold. `cross_validation.walk_forward_splits` gives the forward-only splits the
+post hoc check used, and `cross_validation.null_score_distribution` runs a no-signal null through
+any splits. The walk-forward AUC gap is a property of pooled AUC, which ranks events at different
+times, not a leak. Runbooks 11 to 13 were audited for the same bias; none of their conclusions
+changes. The [notebook contract](/workflows/research-notebook-contract/#features-with-memory-a-null-through-the-same-splits)
+now requires the null control for features with memory.
 
 ## Run it on your own data
 

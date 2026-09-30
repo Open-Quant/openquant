@@ -27,12 +27,18 @@ export const apiInventory = {
       "build_volume_bars"
     ],
     "cross_validation": [
+      "bootstrap_returns",
       "count_train_test_overlaps",
       "cpcv_paths",
       "cpcv_splits",
+      "draw",
       "naive_kfold_splits",
+      "null_p_value",
+      "null_score_distribution",
       "purged_kfold_splits",
-      "split_with_diagnostics"
+      "split_with_diagnostics",
+      "walk_forward_split_with_diagnostics",
+      "walk_forward_splits"
     ],
     "data": [
       "align_calendar",
@@ -194,7 +200,8 @@ export const apiInventory = {
       "naive_kfold_splits",
       "new",
       "split",
-      "split_with_diagnostics"
+      "split_with_diagnostics",
+      "walk_forward_splits"
     ],
     "openquant::data_processing": [
       "align_calendar_columns",
@@ -698,11 +705,13 @@ export const apiInventory = {
       "PurgedKFold::new": "method",
       "PurgedKFold::split": "method",
       "PurgedKFold::split_with_diagnostics": "method",
+      "PurgedKFold::walk_forward_splits": "method",
       "PurgedSplit": "struct",
       "PurgedSplitDiagnostics": "struct",
       "Scoring": "enum",
       "SimpleClassifier": "trait",
       "TrainTestSplit": "type",
+      "WalkForwardSplit": "struct",
       "count_train_test_overlaps": "fn",
       "ml_cross_val_score": "fn",
       "ml_get_train_times": "fn",
