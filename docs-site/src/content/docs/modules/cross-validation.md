@@ -2,7 +2,7 @@
 title: "cross_validation"
 description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-27'
 audience:
   - quant-dev
   - platform-engineering
@@ -12,7 +12,7 @@ afml_chapter:
   - "7"
   - "12"
 citation:
-  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4). Chapter 12: §12.4 The Combinatorial Purged Cross-Validation Method."
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 7: §7.3 Why K-Fold CV Fails in Finance; §7.4.1 Purging the Training Set (Snippet 7.1); §7.4.2 Embargo (Snippet 7.2); §7.4.3 The Purged K-Fold Class (Snippet 7.3); §7.5 Bugs in Sklearn's Cross-Validation (Snippet 7.4). Chapter 12: §12.2 The Walk-Forward Method; §12.3 The Cross-Validation Method; §12.4 The Combinatorial Purged Cross-Validation Method."
 rust_api:
   - "PurgedKFold"
   - "ml_get_train_times"
@@ -24,6 +24,7 @@ rust_api:
   - "PurgedSplitDiagnostics"
   - "CpcvSplit"
   - "CpcvPath"
+  - "WalkForwardSplit"
   - "naive_kfold_splits"
   - "count_train_test_overlaps"
   - "CrossValidationError"
@@ -34,6 +35,11 @@ python_api:
   - "cross_validation.cpcv_paths"
   - "cross_validation.naive_kfold_splits"
   - "cross_validation.count_train_test_overlaps"
+  - "cross_validation.walk_forward_splits"
+  - "cross_validation.walk_forward_split_with_diagnostics"
+  - "cross_validation.null_score_distribution"
+  - "cross_validation.null_p_value"
+  - "cross_validation.bootstrap_returns"
 sidebar:
   badge: Module
 ---
@@ -175,6 +181,94 @@ let (train, test) = &naive_kfold_splits(40, 5)?[2];
 assert_eq!(count_train_test_overlaps(&info_sets, train, test)?, 6);
 ```
 
+## Features with memory: a bias purging does not remove
+
+Purging and the embargo stop one leak: training labels that share returns with test labels,
+and training features computed from test-window prices. They do not change who the model for
+a middle fold is trained on. In every k-fold split but the last, and every CPCV split but the
+one that tests the last groups, that model is also fitted on samples from **after** the test
+fold. AFML §12.3 lists this among the pitfalls of cross-validation (the training set does not
+trail the testing set) and points to purging and the embargo (Chapter 7) as the remedy. For a
+feature with memory — the price level, a weakly differenced price, a long moving average —
+they are not enough, and scores come out above chance on data with no signal at all.
+
+The mechanism, on a random walk with the log price as the only feature:
+
+1. Inside any window a random walk looks mean-reverting, so a model fitted on levels learns to
+   bet against the level relative to its training mean. On 500-event random walks the fitted
+   slope is negative in about nine middle folds of ten.
+2. For a middle fold, the training mean includes the levels *after* the fold. "Below the
+   training mean" then tends to mean "the price goes on to rise": betting up when the price is
+   below the before-and-after training mean is right 54% of the time on the middle folds of
+   pure random walks, and betting against the mean of the earlier samples alone is right
+   50% of the time.
+3. Purging finds nothing to remove: no training label overlaps a test label. The bias is in
+   what the model learned from the later samples, not in shared returns.
+
+Returns and other short-memory features carry little of this, so under k-fold or CPCV a
+comparison of a level-like feature against returns is tilted toward the level. Runbook 14
+([fracdiff features against returns](/runbooks/fracdiff-features-classifier/), issue
+[#217](https://github.com/Open-Quant/openquant/issues/217)) found it on random walks: purged
+5-fold CV gave the log price an annualised net Sharpe ratio of 1.85 on the synthetic `SYN_*`
+sample, and FFD features beat returns by 0.024 of AUC ($t$ = 4.6) on 30 zero-signal paths.
+Walk-forward removed the Sharpe-ratio bias.
+
+Two defences, both in this module:
+
+- **Walk-forward over the same folds.** `walk_forward_splits(n_samples, min_train_folds)`
+  tests the folds of `split` from `min_train_folds` on, and trains each only on the samples
+  before it, purged. No model sees a later sample. The embargo removes nothing here, because
+  it only drops samples after a test block, and none of those train. Because the folds are the
+  k-fold folds, a feature can be scored fold for fold under both schemes.
+  [`backtesting-engine`](/modules/backtesting-engine/)'s `run_walk_forward` is the
+  backtest-engine version, with its own block sizes.
+- **A null through the same splits.** Rebuild the data with no signal (simulate it, or draw
+  the demeaned returns with replacement), recompute features *and* labels from it, run it
+  through the *same* splits, and compare the real score with that distribution rather than
+  with chance. The Python helpers `null_score_distribution` and `bootstrap_returns` do this.
+  Two tempting nulls are wrong here. Permuting the labels alone keeps every feature but cuts
+  the link between a label and the path the level records, which is what the bias uses, so it
+  would pass a biased scheme. Shuffling the returns *without* replacement fixes their sum, so
+  every shuffled path ends where the real one does: a random-walk bridge, which mean-reverts,
+  and on which the level beats chance even walk-forward (0.517 in the example below, against
+  0.500 with the bootstrap).
+
+```rust
+use chrono::{Duration, NaiveDate};
+use openquant::cross_validation::PurgedKFold;
+
+let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+let info_sets: Vec<_> =
+    (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+let cv = PurgedKFold::new(5, info_sets, 0.15)?;
+
+// Folds 1 to 4 are tested, each trained only on what comes before it.
+let splits = cv.walk_forward_splits(40, 1)?;
+assert_eq!(splits.len(), 4);
+let wf = &splits[1];
+assert_eq!(wf.test_fold_id, 2);
+// The third fold (16-23) trains on 0-12: 13-15 are purged, and 24-39 are later.
+assert_eq!(wf.split.train_indices, (0..=12).collect::<Vec<usize>>());
+assert_eq!(wf.split.diagnostics.purged_indices, vec![13, 14, 15]);
+// The k-fold split of the same fold also trains on 33-39, after the test fold.
+assert_eq!(cv.split(40)?[2].0, (0..=12).chain(33..=39).collect::<Vec<usize>>());
+```
+
+The integration test `level_feature_is_biased_under_purged_kfold_but_not_walk_forward` runs a
+one-feature logistic model on the level of 400 Gaussian random walks (500 events each, labels
+the sign of the next five steps, `pct_embargo = 0.01`). Purged 5-fold CV scores an accuracy of
+0.52, nine standard errors above chance; walk-forward over the same folds scores 0.50.
+
+**Pooled AUC is biased even walk-forward.** Runbook 14 also saw level-like features ahead on
+out-of-fold AUC walk-forward. That is the metric, not a leak. AUC compares the scores of events
+at different times, and a later event's score, computed from past prices only, already
+reflects an earlier event's outcome. On random walks, a fixed score with no fitting at all,
+minus the deviation of the price from its past 100 bars' mean, has a within-fold AUC of 0.54
+on five-bar labels. The excess comes from pairs of events close in time: 0.89 over pairs
+within the label horizon, 0.65 over pairs 6 to 40 bars apart, and 0.50 over pairs 200 to 400
+bars apart, where one event's outcome no longer shows in the other's score. Judge features with memory on a per-event measure — accuracy, log loss, net returns —
+against a null run through the same splits, not on pooled AUC.
+
 ## Scoring
 
 `ml_cross_val_score(classifier, x, y, sample_weight, splits, scoring)` fits on each training
@@ -235,6 +329,11 @@ ISO strings, or plain integers such as bar positions. The splitting is the Rust 
 | `split_with_diagnostics(t0, t1, n_splits, pct_embargo)` | one dict per fold: the indices plus `test_ranges`, `purged_indices`, `embargo_indices`, `overlap_count_after_purge` |
 | `cpcv_splits(t0, t1, n_splits, n_test_splits, pct_embargo)` | the same dicts for the $\binom{N}{k}$ CPCV splits, with `test_fold_ids` |
 | `cpcv_paths(n_splits, n_test_splits)` | an `(n_paths, n_splits)` array: `paths[p, g]` is the split whose predictions path `p` uses for fold `g` |
+| `walk_forward_splits(t0, t1, n_splits, pct_embargo, min_train_folds=1)` | `[(train_idx, test_idx), ...]` for folds `min_train_folds` on, each trained only on earlier samples |
+| `walk_forward_split_with_diagnostics(...)` | the same as dicts, with `test_fold_id` and `purged_indices` |
+| `null_score_distribution(evaluate, splits, make_null, n_null, seed)` | `n_null` scores of `evaluate(make_null(rng), splits)`: the pipeline on no-signal data, through the same splits |
+| `bootstrap_returns(returns, demean=True)` | a `make_null` that draws the (demeaned) returns i.i.d. with replacement: a driftless random walk |
+| `null_p_value(observed, null)` | $(k + 1)/(n + 1)$, $k$ of the $n$ null scores at least `observed` |
 | `naive_kfold_splits(n_samples, n_splits)` | the unpurged baseline |
 | `count_train_test_overlaps(t0, t1, train, test)` | the number of leaking training samples |
 
@@ -271,6 +370,46 @@ purged [13, 14, 15, 24, 25, 26]
 naive fold 2 overlaps: 6
 ```
 
+Walk-forward and the null, on the same example. `evaluate` rebuilds the price, the feature and
+the labels from each null path, which is what lets the null see the bias above.
+
+```python
+import numpy as np
+from openquant import cross_validation as cv
+
+t0 = np.datetime64("2024-01-02T09:00") + np.arange(40) * np.timedelta64(1, "h")
+t1 = t0 + np.timedelta64(3, "h")
+train, test = cv.walk_forward_splits(t0, t1, n_splits=5, pct_embargo=0.15)[1]
+print("walk-forward fold 2: test", test.min(), "-", test.max(), "train", train.tolist())
+
+# A null for a pipeline that fits the next 5-bar move on the price level.
+n, h = 300, 5
+t = np.arange(n)
+splits = cv.purged_kfold_splits(t, t + h, n_splits=5, pct_embargo=0.01)
+
+
+def evaluate(returns, splits):
+    price = np.cumsum(returns)
+    x, y = price[t], price[t + h] > price[t]
+    hits = []
+    for tr, te in splits:
+        # Bet up when the price is below its training mean (what a fitted model learns).
+        hits.append(np.mean((x[te] < x[tr].mean()) == y[te]))
+    return float(np.mean(hits))
+
+
+make_null = cv.bootstrap_returns(np.random.default_rng(0).standard_normal(n + h))
+null = cv.null_score_distribution(evaluate, splits, make_null, n_null=200, seed=1)
+wf = cv.walk_forward_splits(t, t + h, n_splits=5, pct_embargo=0.01)
+null_wf = cv.null_score_distribution(evaluate, wf, make_null, n_null=200, seed=1)
+print("k-fold null above chance:", null.mean() > 0.51, "| walk-forward null:", abs(null_wf.mean() - 0.5) < 0.01)
+```
+
+```text
+walk-forward fold 2: test 16 - 23 train [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+k-fold null above chance: True | walk-forward null: True
+```
+
 The list from `purged_kfold_splits` is a valid `cv=` for scikit-learn:
 `cross_val_score(model, X, y, cv=splits)` or `GridSearchCV(model, grid, cv=splits)`.
 scikit-learn then passes `sample_weight` to `fit` but not to the scorer (the bug Snippet 7.4
@@ -297,6 +436,10 @@ fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
 - **`ml_get_train_times` is the purge alone**, on timestamps, for one or more test windows
   (Snippet 7.1). It applies no embargo and nothing else in the crate calls it; use it when
   you build your own splits, for instance several disjoint test blocks at once.
+- **Features with memory need walk-forward, or a null through the same splits.** Purged
+  k-fold and CPCV fit middle folds on later samples, which flatters price levels and other
+  slowly varying features even on random walks; see
+  [Features with memory](#features-with-memory-a-bias-purging-does-not-remove).
 - **One path is not a backtest.** Purged k-fold gives one out-of-sample prediction per
   sample, hence one performance path. `cpcv_splits` and `cpcv_paths` give $\varphi[N,k]$ of
   them, and [`backtesting-engine`](/modules/backtesting-engine/)'s `run_cpcv` scores each.
@@ -309,6 +452,8 @@ fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
   in-sample half of the same overlap problem.
 - [`backtesting-engine`](/modules/backtesting-engine/) — walk-forward, purged CV and CPCV
   over these splits.
+- [`fracdiff`](/modules/fracdiff/) — fractionally differentiated features keep memory of
+  the level, so score them walk-forward.
 - [`hyperparameter-tuning`](/modules/hyperparameter-tuning/) — grid and randomised search
   under `PurgedKFold`.
 - [`feature-importance`](/modules/feature-importance/) — MDA scores features on purged folds.

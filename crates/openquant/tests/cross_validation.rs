@@ -893,3 +893,203 @@ fn ml_cross_val_score_rejects_bad_indices_lengths_and_prediction_counts() {
     let ok = ml_cross_val_score(&mut FixedCount(3), &x, &y, None, &good, Scoring::Accuracy);
     assert_eq!(ok.unwrap(), vec![1.0]);
 }
+
+// ---------------------------------------------------------------------------------------
+// Walk-forward splits, and the level-feature bias of purged k-fold (issue #217).
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn walk_forward_splits_are_the_kfold_splits_cut_at_the_test_fold() {
+    use openquant::cross_validation::WalkForwardSplit;
+    use rand::SeedableRng;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(217);
+    for (n, n_splits, pct_embargo) in [(60, 4, 0.0), (97, 5, 0.05), (150, 6, 0.2)] {
+        let info = random_spans(&mut rng, n);
+        let pkf = PurgedKFold::new(n_splits, info.clone(), pct_embargo).unwrap();
+        let kfold = pkf.split(n).unwrap();
+        for min_train_folds in 1..n_splits {
+            let wf: Vec<WalkForwardSplit> = pkf.walk_forward_splits(n, min_train_folds).unwrap();
+            assert_eq!(wf.len(), n_splits - min_train_folds);
+            for (split_id, s) in wf.iter().enumerate() {
+                let (kf_train, kf_test) = &kfold[s.test_fold_id];
+                assert_eq!(s.split_id, split_id);
+                assert_eq!(s.split.diagnostics.split_id, split_id);
+                assert_eq!(s.test_fold_id, min_train_folds + split_id);
+                assert_eq!(&s.split.test_indices, kf_test);
+                let start = kf_test[0];
+                assert_eq!(s.split.diagnostics.test_ranges, vec![(start, start + kf_test.len())]);
+                // Training is the k-fold training set before the fold: the same purge, and
+                // nothing from after the fold, so the embargo has nothing to remove.
+                let before: Vec<usize> = kf_train.iter().copied().filter(|&i| i < start).collect();
+                assert_eq!(s.split.train_indices, before);
+                assert!(s.split.diagnostics.embargo_indices.is_empty());
+                let mut all: Vec<usize> = s
+                    .split
+                    .train_indices
+                    .iter()
+                    .chain(&s.split.diagnostics.purged_indices)
+                    .copied()
+                    .collect();
+                all.sort_unstable();
+                assert_eq!(all, (0..start).collect::<Vec<_>>(), "train + purged = 0..start");
+                assert_eq!(
+                    count_train_test_overlaps(&info, &s.split.train_indices, &s.split.test_indices),
+                    Ok(0)
+                );
+                assert_eq!(s.split.diagnostics.overlap_count_after_purge, 0);
+                for &p in &s.split.diagnostics.purged_indices {
+                    assert!(info[p].1 >= info[start].0, "purged sample {p} reaches the fold");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn walk_forward_splits_reject_invalid_input() {
+    let info = make_spans("2019-01-01 00:00:00", 10, 1, 2);
+    let pkf = PurgedKFold::new(4, info, 0.0).unwrap();
+    for min_train_folds in [0, 4, 5] {
+        assert_eq!(
+            pkf.walk_forward_splits(10, min_train_folds).unwrap_err(),
+            CrossValidationError::InvalidMinTrainFolds { min_train_folds, n_splits: 4 }
+        );
+    }
+    assert_eq!(
+        pkf.walk_forward_splits(9, 1).unwrap_err(),
+        CrossValidationError::DatasetLengthMismatch
+    );
+}
+
+/// SplitMix64 with Box-Muller: a fixed normal stream that no dependency update can change.
+struct Normals(u64);
+
+impl Normals {
+    fn uniform(&mut self) -> f64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        ((z >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+    }
+    fn normal(&mut self) -> f64 {
+        let (u, v) = (self.uniform(), self.uniform());
+        (-2.0 * u.ln()).sqrt() * (2.0 * std::f64::consts::PI * v).cos()
+    }
+}
+
+/// One-feature logistic regression with an intercept, the feature standardised with the
+/// training mean and s.d., and a unit ridge penalty on the slope; fitted by Newton's method.
+#[derive(Default)]
+struct Logit1 {
+    mean: f64,
+    sd: f64,
+    b0: f64,
+    b1: f64,
+}
+
+impl SimpleClassifier for Logit1 {
+    fn fit(&mut self, x: &[Vec<f64>], y: &[f64], _sample_weight: Option<&[f64]>) {
+        let n = x.len() as f64;
+        self.mean = x.iter().map(|r| r[0]).sum::<f64>() / n;
+        self.sd = (x.iter().map(|r| (r[0] - self.mean).powi(2)).sum::<f64>() / n).sqrt();
+        let (mut b0, mut b1) = (0.0f64, 0.0f64);
+        for _ in 0..50 {
+            let (mut g0, mut g1, mut h00, mut h01, mut h11) = (0.0, b1, 0.0, 0.0, 1.0);
+            for (row, yi) in x.iter().zip(y) {
+                let z = (row[0] - self.mean) / self.sd;
+                let p = 1.0 / (1.0 + (-(b0 + b1 * z)).exp());
+                let w = p * (1.0 - p);
+                g0 += p - yi;
+                g1 += (p - yi) * z;
+                h00 += w;
+                h01 += w * z;
+                h11 += w * z * z;
+            }
+            let det = h00 * h11 - h01 * h01;
+            let (s0, s1) = ((h11 * g0 - h01 * g1) / det, (h00 * g1 - h01 * g0) / det);
+            b0 -= s0;
+            b1 -= s1;
+            if s0.abs().max(s1.abs()) < 1e-10 {
+                break;
+            }
+        }
+        (self.b0, self.b1) = (b0, b1);
+    }
+    fn predict_proba(&self, x: &[Vec<f64>]) -> Vec<f64> {
+        x.iter()
+            .map(|r| 1.0 / (1.0 + (-(self.b0 + self.b1 * (r[0] - self.mean) / self.sd)).exp()))
+            .collect()
+    }
+}
+
+/// Mean and standard error of the mean.
+fn mean_se(v: &[f64]) -> (f64, f64) {
+    let n = v.len() as f64;
+    let m = v.iter().sum::<f64>() / n;
+    let var = v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / (n - 1.0);
+    (m, (var / n).sqrt())
+}
+
+/// Issue #217. On Gaussian random walks nothing predicts the next move, yet a logistic model on
+/// the price *level*, scored by purged 5-fold CV with an embargo, is right well over half the
+/// time: the model for a middle fold is also fitted on the samples after it, and learns where
+/// the path went from them. Purging leaves no label overlap, so this is not the leak it
+/// removes. Walk-forward over the same folds, where no model sees a later sample, is at chance.
+#[test]
+fn level_feature_is_biased_under_purged_kfold_but_not_walk_forward() {
+    const N: usize = 500; // events per path
+    const H: usize = 5; // label: sign of the move from t to t + H
+    const PATHS: usize = 400;
+    let origin = NaiveDateTime::parse_from_str("2020-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let info: Vec<_> = (0..N)
+        .map(|t| {
+            let s = origin + chrono::Duration::hours(t as i64);
+            (s, s + chrono::Duration::hours(H as i64))
+        })
+        .collect();
+    let pkf = PurgedKFold::new(5, info.clone(), 0.01).unwrap();
+    let kfold = pkf.split(N).unwrap();
+    let walk_forward: Vec<(Vec<usize>, Vec<usize>)> = pkf
+        .walk_forward_splits(N, 1)
+        .unwrap()
+        .into_iter()
+        .map(|s| (s.split.train_indices, s.split.test_indices))
+        .collect();
+    for (train, test) in &kfold {
+        assert_eq!(count_train_test_overlaps(&info, train, test), Ok(0));
+    }
+
+    let mut rng = Normals(217);
+    let (mut acc_kfold, mut acc_wf) = (Vec::new(), Vec::new());
+    for _ in 0..PATHS {
+        let mut price = Vec::with_capacity(N + H);
+        let mut level = 0.0f64;
+        price.push(level);
+        for _ in 1..N + H {
+            level += rng.normal();
+            price.push(level);
+        }
+        let x: Vec<Vec<f64>> = (0..N).map(|t| vec![price[t]]).collect();
+        let y: Vec<f64> = (0..N).map(|t| f64::from(u8::from(price[t + H] > price[t]))).collect();
+        let mean = |splits: &[(Vec<usize>, Vec<usize>)]| {
+            let s =
+                ml_cross_val_score(&mut Logit1::default(), &x, &y, None, splits, Scoring::Accuracy)
+                    .unwrap();
+            s.iter().sum::<f64>() / s.len() as f64
+        };
+        acc_kfold.push(mean(&kfold));
+        acc_wf.push(mean(&walk_forward));
+    }
+
+    let (kf, kf_se) = mean_se(&acc_kfold);
+    let (wf, wf_se) = mean_se(&acc_wf);
+    let diff: Vec<f64> = acc_kfold.iter().zip(&acc_wf).map(|(a, b)| a - b).collect();
+    let (d, d_se) = mean_se(&diff);
+    // Measured: purged k-fold 0.52 (t about 9), walk-forward 0.50 (|t| < 1).
+    assert!(kf - 0.5 > 5.0 * kf_se, "purged k-fold accuracy {kf:.4} (s.e. {kf_se:.4})");
+    assert!(kf > 0.51, "purged k-fold accuracy {kf:.4}");
+    assert!((wf - 0.5).abs() < 3.0 * wf_se, "walk-forward accuracy {wf:.4} (s.e. {wf_se:.4})");
+    assert!(d > 5.0 * d_se, "k-fold minus walk-forward {d:.4} (s.e. {d_se:.4})");
+}

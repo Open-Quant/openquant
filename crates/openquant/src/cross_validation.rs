@@ -14,9 +14,55 @@
 //!
 //! [`PurgedKFold::cpcv_splits`] and [`PurgedKFold::cpcv_paths`] give the combinatorial
 //! version (§12.4); [`crate::backtesting_engine`] shares the embargo code and uses the same
-//! split and path numbering. [`naive_kfold_splits`] and [`count_train_test_overlaps`] measure
-//! the leak that purging removes, and [`ml_cross_val_score`] scores a [`SimpleClassifier`] on
-//! any list of splits.
+//! split and path numbering. [`PurgedKFold::walk_forward_splits`] tests the same folds but
+//! trains each one only on the folds before it. [`naive_kfold_splits`] and
+//! [`count_train_test_overlaps`] measure the leak that purging removes, and
+//! [`ml_cross_val_score`] scores a [`SimpleClassifier`] on any list of splits.
+//!
+//! # Features with memory: a bias purging does not remove
+//!
+//! Purging and the embargo remove one leak: training labels whose spans overlap the test
+//! window, and training features computed from test-window prices (AFML §7.4). They do not
+//! change the fact that the model for a middle fold is fitted on samples from *after* the test
+//! fold, as in every k-fold split but the last and every CPCV split but the one that tests the
+//! last groups. AFML §12.3 lists this (the training set does not trail the testing set) among
+//! the pitfalls of cross-validation and points to purging and the embargo as the remedy. For a
+//! feature with memory (the price level, a weakly differenced price, a long moving average)
+//! they are not enough:
+//!
+//! - The later training samples tell the model where the path went after the test fold. A
+//!   model fitted on a level learns, in sample, to fade the level relative to its training
+//!   mean (a random walk looks mean-reverting inside any window). For a middle fold that mean
+//!   includes the levels after the fold, so "below the training mean" means "the price goes on
+//!   to rise", and the fitted model is right more often than chance on data with no signal.
+//! - Returns and other short-memory features carry little of this, so a comparison of a
+//!   level-like feature against returns under k-fold or CPCV is biased toward the level.
+//!
+//! Runbook 14 (`notebooks/python/14_fracdiff_features_classifier.ipynb`, issue #217) measured it
+//! on random walks: under purged 5-fold CV the log price reached an annualised net Sharpe ratio
+//! of 1.85 on the synthetic `SYN_*` sample, and fractionally differentiated prices beat returns
+//! by 0.024 of AUC with no signal at all; walk-forward, the Sharpe ratio bias was gone. The
+//! integration test `level_feature_is_biased_under_purged_kfold_but_not_walk_forward` shows the
+//! same with this module alone. Two defences:
+//!
+//! - **Walk-forward.** [`PurgedKFold::walk_forward_splits`] trains each test fold only on the
+//!   folds before it, purged, so no model sees a later sample. Use it to compare features with
+//!   memory.
+//! - **A null through the same splits.** Run a no-signal version of the data (simulated, or
+//!   the demeaned returns drawn with replacement) through the *same* splits, with features
+//!   *and* labels rebuilt from it, and compare the real score with that null distribution
+//!   rather than with chance. Permuting the labels alone is not this null: it cuts the link
+//!   between a label and the path the feature records, which is what the bias uses. Nor is
+//!   shuffling the returns without replacement: the shuffled path is pinned to the real
+//!   path's end point, a mean-reverting bridge. The Python helpers
+//!   `openquant.cross_validation.null_score_distribution` and `bootstrap_returns` run such a
+//!   null.
+//!
+//! A pooled rank statistic such as AUC stays biased toward slowly varying scores even
+//! walk-forward, for a different reason: it compares events at different times, and a later
+//! event's score, computed from past prices only, already reflects an earlier event's outcome.
+//! Judge features with memory on a per-event measure (accuracy, log loss, net returns) against
+//! the null, not on pooled AUC.
 //!
 //! Conventions:
 //!
@@ -90,6 +136,14 @@ pub enum CrossValidationError {
     InvalidTestSplits {
         /// The requested number of test folds per split.
         n_test_splits: usize,
+        /// The splitter's number of folds.
+        n_splits: usize,
+    },
+    /// `min_train_folds` for walk-forward is not in `[1, n_splits)`.
+    #[error("min_train_folds must be between 1 and {n_splits} - 1, got {min_train_folds}")]
+    InvalidMinTrainFolds {
+        /// The requested number of leading folds that are only trained on.
+        min_train_folds: usize,
         /// The splitter's number of folds.
         n_splits: usize,
     },
@@ -428,8 +482,10 @@ pub type TrainTestSplit = (Vec<usize>, Vec<usize>);
 
 /// Why each non-training sample of a [`PurgedSplit`] was left out of training.
 ///
-/// The training samples are exactly those that are neither test, purged nor embargoed. A
-/// sample can be both purged and embargoed. All index lists are sorted.
+/// In a k-fold or CPCV split the training samples are exactly those that are neither test,
+/// purged nor embargoed; a walk-forward split ([`WalkForwardSplit`]) also leaves out every
+/// sample after its test fold, without listing it. A sample can be both purged and embargoed.
+/// All index lists are sorted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PurgedSplitDiagnostics {
     /// Position of the split in the returned list.
@@ -440,6 +496,7 @@ pub struct PurgedSplitDiagnostics {
     pub purged_indices: Vec<usize>,
     /// Non-test samples inside an embargo window (§7.4.2), whether or not also purged. Each
     /// window follows a test block and starts where that block's purge ends (Snippet 7.3).
+    /// Always empty in a walk-forward split.
     pub embargo_indices: Vec<usize>,
     /// Training samples whose information set still overlaps some test sample's. Purging
     /// guarantees 0; it is reported so callers can assert it.
@@ -482,8 +539,27 @@ pub struct CpcvPath {
     pub split_for_fold: Vec<usize>,
 }
 
+/// One walk-forward split: a test fold of [`PurgedKFold::split`], trained only on the folds
+/// before it ([`PurgedKFold::walk_forward_splits`]).
+///
+/// `split.train_indices` are the samples before the test fold that purging keeps. Samples
+/// after the fold are never trained on and are not listed in the diagnostics, so unlike a
+/// k-fold split, train, test, purged and embargoed samples do not cover every index.
+/// `split.diagnostics.purged_indices` lists only the earlier samples that purging removed, and
+/// `embargo_indices` is always empty: the embargo follows a test block, where walk-forward has
+/// no training data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalkForwardSplit {
+    /// Position of the split in the returned list; `split.diagnostics.split_id == split_id`.
+    pub split_id: usize,
+    /// The fold tested, numbered as in [`PurgedKFold::split`].
+    pub test_fold_id: usize,
+    /// The purged, forward-only split.
+    pub split: PurgedSplit,
+}
+
 /// Purged k-fold cross-validation with an embargo (AFML §7.4.3, Snippet 7.3), and its
-/// combinatorial extension (AFML §12.4).
+/// combinatorial extension (AFML §12.4), with walk-forward splits over the same folds.
 ///
 /// Holds one `(start, end)` information set per sample, in time order, the number of
 /// contiguous folds, and the embargo fraction. See the [module docs](crate::cross_validation) for the purge and
@@ -675,6 +751,106 @@ impl PurgedKFold {
             .map(|path_id| CpcvPath {
                 path_id,
                 split_for_fold: splits_testing.iter().map(|ids| ids[path_id]).collect(),
+            })
+            .collect())
+    }
+
+    /// Walk-forward splits over the folds of [`PurgedKFold::split`]: each test fold from
+    /// `min_train_folds` on is trained only on the samples *before* it, purged.
+    ///
+    /// Fold `g` (for `g >= min_train_folds`) is tested exactly as in [`PurgedKFold::split`];
+    /// its training set is every earlier sample whose information set does not overlap the
+    /// fold's window (from its first start to its latest end). No model is fitted on a sample
+    /// that comes after its test fold, which is what makes this the check for features with
+    /// memory; see the module docs, "Features with memory".
+    /// The training window expands: the model for fold `g` sees folds `0..g`. The first
+    /// `min_train_folds` folds are never tested, so the splits cover the later
+    /// `n_splits - min_train_folds` folds, one out-of-sample prediction per sample there.
+    ///
+    /// The splitter's `pct_embargo` is accepted but removes nothing here: the embargo (AFML
+    /// §7.4.2) drops samples *after* a test block, and none of those train. Because the folds
+    /// are the k-fold folds, a feature can be scored fold for fold under both schemes.
+    /// [`crate::backtesting_engine::run_walk_forward`] is the backtest-engine counterpart, with
+    /// its own block sizes.
+    ///
+    /// # Errors
+    /// [`CrossValidationError::DatasetLengthMismatch`] when `n_samples` differs from the
+    /// number of information sets, and [`CrossValidationError::InvalidMinTrainFolds`] unless
+    /// `1 <= min_train_folds < n_splits`. A split whose training set purging empties is
+    /// returned with no training indices, as in [`PurgedKFold::split`]; check `train.len()`.
+    ///
+    /// ```
+    /// use chrono::{Duration, NaiveDate};
+    /// use openquant::cross_validation::PurgedKFold;
+    ///
+    /// # fn main() -> Result<(), openquant::cross_validation::CrossValidationError> {
+    /// let open = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap().and_hms_opt(9, 0, 0).unwrap();
+    /// let info_sets: Vec<_> =
+    ///     (0..40).map(|i| (open + Duration::hours(i), open + Duration::hours(i + 3))).collect();
+    /// let cv = PurgedKFold::new(5, info_sets, 0.15)?;
+    ///
+    /// // Folds 1 to 4 are tested; fold 0 only trains.
+    /// let splits = cv.walk_forward_splits(40, 1)?;
+    /// assert_eq!(splits.len(), 4);
+    /// // The third fold (16-23) trains on 0-12: 13-15 end inside its window and are purged,
+    /// // and nothing after the fold is used, whatever the embargo.
+    /// let wf = &splits[1];
+    /// assert_eq!(wf.test_fold_id, 2);
+    /// assert_eq!(wf.split.test_indices, (16..=23).collect::<Vec<usize>>());
+    /// assert_eq!(wf.split.train_indices, (0..=12).collect::<Vec<usize>>());
+    /// assert_eq!(wf.split.diagnostics.purged_indices, vec![13, 14, 15]);
+    /// assert!(wf.split.diagnostics.embargo_indices.is_empty());
+    /// // The k-fold split of the same fold also trains on 33-39, after the test fold.
+    /// assert_eq!(cv.split(40)?[2].0, (0..=12).chain(33..=39).collect::<Vec<usize>>());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn walk_forward_splits(
+        &self,
+        n_samples: usize,
+        min_train_folds: usize,
+    ) -> Result<Vec<WalkForwardSplit>, CrossValidationError> {
+        self.check_n_samples(n_samples)?;
+        if min_train_folds == 0 || min_train_folds >= self.n_splits {
+            return Err(CrossValidationError::InvalidMinTrainFolds {
+                min_train_folds,
+                n_splits: self.n_splits,
+            });
+        }
+        let info = &self.samples_info_sets;
+        Ok(contiguous_fold_bounds(n_samples, self.n_splits)
+            .into_iter()
+            .enumerate()
+            .skip(min_train_folds)
+            .enumerate()
+            .map(|(split_id, (test_fold_id, (start, stop)))| {
+                let window_start = info[start].0;
+                let window_end =
+                    info[start..stop].iter().fold(info[start].1, |m, (_, e)| m.max(*e));
+                let (purged_indices, train_indices): (Vec<usize>, Vec<usize>) = (0..start)
+                    .partition(|&i| intervals_overlap(info[i], (window_start, window_end)));
+                let test_indices: Vec<usize> = (start..stop).collect();
+                let overlap_count_after_purge = train_indices
+                    .iter()
+                    .filter(|&&tr| {
+                        test_indices.iter().any(|&te| intervals_overlap(info[tr], info[te]))
+                    })
+                    .count();
+                WalkForwardSplit {
+                    split_id,
+                    test_fold_id,
+                    split: PurgedSplit {
+                        train_indices,
+                        test_indices,
+                        diagnostics: PurgedSplitDiagnostics {
+                            split_id,
+                            test_ranges: vec![(start, stop)],
+                            purged_indices,
+                            embargo_indices: Vec::new(),
+                            overlap_count_after_purge,
+                        },
+                    },
+                }
             })
             .collect())
     }
