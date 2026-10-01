@@ -274,7 +274,11 @@ documentation only). The jobs: format, clippy and rustdoc (`lint`), `doctests`, 
 (`tests`), `bench-compile`, the Python binding tests with stubtest and the smoke checks on
 Python 3.11 and 3.13 (`python`), stubs, ruff and mypy (`python-lint`) and the docs gates
 (`docs-checks`). Separate workflows also run the notebooks (for changes they could affect)
-and, for changes under `crates/openquant/`, the benchmark regression check.
+and, for changes under `crates/openquant/`, the benchmark regression check. A pull request
+that touches packaging (`pyproject.toml`, `Cargo.toml`, `Cargo.lock`, a crate manifest,
+`rust-toolchain.toml`, `scripts/release/` or `release.yml`) also runs the release
+workflow's build half: the five platform wheels, a smoke test of each on Python 3.11 to
+3.13, the sdist and `cargo publish --dry-run`.
 
 Before pushing, the quickest local equivalent is:
 
@@ -285,6 +289,27 @@ just py-develop py-test py-stubtest
 (cd docs-site && bun run check:docs)     # if you touched docs, bindings or public APIs
 just notebooks-run && just notebooks-verify   # if you touched notebooks, python/ or crates/
 ```
+
+## Releases
+
+Releases are cut by maintainers by pushing a `v*` tag; `.github/workflows/release.yml`
+then builds and smoke-tests the wheels and the sdist, publishes the Python package to PyPI
+(trusted publishing) and the `openquant` crate to crates.io, and creates a GitHub Release
+whose notes are the version's section of `CHANGELOG.md`. In short:
+
+1. Set the same version in `pyproject.toml`, `crates/openquant/Cargo.toml` and
+   `crates/pyopenquant/Cargo.toml`; run `cargo update -w` and `uv lock`.
+2. In `CHANGELOG.md`, rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD`, open a new empty
+   `## Unreleased` above it, and run `python3 scripts/docs/generate_site_pages.py --write`.
+3. Check with `python3 scripts/release/release_info.py metadata --tag vX.Y.Z` and
+   `python3 scripts/release/release_info.py notes X.Y.Z`; merge through a pull request.
+4. `git tag -a vX.Y.Z -m "OpenQuant X.Y.Z" && git push origin vX.Y.Z` on the merged commit.
+
+The PyPI distribution name is read from `[project] name` in `pyproject.toml` and appears
+nowhere else. Actions → Release → *Run workflow* is a dry run by default: it builds and tests
+everything and publishes nothing. The full procedure, and the one-time setup (PyPI trusted
+publisher, the `pypi` environment, the `CARGO_REGISTRY_TOKEN` secret), are in
+[`docs/publishing.md`](docs/publishing.md).
 
 ## License
 

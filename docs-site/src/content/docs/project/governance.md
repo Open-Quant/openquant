@@ -2,7 +2,7 @@
 title: Governance
 description: The rules OpenQuant holds its research, documentation, benchmarks and releases to, and where to report a problem.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -89,8 +89,12 @@ crates.io or PyPI. Until a release, only `main` is supported.
   and ships as a wheel built with maturin (it is a Python extension module, not a Rust library).
   The steps are in `docs/publishing.md`.
 - **Release gate.** Pushing a `v*` tag runs `.github/workflows/release.yml`: format, clippy with
-  `-D warnings`, the fast test suite, a `cargo package` dry run, a compile check of every benchmark,
-  and the long SADF test that is skipped on pull requests.
+  `-D warnings`, the fast test suite, a compile check of every benchmark, the long SADF test that
+  is skipped on pull requests, `cargo publish --dry-run`, and abi3 wheels for Linux (x86_64,
+  aarch64), macOS (x86_64, arm64) and Windows plus an sdist, each installed into a clean
+  environment on Python 3.11 to 3.13 and run through the Quickstart. Only when all of that passes
+  does it publish to PyPI and crates.io and create a GitHub Release with the version's changelog
+  section as its notes. Run from the Actions tab, the workflow is a dry run that publishes nothing.
 - **Changes are recorded** in `CHANGELOG.md`, rendered as the [Changelog](/project/changelog/)
   page. A change of behaviour ships with the update to the docs page of every module it touches.
   Pull request titles use conventional-commit prefixes (`feat`, `fix`, `docs`, ...), which is

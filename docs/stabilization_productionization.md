@@ -44,9 +44,10 @@
 2. Run long test gate before cutting release:
    - `just test-slow`
 3. Verify package readiness:
-   - `cargo package -p openquant --allow-dirty`
-4. Cut tag:
-   - `git tag vX.Y.Z && git push origin vX.Y.Z`
+   - `cargo publish -p openquant --locked --dry-run`
+   - Actions → Release → Run workflow (a dry run by default)
+4. Bump the versions, cut the changelog section and tag, as in `docs/publishing.md`:
+   - `git tag -a vX.Y.Z -m "OpenQuant X.Y.Z" && git push origin vX.Y.Z`
 
 ## CI/Automation
 What each workflow enforces. "Every PR" jobs have no path filter, so any of them can be made a
@@ -62,7 +63,7 @@ some PRs).
 | `CI` / `docs-checks` | every PR, push to `main` | docs build, links, content schema, API drift, contrast, coverage page, Rust examples compile, Python examples run |
 | `Benchmark Regression` | PRs touching `crates/openquant`, `Cargo.*`, the toolchain, or the bench scripts/config | head vs merge base, both timed on the same runner; fails above 35% (per-bench overrides in `benchmarks/threshold_overrides.json`) or if a benchmark stops reporting |
 | `Nightly Validation` | daily 07:00 UTC, manual | full Rust suite incl. doc tests and `#[ignore]`d tests (hour-long `test_sadf_test`), except tests ignored with a `FINDING:` reason; core crate tests on macOS and Windows; Python suite + smokes on 3.11 and 3.13; Rust (`cargo-llvm-cov`) and Python (`pytest-cov`) line coverage in the job summary. Coverage is reported, not gated |
-| `Release Readiness` | tags `v*`, manual | lint + fast tests, `cargo package -p openquant`, all benches compile, and `test_sadf_test` |
+| `Release` | tags `v*`; manual (dry run by default); PRs touching packaging files | lint + fast tests, all benches compile and `test_sadf_test` (tag and manual only); `cargo publish --dry-run`; abi3 wheels for Linux x86_64/aarch64, macOS x86_64/arm64 and Windows x86_64 plus an sdist, each smoke-tested on Python 3.11-3.13; on a tag only, publishes to PyPI and crates.io and creates the GitHub Release (`docs/publishing.md`) |
 | `Docs Pages` | push to `main` touching docs | build, links, schema, API drift; deploys the site |
 | `Verify` | manual only | ai-dlc project checks (disabled on PRs until ai-dlc publishes a release manifest) |
 

@@ -1,19 +1,143 @@
-name: Release Readiness
+name: Release
+
+# Builds, smoke-tests and, on a real release, publishes OpenQuant:
+#
+#   - the Python package to PyPI, as one abi3 wheel per platform plus an sdist, through
+#     trusted publishing (no API token), from the `pypi` environment;
+#   - the `openquant` crate to crates.io with the CARGO_REGISTRY_TOKEN secret;
+#   - a GitHub Release whose notes are the version's section of CHANGELOG.md.
+#
+# Triggers:
+#   - push of a `v*` tag: the real release. The tag must be `v` + the version that
+#     pyproject.toml, crates/openquant/Cargo.toml and crates/pyopenquant/Cargo.toml all
+#     carry, and CHANGELOG.md must have a section for that version.
+#   - workflow_dispatch: a dry run by default (dry_run=true): everything is built and
+#     tested, `cargo publish --dry-run` stands in for the upload, nothing is published.
+#     Publishing from a dispatch needs dry_run=false AND a v* tag selected as the ref.
+#   - pull_request touching this workflow, the release scripts or the packaging files:
+#     the wheel matrix, the smoke tests, the sdist and the crate dry run, so a packaging
+#     change is proven before it reaches a tag.
+#
+# The PyPI distribution name lives only in pyproject.toml (`[project] name`). Nothing here
+# spells it out: the metadata job reads it, and the publish step uploads whatever maturin
+# built. docs/publishing.md has the release procedure and the one-time maintainer setup.
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build and test everything, publish nothing"
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release/**
+      - pyproject.toml
+      - Cargo.toml
+      - Cargo.lock
+      - crates/openquant/Cargo.toml
+      - crates/pyopenquant/Cargo.toml
+      - rust-toolchain.toml
+
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  # Never cancel a release in flight; superseded pull request runs can go.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  # Kept in step with the maturin in uv.lock (pyproject.toml requires >= 1.9.4).
+  MATURIN_VERSION: v1.15.0
 
 jobs:
-  release-check:
+  # Reads the distribution name, the version and the pinned toolchain, checks that every
+  # manifest agrees (and the tag, on a tag), and decides whether this run publishes.
+  metadata:
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
+    outputs:
+      name: ${{ steps.meta.outputs.name }}
+      version: ${{ steps.meta.outputs.version }}
+      rust_toolchain: ${{ steps.meta.outputs.rust_toolchain }}
+      publish: ${{ steps.mode.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Decide whether this run publishes
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          publish=false
+          if [ "$EVENT" = push ] && [ "$REF_TYPE" = tag ]; then
+            publish=true
+          elif [ "$EVENT" = workflow_dispatch ] && [ "$DRY_RUN" = false ]; then
+            if [ "$REF_TYPE" != tag ]; then
+              echo "::error::dry_run=false publishes, so dispatch it on a v* tag, not a branch"
+              exit 1
+            fi
+            publish=true
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "event=$EVENT ref=$GITHUB_REF publish=$publish" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Read and check the release metadata
+        id: meta
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          tag_args=()
+          if [ "$REF_TYPE" = tag ]; then tag_args=(--tag "$REF_NAME"); fi
+          python scripts/release/release_info.py metadata "${tag_args[@]}" --github-output
+
+  # Release notes from CHANGELOG.md. A publishing run requires a `## <version>` section;
+  # a dry run falls back to Unreleased so it works before the section is cut.
+  release-notes:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Extract the notes
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          PUBLISH: ${{ needs.metadata.outputs.publish }}
+        run: |
+          args=()
+          if [ "$PUBLISH" != true ]; then args=(--allow-unreleased); fi
+          python scripts/release/release_info.py notes "$VERSION" "${args[@]}" --out release-notes.md
+          { echo "## Release notes for $VERSION"; echo; cat release-notes.md; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  # The pre-release gates from docs/stabilization_productionization.md. ci.yml already runs
+  # the fast ones on every pull request, so these run only for a tag or a dispatch.
+  release-check:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
       # Restore-only: reuses the cache ci.yml saves on main for the same build
       # without adding another entry to the repository's cache budget.
       - uses: Swatinem/rust-cache@v2
@@ -25,26 +149,231 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets --all-features -- -D warnings
           cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
-      - name: Package dry-run
-        run: cargo package -p openquant
       - name: Benchmark compile check (all benches)
         run: cargo bench -p openquant --no-run
 
-  # docs/stabilization_productionization.md makes the long SADF test a
-  # pre-release gate; it runs here in parallel with the checks above.
+  # The long SADF test is a pre-release gate; it runs in parallel with the builds.
   release-slow-tests:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 150
-    env:
-      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      # Restore-only: reuses the cache ci.yml saves on main for the same build
-      # without adding another entry to the repository's cache budget.
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: tests
           save-if: false
       - name: Long SADF test
         run: cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
+
+  # `cargo package` + `cargo publish --dry-run`: the crate builds from its packaged form
+  # alone and crates.io would take its metadata. The real upload is publish-crate.
+  crate-package:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The version pinned in rust-toolchain.toml (read by the metadata job).
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.metadata.outputs.rust_toolchain }}
+      - name: List the packaged files
+        run: cargo package -p openquant --locked --list
+      - name: cargo publish --dry-run
+        run: cargo publish -p openquant --locked --dry-run
+
+  wheels:
+    name: wheel (${{ matrix.platform }})
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+            target: x86_64
+          # A native arm64 runner rather than cross-compiling polars.
+          - platform: linux-aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64
+          - platform: macos-arm64
+            runner: macos-15
+            target: aarch64
+          - platform: windows-x86_64
+            runner: windows-latest
+            target: x64
+    steps:
+      - uses: actions/checkout@v7
+      # macOS and Windows build on the host: an interpreter there lets maturin pick the
+      # abi3 floor (and python3.dll's import library on Windows). Linux builds run in the
+      # manylinux container, which has its own interpreters.
+      - uses: actions/setup-python@v7
+        if: runner.os != 'Linux'
+        with:
+          python-version: "3.11"
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          # manylinux_2_28 (glibc 2.28: RHEL 8, Debian 10, Ubuntu 18.10 and later).
+          manylinux: "2_28"
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          rust-toolchain: ${{ needs.metadata.outputs.rust_toolchain }}
+          args: --release --locked --out dist
+      - name: List the wheel
+        run: ls -l dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # Each wheel installed into fresh virtual environments for every supported Python, on a
+  # fresh runner with no Rust toolchain and no source tree, then the Quickstart run.
+  smoke:
+    name: smoke (${{ matrix.platform }})
+    needs: [metadata, wheels]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x86_64, runner: ubuntu-latest }
+          - { platform: linux-aarch64, runner: ubuntu-24.04-arm }
+          - { platform: macos-x86_64, runner: macos-15-intel }
+          - { platform: macos-arm64, runner: macos-15 }
+          - { platform: windows-x86_64, runner: windows-latest }
+    steps:
+      # Only the smoke script: nothing under python/ can be imported by accident.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/release
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: wheelhouse
+      - name: Install into clean venvs and run the Quickstart
+        env:
+          DIST_NAME: ${{ needs.metadata.outputs.name }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          wheel="$(ls "$PWD"/wheelhouse/*.whl)"
+          smoke="$PWD/scripts/release/smoke_wheel.py"
+          echo "wheel: $wheel"
+          mkdir ../smoke && cd ../smoke
+          for py in 3.11 3.12 3.13; do
+            echo "::group::Python $py"
+            uv venv --python "$py" "venv-$py"
+            if [ "$RUNNER_OS" = Windows ]; then python="venv-$py/Scripts/python"; else python="venv-$py/bin/python"; fi
+            uv pip install --python "$python" "$wheel"
+            "$python" "$smoke" --dist-name "$DIST_NAME" --version "$VERSION" --abi3
+            echo "::endgroup::"
+          done
+
+  # The sdist, then a wheel built from it alone, installed and smoke-tested: proves the
+  # sdist carries everything a source install needs.
+  sdist:
+    needs: metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.metadata.outputs.rust_toolchain }}
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          args: --out dist
+      - name: List the sdist
+        run: |
+          ls -l dist
+          tar -tzf dist/*.tar.gz | sort
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+      - uses: astral-sh/setup-uv@v7
+      - name: Build from the sdist, install, run the Quickstart
+        env:
+          DIST_NAME: ${{ needs.metadata.outputs.name }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          RUSTUP_TOOLCHAIN: ${{ needs.metadata.outputs.rust_toolchain }}
+        run: |
+          sdist="$(ls "$PWD"/dist/*.tar.gz)"
+          smoke="$PWD/scripts/release/smoke_wheel.py"
+          mkdir ../smoke && cd ../smoke
+          uv venv --python 3.13 venv
+          uv pip install --python venv/bin/python "$sdist"
+          venv/bin/python "$smoke" --dist-name "$DIST_NAME" --version "$VERSION" --abi3
+
+  publish-pypi:
+    needs: [metadata, release-notes, release-check, release-slow-tests, crate-package, smoke, sdist]
+    if: needs.metadata.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.metadata.outputs.name }}/${{ needs.metadata.outputs.version }}/
+    permissions:
+      id-token: write # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: "{wheel-*,sdist}"
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+  publish-crate:
+    needs: [metadata, release-notes, release-check, release-slow-tests, crate-package, smoke, sdist]
+    if: needs.metadata.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.metadata.outputs.rust_toolchain }}
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::the CARGO_REGISTRY_TOKEN secret is not set (see docs/publishing.md)"
+            exit 1
+          fi
+          cargo publish -p openquant --locked
+
+  github-release:
+    needs: [metadata, publish-pypi, publish-crate]
+    if: needs.metadata.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: "{wheel-*,sdist,release-notes}"
+          path: dist
+          merge-multiple: true
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          prerelease=()
+          case "$VERSION" in *[a-z]*) prerelease=(--prerelease) ;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "OpenQuant $VERSION" --notes-file dist/release-notes.md "${prerelease[@]}" \
+            dist/*.whl dist/*.tar.gz
