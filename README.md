@@ -41,9 +41,9 @@ uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenqu
 uv run --python .venv/bin/python python -c "import openquant; print('ok')"
 ```
 
-The import name is `openquant`. The name the package will be published under on
-PyPI is not decided yet ([#58](https://github.com/Open-Quant/openquant/issues/58)).
-Do not `pip install openquant` - that name on PyPI belongs to an unrelated project.
+The package is published on PyPI as `pyopenquant` (from v0.1.0, `pip install pyopenquant`);
+the import name is `openquant`. Do not `pip install openquant` - that name on PyPI belongs
+to an unrelated project.
 The extension crate (`crates/pyopenquant`) is built into a wheel with maturin and is
 never published to crates.io.
 
