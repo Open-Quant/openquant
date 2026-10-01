@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,9 +13,10 @@ sidebar:
 OpenQuant is not on PyPI yet. The Python package is a thin pure-Python layer
 (`python/openquant/`) over a compiled PyO3 extension
 (`crates/pyopenquant/`, built as `openquant._core`), so getting it means
-building it. It will be published as `pyopenquant` with the import name
-`openquant`. Do not `pip install openquant`: that name on PyPI belongs to an
-unrelated project, so the command succeeds and installs the wrong package.
+building it. The import name is `openquant`; the name it will be published
+under on PyPI is not decided yet. Do not `pip install openquant`: that name on
+PyPI belongs to an unrelated project, so the command succeeds and installs the
+wrong package.
 
 Before you start: [Prerequisites](/setup/prerequisites/). You need a Rust
 toolchain, a linker, and `uv`.

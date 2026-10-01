@@ -3,6 +3,8 @@ requires = ["maturin>=1.9.4,<2.0"]
 build-backend = "maturin"
 
 [project]
+# Placeholder: the PyPI distribution name is not decided yet (#58). The import name is
+# `openquant` whatever this becomes.
 name = "pyopenquant"
 version = "0.1.0"
 description = "Rust implementations of methods from Advances in Financial Machine Learning, with Python bindings (import name: openquant)"
@@ -27,6 +29,7 @@ Homepage = "https://open-quant.github.io/openquant/"
 Documentation = "https://open-quant.github.io/openquant/"
 Repository = "https://github.com/Open-Quant/openquant"
 Issues = "https://github.com/Open-Quant/openquant/issues"
+Changelog = "https://github.com/Open-Quant/openquant/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 manifest-path = "crates/pyopenquant/Cargo.toml"

@@ -17,7 +17,7 @@ hero:
       link: /openquant/modules/
       variant: minimal
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-09-30'
 audience:
   - quant-dev
   - platform-engineering
@@ -36,9 +36,9 @@ Pre-release. Version 0.1.0 is not on PyPI or crates.io, so installing means
 building from source: about 10–20 minutes the first time, seconds afterwards. The
 [Quickstart](/quickstart/) takes you from a clone to a printed result.
 
-When it is published, the Python distribution will be `pyopenquant` and the
-import name `openquant`. Do not `pip install openquant` — that name on PyPI
-belongs to an unrelated project.
+The import name is `openquant`; the name it will be published under on PyPI is
+not decided yet. Do not `pip install openquant` — that name on PyPI belongs to
+an unrelated project.
 
 ## What using it looks like
 

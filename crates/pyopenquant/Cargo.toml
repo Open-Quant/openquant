@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/Open-Quant/openquant"
 homepage = "https://open-quant.github.io/openquant/"
 readme = "../../README.md"
-# Distributed as the `pyopenquant` wheel on PyPI (built by maturin), never as a crate.
+# Shipped only inside the Python wheel built by maturin, never as a crate on crates.io.
 publish = false
 
 [lib]
