@@ -157,6 +157,7 @@ file disagree).
 
 ### CI, build and tooling
 
+- Release workflow: abi3 wheels for Linux, macOS and Windows plus an sdist, each smoke-tested on Python 3.11 to 3.13; PyPI trusted publishing, `cargo publish` and a GitHub Release with notes from this file, on a `v*` tag only; a dry run from the Actions tab or a packaging pull request (#60)
 - The workspace is migrated to Rust edition 2024 ([#200](https://github.com/Open-Quant/openquant/pull/200))
 - Rust caching, parallel lint and test jobs, release-mode parallel notebooks, a docs-only skip ([#198](https://github.com/Open-Quant/openquant/pull/198))
 - CI gates what it claims to gate (#41) ([#130](https://github.com/Open-Quant/openquant/pull/130))

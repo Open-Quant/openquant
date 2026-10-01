@@ -35,7 +35,13 @@ Changelog = "https://github.com/Open-Quant/openquant/blob/main/CHANGELOG.md"
 manifest-path = "crates/pyopenquant/Cargo.toml"
 python-source = "python"
 module-name = "openquant._core"
-features = []
+# One stable-ABI (abi3) wheel per platform serves CPython 3.11 and every later version, so
+# a release builds five wheels instead of five per Python version. PyO3 0.29 and
+# pyo3-polars 0.28 (which calls Python polars' `Series._export`/`_import` and imports a
+# capsule) use only the limited API. Set here rather than in crates/pyopenquant/Cargo.toml
+# so `cargo test --workspace` keeps building against the full API. Keep the floor in step
+# with `requires-python`.
+features = ["pyo3/abi3-py311"]
 
 [dependency-groups]
 # ruff and mypy are pinned exactly so the CI lint gate and a local run agree.

@@ -100,10 +100,10 @@ uv run --python .venv/bin/python --with maturin \
   maturin build --manifest-path crates/pyopenquant/Cargo.toml --out dist
 ```
 
-The wheel lands in `dist/` and is installable into any interpreter of the
-**same** Python minor version and platform it was built for — the
-extension is ABI-specific. There is no `abi3` configuration in
-`crates/pyopenquant/Cargo.toml`, so a 3.11 wheel will not load on 3.12.
+The wheel lands in `dist/`. It is a stable-ABI (`abi3`) wheel: `pyproject.toml`
+sets `[tool.maturin] features = ["pyo3/abi3-py311"]`, so one wheel installs on
+CPython 3.11 and every later version, on the platform it was built for. Build
+from the repository root so maturin reads that setting from `pyproject.toml`.
 
 ## Smoke test the real surface
 
