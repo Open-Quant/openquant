@@ -271,7 +271,8 @@ jobs:
             echo "::group::Python $py"
             uv venv --python "$py" "venv-$py"
             if [ "$RUNNER_OS" = Windows ]; then python="venv-$py/Scripts/python"; else python="venv-$py/bin/python"; fi
-            uv pip install --python "$python" "$wheel"
+            # The venv directory, not its interpreter: uv wants `python.exe` spelled out on Windows.
+            uv pip install --python "venv-$py" "$wheel"
             "$python" "$smoke" --dist-name "$DIST_NAME" --version "$VERSION" --abi3
             echo "::endgroup::"
           done
