@@ -13,10 +13,10 @@ is pushed:
 
 ## The distribution name
 
-The PyPI distribution name is not decided yet (#58). It lives in exactly one place,
-`[project] name` in `pyproject.toml` (currently the placeholder `pyopenquant`). The workflow
-reads it from there and never spells it out, so choosing the name is a one-line change to
-`pyproject.toml` plus the PyPI trusted-publisher entry below. The import name is
+The PyPI distribution name is `pyopenquant` (decided in #58). It lives in exactly one place,
+`[project] name` in `pyproject.toml`. The workflow reads it from there and never spells it
+out, so renaming would be a one-line change to `pyproject.toml` plus the PyPI
+trusted-publisher entry below. The import name is
 `openquant` whatever the distribution is called.
 
 ## What the workflow does
@@ -61,7 +61,7 @@ python3 scripts/release/release_info.py notes 0.1.0
 Done once, by a repository admin, before the first release. None of it can be done from a
 pull request.
 
-1. **Decide the distribution name** (#58) and set `[project] name` in `pyproject.toml`.
+1. **Distribution name:** `pyopenquant`, set in `[project] name` in `pyproject.toml` (#58).
 2. **PyPI trusted publisher.** On pypi.org, *Your account → Publishing → Add a new pending
    publisher* (the project does not exist yet), GitHub tab: PyPI project name = the name
    from step 1; owner `Open-Quant`; repository `openquant`; workflow `release.yml`;

@@ -1,9 +1,9 @@
 # Changelog
 
-Notable changes to OpenQuant, newest first within each section. OpenQuant is pre-release:
-the crates and the Python package are at 0.1.0, no version has been tagged and nothing is
-published to crates.io or PyPI, so every change so far sits under **Unreleased**. When a
-version is tagged, its entries move under a heading with that version and date.
+Notable changes to OpenQuant, newest first within each section. The Rust crate is published
+on crates.io as `openquant` and the Python package on PyPI as `pyopenquant` (import name
+`openquant`). Changes not yet in a tagged release sit under **Unreleased**; when a version
+is tagged, its entries move under a heading with that version and date.
 
 Each entry links the pull request that made the change; the linked issue, where there is
 one, is in parentheses. Entries were seeded from the titles of the merged pull requests.
@@ -14,8 +14,13 @@ file disagree).
 
 ## Unreleased
 
+## 0.1.0 - 2026-10-01
+
+First release.
+
 ### Added
 
+- Release: the PyPI distribution name is `pyopenquant` (#58)
 - `cross_validation`: walk-forward splits over the purged k-fold folds, a no-signal null through any splits, and the purged k-fold bias toward features with memory documented; runbooks 11 to 14 audited, no conclusion changed (#217)
 - Runbook 14, fracdiff features against returns in a purged-CV classifier, net of costs (#209) ([#216](https://github.com/Open-Quant/openquant/pull/216))
 - Docs: a research gallery generated from the executed runbooks, a performance page generated from `benchmarks/`, and this changelog on the site; the governance stubs folded into one page (#55) ([#207](https://github.com/Open-Quant/openquant/pull/207))
