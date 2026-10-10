@@ -6,10 +6,10 @@ from outside the repository so the source tree cannot shadow the installed packa
 
     python scripts/release/smoke_wheel.py --dist-name NAME --version X.Y.Z [--abi3]
 
-It checks that `openquant` was imported from site-packages, that the installed
-distribution has the expected name and version, that the compiled extension is the
-stable-ABI build when --abi3 is given, and then runs the Quickstart's flywheel iteration
-(docs-site/src/content/docs/quickstart.md) and checks the shape of its result.
+It checks that `openquant` was imported from site-packages, that its package and
+extension files belong to the expected installed distribution and version, that the
+extension is the stable-ABI build when --abi3 is given, and then runs the Quickstart's
+flywheel iteration (docs-site/src/content/docs/quickstart.md) and checks its result.
 """
 
 from __future__ import annotations
@@ -59,10 +59,20 @@ def main() -> None:
     if "site-packages" not in pkg_dir.parts:
         fail(f"openquant was imported from {pkg_dir}, not from an installed wheel")
 
-    installed = importlib.metadata.version(args.dist_name)
+    distribution = importlib.metadata.distribution(args.dist_name)
+    installed = distribution.version
     if installed != args.version:
         fail(f"{args.dist_name} {installed} is installed, expected {args.version}")
     print(f"distribution {args.dist_name} {installed}")
+
+    files = distribution.files
+    if not files:
+        fail(f"{args.dist_name} has no installed file record")
+    recorded_paths = {Path(distribution.locate_file(file)).resolve() for file in files}
+    for name, module in (("openquant", openquant), ("openquant._core", core)):
+        filename = module.__file__
+        if not filename or Path(filename).resolve() not in recorded_paths:
+            fail(f"{name} imported from {filename} is not recorded by {args.dist_name}")
 
     ext = Path(core.__file__ or "").name
     print(f"extension {ext}")
