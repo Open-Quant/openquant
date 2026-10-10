@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
