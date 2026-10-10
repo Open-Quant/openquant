@@ -1,9 +1,10 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use nalgebra::DMatrix;
 use openquant::risk_metrics::RiskMetrics;
 use openquant::sampling::{get_ind_matrix, seq_bootstrap};
 use openquant::util::fast_ewma::ewma;
 use openquant::util::stats::covariance;
+use std::hint::black_box;
 
 fn synthetic_prices(n: usize) -> Vec<f64> {
     let mut out = Vec::with_capacity(n);
