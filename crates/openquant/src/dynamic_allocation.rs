@@ -339,7 +339,7 @@ pub fn trajectory_sharpe_ratio(
 /// book's strict `sr < sr_` comparison does.
 ///
 /// The number of trajectories is `|Ω|^H` and grows fast: 38 weight vectors for `N = K = 3`, so
-/// 54,872 trajectories over three horizons, but 23 million over five. When `|Ω|^H` exceeds
+/// 54,872 trajectories over three horizons, but 79,235,168 over five. When `|Ω|^H` exceeds
 /// `config.max_trajectories` this returns [`DynamicAllocationError::TooManyTrajectories`]
 /// without evaluating anything. Use [`weight_count`] to size a problem in advance.
 ///

@@ -303,7 +303,7 @@ sidebar:
 
 This is the canonical index of every OpenQuant module: one page each, with
 purpose, APIs, formulas, examples, and implementation notes. It lists the same
-39 modules twice over — by subject, and by the language surface they are
+${moduleDocs.length} modules twice over — by subject, and by the language surface they are
 reachable through — because those are the two questions readers arrive with.
 For the AFML chapter each module implements, see
 [By AFML Chapter](/module-reference/by-afml-chapter/).

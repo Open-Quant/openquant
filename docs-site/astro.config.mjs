@@ -207,6 +207,7 @@ export default defineConfig({
               items: [
                 { slug: 'modules/hpc-parallel' },
                 { slug: 'modules/combinatorial-optimization' },
+                { slug: 'modules/dynamic-allocation' },
                 { slug: 'modules/streaming-hpc' },
               ],
             },
@@ -224,6 +225,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { slug: 'modules/data' },
+                { slug: 'modules/data-processing' },
                 { slug: 'modules/evaluation' },
                 { slug: 'modules/feature-diagnostics' },
                 { slug: 'modules/pipeline' },

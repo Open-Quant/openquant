@@ -13,15 +13,3 @@
 #   [rust.some_module]      # or [python.some_module]
 #   reason = "why there is no page yet"
 #   expires = 2026-12-31    # bare date, not a string
-
-[rust.data_processing]
-reason = "Internal preprocessing helpers; no stable public surface to document yet."
-expires = 2026-12-31
-
-[python.bars]
-reason = "Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted."
-expires = 2026-12-31
-
-[rust.dynamic_allocation]
-reason = "AFML Ch 21's partition/trajectory search (#112), new. It needs a page (or a section of the Ch 21 combinatorial-optimization page, rewritten in #114, claiming it) once #114 lands."
-expires = 2026-12-31

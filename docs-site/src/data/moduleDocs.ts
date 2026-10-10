@@ -241,6 +241,17 @@ export const moduleDocs: ModuleDoc[] = [
   },
 
   {
+    slug: "dynamic-allocation",
+    module: "dynamic_allocation",
+    subject: "Scaling, HPC and Infrastructure",
+    summary: "AFML Chapter 21's multi-asset allocation trajectories, enumerated exactly with square-root trading costs and a bounded search.",
+    handwritten: true,
+    afmlChapters: [21],
+    apiSurface: "both",
+    pythonApis: ["dynamic_allocation.pigeonhole_partitions", "dynamic_allocation.all_weights", "dynamic_allocation.transaction_costs", "dynamic_allocation.trajectory_sharpe_ratio", "dynamic_allocation.dynamic_optimal_portfolio"],
+  },
+
+  {
     slug: "streaming-hpc",
     module: "streaming_hpc",
     subject: "Scaling, HPC and Infrastructure",
@@ -323,6 +334,14 @@ export const moduleDocs: ModuleDoc[] = [
     handwritten: true,
     apiSurface: "both",
     pythonApis: ["data.fetch", "data.dataset_hash", "data.record_dataset_hash", "data.quality_failures", "data.default_cache_dir", "data.DataSource", "data.LocalSampleSource", "data.LocalFileSource", "data.CallableSource", "data.CacheMissError", "data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report"],
+  },
+  {
+    slug: "data-processing",
+    module: "data_processing",
+    subject: "Research Workflows",
+    summary: "Rust OHLCV deduplication, gap diagnostics and regular-grid alignment through row, column and DataFrame interfaces.",
+    handwritten: true,
+    apiSurface: "rust-only",
   },
   {
     slug: "evaluation",

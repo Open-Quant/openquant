@@ -52,7 +52,7 @@ def dynamic_optimal_portfolio(
     the number of horizons, scores each with `trajectory_sharpe_ratio` and keeps the first
     trajectory with the highest score (the book's order and tie-breaking). The count
     `|Omega|^H` grows fast (38 vectors for `N = k = 3`, so 54,872 trajectories over three
-    horizons but 23 million over five); a problem above `max_trajectories` is rejected
+    horizons but 79,235,168 over five); a problem above `max_trajectories` is rejected
     before any work is done. The search releases the GIL.
 
     Parameters
