@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 395" role="img" aria-label="Synthetic AAA bars: keep the last duplicate and mark January 4 as missing">
+<rect width="840" height="395" fill="#fbf9f4"/>
+<text x="28" y="32" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="21" font-weight="600" text-anchor="start">Prepare the data, preserve the gaps</text>
+<text x="28" y="57" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="13" font-weight="400" text-anchor="start">Synthetic AAA closes · January 2024 · all timestamps at 00:00 UTC</text>
+<text x="28" y="89" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="17" font-weight="600" text-anchor="start">1  Raw rows</text>
+<text x="28" y="108" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">Repeated (symbol, timestamp)</text>
+<text x="283" y="89" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="17" font-weight="600" text-anchor="start">2  Keep last</text>
+<text x="283" y="108" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">Sorted unique keys</text>
+<text x="535" y="89" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="17" font-weight="600" text-anchor="start">3  Daily grid</text>
+<text x="535" y="108" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">86,400-second spacing</text>
+<polyline points="235,192 257,192" fill="none" stroke="#97196a" stroke-width="1.8" stroke-linejoin="round"/>
+<polyline points="250,186 257,192 250,198" fill="none" stroke="#97196a" stroke-width="1.8" stroke-linejoin="round"/>
+<polyline points="487,192 509,192" fill="none" stroke="#97196a" stroke-width="1.8" stroke-linejoin="round"/>
+<polyline points="502,186 509,192 502,198" fill="none" stroke="#97196a" stroke-width="1.8" stroke-linejoin="round"/>
+<text x="28" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">UTC DATE</text>
+<text x="162" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">CLOSE</text>
+<rect x="20" y="141" width="198" height="32" fill="#97196a" fill-opacity="0.1"/>
+<text x="28" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 02</text>
+<text x="162" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">10</text>
+<line x1="160" y1="158" x2="184" y2="158" stroke="#97196a" stroke-width="1.5"/>
+<rect x="20" y="176" width="198" height="32" fill="#97196a" fill-opacity="0.1"/>
+<text x="28" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 02</text>
+<text x="162" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">10.5</text>
+<text x="28" y="233" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 03</text>
+<text x="162" y="233" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">11</text>
+<text x="28" y="268" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 05</text>
+<text x="162" y="268" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">12</text>
+<text x="283" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">UTC DATE</text>
+<text x="417" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">CLOSE</text>
+<text x="283" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 02</text>
+<text x="417" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">10.5</text>
+<text x="283" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 03</text>
+<text x="417" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">11</text>
+<text x="283" y="233" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 05</text>
+<text x="417" y="233" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">12</text>
+<text x="535" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">UTC DATE</text>
+<text x="669" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">CLOSE</text>
+<text x="737" y="128" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">MISSING?</text>
+<text x="535" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 02</text>
+<text x="669" y="163" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">10.5</text>
+<text x="737" y="163" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">false</text>
+<text x="535" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 03</text>
+<text x="669" y="198" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">11</text>
+<text x="737" y="198" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">false</text>
+<rect x="527" y="211" width="288" height="32" fill="#97196a" fill-opacity="0.1"/>
+<text x="535" y="233" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 04</text>
+<text x="669" y="233" fill="#97196a" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">null</text>
+<text x="737" y="233" fill="#97196a" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">true</text>
+<text x="535" y="268" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">Jan 05</text>
+<text x="669" y="268" fill="#1d1a16" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">12</text>
+<text x="737" y="268" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="15" font-weight="400" text-anchor="start">false</text>
+<text x="28" y="296" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">10.5 is the later Jan 2 row.</text>
+<text x="283" y="296" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="11" font-weight="400" text-anchor="start">1 duplicate removed · 1 weekday-gap interval</text>
+<text x="535" y="296" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">Missing? = is_missing_bar</text>
+<line x1="28" y1="315" x2="812" y2="315" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="28" y="341" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="15" font-weight="400" text-anchor="start">Jan 4 is absent: OHLCV fields stay null (Rust: None), never zero.</text>
+<text x="28" y="367" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="14" font-weight="400" text-anchor="start">The missing-bar flag is true. Alignment does not interpolate prices.</text>
+</svg>
