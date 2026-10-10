@@ -1,9 +1,11 @@
 ---
 title: "data"
 description: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+status: authored
+last_authored: '2026-10-10'
+citation:
+  - 'OpenQuant python/openquant/data.py: loading, cleaning, calendar alignment, cache and hash contracts.'
+  - 'OpenQuant python/tests/test_data_module.py and python/tests/test_data_fetch.py: data quality, calendar, cache and provenance tests.'
 audience:
   - quant-dev
   - platform-engineering
@@ -57,86 +59,177 @@ Use `fetch` when a study needs daily bars for a list of symbols and must be repr
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `symbols` | `str | Iterable[str]` | Symbols to fetch; duplicates are dropped | — |
-| `start, end` | `date | datetime | str` | Inclusive date range (ISO strings accepted) | — |
-| `source` | `DataSource | None` | Where bars come from; None uses the synthetic LocalSampleSource | None |
-| `cache_dir` | `str | Path | None` | Cache root; None uses $OPENQUANT_DATA_CACHE, $XDG_CACHE_HOME/openquant/data or ~/.cache/openquant/data | None |
+| `symbols` | `str \| Iterable[str]` | Symbols to fetch; duplicates are dropped | — |
+| `start, end` | `date \| datetime \| str` | Inclusive date range (ISO strings accepted) | — |
+| `source` | `DataSource \| None` | Where bars come from; None uses the synthetic LocalSampleSource | None |
+| `cache_dir` | `str \| Path \| None` | Cache root; None uses $OPENQUANT_DATA_CACHE, $XDG_CACHE_HOME/openquant/data or ~/.cache/openquant/data | None |
 | `refresh / offline` | `bool` | Refetch even if cached / never call the source (raise CacheMissError) | False |
 | `return_meta` | `bool` | Also return provenance (source, terms, cache status, dataset_hash) for the run manifest | False |
-| `path` | `str | Path` | File path to CSV or Parquet OHLCV data (load_ohlcv) | — |
-| `symbol` | `str | None` | Symbol name if not present as a column in the data | None |
+| `path` | `str \| Path` | File path to CSV or Parquet OHLCV data (load_ohlcv) | — |
+| `symbol` | `str \| None` | Symbol name if not present as a column in the data | None |
 | `interval` | `str` | Calendar alignment interval (e.g., '1d', '1h', '5m') | '1d' |
 | `dedupe_keep` | `str` | Which duplicate to keep: 'first' or 'last' | 'last' |
 
 ## Usage Examples
 
-### Python
+All examples run without credentials or network access. Temporary directories
+keep each example independent and remove the cache and fixtures afterwards.
 
-#### Fetch through the cache and record the dataset hash
+### Fetch synthetic data, reuse the cache, and record provenance
 
 ```python
-import tempfile
+from tempfile import TemporaryDirectory
+from openquant.data import (
+    fetch, data_quality_report, quality_failures, record_dataset_hash,
+)
 
-from openquant.data import data_quality_report, fetch, quality_failures, record_dataset_hash
-
-cache = tempfile.mkdtemp()  # omit cache_dir to use ~/.cache/openquant/data
-
-# The default source is the bundled SYNTHETIC sample (SYN_A ... SYN_E), so this runs offline.
-df, meta = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31", cache_dir=cache, return_meta=True)
-print(df.columns)  # ['ts', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'adj_close']
-print(df.height, meta["cache"])  # 130 {'SYN_A': 'miss', 'SYN_B': 'miss'}
-assert quality_failures(data_quality_report(df)) == []
-
-# The same request again is read from disk; offline=True guarantees the source is not called.
-again, meta2 = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31", cache_dir=cache, return_meta=True, offline=True)
-print(meta2["cache"])  # {'SYN_A': 'hit', 'SYN_B': 'hit'}
-assert again.equals(df) and meta2["dataset_hash"] == meta["dataset_hash"]
-
-# Put the content hash, source, terms and request into the run manifest.
-manifest = record_dataset_hash({"run_name": "demo"}, df, **meta)
-print(manifest["dataset_hash"].startswith("sha256:"))  # True
+with TemporaryDirectory() as cache:
+    # Bundled SYNTHETIC bars, not real tickers or market observations.
+    df, meta = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31",
+                     cache_dir=cache, return_meta=True)
+    again, cached = fetch(["SYN_A", "SYN_B"], "2023-01-01", "2023-03-31",
+                          cache_dir=cache, return_meta=True, offline=True)
+    assert again.equals(df)
+    assert quality_failures(data_quality_report(df)) == []
+    manifest = record_dataset_hash({"run_name": "demo"}, df, **meta)
+    assert manifest["dataset_hash"] == cached["dataset_hash"]
+    print(df.columns)
+    print(df.height, meta["cache"])
+    print(cached["cache"])
+    print(manifest["dataset_hash"].startswith("sha256:"))
 ```
 
-#### Plug in your own data vendor (fetch-only, your own key)
+```text
+['ts', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'adj_close']
+130 {'SYN_A': 'miss', 'SYN_B': 'miss'}
+{'SYN_A': 'hit', 'SYN_B': 'hit'}
+True
+```
 
-```python doc-check=skip
-import os
+The source defaults to `LocalSampleSource`; populating this cache already works
+without a network. `offline=True` is stronger: it prohibits calling *any* source
+and raises `CacheMissError` when an exact request has no usable cache entry.
 
+### Adapt a callable source and demonstrate a cache miss
+
+A source callable receives `(symbol, start, end)`, with dates inclusive. This
+fixture supplies the same interface a vendor adapter would implement, using
+only local synthetic rows. A vendor adapter can replace the function body;
+its data access and storage terms remain the caller's responsibility.
+
+```python
+from tempfile import TemporaryDirectory
 import polars as pl
-from openquant.data import CallableSource, fetch
+from openquant.data import CallableSource, CacheMissError, fetch
 
+calls = []
+def local_bars(symbol, start, end):
+    calls.append(symbol)
+    return pl.DataFrame({
+        "date": ["2024-01-02", "2024-01-03"],
+        "open": [100.0, 101.0], "high": [102.0, 103.0],
+        "low": [99.0, 100.0], "close": [101.0, 102.0],
+        "volume": [10.0, 12.0],
+    })
 
-def my_vendor(symbol, start, end):
-    key = os.environ["MY_VENDOR_API_KEY"]  # your own key, from the environment; never commit it
-    rows = my_vendor_client.daily_bars(symbol, start, end, api_key=key)  # your vendor's client
-    return pl.DataFrame(rows)  # columns such as date/open/high/low/close/volume[/adj_close]
-
-
-source = CallableSource(my_vendor, name="my-vendor", terms="https://my-vendor.example/terms")
-df, meta = fetch(["SPY", "TLT"], "2020-01-01", "2024-12-31", source=source, return_meta=True)
+source = CallableSource(local_bars, name="docs-synthetic", version="1",
+                        terms="Synthetic example generated in this snippet")
+with TemporaryDirectory() as cache:
+    request = dict(source=source, cache_dir=cache, return_meta=True)
+    df, first = fetch("DEMO", "2024-01-02", "2024-01-03", **request)
+    _, second = fetch("DEMO", "2024-01-02", "2024-01-03", offline=True, **request)
+    print(df.height, calls, first["cache"], second["cache"])
+    # A sub-range has a different cache key.
+    try:
+        fetch("DEMO", "2024-01-02", "2024-01-02", offline=True, **request)
+    except CacheMissError:
+        print("uncached range rejected")
 ```
 
-#### Load, clean, and inspect OHLCV data
-
-```python doc-check=skip
-from openquant.data import load_ohlcv, data_quality_report, align_calendar
-
-# Load from CSV/Parquet with auto column normalization
-df, report = load_ohlcv("prices.csv", symbol="AAPL", return_report=True)
-print(report)
-# {'row_count': 5040, 'symbol_count': 1, 'duplicate_key_count': 0, ...}
-
-# Align to regular calendar (fills gaps with nulls + is_missing_bar flag)
-aligned = align_calendar(df, interval="1d")
-
-# Quality report on any DataFrame
-quality = data_quality_report(df)
+```text
+2 ['DEMO'] {'DEMO': 'miss'} {'DEMO': 'hit'}
+uncached range rejected
 ```
+
+### Create a CSV, clean duplicates, and expose a calendar gap
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import polars as pl
+from openquant.data import load_ohlcv, data_quality_report, align_calendar, dataset_hash
+
+raw = pl.DataFrame({
+    "date": ["2024-01-01", "2024-01-02", "2024-01-02", "2024-01-04"],
+    "ticker": ["DEMO"] * 4,
+    "open": [100.0, 101.0, 101.0, 103.0],
+    "high": [102.0, 103.0, 103.0, 105.0],
+    "low": [99.0, 100.0, 100.0, 102.0],
+    "close": [101.0, 102.0, 102.5, 104.0],
+    "volume": [10.0, 12.0, 13.0, 14.0],
+})
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "prices.csv"
+    raw.write_csv(path)
+    clean, report = load_ohlcv(path, return_report=True)
+    aligned = align_calendar(clean, interval="1d")
+    missing = aligned.filter(pl.col("is_missing_bar"))
+    print(clean.height, report["rows_removed_by_deduplication"])
+    print(clean["close"].to_list())
+    print(data_quality_report(clean)["gap_interval_count"])
+    print(aligned.height, missing["ts"].dt.strftime("%Y-%m-%d").to_list())
+    print(dataset_hash(clean) == dataset_hash(clean.reverse()))
+```
+
+```text
+3 1
+[101.0, 102.5, 104.0]
+1
+4 ['2024-01-03']
+True
+```
+
+The default duplicate policy keeps the last row, so January 2 closes at 102.5.
+Alignment inserts January 3 with null price/volume fields and
+`is_missing_bar=True`; it does not invent a tradable bar or impute prices.
+The inferred spacing here is one day (the smallest spacing wins a frequency
+tie). The missing weekday is therefore counted as a gap.
+
+<figure>
+<img src="/figures/data-calendar-gap-light.svg" alt="Calendar alignment inserts January 3 with null fields between synthetic January 2 and January 4 bars." class="dark:sl-hidden" />
+<img src="/figures/data-calendar-gap-dark.svg" alt="Calendar alignment inserts January 3 with null fields between synthetic January 2 and January 4 bars." class="light:sl-hidden" />
+<figcaption>The synthetic CSV example after deduplication, before and after daily alignment. Missing bars are marked, not imputed.</figcaption>
+</figure>
+
+## Cleaning and provenance contracts
+
+`clean_ohlcv` produces columns `ts, symbol, open, high, low, close, volume,
+adj_close`, ordered by symbol and timestamp. It drops extra columns and rows
+with null canonical fields, including unparseable timestamps; a missing
+`adj_close` column is copied from `close`. The `return_report=True` cleaning
+report retains input null counts even though those rows are removed. Run
+`data_quality_report(cleaned)` separately to describe only the resulting frame.
+These behaviors are implemented in
+[data.py](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py)
+and exercised in the [data tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_data_module.py).
+
+`quality_failures` requires at least one row, no duplicate keys, and no nulls.
+It does **not** reject gaps or validate price economics (for example, a negative
+price or high below low). Passing it means this structural quality bar passed,
+not that the data are suitable for a particular study.
+
+The content hash sorts column names and rows, preserving duplicates, and hashes
+a canonical typed representation. It intentionally ignores input row/column
+order and Parquet layout; integer widths map to one integer kind, floating
+widths to Float64, and datetimes to microseconds. A hash identifies this
+normalized content, not file bytes, source authenticity or permission to use it.
+`record_dataset_hash` mutates and returns the supplied manifest, recording the
+hash version, row count and any source metadata supplied by the caller.
 
 ## Common Pitfalls
 
 - Treating the bundled sample as market data. It is synthetic, so any result computed on it says nothing about real markets.
-- Committing a cache directory or fetched data to a repository. Almost every vendor's terms forbid that; see DATA_SOURCES.md.
+- Committing cached data without checking the source terms; the bundled sample and externally fetched data have different provenance.
 - Expecting a cached range to serve a sub-range. The cache key is the exact (source, symbol, start, end), so a different range is a new fetch.
 - Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.
 - Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.
@@ -145,12 +238,19 @@ quality = data_quality_report(df)
 ## Risk Notes and Caveats
 
 - The bundled sample is SYNTHETIC, not market data. Its symbols (SYN_A ... SYN_E) are not real tickers. DATA_SOURCES.md at the repository root records the terms of every source and why no real sample is committed yet.
-- Your vendor's terms govern data you fetch with your own adapter. Several vendors forbid redistribution, and some forbid persistent storage on free plans. The cache is for you only: never commit it.
-- dataset_hash (oq-dataset-sha256-v1) ignores row and column order and Parquet layout. It changes with any value, column name, column type or row, so equal hashes mean the same data.
+- Check your source terms before persisting or redistributing fetched data. See [DATA_SOURCES.md](https://github.com/Open-Quant/openquant/blob/main/DATA_SOURCES.md) for repository data provenance.
+- `dataset_hash` (`oq-dataset-sha256-v1`) describes normalized content, as detailed above. Record source metadata alongside it rather than treating the digest as complete provenance.
 - Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol').
 - clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically.
 - align_calendar marks missing bars with is_missing_bar=True for downstream imputation logic.
 - `gap_interval_count` in the quality report depends on the bar spacing, which the report infers and returns as `inferred_interval_us`: the most common spacing between consecutive bars of one symbol, pooled over symbols (the smallest on a tie). For daily data (a spacing within an hour of one day) a gap is a skipped weekday, so weekends are not gaps; exchange holidays are, since no holiday calendar is applied. For any other spacing a gap is a spacing longer than the inferred one, so intraday data counts every overnight and weekend break as a gap. Before #168 any spacing over one day was a gap whatever the frequency: weekends counted on daily data, and nothing counted on intraday data.
+
+## Sources
+
+- [Python implementation](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py): schemas, quality checks, source protocol, caching and content hash specification.
+- [Data module tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_data_module.py): normalization, duplicate policy, calendar gaps and off-grid reporting.
+- [Fetch tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_data_fetch.py): offline cache behavior, source versions and hash provenance.
+- [Rust data processing](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/src/data_processing.rs): `clean_ohlcv_df`, `quality_report_df` and `align_calendar_df`. Fetch adapters and manifests are Python conveniences, not Rust APIs.
 
 ## Related Modules
 

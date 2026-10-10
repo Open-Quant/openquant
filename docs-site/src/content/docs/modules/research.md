@@ -1,95 +1,129 @@
 ---
 title: "research"
-description: "Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-26'
+description: "Synthetic datasets, transaction-cost heuristics, research comparison grids, and promotion flags."
+status: authored
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
 module: "research"
 api_surface: "python-only"
-rust_api:
-  - "make_synthetic_futures_dataset"
-  - "run_flywheel_iteration"
-  - "ResearchDataset"
 python_api:
   - "research.make_synthetic_futures_dataset"
   - "research.run_flywheel_iteration"
   - "research.ResearchDataset"
+  - "research.run_flywheel_grid"
+  - "research.research_run_manifest"
+citation:
+  - "OpenQuant implementation: python/openquant/research.py."
+  - "OpenQuant regression tests: python/tests/test_research_grid_and_screening.py."
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+`research` supplies deterministic synthetic inputs and a cost-aware wrapper around
+[pipeline](/modules/pipeline/). It is a Python workflow utility, not a model trainer
+or evidence that a strategy is ready to trade. The formulas and gates below come
+from the [implementation](https://github.com/Open-Quant/openquant/blob/main/python/openquant/research.py);
+[regression tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_research_grid_and_screening.py)
+check annualization, net costs and grid ordering.
 
-The research module implements the "research flywheel" pattern: a tight loop of hypothesis → synthetic test → cost estimation → promotion gate. It wraps the pipeline module with additional cost modeling (commissions, spread, slippage proportional to realized volatility) and strategy-readiness checks.
+## Construct a dataset
 
-`make_synthetic_futures_dataset` generates a deterministic multi-asset futures dataset with realistic properties (seasonal patterns, correlated assets, noisy model forecasts). This lets you develop and test research workflows without real market data, and provides a stable baseline for regression testing.
+`ResearchDataset` contains parallel per-bar lists: `timestamps`, `close`,
+`model_probabilities`, `model_sides`, a row-major `asset_prices` matrix and its
+`asset_names`. Its optional `periods_per_year` supplies the annualization convention.
+Construct it from your own aligned inputs, or use `make_synthetic_futures_dataset`.
 
-`run_flywheel_iteration` runs the full pipeline, computes turnover and estimated transaction costs, calculates net-of-cost Sharpe, and evaluates promotion criteria. The result tells you whether a strategy variant passes minimum viability thresholds.
+The generator defaults to 192 bars, seed 7 and assets `CL`, `NG`, `RB`, `GC`; it
+requires at least 32 bars and two assets. It combines sinusoidal price components,
+drift and seeded noise, with synthetic probability and side sequences. Bars are
+one minute apart, starting at 2024-01-01 09:30, without a session calendar. Names
+are illustrative: this does not model exchange sessions, contract rolls, tick sizes
+or actual futures fills. It sets `periods_per_year=98280.0` using the pipeline's
+252 × 390 convention.
 
-## When to Use
-
-Use this for rapid strategy research iteration, especially during development when you don't have (or don't want to use) real market data. Also useful for CI regression tests and notebook tutorials.
-
-**Prerequisites**: None for synthetic data. For real data, construct a ResearchDataset from your own prices and model forecasts.
-
-## Key Parameters
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `n_bars` | `int` | Number of bars in synthetic dataset | 192 |
-| `seed` | `int` | Random seed for reproducibility | 7 |
-| `commission_bps` | `float` | Commission in basis points per turn | 1.5 |
-| `spread_bps` | `float` | Spread cost in basis points | 2.0 |
-| `min_net_sharpe` | `float` | Minimum net-of-cost Sharpe for promotion | 0.30 |
-| `periods_per_year` | `float | None` | Bars per year for annualisation; None uses the dataset's value or the timestamps | None |
-
-## Usage Examples
-
-### Python
-
-#### Synthetic research loop with cost-aware promotion
+## Run and inspect the cost accounting
 
 ```python
 from openquant.research import make_synthetic_futures_dataset, run_flywheel_iteration
 
-# Generate deterministic synthetic multi-asset futures data
-dataset = make_synthetic_futures_dataset(n_bars=192, seed=7)
-
-# Run full pipeline + cost model + promotion checks
+dataset = make_synthetic_futures_dataset(n_bars=64, seed=7)
 result = run_flywheel_iteration(dataset, config={
-    "cusum_threshold": 0.001,
     "commission_bps": 1.5,
     "spread_bps": 2.0,
     "min_net_sharpe": 0.30,
 })
-
-# Cost breakdown
-print(result["costs"])
-# {'turnover': 12.3, 'net_sharpe': 0.42, 'estimated_total_cost': 0.018, ...}
-
-# Promotion gate results
-print(result["promotion"])
-# {'passed_net_sharpe': True, 'promote_candidate': True, ...}
-
-# Full summary DataFrame
-print(result["summary"])
+costs = result["costs"]
+print("bars:", len(dataset.timestamps))
+print("periods/year:", costs["periods_per_year"])
+print("cost identity:", abs(costs["estimated_total_cost"]
+    - costs["turnover"] * costs["cost_per_turn"]) < 1e-12)
+print("net identity:", abs(costs["net_total_return"]
+    - (costs["gross_total_return"] - costs["estimated_total_cost"])) < 1e-12)
+print("summary rows:", result["summary"].height)
+print("gate names:", sorted(result["promotion"]))
 ```
 
-## Common Pitfalls
+```text
+bars: 64
+periods/year: 98280.0
+cost identity: True
+net identity: True
+summary rows: 1
+gate names: ['passed_alignment_guard', 'passed_event_order_guard', 'passed_net_sharpe', 'passed_realized_sharpe', 'promote_candidate']
+```
 
-- Over-optimizing on synthetic data — the data generator has known dynamics; validate on real data before deployment.
-- Ignoring cost estimates — gross Sharpe is misleading for high-turnover strategies.
+The result retains every pipeline output and adds `costs`, `promotion` and a
+one-row `summary`. The example checks accounting relationships rather than claiming
+that synthetic performance demonstrates an investment result.
 
-## Risk Notes and Caveats
+## What the cost numbers mean
 
-- make_synthetic_futures_dataset is deterministic given seed — use for regression tests and reproducible notebooks.
-- run_flywheel_iteration includes turnover estimation, transaction cost modeling, and net-of-cost Sharpe.
-- Sharpe ratios and realized_vol are annualised with the dataset's periods_per_year: 98,280 (390 × 252) for the one-minute synthetic bars, or derived from the timestamps for your own data. config["periods_per_year"] overrides it.
-- Promotion gates check realized Sharpe, net Sharpe, and leakage guards before flagging a strategy as deployment-ready.
+Let `s[t]` be the frame's position, `r[t]` its strategy return (including the initial
+zero), and `bar_vol` the sample standard deviation of those returns. The implementation
+uses:
 
-## Related Modules
+- `turnover = sum(abs(s[t] - s[t-1]))` for bars after the first; initial entry is free.
+- `cost_per_turn = (commission_bps + spread_bps) * 1e-4 + slippage_vol_mult * bar_vol * sqrt(252) * 1e-3`.
+- `estimated_total_cost = turnover * cost_per_turn`.
+- `gross_total_return = final_equity - 1`; `net_total_return` subtracts total estimated cost.
+- Each net bar return subtracts its position-change cost. `net_sharpe` is the mean
+  of these net returns divided by their sample standard deviation, times
+  `sqrt(periods_per_year)`; zero deviation gives zero.
 
-- [`pipeline`](/modules/pipeline/)
+These are comparison heuristics, not a fill simulation. The slippage term retains
+`sqrt(252)` even for intraday bars. The net total return subtracts aggregate costs
+from gross compounded return; it is not a compounded net equity curve. Unlike
+pipeline realized Sharpe, this net Sharpe formula does not subtract a risk-free rate.
+The [net-Sharpe test](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_research_grid_and_screening.py)
+independently reconstructs the per-bar deductions.
+
+| Configuration | Default | Effect |
+| --- | --- | --- |
+| `commission_bps`, `spread_bps` | 1.5, 2.0 | Linear cost per unit of turnover |
+| `slippage_vol_mult` | 8.0 | Multiplier on the volatility heuristic |
+| `min_realized_sharpe`, `min_net_sharpe` | 0.25, 0.30 | Inclusive promotion thresholds |
+| `periods_per_year` | `None` | Config override, then dataset value, then inferred timestamp spacing |
+
+Other pipeline settings pass through. Unknown config keys are ignored, so check
+spelling rather than relying on an error for a misspelled parameter.
+
+## Promotion and repeated trials
+
+`promote_candidate` is the conjunction of realized-Sharpe and net-Sharpe thresholds,
+strictly increasing timestamps (`passed_alignment_guard`) and sorted event indices.
+These guards cannot detect look-ahead inside supplied predictions and perform no
+out-of-sample test. A true value is a workflow flag, not deployment approval.
+
+`run_flywheel_grid(dataset, configs)` repeats this computation on the same dataset.
+Its leaderboard sorts passing candidates first, then descending net Sharpe and
+realized Sharpe, with input index breaking ties. It returns `records`, a Polars
+`leaderboard` and full `runs`. Ranking many configurations on one sample creates
+selection bias; reserve independent evaluation data.
+
+`research_run_manifest(config, dataset_meta=None)` adds a 12-character SHA-256
+prefix of the sorted JSON configuration and optional supplied dataset metadata.
+It does not hash price data or capture the environment automatically. See
+[the notebook research workflow](/workflows/notebook-research-workflow/) for the
+broader reproducibility process.

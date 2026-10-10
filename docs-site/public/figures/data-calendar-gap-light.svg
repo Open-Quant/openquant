@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 240" role="img" aria-label="Calendar alignment inserts a missing synthetic daily bar">
+<rect width="720" height="240" fill="#fbf9f4"/>
+<text x="28" y="30" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="18" font-weight="400" text-anchor="start">Calendar alignment: explicit gaps, no invented prices</text>
+<text x="28" y="105" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="15" font-weight="400" text-anchor="start">Cleaned</text>
+<line x1="200" y1="100" x2="640" y2="100" stroke="#cdc4b1" stroke-width="1.0"/>
+<circle cx="220" cy="100" r="12" fill="#97196a"/>
+<text x="220" y="131" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">101</text>
+<circle cx="350" cy="100" r="12" fill="#97196a"/>
+<text x="350" y="131" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">102.5</text>
+<circle cx="610" cy="100" r="12" fill="#97196a"/>
+<text x="610" y="131" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">104</text>
+<text x="28" y="170" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="15" font-weight="400" text-anchor="start">Aligned</text>
+<line x1="200" y1="165" x2="640" y2="165" stroke="#cdc4b1" stroke-width="1.0"/>
+<circle cx="220" cy="165" r="12" fill="#97196a"/>
+<text x="220" y="196" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">101</text>
+<circle cx="350" cy="165" r="12" fill="#97196a"/>
+<text x="350" y="196" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">102.5</text>
+<circle cx="480" cy="165" r="12" fill="#cdc4b1"/>
+<text x="480" y="196" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">null / missing</text>
+<circle cx="610" cy="165" r="12" fill="#97196a"/>
+<text x="610" y="196" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">104</text>
+<text x="220" y="64" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">Jan 1</text>
+<text x="350" y="64" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">Jan 2</text>
+<text x="480" y="64" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">Jan 3</text>
+<text x="610" y="64" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">Jan 4</text>
+<text x="28" y="226" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">Synthetic closes; January 2 duplicate already resolved by keeping the last row.</text>
+</svg>

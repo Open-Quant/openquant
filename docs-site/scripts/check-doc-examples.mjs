@@ -174,8 +174,7 @@ if (result.status !== 0) {
   console.error('');
   console.error('check:examples: FAILED — at least one documented Rust example does not compile.');
   console.error(`Generated crate for inspection: ${outDir}/src/lib.rs`);
-  console.error('Fix the example in docs-site/src/data/moduleDocs.ts (never the .md page — it is');
-  console.error('overwritten), then re-run `node scripts/generate-module-doc-pages.mjs`.');
+  console.error('Fix the example directly in its authored page under docs-site/src/content/docs/modules/.');
   process.exit(result.status ?? 1);
 }
 

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 270" role="img" aria-label="Adjusted EWMA weights at the third observation, span 3">
+<rect width="720" height="270" fill="#fbf9f4"/>
+<text x="28" y="30" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="18" font-weight="400" text-anchor="start">Span 3: normalize the weights available so far</text>
+<rect x="97" y="160.0" width="96" height="30.0" fill="#97196a" fill-opacity="0.8"/>
+<text x="145" y="150.0" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">0.25</text>
+<text x="145" y="214" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">x = 3</text>
+<rect x="312" y="130.0" width="96" height="60.0" fill="#97196a" fill-opacity="0.8"/>
+<text x="360" y="120.0" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">0.5</text>
+<text x="360" y="214" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">x = 6</text>
+<rect x="527" y="70" width="96" height="120" fill="#97196a" fill-opacity="0.8"/>
+<text x="575" y="60" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">1</text>
+<text x="575" y="214" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">x = 12</text>
+<line x1="65" y1="190" x2="655" y2="190" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="360" y="249" fill="#1d1a16" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="15" font-weight="400" text-anchor="middle">(0.25 × 3 + 0.5 × 6 + 1 × 12) / 1.75 = 9</text>
+</svg>

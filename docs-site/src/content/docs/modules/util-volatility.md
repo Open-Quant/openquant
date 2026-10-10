@@ -1,9 +1,8 @@
 ---
 title: "util::volatility"
 description: "Volatility estimators used across labeling and risk workflows."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+status: authored
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
@@ -21,69 +20,157 @@ python_api:
   - "volatility.get_yang_zhang_vol"
 sidebar:
   badge: Module
+citation:
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. §3.3, Snippet 3.1."
+  - "OpenQuant crates/openquant/src/util/volatility.rs and crates/openquant/tests/volatility_features.rs: estimator formulas and reference tests."
 ---
 
-## Concept Overview
+## Four estimators, two window conventions
 
-Four volatility estimators with different data requirements and different blind spots. `get_daily_vol` is a close-to-close EWMA over a timestamped series — the estimator AFML uses to scale triple-barrier widths. Parkinson uses the high-low range and extracts far more information per observation, but ignores overnight gaps and assumes no drift. Garman-Klass adds the open and close. Yang-Zhang combines an overnight, an open-to-close and a Rogers-Satchell term under a variance-minimising weight, and is the only one of the four that handles both opening gaps and intraday drift.
+The volatility utilities return standard deviations of returns, without
+annualization. Supply positive price levels ordered oldest first. Range
+estimators consume parallel OHLC arrays; daily volatility consumes timestamped
+closes and returns timestamped estimates. The
+[implementation](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/src/util/volatility.rs)
+and [reference tests](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/tests/volatility_features.rs)
+define the conventions below.
 
-## When to Use
+| Function | Inputs | Smoothing | Output and warm-up |
+| --- | --- | --- | --- |
+| `get_daily_vol` | Timestamps and close | Adjusted, unbiased EWM standard deviation; `lookback` is a span | Omits bars without an eligible earlier close; first returned estimate is NaN |
+| `get_parkinson_vol` | High, low | Rolling `window` bars | Input length; first `window - 1` values NaN |
+| `get_garman_class_vol` | Open, high, low, close | Rolling `window` bars | Input length; first `window - 1` values NaN |
+| `get_yang_zhang_vol` | Open, high, low, close | Rolling `window` bars plus previous close | Input length; first `window` values NaN |
 
-Use `get_daily_vol` whenever volatility is a scaling target for barriers or position sizes, and match its lookback to the event horizon — a 100-bar volatility scaling a 3-bar barrier is measuring the wrong thing. Use the range-based estimators when you have OHLC and want more precision from the same number of bars, preferring Yang-Zhang for instruments that gap. All range estimators degrade when quoted spreads are wide, because the recorded high and low then reflect microstructure noise rather than price.
+Use daily volatility for a timestamped target such as a labeling barrier. Use
+range estimates to describe dispersion within OHLC bars. Parkinson and
+Garman-Klass omit overnight gaps; Yang-Zhang includes a previous-close-to-open
+term. The public name `get_garman_class_vol` retains the historical spelling,
+although the estimator is Garman-Klass.
 
-## Mathematical Foundations
+<figure>
+<img src="/figures/util-volatility-warmup-light.svg" alt="For a window of three, Parkinson and Garman-Klass first return a finite value at index two; Yang-Zhang at index three." class="dark:sl-hidden" />
+<img src="/figures/util-volatility-warmup-dark.svg" alt="For a window of three, Parkinson and Garman-Klass first return a finite value at index two; Yang-Zhang at index three." class="light:sl-hidden" />
+<figcaption>Warm-up positions for valid synthetic OHLC inputs; the extra Yang-Zhang bar supplies a previous close.</figcaption>
+</figure>
 
-### Parkinson
+## Daily returns and timestamp alignment
+
+AFML §3.3, Snippet 3.1 selects the last close **strictly before** $t-1$ day:
+$r_t=C_t/C_j-1$, where $t_j<t-1\text{ day}$. An exact timestamp match one day
+ago is excluded. Consequently, regularly spaced daily observations produce
+**two-day returns** after omitting the first two rows. This is the implemented
+search convention, not an ordinary adjacent daily percentage change.
+
+With $q=1-2/(\text{lookback}+1)$, returns receive weights $w_i=q^{t-i}$.
+The weighted mean is $\bar r=\sum w_i r_i/\sum w_i$ and the unbiased variance is
 
 $$
-\sigma_P^2=\frac{1}{4\ln 2}\cdot\frac{1}{n}\sum_{t}\left(\ln\frac{H_t}{L_t}\right)^2
+ s^2=\frac{\sum_i w_i(r_i-\bar r)^2}
+ {\sum_i w_i-\sum_i w_i^2/\sum_i w_i}.
 $$
 
-where $H_t,L_t$ are the bar high and low and $n$ the `window` length. It uses the range rather than the close, so it is far more efficient than close-to-close on the same sample — but it ignores overnight gaps and assumes no drift.
+One observation cannot estimate this variance. Span 1 also leaves only one
+positive weight, so every returned estimate is NaN. Span 0 or fewer than two
+input bars returns an empty sequence.
 
-### Yang-Zhang
+```python
+import math
+from datetime import datetime, timedelta
+from openquant import volatility
 
-$$
-\begin{aligned}\sigma_{YZ}^2&=\sigma_o^2+k\,\sigma_c^2+(1-k)\,\sigma_{rs}^2,\qquad k=\frac{0.34}{1.34+\frac{n+1}{n-1}}\\\sigma_o^2&=\frac{1}{n-1}\sum_{t}\left(o_t-\bar o\right)^2,\qquad o_t=\ln\frac{O_t}{C_{t-1}}\\\sigma_c^2&=\frac{1}{n-1}\sum_{t}\left(c_t-\bar c\right)^2,\qquad c_t=\ln\frac{C_t}{O_t}\\\sigma_{rs}^2&=\frac{1}{n}\sum_{t}\left(\ln\frac{H_t}{C_t}\ln\frac{H_t}{O_t}+\ln\frac{L_t}{C_t}\ln\frac{L_t}{O_t}\right)\end{aligned}
-$$
-
-where the sums run over the last $n$ bars, $n$ is the `window` length, and $\bar o,\bar c$ are the means over those bars (Yang & Zhang 2000). $\sigma_o^2$ is the variance of the overnight (previous close to open) return, $\sigma_c^2$ the variance of the open-to-close return, and $\sigma_{rs}^2$ the Rogers-Satchell (1991) estimator. Because $\sigma_o^2$ and $\sigma_c^2$ are demeaned and $\sigma_{rs}^2$ is unaffected by drift, a steady trend adds nothing to the estimate. $k$ is not a free parameter — it is the weight that minimises the estimator's variance, which is what makes Yang-Zhang the only one of these four that handles both overnight gaps and intraday drift. For a 20-bar window $k\approx0.14$, so the overnight and Rogers-Satchell terms carry most of the estimate. `get_yang_zhang_vol` returns $\sigma_{YZ}$ per bar (not annualised); the first $n$ values are NaN because $o_t$ needs the previous close. mlfinlab's version, which this function mirrored until #165, used $\ln(C_t/O_{t-1})$ for the open-to-close term and did not demean.
-
-## Usage Examples
-
-### Rust
-
-#### Compute daily and range-based volatility
-
-```rust
-use chrono::{Duration, NaiveDateTime};
-use openquant::util::volatility::{get_daily_vol, get_parkinson_vol};
-
-let t0 = NaiveDateTime::parse_from_str("2024-01-02 00:00:00", "%Y-%m-%d %H:%M:%S")?;
-let close: Vec<(NaiveDateTime, f64)> = (0..300)
-    .map(|i| (t0 + Duration::days(i), 100.0 + (i as f64 * 0.07).sin() * 2.0))
-    .collect();
-let high: Vec<f64> = close.iter().map(|(_, p)| p + 0.4).collect();
-let low: Vec<f64> = close.iter().map(|(_, p)| p - 0.4).collect();
-
-// Close-to-close EWMA vol on a timestamped series; `lookback` is the EWMA span.
-let daily = get_daily_vol(&close, 100);
-// Parkinson uses the high/low range, so it needs no timestamps — `window` bars.
-let parkinson = get_parkinson_vol(&high, &low, 20)?;
-
-println!("daily vol tail = {:?}", daily.last());
-println!("parkinson vol tail = {:?}", parkinson.last());
+stamps = [(datetime(2024, 1, 1) + timedelta(days=i)).strftime("%Y-%m-%d %H:%M:%S")
+          for i in range(5)]
+close = [100.0, 100.0, 110.0, 120.0, 121.0]
+result = volatility.get_daily_vol(stamps, close, lookback=3)
+# Eligible returns are 110/100-1, 120/100-1, and 121/110-1.
+assert [stamp for stamp, _ in result] == stamps[2:]
+assert math.isnan(result[0][1])
+assert math.isclose(result[1][1], math.sqrt(0.005), abs_tol=1e-12)
+for stamp, value in result:
+    print(stamp, f"{value:.6f}")
 ```
 
-## Risk Notes and Caveats
+```text
+2024-01-03 00:00:00 nan
+2024-01-04 00:00:00 0.070711
+2024-01-05 00:00:00 0.059761
+```
 
-- Choose estimator based on available fields and microstructure noise.
-- Daily-vol lookback should be matched to event horizon.
+Always join the returned timestamps back to the input. Positional assignment
+would shift the target because the output omits initial rows.
 
-## Related Modules
+## Range formulas
 
-- [`labeling`](/modules/labeling/)
-- [`filters`](/modules/filters/)
-- [`util-fast-ewma`](/modules/util-fast-ewma/)
-- [`bet-sizing`](/modules/bet-sizing/)
-- [`microstructural-features`](/modules/microstructural-features/)
+For a trailing window of $n$ bars, the functions return the square roots of:
+
+$$
+\sigma_P^2=\frac{1}{4\ln 2}\operatorname{mean}\left[\ln(H/L)^2\right],
+\qquad
+\sigma_{GK}^2=\operatorname{mean}\left[\tfrac12\ln(H/L)^2-(2\ln2-1)\ln(C/O)^2\right].
+$$
+
+Yang-Zhang uses $o_i=\ln(O_i/C_{i-1})$, $c_i=\ln(C_i/O_i)$, and
+$RS_i=\ln(H_i/C_i)\ln(H_i/O_i)+\ln(L_i/C_i)\ln(L_i/O_i)$:
+
+$$
+\sigma_{YZ}^2=\operatorname{Var}_{n-1}(o)+k\operatorname{Var}_{n-1}(c)
+ +(1-k)\operatorname{mean}(RS),\qquad
+k=\frac{0.34}{1.34+(n+1)/(n-1)}.
+$$
+
+Both variance terms subtract their window means and use divisor $n-1$; the
+Rogers-Satchell term uses divisor $n$. These are the paper's conventions tested
+in `test_yang_zhang_matches_paper`, rather than the older mlfinlab expression
+using $\ln(C_i/O_{i-1})$ and uncentered sums.
+
+```python
+import math
+from openquant import volatility
+
+# Synthetic identical bars: no overnight or open-to-close movement.
+open_ = close = [100.0] * 5
+high, low = [101.0] * 5, [99.0] * 5
+p = volatility.get_parkinson_vol(high, low, window=3)
+g = volatility.get_garman_class_vol(open_, high, low, close, window=3)
+y = volatility.get_yang_zhang_vol(open_, high, low, close, window=3)
+expected_p = math.log(101 / 99) / math.sqrt(4 * math.log(2))
+assert math.isclose(p[-1], expected_p, abs_tol=1e-12)
+for name, values in [("Parkinson", p), ("Garman-Klass", g), ("Yang-Zhang", y)]:
+    print(name, "warm-up", sum(math.isnan(v) for v in values), "tail", f"{values[-1]:.6f}")
+```
+
+```text
+Parkinson warm-up 2 tail 0.012012
+Garman-Klass warm-up 2 tail 0.014143
+Yang-Zhang warm-up 3 tail 0.013404
+```
+
+The differences reflect the formulas, not evidence that one estimator forecasts
+better. All bars here are synthetic and contain no market information.
+
+## Rust range example
+
+```rust
+use openquant::util::volatility::get_parkinson_vol;
+
+let values = get_parkinson_vol(&[101.0; 5], &[99.0; 5], 3)?;
+assert!(values[..2].iter().all(|v| v.is_nan()));
+let expected = (101.0_f64 / 99.0).ln() / (4.0 * 2.0_f64.ln()).sqrt();
+assert!((values[4] - expected).abs() < 1e-12);
+```
+
+## Failure modes and interpretation
+
+- Parallel array lengths must match; mismatches raise Python `ValueError` or Rust `InputError`. Python daily-volatility timestamps must parse as `YYYY-MM-DD HH:MM:SS` (fractional seconds accepted).
+- Supply increasing timestamps yourself. Daily volatility does not sort or validate price positivity. The range estimators check lengths, not OHLC consistency; nonpositive or inconsistent prices can produce nonfinite results.
+- Range windows containing NaNs remain NaN until the affected observations leave the required window. A close used by Yang-Zhang also affects the next bar's overnight return.
+- Parkinson and Garman-Klass return all NaNs for window 0; Yang-Zhang does so for windows below 2. Windows longer than the history never finish warm-up.
+- Outputs are not percentages or annualized values. Calendar gaps also mean the daily estimator's actual return horizon can exceed one day. Establish the sampling convention before scaling values or comparing estimators.
+
+## Sources and related modules
+
+- López de Prado (2018), *Advances in Financial Machine Learning*, §3.3, Snippet 3.1: daily volatility target.
+- [Rust implementation](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/src/util/volatility.rs) and [Python contract](https://github.com/Open-Quant/openquant/blob/main/python/openquant/_core/volatility.pyi): formulas, validation and output alignment.
+- [Volatility reference tests](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/tests/volatility_features.rs): range estimator references, centered Yang-Zhang variance and pure-drift case.
+- [Labeling](/modules/labeling/) consumes volatility targets; [EWMA](/modules/util-fast-ewma/) explains adjusted means; [data](/modules/data/) prepares OHLCV inputs.

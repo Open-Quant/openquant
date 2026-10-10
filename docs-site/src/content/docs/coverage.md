@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-09-26**.
+Numbers below were regenerated on **2026-10-10**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,9 +41,9 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 11 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
+| `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 50 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 57 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 3 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **64** | |
@@ -61,25 +61,21 @@ chapter at a time, by pages written by hand: each cites its source, has only the
 needs, and runs its examples. For a module with Python bindings that is a Python block whose
 printed output the docs checks compare with the page; for a Rust-only module it is a Rust
 snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
-row below counts those. For the pages still generated, every entry fills in
-`conceptOverview`, `whenToUse` and `relatedModules`, so each carries those sections; the
-split is over the two optional ones, `keyParameters` and `commonPitfalls`.
+row below counts those. All 40 module pages are now authored Markdown; `moduleDocs.ts`
+contains only navigation metadata. Authored status records executed examples and sourced
+content, not human review or validation.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
 | Modules with a documentation page | 40 |
-| …written by hand, with a citation and executed examples | 33 |
-| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 4 |
+| …written by hand, with a citation and executed examples | 40 |
+| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 0 |
+| …generated, carrying the base template only | 0 |
 <!-- coverage:end:module-depth -->
 
-A base-template page is not a stub — it has a concept overview, mathematical
-foundations, usage examples, an API reference and risk notes. What it lacks is
-the parameter table telling you which knobs matter and the pitfalls section
-telling you how the module is usually misused. Both are the parts a reader
-reaches for second, and both are a `moduleDocs.ts` edit rather than a per-page
-rewrite.
+Future module changes belong in the page itself. Update the navigation metadata only
+when the module's name, summary, subject or API surface changes.
 
 ## Code with no documentation entry at all
 
