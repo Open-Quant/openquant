@@ -6,6 +6,7 @@ Inputs match the executable example on modules/viz.md. Drawdown is computed here
 from its definition, independently of openquant.viz: equity / running high - 1.
 This is a synthetic three-point illustration, not backtest performance.
 """
+
 from _svg import MONO, THEMES, Chart
 
 
@@ -13,7 +14,9 @@ def drawdown_figure():
     equity = [100.0, 99.0, 101.0]
     drawdown = [value / max(equity[: i + 1]) - 1.0 for i, value in enumerate(equity)]
     for name, theme in THEMES.items():
-        chart = Chart(760, 290, theme, "Illustrative equity and fractional drawdown across three dates")
+        chart = Chart(
+            760, 290, theme, "Illustrative equity and fractional drawdown across three dates"
+        )
         for panel, title, values, ticks, bounds in (
             (0, "Equity", equity, [99, 100, 101], (98.8, 101.2)),
             (1, "Drawdown (%)", [100 * v for v in drawdown], [-1, -0.5, 0], (-1.1, 0.1)),
