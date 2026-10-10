@@ -68,7 +68,7 @@ def unquote(value: str) -> str:
 
 
 def frontmatter(path: Path) -> dict[str, str]:
-    """Top-level scalar keys only — enough for `status` and `module`."""
+    """Top-level scalar keys only — status and explicit module claims."""
     match = FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
     if not match:
         return {}
@@ -95,18 +95,36 @@ def status_tally() -> dict[str, int]:
     return tally
 
 
-def documented_modules() -> set[str]:
-    """Module names claimed by a module page, e.g. `labeling`, `util::volatility`."""
-    names = set()
+def documented_modules(
+    surfaces: dict[str, list[str]],
+) -> tuple[dict[str, set[str]], list[str]]:
+    """Primary module claims plus validated, Python-only wrapper module claims.
+
+    A page can document a Rust module and a differently named Python wrapper
+    (for example, data_structures and bars). Only explicit `python_module`
+    frontmatter claims that wrapper; API references and prose are not claims.
+    """
+    names: dict[str, set[str]] = {surface: set() for surface in surfaces}
+    failures: list[str] = []
     for page in sorted(MODULE_PAGES.glob("*.md")):
-        module = frontmatter(page).get("module")
+        meta = frontmatter(page)
+        module = meta.get("module")
         if module:
-            names.add(module)
-            # A page for `util::volatility` documents part of `util`; the parent
-            # is a namespace, not a gap.
+            for claimed in names.values():
+                claimed.add(module)
+            # A Rust child page documents its parent namespace, not a Python module.
             if "::" in module:
-                names.add(module.split("::", 1)[0])
-    return names
+                names["rust"].add(module.split("::", 1)[0])
+        python_module = meta.get("python_module")
+        if python_module:
+            if python_module not in surfaces["python"]:
+                failures.append(
+                    f"{page.relative_to(ROOT)}: python_module `{python_module}` "
+                    "is not a public Python module"
+                )
+            else:
+                names["python"].add(python_module)
+    return names, failures
 
 
 def module_depth() -> tuple[int, int, int]:
@@ -134,9 +152,7 @@ def module_depth() -> tuple[int, int, int]:
 
 def public_surfaces() -> dict[str, list[str]]:
     rust = sorted(set(PUB_MOD_RE.findall(LIB_RS.read_text(encoding="utf-8"))))
-    python = sorted(
-        p.stem for p in PY_SRC.glob("*.py") if p.name != "__init__.py"
-    )
+    python = sorted(p.stem for p in PY_SRC.glob("*.py") if p.name != "__init__.py")
     return {"rust": rust, "python": python}
 
 
@@ -155,19 +171,19 @@ def gaps(today: date) -> tuple[list[tuple[str, str, str, str]], list[str]]:
     an exemption for a module that is in fact documented, because a stale
     exemption is how an allowlist stops meaning anything.
     """
-    documented = documented_modules()
+    surfaces = public_surfaces()
+    documented, failures = documented_modules(surfaces)
     allow = load_allowlist()
     rows: list[tuple[str, str, str, str]] = []
-    failures: list[str] = []
 
     labels = {
         "rust": "Rust (`crates/openquant/src/lib.rs`)",
         "python": "Python (`python/openquant/`)",
     }
-    for surface, modules in public_surfaces().items():
+    for surface, modules in surfaces.items():
         entries = allow.get(surface, {})
         for module in modules:
-            if module in documented:
+            if module in documented[surface]:
                 if module in entries:
                     failures.append(
                         f"{surface}.{module} is exempted in "

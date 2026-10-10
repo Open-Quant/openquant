@@ -21,6 +21,9 @@ const docs = defineCollection({
       // Required on every hand-written module page by scripts/check-content-schema.mjs.
       citation: z.array(z.string()).optional(),
       module: z.string().optional(),
+      // Explicit coverage for a differently named Python wrapper on this module page.
+      // check:coverage verifies that the name exists on the public Python surface.
+      python_module: z.string().min(1).optional(),
       afml_chapter: z.array(z.string()).optional(),
       rust_api: z.array(z.string()).optional(),
       python_api: z.array(z.string()).optional(),

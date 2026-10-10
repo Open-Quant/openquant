@@ -7,6 +7,7 @@ audience:
   - quant-dev
   - platform-engineering
 module: "data_structures"
+python_module: "bars"
 api_surface: "both"
 afml_chapter:
   - "2"
