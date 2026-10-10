@@ -1,20 +1,13 @@
 ---
 title: "adapters"
 description: "Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers."
-status: generated
-generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-25'
+status: authored
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
 module: "adapters"
 api_surface: "python-only"
-rust_api:
-  - "to_polars_signal_frame"
-  - "to_polars_event_frame"
-  - "to_polars_backtest_frame"
-  - "to_polars_weights_frame"
-  - "SignalStreamBuffer"
 python_api:
   - "adapters.to_polars_signal_frame"
   - "adapters.to_polars_event_frame"
@@ -24,57 +17,104 @@ python_api:
   - "adapters.to_polars_frontier_frame"
   - "adapters.SignalStreamBuffer"
   - "adapters.to_pandas"
+citation:
+  - "OpenQuant implementation: python/openquant/adapters.py."
+  - "OpenQuant regression tests: python/tests/test_adapters_viz.py."
 sidebar:
   badge: Module
 ---
 
-## Concept Overview
+The adapters turn parallel Python sequences into Polars DataFrames. They preserve
+input order, check corresponding lengths and name columns consistently for notebooks.
+They do not align rows by timestamp, sort data, normalize weights or validate a
+trading strategy. The [implementation](https://github.com/Open-Quant/openquant/blob/main/python/openquant/adapters.py)
+and [adapter tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_adapters_viz.py)
+are the contract for these Python-only helpers.
 
-The Rust core returns results as plain dicts and lists. The adapters module converts these into typed Polars DataFrames with proper datetime parsing, column naming, and validation. This is the standard way to move data between the Rust computation engine and Python analysis/visualization code.
+## Choose the frame shape
 
-`SignalStreamBuffer` provides an incremental append interface for streaming workflows where signals arrive in chunks — common in live research notebooks or paper-trading loops.
+| Function | Required input sequences | Output columns |
+| --- | --- | --- |
+| `to_polars_signal_frame` | `timestamps`, `signal` | `ts`, `signal`; optional `side`, repeated `symbol` |
+| `to_polars_event_frame` | `starts`, `ends`, `probs` | `start_ts`, `end_ts`, `prob`; optional `side`, `label` |
+| `to_polars_backtest_frame` | `timestamps`, `equity_curve` | `ts`, `equity`; optional `returns`, `position` |
+| `to_polars_weights_frame` | `asset_names`, `weights` | `asset`, `weight`; optional repeated `as_of` |
+| `to_polars_frontier_frame` | `volatility`, `returns` | `volatility`, `return`, `point_id`; optional `sharpe` |
+| `to_polars_indicator_matrix` | rectangular `ind_mat` | `bar_index`, one integer column per label |
 
-## When to Use
+Frontier point IDs default to `p0`, `p1`, …; indicator row indices default to
+0, 1, … and labels to `label_0`, `label_1`, …. The matrix is row-major (bars ×
+labels), and entries are cast to integers. An empty matrix returns only an empty
+`bar_index` column. Optional sequences must also match their corresponding rows.
 
-Use adapters whenever you receive output from the Rust core or pipeline module and need DataFrames for analysis, visualization, or further processing. The pipeline module's `_frames` variant calls these adapters internally.
-
-**Alternatives**: Manual Polars DataFrame construction from dicts, but you lose validation and timestamp parsing.
-
-## Usage Examples
-
-### Python
-
-#### Convert pipeline outputs to typed DataFrames
+## Convert and buffer signals
 
 ```python
-from openquant.adapters import (
-    to_polars_signal_frame,
-    to_polars_weights_frame,
-    SignalStreamBuffer,
-)
+from openquant.adapters import SignalStreamBuffer, to_polars_signal_frame
 
-# Signal frame from raw timestamps + values
 signals = to_polars_signal_frame(
-    timestamps=["2024-01-02T09:30:00", "2024-01-02T09:31:00"],
-    signal=[0.5, -0.3],
-    side=[1.0, -1.0],
-    symbol="CL",
+    timestamps=["2024-01-02 09:30:00", "2024-01-02 09:31:00"],
+    signal=[0.5, -0.3], side=[1.0, -1.0], symbol="CL",
 )
+print("columns:", signals.columns)
+print("timestamp type:", signals.schema["ts"])
+print("signals:", signals["signal"].to_list())
 
-# Streaming buffer for incremental signal updates
-buf = SignalStreamBuffer()
-buf.append(timestamps=["2024-01-02T09:32:00"], signal=[0.1])
-buf.append(timestamps=["2024-01-02T09:33:00"], signal=[-0.2])
-all_signals = buf.frame()  # concat into single DataFrame
+buffer = SignalStreamBuffer()
+buffer.append(["2024-01-02 09:32:00"], [0.1], symbol="CL")
+buffer.append(["2024-01-02 09:33:00"], [-0.2], symbol="CL")
+print("buffer rows:", buffer.frame().height)
+print("symbols:", buffer.frame()["symbol"].to_list())
+buffer.clear()
+print("after clear:", buffer.frame().height)
 ```
 
-## Risk Notes and Caveats
+```text
+columns: ['ts', 'signal', 'side', 'symbol']
+timestamp type: Datetime(time_unit='us', time_zone=None)
+signals: [0.5, -0.3]
+buffer rows: 2
+symbols: ['CL', 'CL']
+after clear: 0
+```
 
-- All adapter functions validate input length alignment before constructing frames.
-- SignalStreamBuffer supports incremental append for streaming research notebooks.
-- to_pandas() is available for downstream tools that require pandas; requires pandas to be installed.
+`SignalStreamBuffer.append` constructs each batch immediately, so a length mismatch
+fails at append time. `frame()` vertically concatenates every stored batch in append
+order: use consistent optional columns and compatible dtypes across batches. It
+has no time window, eviction, deduplication or persistence; call `clear()` to release
+stored batches. An empty buffer returns an empty `ts`, `signal` frame.
 
-## Related Modules
+## Parsing and error handling
 
-- [`pipeline`](/modules/pipeline/)
-- [`data`](/modules/data/)
+Timestamp columns use the [shared parser](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py).
+The parser attempts datetime parsing with `strict=False`; unparseable entries in
+a recognizable date series become null. If no format can be inferred (for example,
+a series containing only invalid strings), Polars can raise a parsing error. A frame with matching lengths can therefore still contain unusable timestamps.
+Inspect nulls before joining or plotting; no adapter checks chronological order or
+whether an event's end follows its start.
+
+```python
+from openquant.adapters import to_polars_signal_frame, to_polars_weights_frame
+
+frame = to_polars_signal_frame(
+    ["2024-01-02 09:30:00", "bad timestamp"], [0.1, 0.2]
+)
+print("null timestamps:", frame["ts"].null_count())
+try:
+    to_polars_weights_frame(["CL", "GC"], [1.0])
+except ValueError as error:
+    print(type(error).__name__)
+```
+
+```text
+null timestamps: 1
+ValueError
+```
+
+`to_pandas(frame)` delegates to Polars' pandas conversion and raises a helpful
+`RuntimeError` when pandas is absent. Install pandas before using the bridge; PyArrow is already a package dependency. Conversion
+can require a copy; it is not a streaming interface.
+
+[pipeline](/modules/pipeline/)'s `run_mid_frequency_pipeline_frames` already calls
+these adapters. Use them directly for custom stage outputs, and
+[viz](/modules/viz/) to build plotting payloads from sequence columns.

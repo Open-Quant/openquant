@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 290" role="img" aria-label="Illustrative equity and fractional drawdown across three dates">
+<rect width="760" height="290" fill="#fbf9f4"/>
+<text x="65" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">EQUITY</text>
+<line x1="65" y1="213.6" x2="320" y2="213.6" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="55" y="217.6" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">99</text>
+<line x1="65" y1="141.5" x2="320" y2="141.5" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="55" y="145.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">100</text>
+<line x1="65" y1="69.4" x2="320" y2="69.4" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="55" y="73.4" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">101</text>
+<polyline points="65.0,141.5 192.5,213.6 320.0,69.4" fill="none" stroke="#97196a" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="65.0" cy="141.5" r="3.2" fill="#97196a"/>
+<text x="65.0" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 2</text>
+<circle cx="192.5" cy="213.6" r="3.2" fill="#97196a"/>
+<text x="192.5" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 3</text>
+<circle cx="320.0" cy="69.4" r="3.2" fill="#97196a"/>
+<text x="320.0" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 4</text>
+<text x="445" y="28" fill="#5c554b" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">DRAWDOWN (%)</text>
+<line x1="445" y1="213.6" x2="700" y2="213.6" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="435" y="217.6" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">-1</text>
+<line x1="445" y1="141.5" x2="700" y2="141.5" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="435" y="145.5" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">-0.5</text>
+<line x1="445" y1="69.4" x2="700" y2="69.4" stroke="#cdc4b1" stroke-width="1.0"/>
+<text x="435" y="73.4" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">0</text>
+<polyline points="445.0,69.4 572.5,213.6 700.0,69.4" fill="none" stroke="#97196a" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="445.0" cy="69.4" r="3.2" fill="#97196a"/>
+<text x="445.0" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 2</text>
+<circle cx="572.5" cy="213.6" r="3.2" fill="#97196a"/>
+<text x="572.5" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 3</text>
+<circle cx="700.0" cy="69.4" r="3.2" fill="#97196a"/>
+<text x="700.0" y="257" fill="#5c554b" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">Jan 4</text>
+</svg>
