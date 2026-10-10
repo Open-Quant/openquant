@@ -225,6 +225,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { slug: 'modules/data' },
+                { slug: 'modules/data-processing' },
                 { slug: 'modules/evaluation' },
                 { slug: 'modules/feature-diagnostics' },
                 { slug: 'modules/pipeline' },

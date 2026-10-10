@@ -336,6 +336,14 @@ export const moduleDocs: ModuleDoc[] = [
     pythonApis: ["data.fetch", "data.dataset_hash", "data.record_dataset_hash", "data.quality_failures", "data.default_cache_dir", "data.DataSource", "data.LocalSampleSource", "data.LocalFileSource", "data.CallableSource", "data.CacheMissError", "data.load_ohlcv", "data.clean_ohlcv", "data.align_calendar", "data.data_quality_report"],
   },
   {
+    slug: "data-processing",
+    module: "data_processing",
+    subject: "Research Workflows",
+    summary: "Rust OHLCV deduplication, gap diagnostics and regular-grid alignment through row, column and DataFrame interfaces.",
+    handwritten: true,
+    apiSurface: "rust-only",
+  },
+  {
     slug: "evaluation",
     module: "evaluation",
     subject: "Research Workflows",

@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-09-26'
+last_generated: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,7 +13,7 @@ sidebar:
 
 This is the canonical index of every OpenQuant module: one page each, with
 purpose, APIs, formulas, examples, and implementation notes. It lists the same
-39 modules twice over — by subject, and by the language surface they are
+42 modules twice over — by subject, and by the language surface they are
 reachable through — because those are the two questions readers arrive with.
 For the AFML chapter each module implements, see
 [By AFML Chapter](/module-reference/by-afml-chapter/).
@@ -59,6 +59,7 @@ For the AFML chapter each module implements, see
 
 ### Research Workflows
 
+- [`data_processing`](/modules/data-processing/) — Rust OHLCV deduplication, gap diagnostics and regular-grid alignment through row, column and DataFrame interfaces.
 - [`evaluation`](/modules/evaluation/) — PSR, deflated Sharpe and minimum track record from a returns series, with a trial registry that persists the count DSR deflates by.
 - [`pipeline`](/modules/pipeline/) — End-to-end AFML research pipeline: events → signals → portfolio → risk → backtest, with ordering checks.
 - [`research`](/modules/research/) — Synthetic dataset generation and flywheel research iteration with cost modeling and promotion gates.
@@ -81,6 +82,7 @@ For the AFML chapter each module implements, see
 ### Scaling, HPC and Infrastructure
 
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
+- [`dynamic_allocation`](/modules/dynamic-allocation/) — AFML Chapter 21's multi-asset allocation trajectories, enumerated exactly with square-root trading costs and a bounded search.
 - [`hpc_parallel`](/modules/hpc-parallel/) — AFML's atoms and molecules: equal-work partitions of a job, run in serial or on threads, outputs in order.
 - [`streaming_hpc`](/modules/streaming-hpc/) — VPIN and a venue-concentration HHI updated event by event in constant memory, with a joint alert.
 
@@ -96,7 +98,9 @@ For the AFML chapter each module implements, see
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
 - [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
+- [`data_processing`](/modules/data-processing/) — Rust OHLCV deduplication, gap diagnostics and regular-grid alignment through row, column and DataFrame interfaces.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
+- [`dynamic_allocation`](/modules/dynamic-allocation/) — AFML Chapter 21's multi-asset allocation trajectories, enumerated exactly with square-root trading costs and a bounded search.
 - [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
@@ -133,8 +137,9 @@ For the AFML chapter each module implements, see
 - [`bet_sizing`](/modules/bet-sizing/) — `get_signal`, `discrete_signal`, `bet_size`, `bet_size_sigmoid`, `bet_size_power`, `inv_price`, `inv_price_sigmoid`, `inv_price_power`, `get_w`, `get_w_sigmoid`, `get_w_power`, `get_target_pos`, `get_target_pos_sigmoid`, `get_target_pos_power`, `limit_price`, `limit_price_sigmoid`, `limit_price_power`, `avg_active_signals`, `bet_size_dynamic`, `cdf_mixture`, `single_bet_size_mixed`, `get_concurrent_sides`, `bet_size_budget`, `bet_size_probability`, `mp_avg_active_signals`, `bet_size_reserve`, `bet_size_reserve_with_fit`, `bet_size_reserve_full`
 - [`cla`](/modules/cla/) — `allocate_cla`
 - [`codependence`](/modules/codependence/) — `angular_distance`, `absolute_angular_distance`, `squared_angular_distance`, `distance_correlation`, `get_optimal_number_of_bins`, `get_mutual_info`, `variation_of_information_score`
-- [`cross_validation`](/modules/cross-validation/) — `purged_kfold_splits`, `split_with_diagnostics`, `cpcv_splits`, `cpcv_paths`, `naive_kfold_splits`, `count_train_test_overlaps`
+- [`cross_validation`](/modules/cross-validation/) — `purged_kfold_splits`, `split_with_diagnostics`, `cpcv_splits`, `cpcv_paths`, `naive_kfold_splits`, `count_train_test_overlaps`, `walk_forward_splits`, `walk_forward_split_with_diagnostics`, `null_score_distribution`, `null_p_value`, `bootstrap_returns`
 - [`data`](/modules/data/) — `fetch`, `dataset_hash`, `record_dataset_hash`, `quality_failures`, `default_cache_dir`, `DataSource`, `LocalSampleSource`, `LocalFileSource`, `CallableSource`, `CacheMissError`, `load_ohlcv`, `clean_ohlcv`, `align_calendar`, `data_quality_report`
+- [`dynamic_allocation`](/modules/dynamic-allocation/) — `pigeonhole_partitions`, `all_weights`, `transaction_costs`, `trajectory_sharpe_ratio`, `dynamic_optimal_portfolio`
 - [`ef3m`](/modules/ef3m/) — `centered_moment`, `raw_moment`, `most_likely_parameters`, `fit_m2n`
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
 - [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
@@ -151,7 +156,7 @@ For the AFML chapter each module implements, see
 - [`onc`](/modules/onc/) — `get_onc_clusters`
 - [`pipeline`](/modules/pipeline/) — `run_mid_frequency_pipeline`, `run_mid_frequency_pipeline_frames`, `summarize_pipeline`, `infer_periods_per_year`
 - [`portfolio`](/modules/portfolio-optimization/) — `allocate_inverse_variance`, `allocate_min_vol`, `allocate_max_sharpe`, `allocate_efficient_risk`, `allocate_with_solution`, `allocate_from_inputs`
-- [`research`](/modules/research/) — `make_synthetic_futures_dataset`, `run_flywheel_iteration`, `ResearchDataset`
+- [`research`](/modules/research/) — `make_synthetic_futures_dataset`, `run_flywheel_iteration`, `run_flywheel_grid`, `research_run_manifest`, `ResearchDataset`
 - [`risk`](/modules/risk-metrics/) — `calculate_value_at_risk`, `calculate_expected_shortfall`, `calculate_conditional_drawdown_risk`, `calculate_variance`, `calculate_value_at_risk_from_matrix`, `calculate_expected_shortfall_from_matrix`, `calculate_conditional_drawdown_risk_from_matrix`
 - [`sample_weights`](/modules/sample-weights/) — `get_weights_by_return`, `get_weights_by_time_decay`
 - [`sampling`](/modules/sampling/) — `get_ind_matrix`, `seq_bootstrap`, `get_ind_mat_average_uniqueness`, `get_ind_mat_label_uniqueness`, `bootstrap_loop_run`, `get_av_uniqueness_from_triple_barrier`, `num_concurrent_events`

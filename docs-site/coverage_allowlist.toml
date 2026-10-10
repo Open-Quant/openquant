@@ -13,7 +13,3 @@
 #   [rust.some_module]      # or [python.some_module]
 #   reason = "why there is no page yet"
 #   expires = 2026-12-31    # bare date, not a string
-
-[rust.data_processing]
-reason = "The public Rust preprocessing API still needs a complete module page; the data page covers Python workflows and selected Rust helpers."
-expires = 2026-12-31

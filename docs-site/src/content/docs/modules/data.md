@@ -49,6 +49,10 @@ The data quality report provides diagnostics — row counts, symbol counts, dupl
 
 ## When to Use
 
+For preprocessing directly in Rust through row, column and Polars DataFrame interfaces,
+see [`data_processing`](/modules/data-processing/). That page covers the exact
+UTC timestamp schema, duplicate policy, gap diagnostics and off-grid alignment report.
+
 Use `fetch` when a study needs daily bars for a list of symbols and must be reproducible. Record the dataset hash in the run manifest. Use the loaders directly when you already hold pre-aggregated OHLCV data (daily bars, minute bars from a vendor). If you have raw tick/trade data instead, use the `data_structures` module to construct bars first.
 
 **Prerequisites**: For `fetch`, a source: the bundled synthetic sample, your own file, or your own vendor function and key. For the loaders, a CSV or Parquet file, or an existing Polars DataFrame with OHLCV-like columns.

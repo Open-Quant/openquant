@@ -43,10 +43,10 @@ tally below cannot be bulk-applied.
 |---|---|---|
 | `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 58 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 59 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 3 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **65** | |
+| **Total** | **66** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
@@ -61,15 +61,15 @@ chapter at a time, by pages written by hand: each cites its source, has only the
 needs, and runs its examples. For a module with Python bindings that is a Python block whose
 printed output the docs checks compare with the page; for a Rust-only module it is a Rust
 snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
-row below counts those. All 41 module pages are now authored Markdown; `moduleDocs.ts`
+row below counts those. All 42 module pages are now authored Markdown; `moduleDocs.ts`
 contains only navigation metadata. Authored status records executed examples and sourced
 content, not human review or validation.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
-| Modules with a documentation page | 41 |
-| …written by hand, with a citation and executed examples | 41 |
+| Modules with a documentation page | 42 |
+| …written by hand, with a citation and executed examples | 42 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 0 |
 | …generated, carrying the base template only | 0 |
 <!-- coverage:end:module-depth -->
@@ -86,9 +86,7 @@ under `src/content/docs/modules/`. A gap fails the gate unless
 it.
 
 <!-- coverage:begin:gaps -->
-| Surface | Undocumented | Exempt until | Why |
-|---|---|---|---|
-| Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | The public Rust preprocessing API still needs a complete module page; the data page covers Python workflows and selected Rust helpers. |
+Every public module on both surfaces has a documentation page.
 <!-- coverage:end:gaps -->
 
 `util` also appears in the raw module list, but it is a parent namespace: two
@@ -97,11 +95,12 @@ third, `util::stats`, holds the descriptive-statistics helpers the other modules
 share and is documented in rustdoc only. It is not a gap, and the gate does not
 count it as one.
 
-`openquant.bars` is the sharper miss of the two. It has no module page
-even though [Python Core Workflow](/workflows/python-core-workflow/)
-makes it a whole stage, and its memory behaviour under large inputs is
-non-obvious enough to have earned an entry in
-[Troubleshooting](/setup/troubleshooting/#python-runs-out-of-memory-building-bars-from-a-large-dataset).
+`openquant.bars` is documented on the [`data_structures`](/modules/data-structures/)
+page. Its explicit `python_module: bars` claim connects that page to the differently
+named Python wrapper; it does not claim coverage for an unrelated Rust module.
+The Rust preprocessing interfaces have their own
+[`data_processing`](/modules/data-processing/) page, separate from Python ingestion
+and caching on [`data`](/modules/data/).
 
 ## What this page does not measure
 
