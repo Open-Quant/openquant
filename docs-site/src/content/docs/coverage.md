@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-09-26**.
+Numbers below were regenerated on **2026-10-10**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -41,9 +41,9 @@ tally below cannot be bulk-applied.
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 11 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
+| `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 50 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 57 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 3 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
 | **Total** | **64** | |
@@ -69,9 +69,9 @@ content, not human review or validation.
 | | Count |
 |---|---|
 | Modules with a documentation page | 40 |
-| …written by hand, with a citation and executed examples | 33 |
-| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 3 |
-| …generated, carrying the base template only | 4 |
+| …written by hand, with a citation and executed examples | 40 |
+| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 0 |
+| …generated, carrying the base template only | 0 |
 <!-- coverage:end:module-depth -->
 
 Future module changes belong in the page itself. Update the navigation metadata only
