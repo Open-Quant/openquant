@@ -43,10 +43,10 @@ tally below cannot be bulk-applied.
 |---|---|---|
 | `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 57 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 58 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 3 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **64** | |
+| **Total** | **65** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
@@ -61,15 +61,15 @@ chapter at a time, by pages written by hand: each cites its source, has only the
 needs, and runs its examples. For a module with Python bindings that is a Python block whose
 printed output the docs checks compare with the page; for a Rust-only module it is a Rust
 snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
-row below counts those. All 40 module pages are now authored Markdown; `moduleDocs.ts`
+row below counts those. All 41 module pages are now authored Markdown; `moduleDocs.ts`
 contains only navigation metadata. Authored status records executed examples and sourced
 content, not human review or validation.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
-| Modules with a documentation page | 40 |
-| …written by hand, with a citation and executed examples | 40 |
+| Modules with a documentation page | 41 |
+| …written by hand, with a citation and executed examples | 41 |
 | …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 0 |
 | …generated, carrying the base template only | 0 |
 <!-- coverage:end:module-depth -->
@@ -88,9 +88,7 @@ it.
 <!-- coverage:begin:gaps -->
 | Surface | Undocumented | Exempt until | Why |
 |---|---|---|---|
-| Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | Internal preprocessing helpers; no stable public surface to document yet. |
-| Rust (`crates/openquant/src/lib.rs`) | `dynamic_allocation` | 2026-12-31 | AFML Ch 21's partition/trajectory search (#112), new. It needs a page (or a section of the Ch 21 combinatorial-optimization page, rewritten in #114, claiming it) once #114 lands. |
-| Python (`python/openquant/`) | `bars` | 2026-12-31 | Needs a page — it is a whole stage of the Python Core Workflow. Tracked, not accepted. |
+| Rust (`crates/openquant/src/lib.rs`) | `data_processing` | 2026-12-31 | The public Rust preprocessing API still needs a complete module page; the data page covers Python workflows and selected Rust helpers. |
 <!-- coverage:end:gaps -->
 
 `util` also appears in the raw module list, but it is a parent namespace: two

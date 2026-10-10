@@ -241,6 +241,17 @@ export const moduleDocs: ModuleDoc[] = [
   },
 
   {
+    slug: "dynamic-allocation",
+    module: "dynamic_allocation",
+    subject: "Scaling, HPC and Infrastructure",
+    summary: "AFML Chapter 21's multi-asset allocation trajectories, enumerated exactly with square-root trading costs and a bounded search.",
+    handwritten: true,
+    afmlChapters: [21],
+    apiSurface: "both",
+    pythonApis: ["dynamic_allocation.pigeonhole_partitions", "dynamic_allocation.all_weights", "dynamic_allocation.transaction_costs", "dynamic_allocation.trajectory_sharpe_ratio", "dynamic_allocation.dynamic_optimal_portfolio"],
+  },
+
+  {
     slug: "streaming-hpc",
     module: "streaming_hpc",
     subject: "Scaling, HPC and Infrastructure",
