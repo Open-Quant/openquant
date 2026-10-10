@@ -61,9 +61,9 @@ chapter at a time, by pages written by hand: each cites its source, has only the
 needs, and runs its examples. For a module with Python bindings that is a Python block whose
 printed output the docs checks compare with the page; for a Rust-only module it is a Rust
 snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
-row below counts those. For the pages still generated, every entry fills in
-`conceptOverview`, `whenToUse` and `relatedModules`, so each carries those sections; the
-split is over the two optional ones, `keyParameters` and `commonPitfalls`.
+row below counts those. All 40 module pages are now authored Markdown; `moduleDocs.ts`
+contains only navigation metadata. Authored status records executed examples and sourced
+content, not human review or validation.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
@@ -74,12 +74,8 @@ split is over the two optional ones, `keyParameters` and `commonPitfalls`.
 | …generated, carrying the base template only | 4 |
 <!-- coverage:end:module-depth -->
 
-A base-template page is not a stub — it has a concept overview, mathematical
-foundations, usage examples, an API reference and risk notes. What it lacks is
-the parameter table telling you which knobs matter and the pitfalls section
-telling you how the module is usually misused. Both are the parts a reader
-reaches for second, and both are a `moduleDocs.ts` edit rather than a per-page
-rewrite.
+Future module changes belong in the page itself. Update the navigation metadata only
+when the module's name, summary, subject or API surface changes.
 
 ## Code with no documentation entry at all
 

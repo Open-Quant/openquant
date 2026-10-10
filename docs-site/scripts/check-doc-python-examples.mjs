@@ -21,7 +21,6 @@
  * gate somebody disables, so they opt out explicitly, and:
  *
  *   - the opt-out is per-fence and visible in source: ```python doc-check=skip
- *     (from src/data/moduleDocs.ts, set `docCheck: "skip"` on the example);
  *   - every skip is printed by name on every run, so skipping cannot hide;
  *   - skipped blocks are still parsed with ast.parse, so an unrunnable snippet
  *     is at least valid Python, not a typo nobody will ever notice.
@@ -260,10 +259,9 @@ if (failures.length) {
   }
   console.error('');
   console.error(`check:python-examples: FAILED — ${failures.length} of ${runnable.length} documented Python example(s) do not run.`);
-  console.error('Fix the example at its source: module pages come from docs-site/src/data/moduleDocs.ts');
-  console.error('(the .md is overwritten by generate-module-doc-pages.mjs); every other page is edited');
-  console.error('directly. If a snippet is genuinely illustrative, mark the fence ```python doc-check=skip');
-  console.error('(or set docCheck: "skip" on the moduleDocs example) — it is then still parsed, not run.');
+  console.error('Fix the example directly in its page under docs-site/src/content/docs/.');
+  console.error('If a snippet is genuinely illustrative, mark the fence ```python doc-check=skip');
+  console.error('— it is then still parsed, not run.');
   process.exit(1);
 }
 
