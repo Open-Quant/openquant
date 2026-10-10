@@ -109,9 +109,10 @@ probability for VaR/ES; the pipeline passes its complement to conditional drawdo
 risk. `risk_free_rate` is annual and applies to both allocation and realized Sharpe.
 
 Python's `periods_per_year=None` derives an annualization factor from the median
-positive timestamp gap: 252 sessions of 390 minutes for intraday bars, 252 for daily
-bars, and 365.25 divided by gap days for longer intervals. It falls back to 252 when
-no positive gap is measurable. One-minute bars therefore use 98,280. Override this
+positive timestamp gap. Gaps below 20 hours use `98280 / gap_minutes` (252 sessions
+of 390 minutes); gaps from 20 hours up to, but not including, four days use 252;
+gaps of four days or more use `365.25 / gap_days`. It falls back to 252 when no
+positive gap is measurable. One-minute bars therefore use 98,280. Override this
 for a different trading calendar, and ensure both price inputs share that frequency.
 Rust `ResearchPipelineConfig` and the `_core` binding instead default to 252.
 The [annualization tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_pipeline_api.py)
