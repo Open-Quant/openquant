@@ -105,6 +105,40 @@ def test_notes_for_a_bracketed_heading_keep_code_fences() -> None:
     assert "first release" not in notes
 
 
+@pytest.mark.parametrize(
+    ("opening", "inside", "closing"),
+    [
+        ("~~~text", "## example heading", "~~~"),
+        ("````text", "```\n## example heading", "````"),
+        ("~~~~text", "~~~\n## example heading", "~~~~"),
+        ("```text", "~~~\n## example heading", "```"),
+        ("~~~text", "```\n## example heading", "~~~"),
+        ("```text", "```not a closing fence\n## example heading", "```"),
+        ("~~~text", "~~~not a closing fence\n## example heading", "~~~"),
+        ("   ```text", "    ```\n## example heading", "  ````` \t"),
+        ("  ~~~text", "    ~~~\n## example heading", "   ~~~~~ \t"),
+    ],
+)
+def test_notes_preserve_fenced_headings(opening: str, inside: str, closing: str) -> None:
+    body = f"Release text.\n{opening}\n{inside}\n{closing}\nKeep this sentence.\n"
+    changelog = f"## 0.1.0\n{body}## 0.0.9\nOld.\n"
+    assert ri.extract_notes(changelog, "0.1.0") == body
+    assert ri.extract_notes(changelog, "0.0.9") == "Old.\n"
+
+
+@pytest.mark.parametrize("opening", ["    ```", "\t```", "```text`invalid", "~~", "``"])
+def test_notes_do_not_treat_invalid_fence_openers_as_fences(opening: str) -> None:
+    changelog = f"## 0.1.0\nRelease text.\n{opening}\n## 0.0.9\nOld.\n"
+    assert ri.extract_notes(changelog, "0.1.0") == f"Release text.\n{opening}\n"
+    assert ri.extract_notes(changelog, "0.0.9") == "Old.\n"
+
+
+@pytest.mark.parametrize("opening", ["```text", "~~~text"])
+def test_notes_preserve_unclosed_fences_to_end_of_file(opening: str) -> None:
+    body = f"Release text.\n{opening}\n## example heading\nKeep this sentence.\n"
+    assert ri.extract_notes(f"## 0.1.0\n{body}", "0.1.0") == body
+
+
 def test_notes_require_a_version_section_unless_unreleased_allowed() -> None:
     with pytest.raises(ri.ReleaseError, match="no `## 0.3.0` section"):
         ri.extract_notes(CHANGELOG, "0.3.0")

@@ -110,6 +110,7 @@ def check_tag(tag: str, version: str) -> None:
 
 
 _HEADING = re.compile(r"^##(?!#)\s*(.*?)\s*$")
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 def _heading_version(title: str) -> str | None:
@@ -121,11 +122,22 @@ def _heading_version(title: str) -> str | None:
 def _sections(changelog: str) -> list[tuple[str, str]]:
     """(heading title, body) for every `## ` section, in order."""
     sections: list[tuple[str, list[str]]] = []
-    in_fence = False
+    fence = ""
     for line in changelog.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-        m = None if in_fence else _HEADING.match(line)
+        fence_match = _FENCE.match(line)
+        if fence_match:
+            marker, trailing = fence_match.groups()
+            if fence:
+                # A closer must use the same character and at least the opening length.
+                if (
+                    marker[0] == fence[0]
+                    and len(marker) >= len(fence)
+                    and not trailing.strip(" \t")
+                ):
+                    fence = ""
+            elif marker[0] == "~" or "`" not in trailing:
+                fence = marker
+        m = None if fence else _HEADING.match(line)
         if m:
             sections.append((m.group(1), []))
         elif sections:

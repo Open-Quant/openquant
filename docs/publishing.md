@@ -112,10 +112,46 @@ The workflow runs all of these; they are listed for running by hand.
 3. `cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test`
 4. `cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored`
 5. `cargo publish -p openquant --locked --dry-run`
-6. A wheel and the Quickstart smoke test:
-   `uv run --with maturin maturin build --release --out dist`, then install the wheel into a
-   fresh venv and, from outside the repository, run
-   `python scripts/release/smoke_wheel.py --dist-name <name> --version X.Y.Z --abi3`.
+6. Build a wheel and an sdist, then run the Quickstart from fresh environments outside
+   the checkout. With `uv` and the pinned Rust toolchain installed, run this Bash recipe
+   from the repository root (including on Windows with Git Bash):
+
+   ```bash
+   (
+   set -eu
+   repo="$PWD"
+   smoke="$repo/scripts/release/smoke_wheel.py"
+   scratch="$(mktemp -d)"
+   # Keep artifact paths absolute and the output directory fresh.
+   uv tool run --from maturin==1.15.0 maturin build --release --locked --out "$scratch/dist"
+   uv tool run --from maturin==1.15.0 maturin sdist --out "$scratch/dist"
+   name="$(uv run --no-project --python 3.13 python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')"
+   version="$(uv run --no-project --python 3.13 python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+   # The sdist does not carry rust-toolchain.toml; preserve the workflow's toolchain.
+   RUSTUP_TOOLCHAIN="$(uv run --no-project --python 3.13 python -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
+   export RUSTUP_TOOLCHAIN
+   cd "$scratch"
+   for artifact in "$scratch"/dist/*.whl "$scratch"/dist/*.tar.gz; do
+     case "$artifact" in *.whl) env=wheel-venv ;; *) env=sdist-venv ;; esac
+     uv venv --python 3.13 "$env"
+     uv pip install --python "$env" "$artifact"
+     if [ -f "$env/Scripts/python.exe" ]; then
+       python="$env/Scripts/python.exe"
+     else
+       python="$env/bin/python"
+     fi
+     "$python" "$smoke" --dist-name "$name" --version "$version" --abi3
+   done
+   cd "$repo"
+   echo "Artifacts and validation environments: $scratch"
+   )
+   ```
+
+   The sdist install builds its own wheel from the archive, so it checks that a source
+   install works without the checkout. The standalone maturin invocation avoids syncing
+   the project's development environment before building. Keep its version aligned with
+   `MATURIN_VERSION` in the workflow. These local artifacts target the current host; the
+   workflow still validates all five platforms and Python 3.11–3.13.
 
 Benchmarks are not a release gate in CI. To refresh them:
 
