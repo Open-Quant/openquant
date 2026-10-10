@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" role="img" aria-label="Net Sharpe of four synthetic portfolio candidates">
+<rect width="760" height="330" fill="#17140f"/>
+<text x="26" y="30" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="10.5" font-weight="600" letter-spacing="1.2">ONE HORIZON / TWO ASSETS / K = 1</text>
+<text x="26" y="52" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="start">Synthetic forecasts; every entry costs 0.01</text>
+<line x1="220.0" y1="72" x2="220.0" y2="266" stroke="#4c4536" stroke-width="1.0"/>
+<text x="220.0" y="287" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">-0.6</text>
+<line x1="337.5" y1="72" x2="337.5" y2="266" stroke="#4c4536" stroke-width="1.0"/>
+<text x="337.5" y="287" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">-0.3</text>
+<line x1="455.0" y1="72" x2="455.0" y2="266" stroke="#4c4536" stroke-width="1.0"/>
+<text x="455.0" y="287" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">0.0</text>
+<line x1="572.5" y1="72" x2="572.5" y2="266" stroke="#4c4536" stroke-width="1.0"/>
+<text x="572.5" y="287" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">0.3</text>
+<line x1="690.0" y1="72" x2="690.0" y2="266" stroke="#4c4536" stroke-width="1.0"/>
+<text x="690.0" y="287" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="middle">0.6</text>
+<line x1="455.0" y1="72" x2="455.0" y2="266" stroke="#aaa190" stroke-width="1.0"/>
+<text x="150" y="99" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="end">Short asset 0</text>
+<rect x="239.6" y="83" width="215.4" height="24" fill="#aaa190" fill-opacity="0.8"/>
+<text x="231.6" y="99" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">-0.55</text>
+<text x="150" y="147" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="end">Long asset 0</text>
+<rect x="455.0" y="131" width="176.2" height="24" fill="#f29ad6" fill-opacity="0.8"/>
+<text x="639.2" y="147" fill="#f29ad6" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">+0.45</text>
+<text x="150" y="195" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="end">Short asset 1</text>
+<rect x="455.0" y="179" width="78.3" height="24" fill="#aaa190" fill-opacity="0.8"/>
+<text x="541.3" y="195" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="start">+0.20</text>
+<text x="150" y="243" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="end">Long asset 1</text>
+<rect x="337.5" y="227" width="117.5" height="24" fill="#aaa190" fill-opacity="0.8"/>
+<text x="329.5" y="243" fill="#aaa190" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="12" font-weight="400" text-anchor="end">-0.30</text>
+<text x="430" y="314" fill="#aaa190" font-family="'IBM Plex Sans', system-ui, sans-serif" font-size="12" font-weight="400" text-anchor="middle">Forecast Sharpe after transaction costs</text>
+</svg>

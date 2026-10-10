@@ -2,7 +2,7 @@
 title: "combinatorial_optimization"
 description: "Exhaustive search over small integer problems, and over single-instrument trading paths with a fixed cost per trade, as an exact baseline for heuristic solvers."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-10-10'
 audience:
   - quant-dev
   - platform-engineering
@@ -57,7 +57,7 @@ are split among $N$ assets at each of $H$ horizons; the allocations at one horiz
 one allocation per horizon; and the trajectory with the best Sharpe ratio, net of a
 square-root transaction cost, wins.
 
-**The chapter's method lives in a separate module, `dynamic_allocation`**
+**The chapter's method lives in a separate module, [`dynamic_allocation`](/modules/dynamic-allocation/)**
 (`openquant::dynamic_allocation` in Rust, `openquant.dynamic_allocation` in Python). It
 generates the pigeonhole partitions (Snippet 21.1) and the signed weight set $\Omega$ with
 gross exposure 1 (Snippet 21.2), and searches all of $\Omega^H$ for the trajectory with the
@@ -65,8 +65,7 @@ best Sharpe ratio net of $\tau = \sum c\sqrt{\lvert\Delta\omega\rvert}$ (Snippet
 $\Omega$ drops the book's repeated vectors, with the same optimum. $\lvert\Omega\rvert^H$
 grows fast (38 vectors for $N = K = 3$, so 54,872 trajectories over 3 horizons and 79 million
 over 5), and a search above `max_trajectories` returns `TooManyTrajectories` instead of
-starting. Covariances must be positive definite, and `k` defaults to $N$. It has no page of
-its own yet.
+starting. Covariances must be positive definite, and `k` defaults to $N$. Its [module page](/modules/dynamic-allocation/) demonstrates the search and its limits.
 
 This module stays a generic exact-enumeration baseline. It provides the machinery
 underneath: exhaustive search over a box of integers with any objective you write, and
