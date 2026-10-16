@@ -51,8 +51,8 @@ dev = [
   "maturin>=1.9.4,<2.0",
   "pytest>=8,<10",
   "pytest-cov>=5",
-  "ruff==0.16.9",
-  "mypy==2.3.1",
+  "ruff==0.17.0",
+  "mypy==2.4.0",
   # numpy 2.5 needs Python 3.12 and its stubs use `type` statements, which mypy rejects when
   # checking for 3.11 ([tool.mypy] python_version). Keeps the lint environment on 2.4.
   "numpy<2.5",
