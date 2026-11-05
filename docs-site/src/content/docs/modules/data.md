@@ -9,6 +9,7 @@ citation:
   - 'OpenQuant python/tests/test_data_normalization.py: canonical-column precedence and invalid timestamp reports.'
   - 'OpenQuant python/tests/test_data_cache_namespaces.py: independent source and symbol cache directories.'
   - 'OpenQuant python/tests/test_data_cache_identity.py: request identity and malformed cache sidecars.'
+  - 'OpenQuant python/tests/test_data_cleaning_execution.py: optional-report execution and unchanged cleaning results.'
 audience:
   - quant-dev
   - platform-engineering
@@ -58,6 +59,10 @@ The loaders accept CSV or Parquet files with flexible column naming (e.g., "time
 
 The data quality report provides diagnostics — row counts, symbol counts, duplicate counts, gap intervals, and null counts — that should be inspected before feeding data into bars, labeling, or any downstream module.
 
+For `clean_ohlcv`, request those diagnostics with `return_report=True`. The
+default `False` skips report-only scans while preserving the same cleaning
+and duplicate-retention behavior.
+
 ## When to Use
 
 For preprocessing directly in Rust through row, column and Polars DataFrame interfaces,
@@ -84,6 +89,7 @@ Use `fetch` when a study needs daily bars for a list of symbols and must be repr
 | `symbol` | `str \| None` | Symbol name if not present as a column in the data | None |
 | `interval` | `str` | Calendar alignment interval (e.g., '1d', '1h', '5m') | '1d' |
 | `dedupe_keep` | `str` | Which duplicate to keep: 'first' or 'last' | 'last' |
+| `return_report` | `bool` | Also calculate a quality report (`clean_ohlcv`) | False |
 
 ## Usage Examples
 

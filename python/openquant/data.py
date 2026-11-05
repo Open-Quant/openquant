@@ -335,20 +335,22 @@ def clean_ohlcv(
     )
     sorted_lf = base_lf.sort(["symbol", "ts_us"])
 
-    duplicate_key_count = int(
-        sorted_lf.select(
-            (
+    duplicate_key_count = 0
+    if return_report:
+        duplicate_key_count = int(
+            sorted_lf.select(
                 (
-                    (pl.col("symbol") == pl.col("symbol").shift(1))
-                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
-                )
-                .cast(pl.UInt32)
-                .sum()
-            ).alias("duplicate_key_count")
+                    (
+                        (pl.col("symbol") == pl.col("symbol").shift(1))
+                        & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                    )
+                    .cast(pl.UInt32)
+                    .sum()
+                ).alias("duplicate_key_count")
+            )
+            .collect()
+            .item(0, 0)
         )
-        .collect()
-        .item(0, 0)
-    )
 
     cleaned = (
         sorted_lf.unique(
