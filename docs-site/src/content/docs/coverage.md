@@ -43,10 +43,10 @@ tally below cannot be bulk-applied.
 |---|---|---|
 | `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 61 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `authored` | 62 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
 | `reviewed` | 2 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **67** | |
+| **Total** | **68** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
