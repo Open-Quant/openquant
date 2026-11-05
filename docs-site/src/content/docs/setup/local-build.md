@@ -1,8 +1,8 @@
 ---
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
-status: reviewed
-last_validated: '2026-09-18'
+status: authored
+last_authored: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -40,32 +40,58 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 ## Documentation quality gates
 
+For a local preview only, install the locked site dependencies and start Astro:
+
 ```bash
 cd docs-site
-npm install
-npx astro build
-node scripts/check-links.mjs
-python3 ../scripts/generate_api_inventory.py --check
-node scripts/check-content-schema.mjs
+bun install --frozen-lockfile
+bun run dev
 ```
 
-`package.json` wraps these as `bun run check:docs`, and the deploy
-workflow uses Bun — but nothing here needs Bun as a runtime, and the npm
-form above is what these commands were last verified with. If you have
-Bun, `bun run check:docs` runs all four in order.
+Without Bun, use `npm ci` and `npm run dev`. The site itself runs on Node;
+Bun is the package manager and script runner used by CI.
 
-Expected checkpoints:
+For the **full documentation gate**, first build the Python extension using
+[the contributor setup](https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md#setup),
+then run:
 
-- `astro build` completes and reports the page count.
-- `check:links` returns zero broken internal links.
-- `check:api-drift` is clean.
-- `check:content-schema` prints a per-status tally of all docs files.
+```bash
+cd docs-site
+bun run check:docs
+```
+
+This needs the pinned Rust toolchain, Python dependencies and the built extension.
+It runs the checks declared in
+[`docs-site/package.json`](https://github.com/Open-Quant/openquant/blob/main/docs-site/package.json):
+
+1. Build the site and stage Rust API documentation with `stage:rustdoc`.
+2. Check the generated agent index and test the navigation checker, then check
+   built paths, anchors and redirects.
+3. Check API drift, page status/schema, theme contrast, coverage and generated pages.
+4. Compile Rust snippets on module pages, execute runnable Python snippets and
+   check the generated Python reference against the built extension.
+
+With npm, invoke those scripts individually with `npm run SCRIPT`; the
+aggregate `check:docs` command currently uses `bun run` internally.
+For example, a build and link check must include rustdoc staging:
+
+```bash
+npm run build
+npm run stage:rustdoc
+npm run test:links
+npm run check:links
+```
+
+A preview or a successful Astro build is **not** a full docs pass. If Rust or
+the extension is unavailable, record those checks as not run and still run the
+independent schema, contrast, API inventory, coverage and generated-page checks.
 
 ## When a gate fails
 
-**`check:links` reports broken links.** Run `astro build` first. The link
+**`check:links` reports broken links.** Run the site build and `stage:rustdoc` first. The link
 checker reads the built output in `dist/`, not the Markdown sources, so a
-stale or absent `dist/` produces phantom failures. Internal links must
+stale or absent `dist/`, or missing staged rustdoc, produces failures.
+The checker also verifies fragment anchors and relative links, not just files. Internal links must
 resolve under the `/openquant` base path once built — a link that works
 in `astro dev` can still 404 in production if it omits the base.
 
@@ -82,13 +108,15 @@ The taxonomy is defined at the top of
 |---|---|---|
 | `generated` | emitted from `src/data/moduleDocs.ts`; nobody has read it | `last_generated` |
 | `draft` | hand-written, known incomplete; claims nothing | **none** |
+| `authored` | complete and checked, not yet read by a human | `last_authored` |
 | `reviewed` | a human read the page end to end | `last_validated` |
 | `validated` | reviewed *and* checked against the code it describes | `last_validated` |
 
 Two rules catch most failures. A `draft` may not carry `last_validated` —
-drop the field or raise the status. And a stamp may not predate the
-page's last content change: if you edited a page, either re-read it and
-bump the date, or lower the status to `draft`. The gate reads the change
+drop the field; do not invent a validation. A stamp may not predate the
+page's last content change. AI-authored changes stop at `authored` with a current
+`last_authored`; `reviewed` and `validated` require a human. Use `draft` when
+the page is incomplete. The gate reads the change
 date from `git log` plus the working-tree mtime, so an uncommitted edit
 counts.
 

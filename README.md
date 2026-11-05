@@ -22,10 +22,16 @@
   <a href="https://github.com/Open-Quant/openquant/issues">Issues</a>
 </p>
 
+## Choose your documentation path
+
+- **For humans:** [Quickstart](https://open-quant.github.io/openquant/quickstart/) for a first result, then the [module index](https://open-quant.github.io/openquant/modules/).
+- **For agents:** [Agent guide](https://open-quant.github.io/openquant/agents/) for source files, research safeguards and validation commands. Read it alongside [AI-DLC.md](AI-DLC.md) when changing the repository.
+
 ## Status
 Pre-release (0.1.0, unpublished). The Rust core covers most AFML chapters and is
-tested in CI; the Python bindings expose 32 submodules. Nothing is on crates.io or
-PyPI yet, so installing means building from source. Open work is tracked in
+tested in CI. The [module index](https://open-quant.github.io/openquant/modules/)
+lists the current Rust and Python surfaces. The installation below builds from source
+so the examples and extension use the same revision. Open work is tracked in
 [issues](https://github.com/Open-Quant/openquant/issues); the reasoning behind it is in
 `docs/design/production-readiness-brief.md`.
 
@@ -41,8 +47,9 @@ uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenqu
 uv run --python .venv/bin/python python -c "import openquant; print('ok')"
 ```
 
-The package is published on PyPI as `pyopenquant` (from v0.1.0, `pip install pyopenquant`);
-the import name is `openquant`. Do not `pip install openquant` - that name on PyPI belongs
+The Python distribution name is `pyopenquant`; the import name is `openquant`.
+Check the [release notes](https://github.com/Open-Quant/openquant/releases) for packaged
+release availability; the commands above do not depend on a published wheel. Do not `pip install openquant` - that name on PyPI belongs
 to an unrelated project.
 The extension crate (`crates/pyopenquant`) is built into a wheel with maturin and is
 never published to crates.io.

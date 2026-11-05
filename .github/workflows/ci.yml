@@ -290,6 +290,12 @@ jobs:
       - name: Check API inventory drift
         run: bun run check:api-drift
         working-directory: docs-site
+      - name: Check generated agent index
+        run: bun run test:agent-index
+        working-directory: docs-site
+      - name: Test documentation link checker
+        run: bun run test:links
+        working-directory: docs-site
       - name: Check internal links
         run: bun run check:links
         working-directory: docs-site
