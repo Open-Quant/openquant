@@ -14,6 +14,10 @@ file disagree).
 
 ## Unreleased
 
+### Fixed
+
+- `bars`: preserve populated-bar dtypes for empty symbol results so incomplete symbols can be concatenated safely. ([#258](https://github.com/Open-Quant/openquant/pull/258))
+
 ## 0.1.0 - 2026-10-01
 
 First release.
