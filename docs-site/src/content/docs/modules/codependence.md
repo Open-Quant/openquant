@@ -2,7 +2,7 @@
 title: "codependence"
 description: "Measures of dependence that are true metrics or that see non-linear relationships: correlation distances, distance correlation, mutual information and variation of information."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-11-06'
 audience:
   - quant-dev
   - platform-engineering
@@ -166,6 +166,11 @@ assert!(matches!(angular_distance(&x, &[1.0]), Err(CodependenceError::InputLengt
 
 ## What to watch for
 
+- **Correlation boundaries are rounded safely.** Finite correlations are clamped to
+  `[-1, 1]` before the angular-distance transforms, so rounding just beyond perfect
+  correlation does not produce `NaN`. Finite constant series raise the documented
+  zero-variance error, including when automatic histogram binning needs a correlation.
+  This is not a general extreme-scale or nonfinite-input fix; rescale extreme inputs first.
 - **Distance correlation is quadratic in memory.** It builds two $n\times n$ matrices of
   `f64`: 16 MB at a thousand observations, 1.6 GB at ten thousand, and an allocation failure
   not far beyond. Subsample, or use mutual information, which is linear.
