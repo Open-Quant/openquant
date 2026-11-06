@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-06'
 audience:
   - quant-dev
   - platform-engineering
@@ -31,8 +31,9 @@ and how each can mislead; this page covers what the Python functions do with the
 
 ## The model is fixed
 
-Every function here fits the same model: a logistic regression of the 0/1 label on the
-features, fitted by Newton's method (iteratively reweighted least squares) with a tiny L2
+The importance estimators and substitution report use the same model: a logistic
+regression of the 0/1 label on the features, fitted by Newton's method (iteratively
+reweighted least squares) with a tiny L2
 penalty of 0.001 that keeps the coefficients finite when a fold is perfectly separable.
 `sample_weight` weights each row's log-likelihood. It has no dependencies, and it is the
 first thing to know about any number this module reports.
@@ -50,9 +51,19 @@ Use these reports for screening. Measure importance for the model you will trade
 k-fold splits and need `event_end_indices`: for each row, the row index at which its label
 is resolved. Omit it and they raise, with an explanation, rather than quietly running
 unpurged. `allow_unpurged=True` is the explicit opt-out, and the returned `cv` block then
-records `"purged": False`. This Python splitter embargoes both sides of each test fold, counted from the fold's edges.
-That is stricter than the Rust `PurgedKFold`, which embargoes only after the fold, starting
-where the purge ends ([Snippet 7.3](/modules/cross-validation/#where-the-embargo-starts)).
+records `"purged": False`. This Python splitter removes `ceil(n * pct_embargo)` rows
+before each test fold and after its latest label end. The pre-fold window is counted back
+from the first test row. The post-fold window starts at the first row whose start is
+strictly after every test label has resolved, matching the Rust `PurgedKFold` rule
+([Snippet 7.3](/modules/cross-validation/#where-the-embargo-starts)). The Python splitter
+retains its additional pre-fold embargo; Rust applies only the post-label window.
+
+For example, with test rows 0–3, labels ending at rows 2–5 and a two-row embargo, purging
+removes rows through 5 and the post-label embargo removes rows 6–7. Earlier versions
+counted the right embargo from the last test row instead, so those rows could remain in
+training. Correcting this can change feature scores, and long label horizons or large
+embargoes can now produce the existing empty-training-fold `ValueError`. Zero embargo
+and point labels (`event_end_indices[i] == i`) keep their previous splits.
 
 ## Three rankings of the same features
 
@@ -90,15 +101,15 @@ print(f"{pair['feature_a']} ~ {pair['feature_b']}: corr {pair['corr']:.3f}, "
 
 ```text
 feature      MDI     MDA     SFI
-a          0.538   0.625  -0.474
-a_copy     0.093   0.014  -0.482
+a          0.538   0.626  -0.474
+a_copy     0.093   0.016  -0.482
 b          0.337   0.410  -0.633
 noise_1    0.018  -0.001  -0.696
 noise_2    0.015  -0.005  -0.695
-a ~ a_copy: corr 0.981, singly 0.639, jointly 0.656
+a ~ a_copy: corr 0.981, singly 0.641, jointly 0.656
 ```
 
-Read across the `a_copy` row. MDA says it is nearly worthless, 0.014 against 0.625 for `a`.
+Read across the `a_copy` row. MDA says it is nearly worthless, 0.016 against 0.626 for `a`.
 SFI says it is nearly as good as `a`: −0.482 against −0.474. Both are right. Given `a`, the model
 has no use for a noisier copy of it, and damaging the copy costs nothing; on its own, the
 copy carries almost all of `a`'s information. This is the substitution effect, and it is the
@@ -133,7 +144,7 @@ block recording the split settings and `mean_base_score`.
 
 In the substitution report, `dilution_ratio` is joint importance over the sum of single
 importances, and `flag_substitution_risk` is set when it exceeds 1.15. In the example
-it is 1.03 and unflagged: the linear model concentrated on `a` and never split credit with
+it is 1.02 and unflagged: the linear model concentrated on `a` and never split credit with
 the copy. A tree ensemble on the same data would split it, and the ratio would be well above
 one. The report is only as sensitive as the fixed model lets it be.
 

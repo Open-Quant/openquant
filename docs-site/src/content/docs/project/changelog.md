@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-10-01'
+last_generated: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -27,6 +27,10 @@ page (`python3 scripts/docs/generate_site_pages.py --write`; CI fails if the pag
 file disagree).
 
 ## Unreleased
+
+### Fixed
+
+- `feature_diagnostics`: count the post-fold embargo after the latest test label resolves, preserving the pre-fold window. MDA, SFI and substitution scores can change; folds with no remaining training samples raise `ValueError`.
 
 ## 0.1.0 - 2026-10-01
 

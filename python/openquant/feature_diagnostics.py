@@ -120,8 +120,14 @@ def _purged_kfold_splits(
             if any(_overlaps(interval, t) for t in test_intervals):
                 train_mask[i] = False
 
+        # Keep the legacy pre-fold embargo, but count the post-fold embargo
+        # from the first row after all test labels resolve, not inside the purge.
         before = max(0, start - embargo_n)
-        after = min(n, stop + embargo_n)
+        test_end = max(end for _, end in test_intervals)
+        resume = stop
+        while resume < n and intervals[resume][0] <= test_end:
+            resume += 1
+        after = min(n, resume + embargo_n)
         for i in range(before, after):
             train_mask[i] = False
 
@@ -463,9 +469,10 @@ def mda_importance(
 
     Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
     samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
-    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
-    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
-    tree ensemble AFML uses.
+    `ceil(n * pct_embargo)` rows before the test fold and after its latest label end are
+    also removed. The post-fold embargo starts at the first row whose start is strictly
+    after that end. The model is an L2-penalized (ridge 1e-3) logistic regression fitted
+    by Newton's method, not the tree ensemble AFML uses.
 
     Parameters
     ----------
@@ -483,8 +490,9 @@ def mda_importance(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False
@@ -589,9 +597,10 @@ def sfi_importance(
 
     Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
     samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
-    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
-    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
-    tree ensemble AFML uses.
+    `ceil(n * pct_embargo)` rows before the test fold and after its latest label end are
+    also removed. The post-fold embargo starts at the first row whose start is strictly
+    after that end. The model is an L2-penalized (ridge 1e-3) logistic regression fitted
+    by Newton's method, not the tree ensemble AFML uses.
 
     Parameters
     ----------
@@ -609,8 +618,9 @@ def sfi_importance(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False
@@ -848,8 +858,9 @@ def substitution_effect_report(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False

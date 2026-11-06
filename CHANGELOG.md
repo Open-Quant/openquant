@@ -14,6 +14,10 @@ file disagree).
 
 ## Unreleased
 
+### Fixed
+
+- `feature_diagnostics`: count the post-fold embargo after the latest test label resolves, preserving the pre-fold window. MDA, SFI and substitution scores can change; folds with no remaining training samples raise `ValueError`.
+
 ## 0.1.0 - 2026-10-01
 
 First release.
