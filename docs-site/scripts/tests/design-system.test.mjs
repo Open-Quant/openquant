@@ -51,3 +51,17 @@ test('bold and table type use loaded semibold instead of synthetic bold', () => 
   assert.match(css, /\.sl-markdown-content :is\(strong, b\)[^{]*\{[^}]*font-weight:\s*600/s);
   assert.match(css, /\.sl-markdown-content table[^}]*font-family:\s*var\(--oq-sans\)/s);
 });
+
+test('data cache paths render literally instead of as inline math', () => {
+  const page = parse(fs.readFileSync(path.join(root, 'dist/modules/data/index.html'), 'utf8'));
+  const row = walk(page).find((node) => node.tagName === 'tr'
+    && node.childNodes?.some((cell) => cell.tagName === 'td' && text(cell).trim() === 'cache_dir'));
+  assert.ok(row, 'Data guide should document the cache_dir parameter');
+  const nodes = walk(row);
+  assert.ok(!nodes.some((node) => node.tagName === 'math'
+    || attr(node, 'class')?.split(/\s+/).includes('katex')), 'Cache paths must not become math nodes');
+  const code = nodes.filter((node) => node.tagName === 'code').map(text);
+  for (const literal of ['$OPENQUANT_DATA_CACHE', '$XDG_CACHE_HOME/openquant/data', '~/.cache/openquant/data']) {
+    assert.ok(code.includes(literal), `Cache path should remain literal inline code: ${literal}`);
+  }
+});
