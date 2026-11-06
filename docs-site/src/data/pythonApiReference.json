@@ -326,7 +326,7 @@
           "signature": "(\n    observed_sr: float,\n    benchmark_sr: float,\n    number_of_returns: int,\n    skewness: float,\n    kurtosis: float,\n) -> float"
         },
         {
-          "doc": "Annualised Sharpe ratio of per-period returns.\n\nComputes `(mean - risk_free_rate) / std * sqrt(entries_per_year)` with the sample standard\ndeviation (ddof=1), AFML 14.7.1. Nothing is validated: an empty list or a single return\ngives NaN, and constant returns give an infinite ratio.\n\nParameters\n----------\nreturns : list[float]\n    Per-period returns.\nentries_per_year : float\n    Number of return periods per year (252 for daily).\nrisk_free_rate : float\n    Per-period risk-free rate, in the same units as `returns` (not annualised).\n\nReturns\n-------\nfloat\n    The annualised Sharpe ratio.",
+          "doc": "Annualised Sharpe ratio of per-period returns.\n\nComputes `(mean - risk_free_rate) / std * sqrt(entries_per_year)` with the sample standard\ndeviation (ddof=1), AFML 14.7.1. Nothing is validated: an empty list or a single return\ngives NaN. With positive finite `entries_per_year` and a finite risk-free rate, finite\nconstant returns give signed infinity for nonzero excess return, or NaN when the return\nequals the risk-free rate (0/0).\n\nParameters\n----------\nreturns : list[float]\n    Per-period returns.\nentries_per_year : float\n    Number of return periods per year (252 for daily).\nrisk_free_rate : float\n    Per-period risk-free rate, in the same units as `returns` (not annualised).\n\nReturns\n-------\nfloat\n    The annualised Sharpe ratio.",
           "name": "sharpe_ratio",
           "signature": "(\n    returns: Sequence[float],\n    entries_per_year: float,\n    risk_free_rate: float,\n) -> float"
         },

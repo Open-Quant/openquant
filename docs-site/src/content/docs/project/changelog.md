@@ -42,6 +42,8 @@ file disagree).
 
 ### Fixed
 
+- `util.stats`: preserve exact finite constant means and zero variance, so constant-return Sharpe ratios use signed infinity for nonzero excess returns and NaN at the risk-free rate; identical trial Sharpes have a zero deflation benchmark.
+
 - `codependence`: avoid NaN angular distances from finite correlation roundoff and consistently reject finite constant series when correlation is required. ([#264](https://github.com/Open-Quant/openquant/pull/264))
 - Docs: preserve literal cache environment variables and paths in the data guide instead of rendering them as math. ([#263](https://github.com/Open-Quant/openquant/pull/263))
 - `data`: restore offset-aware ISO and timezone-aware datetime parsing on newer Polars, preserving the existing timezone-naive UTC output schema. ([#261](https://github.com/Open-Quant/openquant/pull/261))

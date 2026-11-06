@@ -250,3 +250,15 @@ def test_engine_trains_on_the_same_samples_as_cross_validation():
             assert mine["train_indices"].tolist() == theirs["train_indices"]
         compared += 1
     assert compared > 20
+
+
+@pytest.mark.parametrize("value", [0.01, -0.01])
+def test_constant_cpcv_returns_use_engine_zero_sharpe_convention(value):
+    t0, t1 = point_labels(30)
+    splits = cv.cpcv_splits(t0, t1, 6, 2, 0.0)
+    returns = [[value] * len(split["test_indices"]) for split in splits]
+    result = bt.run_cpcv(t0, t1, returns, n_groups=6, test_groups=2, pct_embargo=0.0, **RUN)
+    for summary in result["folds"] + result["path_distribution"]:
+        assert summary["mean_return"] == value
+        assert summary["std_return"] == 0.0
+        assert summary["sharpe"] == 0.0

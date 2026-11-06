@@ -113,3 +113,59 @@ def test_backtest_stats_rejects_bad_timestamp_inputs():
 def test_deflated_sharpe_ratio_without_estimates_raises_value_error():
     with pytest.raises(ValueError):
         backtest_stats.deflated_sharpe_ratio(1.14, [], 250, 0.0, 3.0)
+
+
+@pytest.mark.parametrize("value", [0.01, -0.01])
+@pytest.mark.parametrize("n", [10, 1000])
+@pytest.mark.parametrize("annualization", [1.0, 252.0])
+def test_constant_return_ratios(value, n, annualization):
+    returns = [value] * n
+    for benchmark in [-0.02, 0.0, 0.02]:
+        expected = math.copysign(math.inf, value - benchmark)
+        assert backtest_stats.sharpe_ratio(returns, annualization, benchmark) == expected
+        assert backtest_stats.information_ratio(returns, benchmark, annualization) == expected
+
+
+@pytest.mark.parametrize("value", [0.01, -0.01, 0.0, -0.0])
+@pytest.mark.parametrize("n", [10, 1000])
+def test_constant_returns_matching_benchmark_have_undefined_ratios(value, n):
+    returns = [value] * n
+    assert math.isnan(backtest_stats.sharpe_ratio(returns, 1.0, value))
+    assert math.isnan(backtest_stats.information_ratio(returns, value, 1.0))
+
+
+@pytest.mark.parametrize(
+    "returns",
+    [
+        [],
+        [0.01],
+        [-0.0, 0.0],
+        [0.0, -0.0],
+        [math.nan] * 10,
+        [math.inf] * 10,
+        [-math.inf] * 10,
+        [0.01, math.nan],
+        [0.01, math.inf],
+        [math.inf, -math.inf],
+    ],
+)
+def test_degenerate_return_ratios_remain_nan(returns):
+    assert math.isnan(backtest_stats.sharpe_ratio(returns, 1.0, 0.0))
+    assert math.isnan(backtest_stats.information_ratio(returns, 0.0, 1.0))
+
+
+@pytest.mark.parametrize("value", [0.01, -0.01])
+@pytest.mark.parametrize("n", [10, 1000])
+def test_identical_trial_sharpes_have_zero_deflation_benchmark(value, n):
+    assert (
+        backtest_stats.deflated_sharpe_ratio(1.0, [value] * n, 250, 0.0, 3.0, benchmark_out=True)
+        == 0.0
+    )
+
+
+def test_nearly_constant_returns_are_not_rounded_to_constant():
+    returns = [0.01] * 10
+    returns[-1] = math.nextafter(returns[-1], math.inf)
+    result = backtest_stats.sharpe_ratio(returns, 1.0, 0.0)
+    assert math.isfinite(result)
+    assert result > 0.0
