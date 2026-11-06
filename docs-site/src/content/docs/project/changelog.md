@@ -30,6 +30,7 @@ file disagree).
 
 ### Fixed
 
+- `bars`: preserve populated-bar dtypes for empty symbol results so incomplete symbols can be concatenated safely. ([#258](https://github.com/Open-Quant/openquant/pull/258))
 - `feature_diagnostics`: count the post-fold embargo after the latest test label resolves, preserving the pre-fold window. MDA, SFI and substitution scores can change; folds with no remaining training samples raise `ValueError`. ([#257](https://github.com/Open-Quant/openquant/pull/257))
 
 ## 0.1.0 - 2026-10-01
