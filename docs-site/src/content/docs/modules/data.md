@@ -84,7 +84,7 @@ Use `fetch` when a study needs daily bars for a list of symbols and must be repr
 | `symbols` | `str \| Iterable[str]` | Symbols to fetch; duplicates are dropped | — |
 | `start, end` | `date \| datetime \| str` | Inclusive date range (ISO strings accepted) | — |
 | `source` | `DataSource \| None` | Where bars come from; None uses the synthetic LocalSampleSource | None |
-| `cache_dir` | `str \| Path \| None` | Cache root; None uses $OPENQUANT_DATA_CACHE, $XDG_CACHE_HOME/openquant/data or ~/.cache/openquant/data | None |
+| `cache_dir` | `str \| Path \| None` | Cache root; None uses `$OPENQUANT_DATA_CACHE`, `$XDG_CACHE_HOME/openquant/data` or `~/.cache/openquant/data` | None |
 | `refresh / offline` | `bool` | Refetch even if cached / never call the source (raise CacheMissError) | False |
 | `return_meta` | `bool` | Also return provenance (source, terms, cache status, dataset_hash) for the run manifest | False |
 | `path` | `str \| Path` | File path to CSV or Parquet OHLCV data (load_ohlcv) | — |
