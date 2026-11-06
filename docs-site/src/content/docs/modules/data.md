@@ -11,6 +11,7 @@ citation:
   - 'OpenQuant python/tests/test_data_cache_identity.py: request identity and malformed cache sidecars.'
   - 'OpenQuant python/tests/test_data_cleaning_execution.py: optional-report execution and unchanged cleaning results.'
   - 'OpenQuant python/tests/test_data_duplicate_order.py: first/last input revision selection across cleaning, loading and alignment.'
+  - 'OpenQuant python/tests/test_data_timezone_parsing.py: UTC normalization of offset-aware strings and timezone-aware datetime columns.'
 audience:
   - quant-dev
   - platform-engineering
@@ -233,6 +234,13 @@ report retains input null counts even though those rows are removed. This also a
 when every timestamp is unparseable: the cleaned frame is empty, and the report
 counts every invalid timestamp as a null. Run
 `data_quality_report(cleaned)` separately to describe only the resulting frame.
+Timestamps are normalized to timezone-naive UTC at microsecond precision. ISO strings
+with `Z` or numeric offsets and timezone-aware Polars datetime columns preserve their
+UTC instants, including distinct instants during a daylight-saving clock change. Naive
+timestamps keep their clock readings and are treated as UTC; no exchange timezone is
+guessed. Convert local naive wall times to timezone-aware values before loading them.
+Format inference is unchanged: normalize mixed string formats before loading them.
+
 For duplicate `(symbol, ts)` keys, `dedupe_keep="first"` or `"last"` selects by the
 order of the surviving input rows, not price or volume. The key sort is stable, so
 shuffled or multi-chunk input keeps that order within each key. `load_ohlcv`,

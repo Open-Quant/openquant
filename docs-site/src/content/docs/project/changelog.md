@@ -30,6 +30,8 @@ file disagree).
 
 ### Fixed
 
+- `data`: restore offset-aware ISO and timezone-aware datetime parsing on newer Polars, preserving the existing timezone-naive UTC output schema.
+
 - `data`: preserve input order when selecting the first or last OHLCV duplicate. Reload the raw source or refresh affected caches to replace outputs made by the earlier unstable sort. ([#259](https://github.com/Open-Quant/openquant/pull/259))
 
 ## 0.1.0 - 2026-10-01

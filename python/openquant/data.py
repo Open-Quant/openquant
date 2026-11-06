@@ -81,7 +81,7 @@ TS_FORMAT = "%Y-%m-%d %H:%M:%S%.f"
 
 
 def _parse_ts(expr: pl.Expr) -> pl.Expr:
-    """Parse timestamp strings, keeping fractional seconds (to microseconds).
+    """Parse timestamp strings to UTC-naive datetimes, keeping microseconds.
 
     Strings in `TS_FORMAT` are parsed with it; anything else (dates, ISO `T` forms) falls back
     to polars' format inference, as before.
@@ -89,13 +89,16 @@ def _parse_ts(expr: pl.Expr) -> pl.Expr:
     # strict=False turns bad values into nulls, but inference still raises if *none*
     # can be parsed. A final known-valid date lets inference finish in that case;
     # remove it before returning so empty/all-invalid inputs keep their original size.
+    utc_dtype = pl.Datetime(time_unit="us", time_zone="UTC")
     inferred = (
-        expr.append(pl.lit("2000-01-01")).str.strptime(pl.Datetime, strict=False).head(expr.len())
+        expr.append(pl.lit("2000-01-01")).str.strptime(utc_dtype, strict=False).head(expr.len())
     )
+    # An explicit zone is required for offset-aware strings in a lazy plan.
+    # Normalize to UTC before dropping the zone to keep the canonical naive schema.
     return pl.coalesce(
-        expr.str.strptime(pl.Datetime, TS_FORMAT, strict=False),
+        expr.str.strptime(utc_dtype, TS_FORMAT, strict=False),
         inferred,
-    )
+    ).dt.replace_time_zone(None)
 
 
 def _cast_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
@@ -296,10 +299,13 @@ def clean_ohlcv(
     Column names are matched case-insensitively against known aliases (for example `date`,
     `timestamp` or `datetime` for `ts`, `ticker` for `symbol`, `adjusted_close` for
     `adj_close`). `ts` is cast to string and parsed to `Datetime` (a
-    `"%Y-%m-%d %H:%M:%S[.f]"` form exactly, anything else by polars' inference); `symbol` is
-    cast to string and the price and volume columns to `Float64`. A missing `adj_close` is
-    filled from `close`. Rows with a null in any canonical column, including timestamps that
-    fail to parse, are dropped silently. Extra columns are discarded.
+    `"%Y-%m-%d %H:%M:%S[.f]"` form exactly, anything else by polars' inference). Offset-aware
+    strings and timezone-aware datetime columns are converted to UTC; naive timestamps
+    retain their clock readings and are treated as UTC. The output is timezone-naive
+    `Datetime` at microsecond precision. `symbol` is cast to string and the price and
+    volume columns to `Float64`. A missing `adj_close` is filled from `close`. Rows with a
+    null in any canonical column, including timestamps that fail to parse, are dropped
+    silently. Extra columns are discarded.
 
     Parameters
     ----------
