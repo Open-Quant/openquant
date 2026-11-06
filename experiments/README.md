@@ -70,3 +70,18 @@ diagnostics on the same controls:
 
 The [lab guide](VALIDATION_LAB.md#compare-the-existing-psrdsr-diagnostics) explains
 score conventions, unavailable DSR values, registry audits and simulation intervals.
+
+## Offline rolling risk-model comparison
+
+[The risk-model utility lab](RISK_MODEL_LAB.md) compares existing minimum-variance,
+HRP and baseline allocations on three controlled covariance families. Rolling fits
+use only historical rows; the report separates realized risk, concentration, target
+changes, drift-aware traded fractions and a declared toy cost model.
+
+```bash
+.venv/bin/python experiments/risk_model_lab.py --out /tmp/openquant-risk.json
+```
+
+All six methods are fixed before simulation. The lab reports independent-path and
+paired Monte Carlo precision, unavailable paths, input hashes and native/source
+provenance. It selects no winner and provides no investment guarantee.

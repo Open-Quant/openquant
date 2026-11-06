@@ -1,0 +1,19 @@
+schema = 1
+id = "res-risk-model-lab"
+title = "Compare existing allocations in a rolling synthetic risk lab"
+scope = "Research-only experiment: existing HRP/minimum-variance allocations, fixed covariance conventions, chronological holdouts, drift-aware traded fractions and explicit toy costs. No production API, new estimator, live trading or performance guarantee."
+requires_spec = false
+spec_reason = "An experimental script and tests do not change public library behavior. The experiment guide defines its reproducibility and measurement contracts; production promotion requires a separate specification decision."
+acceptance = [
+  "Existing native allocators match independent analytic fixtures and the fixed HRP shrink convention.",
+  "Changing current or future observations cannot alter a rebalance decision; oracle covariance is diagnostic only.",
+  "Drift, full-L1 turnover and toy cost accounting match hand-computed fixtures.",
+  "Reports retain all paths, explicit failures, paired independent-path precision, source/native hashes and deterministic input hashes.",
+  "Focused and full Python tests, lint/types and independent review pass before merge.",
+]
+reviewed = true
+
+[artifacts]
+brief = "experiments/RISK_MODEL_LAB.md"
+plan = "experiments/RISK_MODEL_LAB.md"
+tracker = "44"

@@ -183,9 +183,10 @@ The practical sequence is an engineering proposal, not verified evidence of user
    convention/assumption caveats, duplicate/correlated-family behavior and threshold
    frequencies with simulation precision. Do not call those frequencies calibrated
    without verifying assumptions.
-3. **Then: risk-model utility benchmark.** Compare held-out realized portfolio risk,
-   covariance conditioning, weight stability and turnover under identical rebalancing
-   and cost conventions, using existing estimators before adding another one.
+3. **Now: [risk-model utility benchmark](RISK_MODEL_LAB.md).** Compare held-out realized
+   portfolio risk, covariance conditioning, weight stability and traded fractions under
+   identical rolling rebalancing and explicit toy cost conventions, using existing
+   allocations and fixed diagonal shrinkage before adding another estimator.
 4. **Later: experimental RAS estimation.** Only after an authorized full text or complete
    public primary source verifies formulas and assumptions. Keep empirical complexity
    estimation separate from theorem-based confidence bounds; preserve full candidate
