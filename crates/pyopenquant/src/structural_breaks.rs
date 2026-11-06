@@ -28,8 +28,13 @@ use crate::helpers::to_py_err;
 /// ValueError
 ///     If the regression has no rows (`min_length == 0` with a single price).
 #[pyfunction(name = "get_chow_type_stat")]
-fn sb_get_chow_type_stat(log_prices: Vec<f64>, min_length: usize) -> PyResult<Vec<f64>> {
-    openquant::structural_breaks::get_chow_type_stat(&log_prices, min_length).map_err(to_py_err)
+fn sb_get_chow_type_stat(
+    py: Python<'_>,
+    log_prices: Vec<f64>,
+    min_length: usize,
+) -> PyResult<Vec<f64>> {
+    py.detach(|| openquant::structural_breaks::get_chow_type_stat(&log_prices, min_length))
+        .map_err(to_py_err)
 }
 
 /// Chu-Stinchcombe-White CUSUM test on levels, with its critical values.
@@ -59,12 +64,18 @@ fn sb_get_chow_type_stat(log_prices: Vec<f64>, min_length: usize) -> PyResult<Ve
 ///     `"two_sided"`.
 #[pyfunction(name = "get_chu_stinchcombe_white_statistics")]
 fn sb_get_chu_stinchcombe_white_statistics(
+    py: Python<'_>,
     log_prices: Vec<f64>,
     test_type: String,
 ) -> PyResult<(Vec<f64>, Vec<f64>)> {
-    let result =
-        openquant::structural_breaks::get_chu_stinchcombe_white_statistics(&log_prices, &test_type)
-            .map_err(to_py_err)?;
+    let result = py
+        .detach(|| {
+            openquant::structural_breaks::get_chu_stinchcombe_white_statistics(
+                &log_prices,
+                &test_type,
+            )
+        })
+        .map_err(to_py_err)?;
     Ok((result.critical_value, result.stat))
 }
 
@@ -118,19 +129,24 @@ fn sb_get_chu_stinchcombe_white_statistics(
 #[pyfunction(name = "get_sadf")]
 #[pyo3(signature = (series, model, add_const, min_length, lags))]
 fn sb_get_sadf(
+    py: Python<'_>,
     series: Vec<f64>,
     model: String,
     add_const: bool,
     min_length: usize,
     lags: usize,
 ) -> PyResult<Vec<f64>> {
-    openquant::structural_breaks::get_sadf(
-        &series,
-        &model,
-        add_const,
-        min_length,
-        openquant::structural_breaks::SadfLags::Fixed(lags),
-    )
+    // Python inputs have already been copied into owned Rust values. None of the numerical
+    // work uses Python objects, so keep other Python threads responsive until it completes.
+    py.detach(|| {
+        openquant::structural_breaks::get_sadf(
+            &series,
+            &model,
+            add_const,
+            min_length,
+            openquant::structural_breaks::SadfLags::Fixed(lags),
+        )
+    })
     .map_err(to_py_err)
 }
 
