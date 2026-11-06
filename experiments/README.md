@@ -44,3 +44,29 @@ Grid runs additionally include:
 
 - Default config is futures-centric and oil-inclusive.
 - Runner uses `openquant.research.run_flywheel_iteration` for notebook/script parity.
+
+## Offline selection-validation lab
+
+[The synthetic validation lab](VALIDATION_LAB.md) studies candidate-selection bias
+using six controlled return families. It requires only NumPy and keeps training-only
+selection separate from a deliberately contaminated holdout comparator:
+
+```bash
+python experiments/validation_lab.py --out /tmp/openquant-validation.json
+python -m pytest python/tests/test_validation_lab.py -q
+```
+
+The JSON records all replications, input hashes, source/version provenance and timing.
+These are synthetic diagnostics, not a trading strategy, calibrated confidence bound,
+or promotion decision.
+
+With the built OpenQuant extension, compare the existing PSR/DSR and trial-registry
+diagnostics on the same controls:
+
+```bash
+.venv/bin/python experiments/compare_validation_diagnostics.py \
+  --out /tmp/openquant-diagnostics.json
+```
+
+The [lab guide](VALIDATION_LAB.md#compare-the-existing-psrdsr-diagnostics) explains
+score conventions, unavailable DSR values, registry audits and simulation intervals.

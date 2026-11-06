@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
+
 import openquant
 import polars as pl
+import pytest
+from polars.testing import assert_frame_equal
 
 
 def _base_frame() -> pl.DataFrame:
@@ -98,3 +103,121 @@ def test_sparse_intervals_and_outlier_volume_edge_cases():
     vol_bars = openquant.bars.build_volume_bars(outlier, volume_per_bar=300_000)
     _assert_bar_invariants(vol_bars)
     assert vol_bars.height >= 2
+
+
+_THRESHOLD_BUILDERS = [
+    pytest.param(lambda df: openquant.bars.build_tick_bars(df, ticks_per_bar=2), id="tick"),
+    pytest.param(lambda df: openquant.bars.build_volume_bars(df, volume_per_bar=2.0), id="volume"),
+    pytest.param(
+        lambda df: openquant.bars.build_dollar_bars(df, dollar_value_per_bar=21.0), id="dollar"
+    ),
+]
+
+
+def _mixed_symbols_frame(full_symbol: str = "A", partial_symbol: str = "B") -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "ts": ["2024-01-01 09:30:00", "2024-01-01 09:31:00", "2024-01-01 09:30:00"],
+            "symbol": [full_symbol, full_symbol, partial_symbol],
+            "open": [10.0, 11.0, 20.0],
+            "high": [10.0, 11.0, 20.0],
+            "low": [10.0, 11.0, 20.0],
+            "close": [10.0, 11.0, 20.0],
+            "volume": [1.0, 1.0, 1.0],
+        }
+    )
+
+
+def _expected_full_bar(symbol: str = "A") -> pl.DataFrame:
+    # Hand-computed output for the first two observations, including canonical dtypes.
+    return pl.DataFrame(
+        {
+            "ts": [datetime(2024, 1, 1, 9, 31)],
+            "symbol": [symbol],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [10.0],
+            "close": [11.0],
+            "volume": [2.0],
+            "adj_close": [11.0],
+            "start_ts": [datetime(2024, 1, 1, 9, 30)],
+            "n_obs": [2],
+            "dollar_value": [21.0],
+        }
+    )
+
+
+@pytest.mark.parametrize("build", _THRESHOLD_BUILDERS)
+@pytest.mark.parametrize("symbols", [("A", "B"), ("B", "A")])
+@pytest.mark.parametrize("reverse_input", [False, True])
+def test_threshold_bars_drop_only_the_incomplete_symbol(
+    build: Callable[[pl.DataFrame], pl.DataFrame],
+    symbols: tuple[str, str],
+    reverse_input: bool,
+) -> None:
+    frame = _mixed_symbols_frame(*symbols)
+    if reverse_input:
+        frame = frame.reverse()
+    assert_frame_equal(build(frame), _expected_full_bar(symbols[0]))
+
+
+@pytest.mark.parametrize("build", _THRESHOLD_BUILDERS)
+@pytest.mark.parametrize("empty_first", [False, True])
+def test_empty_and_full_bar_results_concatenate_in_either_order(
+    build: Callable[[pl.DataFrame], pl.DataFrame], empty_first: bool
+) -> None:
+    # Both frames cross the real Rust/Python boundary. A partial symbol must not
+    # change the schema or make a multi-symbol concat depend on traversal order.
+    frame = _mixed_symbols_frame()
+    full = build(frame.filter(pl.col("symbol") == "A"))
+    empty = build(frame.filter(pl.col("symbol") == "B"))
+    frames = [empty, full] if empty_first else [full, empty]
+    assert_frame_equal(pl.concat(frames, how="vertical"), _expected_full_bar())
+
+
+@pytest.mark.parametrize("build", _THRESHOLD_BUILDERS)
+def test_all_partial_symbols_return_the_bar_schema(
+    build: Callable[[pl.DataFrame], pl.DataFrame],
+) -> None:
+    frame = _mixed_symbols_frame().filter(pl.col("ts") == "2024-01-01 09:30:00")
+    assert_frame_equal(build(frame), _expected_full_bar().clear())
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        *_THRESHOLD_BUILDERS,
+        pytest.param(lambda df: openquant.bars.build_time_bars(df, interval="1m"), id="time"),
+    ],
+)
+@pytest.mark.parametrize("input_kind", ["empty", "all-invalid"])
+def test_empty_bar_inputs_keep_the_bar_schema(
+    build: Callable[[pl.DataFrame], pl.DataFrame], input_kind: str
+) -> None:
+    frame = _mixed_symbols_frame()
+    if input_kind == "empty":
+        frame = frame.clear()
+    else:
+        frame = frame.with_columns(pl.lit(None, dtype=pl.Float64).alias("close"))
+    assert_frame_equal(build(frame), _expected_full_bar().clear())
+
+
+def test_time_bars_keep_an_incomplete_symbol() -> None:
+    expected = pl.DataFrame(
+        {
+            "ts": [datetime(2024, 1, 1, 9, 31), datetime(2024, 1, 1, 9, 30)],
+            "symbol": ["A", "B"],
+            "open": [10.0, 20.0],
+            "high": [11.0, 20.0],
+            "low": [10.0, 20.0],
+            "close": [11.0, 20.0],
+            "volume": [2.0, 1.0],
+            "adj_close": [11.0, 20.0],
+            "start_ts": [datetime(2024, 1, 1, 9, 30)] * 2,
+            "n_obs": [2, 1],
+            "dollar_value": [21.0, 20.0],
+        }
+    )
+    assert_frame_equal(
+        openquant.bars.build_time_bars(_mixed_symbols_frame(), interval="1m"), expected
+    )

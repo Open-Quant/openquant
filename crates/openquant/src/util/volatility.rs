@@ -49,6 +49,15 @@ use chrono::{Duration, NaiveDateTime};
 /// the usual target for [`crate::labeling`]'s barrier widths. Mirrors mlfinlab's
 /// `get_daily_vol`.
 ///
+/// Non-finite returns are treated as missing, as pandas does. Their positions still decay
+/// earlier observations' weights (`ignore_na=False`), but do not enter the mean or variance.
+/// The estimate stays `NaN` until two finite returns have non-zero weight, and otherwise
+/// carries the previous estimate across a missing return.
+///
+/// Extremely large finite returns can overflow variance or intermediate arithmetic. Such
+/// overflow is exposed as infinity or `NaN`, not clamped to zero. Callers must check that
+/// targets are finite before using them in downstream calculations.
+///
 /// Returns an empty vector when `close` has fewer than two bars or `lookback == 0`.
 ///
 /// ```
@@ -80,6 +89,7 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
     let decay = 1.0 - 2.0 / (lookback as f64 + 1.0);
     let (mut sum_wt, mut sum_wt2, mut old_wt) = (0.0f64, 0.0f64, 0.0f64);
     let (mut mean, mut var) = (0.0f64, 0.0f64);
+    let mut initialized = false;
 
     let mut out = Vec::new();
     for (i, &(ts_i, price_i)) in close.iter().enumerate() {
@@ -94,14 +104,27 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
         sum_wt2 *= decay * decay;
         old_wt *= decay;
 
-        let old_mean = mean;
-        let total = old_wt + 1.0;
-        mean = (old_wt * old_mean + ret) / total;
-        var = (old_wt * (var + (old_mean - mean).powi(2)) + (ret - mean).powi(2)) / total;
+        // Missing returns age existing weights but do not enter the recurrence.
+        if ret.is_finite() {
+            if !initialized {
+                // Do not evaluate 0 * ret^2: a finite ret can have an infinite square.
+                // This is only the first observation, not a reset when weights underflow.
+                mean = ret;
+                initialized = true;
+            } else {
+                let old_mean = mean;
+                let total = old_wt + 1.0;
+                // Preserve exact constant series without rounding or overflowing the mean.
+                if mean != ret {
+                    mean = (old_wt * old_mean + ret) / total;
+                }
+                var = (old_wt * (var + (old_mean - mean).powi(2)) + (ret - mean).powi(2)) / total;
+            }
 
-        sum_wt += 1.0;
-        sum_wt2 += 1.0;
-        old_wt += 1.0;
+            sum_wt += 1.0;
+            sum_wt2 += 1.0;
+            old_wt += 1.0;
+        }
 
         // One observation has no sample variance: pandas reports NaN there and so does this,
         // so the result lines up with `ewm().std()` row for row. `get_events` drops a NaN
@@ -111,7 +134,12 @@ pub fn get_daily_vol(close: &[(NaiveDateTime, f64)], lookback: usize) -> Vec<(Na
             out.push((ts_i, f64::NAN));
             continue;
         }
-        out.push((ts_i, (var.max(0.0) * sum_wt * sum_wt / denom).sqrt()));
+        // Form the dimensionless correction first: multiplying a small variance
+        // by decayed weights can underflow to zero across a long missing gap.
+        let correction = sum_wt * sum_wt / denom;
+        // Clamp negative roundoff, but preserve NaN from undefined overflow arithmetic.
+        let nonnegative_var = if var < 0.0 { 0.0 } else { var };
+        out.push((ts_i, (correction * nonnegative_var).sqrt()));
     }
 
     out

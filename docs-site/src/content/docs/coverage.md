@@ -2,7 +2,7 @@
 title: Coverage Dashboard
 description: What is documented, what is not, and the commands that produce those numbers.
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,7 @@ with it, so the numbers cannot quietly rot again. Everything outside the
 generated regions is prose a human owns.
 
 <!-- coverage:begin:measured -->
-Numbers below were regenerated on **2026-10-10**.
+Numbers below were regenerated on **2026-11-05**.
 <!-- coverage:end:measured -->
 
 ## Documentation status
@@ -43,10 +43,10 @@ tally below cannot be bulk-applied.
 |---|---|---|
 | `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 59 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
-| `reviewed` | 3 | A human read the page end to end. |
+| `authored` | 62 | Hand-written and complete, examples executed by the docs gates. No human has read it. |
+| `reviewed` | 2 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **66** | |
+| **Total** | **68** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
