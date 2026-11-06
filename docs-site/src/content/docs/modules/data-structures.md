@@ -2,7 +2,7 @@
 title: "data_structures"
 description: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-11-06'
 audience:
   - quant-dev
   - platform-engineering
@@ -214,6 +214,12 @@ trades is valid and yields no bars.
   `build_run_bars` and `build_imbalance_bars`; `openquant.bars` does not wrap them in a frame.
 - **Bars overshoot.** One block trade can be many thresholds wide, and it still closes exactly
   one bar. `dollar_value` on the bar records what was actually accumulated.
+- **Partial symbols do not block complete bars.** Python tick, volume and dollar builders
+  omit symbols that never reach the threshold and keep complete bars from other symbols.
+  When no bars remain (including empty input or rows all dropped by cleaning), the output
+  still has the same columns and types as a populated result: microsecond datetimes for `ts` and
+  `start_ts`, a string `symbol`, `Int64` `n_obs`, and `Float64` prices, volume and dollar value.
+  Time bars still keep each symbol's trailing partial bar.
 
 ## Related modules
 
