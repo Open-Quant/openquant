@@ -61,8 +61,9 @@ def prepare_events(observations: pl.DataFrame) -> dict:
     if clean["symbol"].n_unique() != 1:
         raise ValueError("this example requires exactly one symbol")
     sampled = bars.build_dollar_bars(clean, dollar_value_per_bar=DOLLARS_PER_BAR)
-    # The bar builder retains the final partial bar. Do not treat its file-end close
-    # as an activity-threshold observation available in a streaming run.
+    # The builder drops trailing partial dollar bars. Keep this completeness guard
+    # explicit so a file-end close is never treated as an activity-threshold
+    # observation available in a streaming run.
     sampled = sampled.filter(pl.col("dollar_value") >= DOLLARS_PER_BAR)
     timestamps = [str(ts) for ts in sampled["ts"].to_list()]
     closes = sampled["close"].to_list()
