@@ -17,6 +17,10 @@ use crate::helpers::{format_naive_datetime, pair_timestamps_values, to_py_err};
 /// until two finite returns have non-zero weight; a missing return then carries the previous
 /// estimate rather than turning it into zero.
 ///
+/// Extremely large finite returns can overflow variance or intermediate arithmetic,
+/// producing infinity or NaN rather than zero. Check that targets are finite before
+/// passing them to downstream calculations.
+///
 /// Parameters
 /// ----------
 /// close_timestamps : list[str]
