@@ -10,14 +10,14 @@ hero:
   image:
     file: ../../assets/openquant-mark.svg
   actions:
-    - text: Quickstart
+    - text: Start with Python
       link: /openquant/quickstart/
       icon: right-arrow
-    - text: Browse modules
-      link: /openquant/modules/
+    - text: Agent guide
+      link: /openquant/agents/
       variant: minimal
 status: authored
-last_authored: '2026-10-01'
+last_authored: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,15 +30,34 @@ cross-validation, backtest statistics, bet sizing, and hierarchical portfolio
 construction. The numerical core is Rust; a PyO3 extension exposes it to Python.
 Functions take plain sequences, and the data-loading layer works in Polars frames.
 
-## Status
+## Choose your path
 
-Pre-release. Version 0.1.0 is not on PyPI or crates.io, so installing means
-building from source: about 10–20 minutes the first time, seconds afterwards. The
-[Quickstart](/quickstart/) takes you from a clone to a printed result.
+<nav class="oq-paths not-content" aria-label="Documentation paths">
+  <a class="oq-path" href="/openquant/quickstart/">
+    <span class="oq-path-label">For humans</span>
+    <strong>Run your first experiment</strong>
+    <span>Install from source, run a small synthetic example, and learn what its results mean.</span>
+    <span class="oq-path-action">Open the quickstart →</span>
+  </a>
+  <a class="oq-path" href="/openquant/agents/">
+    <span class="oq-path-label">For agents</span>
+    <strong>Work from verified sources</strong>
+    <span>Find the right API, preserve research safeguards, and choose the checks your change needs.</span>
+    <span class="oq-path-action">Open the agent guide →</span>
+  </a>
+</nav>
 
-Releases are published on PyPI as `pyopenquant` (from v0.1.0, `pip install
-pyopenquant`); the import name is `openquant`. Do not `pip install openquant` —
-that name on PyPI belongs to an unrelated project.
+## Install and maturity
+
+OpenQuant is pre-release. These docs use a source checkout so the examples,
+Python wrappers and Rust extension come from the same revision. The
+[Quickstart](/quickstart/) walks through installation and a first result;
+[Local build](/setup/local-build/) is the contributor path.
+
+The Python distribution is named **`pyopenquant`** in the package metadata;
+the import is **`openquant`**. Do not install the unrelated PyPI project named
+`openquant`. Check [release status](/project/governance/#versioning-and-releases)
+before choosing a packaged release instead of the source workflow.
 
 ## What using it looks like
 
@@ -90,61 +109,38 @@ touched: its outcome is not known yet, so it gets no label instead of an invente
 one. This example runs in CI on every change to the docs; if the API moves, the
 build fails before this page goes stale.
 
-## What is implemented
+## Find an implementation
 
-Every module is a Rust API. The Python column says whether the compiled
-extension exposes it today.
+Start with a task, then follow the linked module to its API and examples:
 
-| AFML chapters | Modules | Python |
-| --- | --- | --- |
-| 2 · Data structures | [data_structures](/modules/data-structures/), [filters](/modules/filters/) | yes |
-| | [etf_trick](/modules/etf-trick/) | Rust only |
-| 3 · Labeling | [labeling](/modules/labeling/) | yes |
-| 4 · Sample weights | [sampling](/modules/sampling/), [sample_weights](/modules/sample-weights/), [sb_bagging](/modules/sb-bagging/) | yes |
-| 5–6 · Features, ensembles | [fracdiff](/modules/fracdiff/), [ensemble_methods](/modules/ensemble-methods/) | yes |
-| 7 · Cross-validation | [cross_validation](/modules/cross-validation/) | Rust only |
-| 8–9 · Importance, tuning | [feature_importance](/modules/feature-importance/), [fingerprint](/modules/fingerprint/), [hyperparameter_tuning](/modules/hyperparameter-tuning/) | Rust only |
-| 10 · Bet sizing | [bet_sizing](/modules/bet-sizing/) | yes |
-| 11–13 · Backtesting | [backtesting_engine](/modules/backtesting-engine/) | Rust only |
-| | [synthetic_backtesting](/modules/synthetic-backtesting/) | yes |
-| 14–15 · Statistics, risk | [backtest_statistics](/modules/backtest-statistics/), [risk_metrics](/modules/risk-metrics/), [strategy_risk](/modules/strategy-risk/) | yes |
-| 16 · Portfolio construction | [hrp](/modules/hrp/), [hcaa](/modules/hcaa/), [onc](/modules/onc/), [cla](/modules/cla/), [portfolio_optimization](/modules/portfolio-optimization/) | yes |
-| 17–19 · Breaks, microstructure | [structural_breaks](/modules/structural-breaks/), [microstructural_features](/modules/microstructural-features/), [codependence](/modules/codependence/) | yes |
-| 20–22 · HPC | [streaming_hpc](/modules/streaming-hpc/) | yes |
-| | [hpc_parallel](/modules/hpc-parallel/), [combinatorial_optimization](/modules/combinatorial-optimization/) | Rust only |
+- **Prepare data and labels:** [bars](/modules/data-structures/),
+  [filters](/modules/filters/) and [labeling](/modules/labeling/).
+- **Validate without overlapping labels leaking across folds:**
+  [purged cross-validation](/modules/cross-validation/) and
+  [CPCV backtesting](/modules/backtesting-engine/), available through Python wrappers.
+- **Evaluate a research result:** [evaluation](/modules/evaluation/),
+  [cost-aware research](/modules/research/) and the [research runbooks](/runbooks/).
+- **Allocate and measure risk:** [portfolio construction](/modules/portfolio-optimization/),
+  [HRP](/modules/hrp/) and [risk metrics](/modules/risk-metrics/).
 
-The Rust-only rows are the gap that matters most for research: purged
-cross-validation and the CPCV backtester are not callable from Python yet. The
-[module index](/modules/) lists everything, including the pure-Python layers
-(`data`, `pipeline`, `research`, `viz`), and
-[By AFML Chapter](/module-reference/by-afml-chapter/) maps book sections to APIs.
+The [module index](/modules/) is the source of truth for the module list and
+language surfaces. Use the [Python API](/api/python/) for exact import paths,
+signatures and return values, or [Rust API](/api/rust/openquant/) for the core.
+[By AFML chapter](/module-reference/by-afml-chapter/) connects the book to the code.
 
-## How far to trust it
+## What the checks establish
 
-- **Tests.** The Rust suite runs on every pull request. About half of its test
-  files check results against fixtures derived from mlfinlab's tests; the rest
-  use inline data with no external reference yet.
-- **Page status.** Every page carries a status. Most module pages are still
-  marked *generated* — assembled from templates and not yet read by a person
-  against the book. Setup, quickstart and workflow pages are *reviewed*.
-  [Coverage](/coverage/) has the current counts.
-- **Examples.** Rust snippets on module pages are compiled in CI, and Python
-  snippets are executed, unless a snippet is explicitly marked as illustrative.
-- **Open work** is tracked in
-  [GitHub issues](https://github.com/Open-Quant/openquant/issues).
-
-## Timings
-
-Criterion means from the regression baseline CI compares each pull request
-against, recorded 2026-02-07. The hardware was not recorded and there is no
-comparison against another library, so read these as orders of magnitude.
-
-| Benchmark | Mean |
-| --- | ---: |
-| EWMA over 100,000 points | 4.7 ms |
-| VaR, expected shortfall and CDaR on the synthetic ticker set | 8.0 ms |
-| Sequential bootstrap, 2,000 samples × 600 draws | 384 ms |
-| SADF structural-break statistic (`sm_power`) | 602 ms |
+- **Examples:** the docs gate executes runnable Python snippets and checks their
+  documented output. Rust examples on module pages are compile-checked, not executed.
+  Explicitly skipped Python snippets are syntax-checked only.
+- **Review status:** each page carries its own status. *Authored* is not a human
+  review; *generated* is not a correctness claim. The
+  [coverage dashboard](/coverage/) has the current counts and gaps.
+- **Research limits:** synthetic results demonstrate the workflow, not trading
+  performance. Read the [methodology and leakage controls](/project/governance/#methodology-and-leakage-controls)
+  before interpreting a backtest.
+- **Performance:** current measurements, hardware limitations and the regression
+  policy live on the [performance page](/project/performance/).
 
 ## Where to go next
 
@@ -155,3 +151,5 @@ comparison against another library, so read these as orders of magnitude.
 - **To review methodology:**
   [Methodology and leakage controls](/project/governance/#methodology-and-leakage-controls),
   then the [research gallery](/runbooks/).
+
+- **To automate a task:** [Agent guide](/agents/), with source paths and validation gates.

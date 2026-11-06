@@ -137,9 +137,11 @@ bun run check:docs     # every docs gate, in the order CI runs them
 ```
 
 `check:docs` runs, in order: `build`, `stage:rustdoc` (rustdoc into the built site, so
-`check:links` can check links to it), `check:links`, `check:api-drift`,
+`check:links` can check links to it), `test:agent-index` (generated discovery index),
+`test:links` (navigation checker regression tests),
+`check:links` (built paths, fragment anchors and redirects), `check:api-drift`,
 `check:content-schema`, `check:contrast`, `check:coverage`, `check:generated-pages`,
-`check:examples` (every Rust block in the docs is compiled with `cargo check`),
+`check:examples` (Rust blocks on module pages are compiled with `cargo check`),
 `check:python-examples` (every Python block is executed) and `check:python-reference`.
 The last two need the extension built into `.venv` (see Setup); `check:python-examples`
 also accepts an interpreter named by `DOC_PYTHON` that can `import openquant`. A block

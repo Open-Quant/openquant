@@ -541,3 +541,66 @@ mobile-starlight-toc .toggle {
 .oq-doc-missing {
   color: var(--oq-muted);
 }
+
+/* Audience paths use the frozen Monograph palette, not a second visual identity. */
+.oq-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-block: 1.5rem 2rem;
+  font-family: var(--oq-sans);
+}
+
+.oq-path {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid var(--oq-rule);
+  border-block-start: 3px solid var(--oq-accent);
+  border-radius: 3px;
+  color: var(--oq-text);
+  background: var(--oq-surface);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.oq-path > strong {
+  font-family: var(--oq-serif);
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.oq-path-label {
+  color: var(--oq-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.oq-path-action {
+  margin-block-start: auto;
+  padding-block-start: 0.5rem;
+  color: var(--oq-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.oq-path:hover {
+  border-color: var(--oq-accent);
+}
+
+/* The accent passes AA against ground and surface in check:contrast. A visible
+   outline is independent of hover/color alone and follows keyboard focus. */
+:where(a, button, input, select, summary):focus-visible {
+  outline: 3px solid var(--oq-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .oq-paths { grid-template-columns: 1fr; }
+  .oq-path { padding: 1rem; }
+}
