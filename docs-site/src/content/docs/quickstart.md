@@ -2,13 +2,16 @@
 title: Quickstart
 description: Install OpenQuant and get one real result out of it.
 status: authored
-last_authored: '2026-10-01'
+last_authored: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
 sidebar:
   order: 1
 ---
+
+This is the human learning path. For repository automation, use the
+[agent guide](/agents/) alongside it.
 
 Three steps, ending in a number OpenQuant computed for you. Budget
 **20–30 minutes**, nearly all of it the Rust compile in step 2.
@@ -26,26 +29,25 @@ cd openquant
 
 ## Step 2 — Install
 
-OpenQuant is not on PyPI yet: the Python package sits on a compiled PyO3
-extension, so installing it means building it. Releases are published on PyPI
-as `pyopenquant` (from v0.1.0, `pip install pyopenquant`); the import name is
-`openquant`. Do not `pip install openquant` — that name on PyPI belongs to an
-unrelated project.
+This guide builds the Python package and its PyO3 extension from the same
+checkout. The distribution name is `pyopenquant`; the import name is `openquant`.
+Do not `pip install openquant`: that name belongs to an unrelated project.
+See [release status](/project/governance/#versioning-and-releases) if you want
+to use a packaged release instead.
 
 ```bash
-uv venv --python 3.11 .venv
-
-uv run --python .venv/bin/python --with maturin \
-  maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv venv --python 3.13 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 
 uv run --python .venv/bin/python python -c "import openquant; print('openquant bindings import ok')"
 ```
 
-This compiles the whole Rust workspace — `polars`, `nalgebra` and their
+This compiles the Rust extension, including `polars`, `nalgebra` and their
 dependency trees — so **expect 10–20 minutes on a cold cache**. Later
 builds are incremental and take seconds.
 
-The third command should print:
+The import check should print:
 
 ```
 openquant bindings import ok

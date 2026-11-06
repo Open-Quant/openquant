@@ -1,12 +1,38 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
 
 def load(path: Path):
     return json.loads(path.read_text())
+
+
+def finite_number(value, label, *, positive=False):
+    """Reject unusable measurements before comparisons can silently ignore them."""
+    requirement = "positive" if positive else "non-negative"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a finite {requirement} number")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite or (value <= 0 if positive else value < 0):
+        raise ValueError(f"{label} must be a finite {requirement} number")
+    return value
+
+
+def benchmark_timings(payload, label):
+    if not isinstance(payload, dict) or not isinstance(payload.get("benchmarks"), dict):
+        raise ValueError(f"{label} must contain a benchmarks object")
+    benchmarks = payload["benchmarks"]
+    for name, measurement in benchmarks.items():
+        if not isinstance(measurement, dict) or "mean_ms" not in measurement:
+            raise ValueError(f"{label} benchmark {name!r} must contain mean_ms")
+        finite_number(measurement["mean_ms"], f"{label} benchmark {name!r} mean_ms", positive=True)
+    return benchmarks
 
 
 def main():
@@ -25,12 +51,18 @@ def main():
     )
     args = parser.parse_args()
 
-    baseline = load(Path(args.baseline))
-    latest = load(Path(args.latest))
-    overrides = load(Path(args.overrides)) if args.overrides else {}
-
-    base = baseline.get("benchmarks", {})
-    curr = latest.get("benchmarks", {})
+    try:
+        finite_number(args.max_regression_pct, "--max-regression-pct")
+        finite_number(args.min_baseline_ms, "--min-baseline-ms")
+        base = benchmark_timings(load(Path(args.baseline)), "baseline")
+        curr = benchmark_timings(load(Path(args.latest)), "latest")
+        overrides = load(Path(args.overrides)) if args.overrides else {}
+        if not isinstance(overrides, dict):
+            raise ValueError("overrides must be an object mapping benchmark names to thresholds")
+        for name, value in overrides.items():
+            finite_number(value, f"override for {name!r}")
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
 
     regressions = []
     missing = []

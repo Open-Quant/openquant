@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import ceil, exp, isfinite, log, log1p, sqrt
 from typing import Any
 
+import numpy as np
 import polars as pl
 
 from . import viz
@@ -119,8 +120,14 @@ def _purged_kfold_splits(
             if any(_overlaps(interval, t) for t in test_intervals):
                 train_mask[i] = False
 
+        # Keep the legacy pre-fold embargo, but count the post-fold embargo
+        # from the first row after all test labels resolve, not inside the purge.
         before = max(0, start - embargo_n)
-        after = min(n, stop + embargo_n)
+        test_end = max(end for _, end in test_intervals)
+        resume = stop
+        while resume < n and intervals[resume][0] <= test_end:
+            resume += 1
+        after = min(n, resume + embargo_n)
         for i in range(before, after):
             train_mask[i] = False
 
@@ -462,9 +469,10 @@ def mda_importance(
 
     Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
     samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
-    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
-    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
-    tree ensemble AFML uses.
+    `ceil(n * pct_embargo)` rows before the test fold and after its latest label end are
+    also removed. The post-fold embargo starts at the first row whose start is strictly
+    after that end. The model is an L2-penalized (ridge 1e-3) logistic regression fitted
+    by Newton's method, not the tree ensemble AFML uses.
 
     Parameters
     ----------
@@ -482,8 +490,9 @@ def mda_importance(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False
@@ -588,9 +597,10 @@ def sfi_importance(
 
     Cross-validation is purged k-fold (AFML section 7.4): contiguous test folds, training
     samples whose `[i, event_end_indices[i]]` span overlaps any test span are removed, and
-    `ceil(n * pct_embargo)` rows on both sides of the test fold are also removed. The model
-    is an L2-penalized (ridge 1e-3) logistic regression fitted by Newton's method, not the
-    tree ensemble AFML uses.
+    `ceil(n * pct_embargo)` rows before the test fold and after its latest label end are
+    also removed. The post-fold embargo starts at the first row whose start is strictly
+    after that end. The model is an L2-penalized (ridge 1e-3) logistic regression fitted
+    by Newton's method, not the tree ensemble AFML uses.
 
     Parameters
     ----------
@@ -608,8 +618,9 @@ def sfi_importance(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False
@@ -693,28 +704,6 @@ def _standardize(
     return z, means, stds
 
 
-def _mat_vec(a: Sequence[Sequence[float]], v: Sequence[float]) -> list[float]:
-    return [sum(aij * vj for aij, vj in zip(row, v)) for row in a]
-
-
-def _norm(v: Sequence[float]) -> float:
-    return sqrt(sum(x * x for x in v))
-
-
-def _power_iteration(a: list[list[float]], iters: int = 200) -> tuple[float, list[float]]:
-    n = len(a)
-    v = [1.0 / sqrt(n)] * n
-    for _ in range(iters):
-        av = _mat_vec(a, v)
-        nrm = _norm(av)
-        if nrm <= _EPS:
-            break
-        v = [x / nrm for x in av]
-    av = _mat_vec(a, v)
-    eig = _dot(v, av)
-    return eig, v
-
-
 def orthogonalize_features_pca(
     X: Sequence[Sequence[float]],
     variance_threshold: float = 0.95,
@@ -722,8 +711,8 @@ def orthogonalize_features_pca(
     """Project standardized features onto their leading principal components (AFML 8.4.2).
 
     Each column is standardized with its mean and sample standard deviation (a constant
-    column is divided by 1). Eigenpairs of the resulting correlation matrix are found by
-    power iteration with deflation, stopping at the first eigenvalue `<= 1e-12`; the
+    column is divided by 1). A symmetric eigensolver finds all eigenpairs of the resulting
+    correlation matrix; eigenvalues `<= 1e-12` are discarded. The
     fewest leading components whose explained-variance ratios reach `variance_threshold`
     are kept. Component signs are arbitrary.
 
@@ -746,13 +735,15 @@ def orthogonalize_features_pca(
     Raises
     ------
     ValueError
-        If `variance_threshold` is not in `(0, 1]`, `X` is empty or not rectangular, or
-        every eigenvalue is zero.
+        If `variance_threshold` is not finite and in `(0, 1]`, `X` is empty, not
+        rectangular or contains a non-finite value, or every eigenvalue is zero.
     """
-    if variance_threshold <= 0.0 or variance_threshold > 1.0:
+    if not isfinite(variance_threshold) or variance_threshold <= 0.0 or variance_threshold > 1.0:
         raise ValueError("variance_threshold must be in (0, 1]")
 
     x = _as_matrix(X)
+    if not np.isfinite(x).all():
+        raise ValueError("X must contain only finite values")
     z, means, stds = _standardize(x)
     n = len(z)
     p = len(z[0])
@@ -762,20 +753,14 @@ def orthogonalize_features_pca(
         for j in range(p):
             cov[i][j] = sum(row[i] * row[j] for row in z) / max(n - 1, 1)
 
-    work = [row[:] for row in cov]
-    eigvals: list[float] = []
-    eigvecs: list[list[float]] = []
-
-    for _ in range(p):
-        eig, vec = _power_iteration(work)
-        if eig <= _EPS:
-            break
-        eigvals.append(eig)
-        eigvecs.append(vec)
-        # deflation: A = A - lambda * v v^T
-        for i in range(p):
-            for j in range(p):
-                work[i][j] -= eig * vec[i] * vec[j]
+    # A fixed power-iteration seed can be orthogonal to a nonzero eigenspace (for
+    # example, the all-ones vector for perfectly anticorrelated columns). Reusing
+    # that seed after deflation also loses repeated eigenvalues. `eigh` returns a
+    # complete orthonormal basis for this real symmetric matrix, in ascending order.
+    values, vectors = np.linalg.eigh(cov)
+    order = np.flatnonzero(values > _EPS)[::-1]
+    eigvals = values[order].tolist()
+    eigvecs = vectors[:, order].T.tolist()
 
     total = sum(max(v, 0.0) for v in eigvals)
     if total <= _EPS:
@@ -873,8 +858,9 @@ def substitution_effect_report(
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
-        Fraction of samples, rounded up, embargoed on each side of every test fold; in
-        `[0, 1)`.
+        Fraction of samples, rounded up, embargoed before each test fold and after its
+        latest label end; in `[0, 1)`. The pre-fold window is counted from the first
+        test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
     allow_unpurged : bool, default False

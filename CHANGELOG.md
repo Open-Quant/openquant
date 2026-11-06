@@ -16,7 +16,9 @@ file disagree).
 
 ### Fixed
 
+- `bars`: preserve populated-bar dtypes for empty symbol results so incomplete symbols can be concatenated safely. ([#258](https://github.com/Open-Quant/openquant/pull/258))
 - `data`: preserve input order when selecting the first or last OHLCV duplicate. Reload the raw source or refresh affected caches to replace outputs made by the earlier unstable sort. ([#259](https://github.com/Open-Quant/openquant/pull/259))
+- `feature_diagnostics`: count the post-fold embargo after the latest test label resolves, preserving the pre-fold window. MDA, SFI and substitution scores can change; folds with no remaining training samples raise `ValueError`. ([#257](https://github.com/Open-Quant/openquant/pull/257))
 
 ## 0.1.0 - 2026-10-01
 

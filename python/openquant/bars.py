@@ -30,18 +30,18 @@ def _rows_to_frame(
 ) -> pl.DataFrame:
     if not rows:
         return pl.DataFrame(
-            {
-                "ts": [],
-                "symbol": [],
-                "open": [],
-                "high": [],
-                "low": [],
-                "close": [],
-                "volume": [],
-                "adj_close": [],
-                "start_ts": [],
-                "n_obs": [],
-                "dollar_value": [],
+            schema={
+                "ts": pl.Datetime("us"),
+                "symbol": pl.String,
+                "open": pl.Float64,
+                "high": pl.Float64,
+                "low": pl.Float64,
+                "close": pl.Float64,
+                "volume": pl.Float64,
+                "adj_close": pl.Float64,
+                "start_ts": pl.Datetime("us"),
+                "n_obs": pl.Int64,
+                "dollar_value": pl.Float64,
             }
         )
     return (
