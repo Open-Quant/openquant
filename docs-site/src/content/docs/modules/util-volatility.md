@@ -2,7 +2,7 @@
 title: "util::volatility"
 description: "Volatility estimators used across labeling and risk workflows."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-06'
 audience:
   - quant-dev
   - platform-engineering
@@ -23,6 +23,8 @@ sidebar:
 citation:
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. §3.3, Snippet 3.1."
   - "OpenQuant crates/openquant/src/util/volatility.rs and crates/openquant/tests/volatility_features.rs: estimator formulas and reference tests."
+  - "OpenQuant crates/openquant/tests/daily_vol.rs: adjusted EWM reference and missing-return regressions."
+  - "OpenQuant crates/openquant/tests/daily_vol_extremes.rs: first-observation initialization, constant returns, and explicit arithmetic overflow."
 ---
 
 ## Four estimators, two window conventions
@@ -73,6 +75,19 @@ $$
 One observation cannot estimate this variance. Span 1 also leaves only one
 positive weight, so every returned estimate is NaN. Span 0 or fewer than two
 input bars returns an empty sequence.
+
+Non-finite returns are treated as missing, matching pandas' default
+`ewm(span=lookback).std()` behavior with `ignore_na=False`. A missing return
+still ages earlier observations' weights, but does not enter the mean or
+variance. The estimate remains NaN until two finite returns have non-zero
+weight, then carries the previous estimate across missing returns. Later
+finite returns resume the calculation rather than resetting it to zero.
+
+The EWM recurrence stores variance in `f64`. Extremely large finite returns
+can overflow variance or intermediate calculations, producing infinity or
+NaN even when the mathematical standard deviation is representable. These
+results are not clamped to zero. Check that each target is finite before
+using it as a labeling barrier or in another downstream calculation.
 
 ```python
 import math

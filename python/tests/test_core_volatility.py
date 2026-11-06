@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, timedelta
 
 import pytest
 from _core_fixtures import load_csv_columns, load_json, nanmean
@@ -63,9 +64,8 @@ def test_yang_zhang_is_zero_for_pure_drift():
 
 
 def test_daily_vol_is_zero_for_constant_daily_return():
-    # No Rust value test exists for get_daily_vol (it is only used as an input in
-    # crates/openquant/tests/sample_weights.rs). A series compounding at exactly 1% per
-    # day has identical one-day returns, so any EWM standard deviation of them is zero.
+    # A series compounding at exactly 1% per day has identical eligible two-day
+    # returns, so any EWM standard deviation of them is zero.
     timestamps = [f"2024-01-{day:02d} 00:00:00" for day in range(1, 11)]
     prices = [100.0 * 1.01**i for i in range(10)]
 
@@ -85,6 +85,74 @@ def test_daily_vol_rejects_length_mismatch_and_bad_timestamps():
         volatility.get_daily_vol(["2024-01-01 00:00:00"], [1.0, 2.0], 5)
     with pytest.raises(ValueError, match="invalid datetime"):
         volatility.get_daily_vol(["2024-01-01"], [1.0], 5)
+
+
+@pytest.mark.parametrize(
+    ("prices", "expected"),
+    [
+        (
+            [100.0, 110.0, 120.0, math.nan, 150.0, 140.0, 170.0, 180.0],
+            [
+                math.nan,
+                math.nan,
+                0.03535533905932741,
+                0.03535533905932741,
+                0.07528605062021397,
+                0.09357397530988633,
+            ],
+        ),
+        (
+            [math.nan, math.nan, 100.0, 110.0, 120.0, 130.0, 140.0],
+            [math.nan, math.nan, math.nan, 0.012856486930664428, 0.015745916432444287],
+        ),
+        (
+            [100.0, 110.0, 120.0, 125.0, math.nan, 150.0, 160.0, 170.0],
+            [
+                math.nan,
+                0.044997704257325646,
+                0.044997704257325646,
+                0.037440353071835054,
+                0.037440353071835054,
+                0.0423121471969789,
+            ],
+        ),
+        ([math.nan] * 6, [math.nan] * 4),
+        (
+            [100.0, 110.0, 120.0, math.inf, 150.0, 140.0, 170.0, 180.0],
+            [
+                math.nan,
+                math.nan,
+                0.03535533905932741,
+                0.8361845163924918,
+                0.6709403362030547,
+                0.5297712044961865,
+            ],
+        ),
+    ],
+    ids=["interior_nan", "leading_nan", "hold_then_recover", "all_nan", "infinite_return"],
+)
+def test_daily_vol_matches_pandas_with_missing_returns(prices, expected):
+    # Independent pandas EWM golden values shared with crates/openquant/tests/daily_vol.rs.
+    timestamps = [f"2024-01-{i + 1:02d} 00:00:00" for i in range(len(prices))]
+    out = volatility.get_daily_vol(timestamps, prices, 3)
+    assert [timestamp for timestamp, _ in out] == timestamps[2:]
+    assert [value for _, value in out] == pytest.approx(expected, nan_ok=True, rel=0, abs=1e-12)
+
+
+def test_daily_vol_does_not_underflow_to_zero_across_a_long_missing_gap():
+    prices = [100.0, 101.0, 102.0, 103.0] + [math.nan] * 530
+    start = datetime(2024, 1, 1)
+    timestamps = [
+        (start + timedelta(days=i)).strftime("%Y-%m-%d %H:%M:%S") for i in range(len(prices))
+    ]
+    out = volatility.get_daily_vol(timestamps, prices, 3)
+    # Two-observation sample standard deviation, carried forward by pandas.
+    expected = math.sqrt((102.0 / 100.0 - 103.0 / 101.0) ** 2 / 2)
+    assert [timestamp for timestamp, _ in out] == timestamps[2:]
+    assert math.isnan(out[0][1])
+    assert [value for _, value in out[1:]] == pytest.approx(
+        [expected] * (len(out) - 1), rel=0, abs=1e-12
+    )
 
 
 @pytest.mark.parametrize(
