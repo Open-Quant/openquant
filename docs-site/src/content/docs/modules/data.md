@@ -2,7 +2,7 @@
 title: "data"
 description: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting."
 status: authored
-last_authored: '2026-11-05'
+last_authored: '2026-11-06'
 citation:
   - 'OpenQuant python/openquant/data.py: loading, cleaning, calendar alignment, cache and hash contracts.'
   - 'OpenQuant python/tests/test_data_module.py and python/tests/test_data_fetch.py: data quality, calendar, cache and provenance tests.'
@@ -10,6 +10,7 @@ citation:
   - 'OpenQuant python/tests/test_data_cache_namespaces.py: independent source and symbol cache directories.'
   - 'OpenQuant python/tests/test_data_cache_identity.py: request identity and malformed cache sidecars.'
   - 'OpenQuant python/tests/test_data_cleaning_execution.py: optional-report execution and unchanged cleaning results.'
+  - 'OpenQuant python/tests/test_data_duplicate_order.py: first/last input revision selection across cleaning, loading and alignment.'
 audience:
   - quant-dev
   - platform-engineering
@@ -88,7 +89,7 @@ Use `fetch` when a study needs daily bars for a list of symbols and must be repr
 | `path` | `str \| Path` | File path to CSV or Parquet OHLCV data (load_ohlcv) | — |
 | `symbol` | `str \| None` | Symbol name if not present as a column in the data | None |
 | `interval` | `str` | Calendar alignment interval (e.g., '1d', '1h', '5m') | '1d' |
-| `dedupe_keep` | `str` | Which duplicate to keep: 'first' or 'last' | 'last' |
+| `dedupe_keep` | `str` | Which surviving input occurrence of a duplicate key to keep: 'first' or 'last' | 'last' |
 | `return_report` | `bool` | Also calculate a quality report (`clean_ohlcv`) | False |
 
 ## Usage Examples
@@ -210,7 +211,7 @@ with TemporaryDirectory() as directory:
 True
 ```
 
-The default duplicate policy keeps the last row, so January 2 closes at 102.5.
+The default duplicate policy keeps the last surviving input row, so January 2 closes at 102.5.
 Alignment inserts January 3 with null price/volume fields and
 `is_missing_bar=True`; it does not invent a tradable bar or impute prices.
 The inferred spacing here is one day (the smallest spacing wins a frequency
@@ -232,6 +233,14 @@ report retains input null counts even though those rows are removed. This also a
 when every timestamp is unparseable: the cleaned frame is empty, and the report
 counts every invalid timestamp as a null. Run
 `data_quality_report(cleaned)` separately to describe only the resulting frame.
+For duplicate `(symbol, ts)` keys, `dedupe_keep="first"` or `"last"` selects by the
+order of the surviving input rows, not price or volume. The key sort is stable, so
+shuffled or multi-chunk input keeps that order within each key. `load_ohlcv`,
+`align_calendar` and newly fetched data use the default last-input-row policy.
+Earlier Python cleanup could choose a different duplicate because its key sort
+was unstable. Reload the raw source (or use `fetch(..., refresh=True)`) to rebuild
+affected outputs; existing caches are not automatically recomputed by this fix.
+
 These behaviors are implemented in
 [data.py](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py)
 and exercised in the [data tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_data_module.py).

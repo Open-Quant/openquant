@@ -307,8 +307,8 @@ def clean_ohlcv(
         Long OHLCV frame with `ts`, `symbol`, `open`, `high`, `low`, `close` and `volume`
         (or their aliases), optionally `adj_close`.
     dedupe_keep : {"first", "last"}, default "last"
-        Which row to keep among rows sharing a `(symbol, ts)` key, by position after the
-        frame is sorted by `symbol` and `ts`.
+        Which surviving input row to keep among rows sharing a `(symbol, ts)` key.
+        Sorting is stable, so the choice follows input order after null rows are dropped.
     return_report : bool, default False
         Also return a data quality report of the cleaned frame.
 
@@ -333,7 +333,7 @@ def clean_ohlcv(
     base_lf = cast_lf.drop_nulls(CANONICAL_OHLCV_COLUMNS).with_columns(
         pl.col("ts").dt.timestamp(time_unit="us").alias("ts_us")
     )
-    sorted_lf = base_lf.sort(["symbol", "ts_us"])
+    sorted_lf = base_lf.sort(["symbol", "ts_us"], maintain_order=True)
 
     duplicate_key_count = 0
     if return_report:
