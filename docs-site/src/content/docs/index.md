@@ -5,7 +5,7 @@ template: splash
 banner:
   content: '<a href="/openquant/quickstart/">New to OpenQuant? Start with the Quickstart guide →</a>'
 hero:
-  title: OpenQuant
+  title: '<span class="oq-eyebrow">Rust core · Python bindings</span>OpenQuant'
   tagline: The methods from López de Prado's Advances in Financial Machine Learning, implemented in Rust and callable from Python.
   image:
     file: ../../assets/openquant-mark.svg
@@ -47,9 +47,48 @@ Functions take plain sequences, and the data-loading layer works in Polars frame
   </a>
 </nav>
 
+## A research workflow, at a glance
+
+Each stage has a different job. Keep the data, label intervals, validation splits
+and evaluation assumptions explicit as you move between them.
+
+<figure class="oq-workflow not-content">
+  <ol class="oq-research-map" role="list" aria-label="Research workflow stages">
+    <li>
+      <span class="oq-step">01 →</span>
+      <strong>Prepare</strong>
+      <svg viewBox="0 0 160 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 42H152"/><path d="M18 34V24M36 34V14M54 34V20M72 34V8M90 34V16M108 34V4M126 34V12M144 34V6" class="oq-signal" stroke-width="7"/></svg>
+      <p>Turn observations into bars and sample meaningful events.</p>
+      <a href="/openquant/modules/data-structures/">Bars</a> · <a href="/openquant/modules/filters/">Filters</a>
+    </li>
+    <li>
+      <span class="oq-step">02 →</span>
+      <strong>Label</strong>
+      <svg viewBox="0 0 160 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 8H152M8 40H152M128 4V44" stroke-dasharray="4 4"/><path d="m8 28 18-7 20 9 20-13 20 5 20-14" class="oq-signal"/><circle cx="106" cy="8" r="4" class="oq-signal"/></svg>
+      <p>Define outcomes and retain their start and end times.</p>
+      <a href="/openquant/modules/labeling/">Triple-barrier labels</a>
+    </li>
+    <li>
+      <span class="oq-step">03 →</span>
+      <strong>Validate</strong>
+      <svg viewBox="0 0 160 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 8H62V20H8ZM8 28H94V40H8Z"/><path d="M82 8H118V20H82ZM114 28H150V40H114Z" class="oq-signal"/><path d="M70 4V24M102 24V44" stroke-dasharray="2 3"/></svg>
+      <p>Separate training from testing. Control overlapping labels.</p>
+      <a href="/openquant/modules/cross-validation/">Purged cross-validation</a>
+    </li>
+    <li>
+      <span class="oq-step">04</span>
+      <strong>Evaluate</strong>
+      <svg viewBox="0 0 160 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 8H152M8 24H152M8 40H152"/><path d="M20 5V43M108 5V43"/><path d="M34 16H78M122 16H140M34 32H64M122 32H140" class="oq-signal" stroke-width="3"/></svg>
+      <p>Read diagnostics with costs, uncertainty and limits in view.</p>
+      <a href="/openquant/modules/evaluation/">Evaluation</a> · <a href="/openquant/modules/research/">Research</a>
+    </li>
+  </ol>
+  <figcaption>Conceptual workflow, not a performance result. The sketches show each stage's role, not measured data; the linked modules document their contracts.</figcaption>
+</figure>
+
 ## Install and maturity
 
-OpenQuant is pre-release. These docs use a source checkout so the examples,
+**OpenQuant is pre-release.** These docs use a source checkout so the examples,
 Python wrappers and Rust extension come from the same revision. The
 [Quickstart](/quickstart/) walks through installation and a first result;
 [Local build](/setup/local-build/) is the contributor path.

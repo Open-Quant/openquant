@@ -48,6 +48,9 @@ jobs:
       - name: Build Astro docs
         run: bun run build
         working-directory: docs-site
+      - name: Test documentation design contracts
+        run: bun run test:design
+        working-directory: docs-site
       # cargo doc -p openquant --no-deps into dist/api/rust/. Before check:links, which
       # then proves every rustdoc link on the module pages points at a real page.
       - name: Build and stage rustdoc
