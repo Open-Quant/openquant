@@ -32,6 +32,10 @@ export default defineConfig({
       head: [
         {
           tag: 'link',
+          attrs: { rel: 'alternate', type: 'text/plain', title: 'OpenQuant agent index', href: '/openquant/llms.txt' },
+        },
+        {
+          tag: 'link',
           attrs: {
             rel: 'preconnect',
             href: 'https://fonts.googleapis.com',
@@ -99,7 +103,8 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', link: '/' },
-            { label: 'Quickstart', link: '/quickstart/' },
+            { label: 'For humans: Quickstart', link: '/quickstart/' },
+            { label: 'For agents', link: '/agents/' },
           ],
         },
         {

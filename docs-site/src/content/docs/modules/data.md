@@ -2,10 +2,14 @@
 title: "data"
 description: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-05'
 citation:
   - 'OpenQuant python/openquant/data.py: loading, cleaning, calendar alignment, cache and hash contracts.'
   - 'OpenQuant python/tests/test_data_module.py and python/tests/test_data_fetch.py: data quality, calendar, cache and provenance tests.'
+  - 'OpenQuant python/tests/test_data_normalization.py: canonical-column precedence and invalid timestamp reports.'
+  - 'OpenQuant python/tests/test_data_cache_namespaces.py: independent source and symbol cache directories.'
+  - 'OpenQuant python/tests/test_data_cache_identity.py: request identity and malformed cache sidecars.'
+  - 'OpenQuant python/tests/test_data_cleaning_execution.py: optional-report execution and unchanged cleaning results.'
 audience:
   - quant-dev
   - platform-engineering
@@ -43,9 +47,21 @@ Before any AFML workflow begins, raw market data must be fetched, loaded into a 
 
 `dataset_hash(df)` is a deterministic SHA-256 of a table's contents. `record_dataset_hash(manifest, df, **meta)` writes that hash, with the source, terms and request, into a run manifest, so every result can name the exact data behind it. `experiments/run_pipeline.py` records it in every `run_manifest.json`.
 
+Source names and symbols are URL-escaped as individual cache path components, including
+dot-only names (`.` and `..`). Each source and symbol keeps its own directory; ordinary
+dots in names such as `BRK.B` retain their existing cache paths.
+
+A cache hit requires both a matching content hash and a sidecar whose cache format,
+source, source version, symbol and date range match the request. Mismatched or malformed
+sidecars trigger a refetch; with `offline=True`, they raise `CacheMissError` instead.
+
 The loaders accept CSV or Parquet files with flexible column naming (e.g., "timestamp", "datetime", "date" all map to "ts"; "ticker" or "asset" map to "symbol") and produce a standardized Polars DataFrame with canonical OHLCV columns. Deduplication handles duplicate (symbol, timestamp) keys, and calendar alignment generates a regular grid with explicit gap markers.
 
 The data quality report provides diagnostics — row counts, symbol counts, duplicate counts, gap intervals, and null counts — that should be inspected before feeding data into bars, labeling, or any downstream module.
+
+For `clean_ohlcv`, request those diagnostics with `return_report=True`. The
+default `False` skips report-only scans while preserving the same cleaning
+and duplicate-retention behavior.
 
 ## When to Use
 
@@ -73,6 +89,7 @@ Use `fetch` when a study needs daily bars for a list of symbols and must be repr
 | `symbol` | `str \| None` | Symbol name if not present as a column in the data | None |
 | `interval` | `str` | Calendar alignment interval (e.g., '1d', '1h', '5m') | '1d' |
 | `dedupe_keep` | `str` | Which duplicate to keep: 'first' or 'last' | 'last' |
+| `return_report` | `bool` | Also calculate a quality report (`clean_ohlcv`) | False |
 
 ## Usage Examples
 
@@ -211,7 +228,9 @@ tie). The missing weekday is therefore counted as a gap.
 adj_close`, ordered by symbol and timestamp. It drops extra columns and rows
 with null canonical fields, including unparseable timestamps; a missing
 `adj_close` column is copied from `close`. The `return_report=True` cleaning
-report retains input null counts even though those rows are removed. Run
+report retains input null counts even though those rows are removed. This also applies
+when every timestamp is unparseable: the cleaned frame is empty, and the report
+counts every invalid timestamp as a null. Run
 `data_quality_report(cleaned)` separately to describe only the resulting frame.
 These behaviors are implemented in
 [data.py](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py)
@@ -244,7 +263,7 @@ hash version, row count and any source metadata supplied by the caller.
 - The bundled sample is SYNTHETIC, not market data. Its symbols (SYN_A ... SYN_E) are not real tickers. DATA_SOURCES.md at the repository root records the terms of every source and why no real sample is committed yet.
 - Check your source terms before persisting or redistributing fetched data. See [DATA_SOURCES.md](https://github.com/Open-Quant/openquant/blob/main/DATA_SOURCES.md) for repository data provenance.
 - `dataset_hash` (`oq-dataset-sha256-v1`) describes normalized content, as detailed above. Record source metadata alongside it rather than treating the digest as complete provenance.
-- Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol').
+- Column aliases are resolved automatically (e.g., 'timestamp' → 'ts', 'ticker' → 'symbol'). An exact canonical column wins over its aliases regardless of column order. Without a canonical column, the first recognized alias is used.
 - clean_ohlcv deduplicates by (symbol, ts) and sorts chronologically.
 - align_calendar marks missing bars with is_missing_bar=True for downstream imputation logic.
 - `gap_interval_count` in the quality report depends on the bar spacing, which the report infers and returns as `inferred_interval_us`: the most common spacing between consecutive bars of one symbol, pooled over symbols (the smallest on a tie). For daily data (a spacing within an hour of one day) a gap is a skipped weekday, so weekends are not gaps; exchange holidays are, since no holiday calendar is applied. For any other spacing a gap is a spacing longer than the inferred one, so intraday data counts every overnight and weekend break as a gap. Before #168 any spacing over one day was a gap whatever the frequency: weekends counted on daily data, and nothing counted on intraday data.

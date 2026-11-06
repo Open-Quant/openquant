@@ -12,6 +12,15 @@ use crate::helpers::{format_naive_datetime, pair_timestamps_values, to_py_err};
 /// increasing time. A typical use is as the target of the labeling functions, which drop
 /// NaN targets.
 ///
+/// Non-finite returns are treated as missing. Their positions still decay older weights
+/// (`ignore_na=False`), but do not enter the mean or variance. The estimate remains NaN
+/// until two finite returns have non-zero weight; a missing return then carries the previous
+/// estimate rather than turning it into zero.
+///
+/// Extremely large finite returns can overflow variance or intermediate arithmetic,
+/// producing infinity or NaN rather than zero. Check that targets are finite before
+/// passing them to downstream calculations.
+///
 /// Parameters
 /// ----------
 /// close_timestamps : list[str]

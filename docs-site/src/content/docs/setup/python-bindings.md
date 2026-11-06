@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-10-01'
+last_authored: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -10,53 +10,37 @@ sidebar:
   order: 3
 ---
 
-OpenQuant is not on PyPI yet. The Python package is a thin pure-Python layer
-(`python/openquant/`) over a compiled PyO3 extension
-(`crates/pyopenquant/`, built as `openquant._core`), so getting it means
-building it. Releases are published on PyPI as `pyopenquant` (from v0.1.0,
-`pip install pyopenquant` installs a prebuilt wheel); the import name is
-`openquant`. Do not `pip install openquant`: that name on PyPI belongs to an
-unrelated project, so the command succeeds and installs the wrong package.
+The Python package is a pure-Python layer (`python/openquant/`) over a compiled
+PyO3 extension (`crates/pyopenquant/`, built as `openquant._core`). This guide
+builds both from one checkout. The distribution name is `pyopenquant`; the import
+name is `openquant`. Do not `pip install openquant`: that name belongs to an
+unrelated project, so the command can succeed and install the wrong package.
+For packaged releases, check [release status](/project/governance/#versioning-and-releases).
 
 Before you start: [Prerequisites](/setup/prerequisites/). You need a Rust
 toolchain, a linker, and `uv`.
 
 ## Setup
 
-Four commands, from the repository root. The `python` jobs in
-`.github/workflows/ci.yml` run the same build on every PR, on Python 3.11
-and 3.13 (CI installs `maturin` from the dev dependency group rather than
-with `--with`; the result is the same).
+Run from the repository root. Python 3.13 matches `just py-setup`; CI tests
+the bindings on both Python 3.11 and 3.13.
 
 ```bash
-# 1. Create an isolated interpreter. CI builds against 3.11 and 3.13.
-uv venv --python 3.11 .venv
-
-# 2. Compile the extension and install it into that environment.
-uv run --python .venv/bin/python --with maturin \
-  maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-
-# 3. Prove it imports.
+uv venv --python 3.13 .venv
+uv sync --group dev
+uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
 uv run --python .venv/bin/python python -c "import openquant; print('openquant bindings import ok')"
-
-# 4. Prove it works.
-uv run --python .venv/bin/python --with pytest pytest python/tests -q
+uv run --python .venv/bin/python pytest python/tests -q
 ```
 
-Step 2 compiles the whole Rust workspace — `polars`, `nalgebra` and their
-dependency trees. Budget **10–20 minutes on a cold cache**; subsequent
-runs are incremental and take seconds.
+The first build compiles the Rust extension and its dependencies, including
+`polars` and `nalgebra`. Budget **10–20 minutes on a cold cache**; later builds
+are incremental. The import check prints `openquant bindings import ok` and
+pytest should report no failures. The test count and runtime change with the
+checkout and machine, so they are not a fixed acceptance value.
 
-Expected output from steps 3 and 4:
-
-```
-openquant bindings import ok
-```
-
-```
-................................                                         [100%]
-32 passed in 2.52s
-```
+Re-run `maturin develop` after any Rust change before testing Python. Otherwise,
+you can accidentally test an older extension against newer Python source.
 
 ### The `just` equivalents
 
@@ -71,13 +55,12 @@ just py-import-smoke   # import openquant; print('openquant bindings OK')
 just py-test           # pytest python/tests -q
 ```
 
-:::caution[`just py-setup` is not the same as the CI path]
-`py-setup` pins Python **3.13** where CI uses **3.11**, and it uses
-`uv sync` rather than `--with maturin`. `uv sync` builds the project
-through maturin's PEP 517 hook, which swallows the compiler's error
-output and reports only `returned non-zero exit status 1` — see
+:::note[When environment setup fails]
+`uv sync` also builds the project through maturin's PEP 517 hook. If it fails
+before showing a useful compiler error, follow the explicit diagnostic build in
 [Troubleshooting](/setup/troubleshooting/#uv-sync-fails-with-an-opaque-pep517-build-wheel-error).
-Prefer the four explicit commands above when something is going wrong.
+Use the pinned toolchain rather than changing dependency versions to suppress
+an error.
 :::
 
 ### Debug or release
@@ -87,8 +70,7 @@ correct, but unoptimised. That is fine for tests and most of the API. Numericall
 heavy calls are a different matter — a full-series
 [SADF](/modules/structural-breaks/) run can take minutes per model in a debug build.
 Before timing anything or running a long research job, rebuild with
-`maturin develop --release` (or `just py-develop-release`). `maturin build`, used for
-wheels below, already builds in release mode.
+`maturin develop --release` (or `just py-develop-release`). For distributable wheels, pass `--release` to `maturin build` explicitly.
 
 ## Building a wheel
 
@@ -97,7 +79,7 @@ development. To produce a distributable wheel:
 
 ```bash
 uv run --python .venv/bin/python --with maturin \
-  maturin build --manifest-path crates/pyopenquant/Cargo.toml --out dist
+  maturin build --release --manifest-path crates/pyopenquant/Cargo.toml --out dist
 ```
 
 The wheel lands in `dist/`. It is a stable-ABI (`abi3`) wheel: `pyproject.toml`

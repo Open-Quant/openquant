@@ -1,5 +1,5 @@
 /* OpenQuant identity — A · Monograph.
-   Source of truth: docs/design/identity/tokens.md (frozen). The colour pairs below are checked
+   Source of truth: docs/design/identity/tokens.md (Monograph, refined 2026-11-05). The colour pairs below are checked
    for AA contrast by scripts/check-contrast.mjs, which reads the --oq-* declarations from this
    file; change a value here and the gate re-measures it.
 
@@ -118,14 +118,23 @@ header.header {
 }
 
 .site-title {
+  font-family: var(--oq-serif);
+  font-size: 1.6rem;
+  gap: 0.65rem;
+  letter-spacing: -0.02em;
   font-weight: 600;
   color: var(--oq-text);
+}
+
+.site-title img {
+  height: 2rem;
+  width: 2rem;
 }
 
 /* Sidebar: small-cap group labels; the current page is marked by a rule, not a filled pill. */
 .sidebar-content .large,
 .sidebar-content summary .large {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -296,7 +305,9 @@ h1 {
   border-collapse: collapse;
   border-top: 2px solid var(--oq-text);
   border-bottom: 2px solid var(--oq-text);
-  font-size: 0.95em;
+  font-family: var(--oq-sans);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
@@ -316,12 +327,11 @@ h1 {
 
 .sl-markdown-content th:not(:where(.not-content *)) {
   font-family: var(--oq-sans);
-  font-size: 0.74rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--oq-muted);
+  line-height: 1.4;
+  color: var(--oq-text);
+  background: var(--oq-surface);
 }
 
 .sl-markdown-content tr:nth-child(2n):not(:where(.not-content *)) {
@@ -383,15 +393,14 @@ h1 {
 
 .hero .tagline {
   font-family: var(--oq-serif);
-  font-style: italic;
   font-size: 1.45rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--oq-text);
   max-width: 34rem;
 }
 
 .hero img {
-  max-width: 200px;
+  max-width: 168px;
 }
 
 .sl-link-button {
@@ -540,4 +549,127 @@ mobile-starlight-toc .toggle {
 .oq-api-kind,
 .oq-doc-missing {
   color: var(--oq-muted);
+}
+
+/* Audience paths share the Monograph palette. */
+.oq-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-block: 1.5rem 2rem;
+  font-family: var(--oq-sans);
+}
+
+.oq-path {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid var(--oq-rule);
+  border-block-start: 3px solid var(--oq-accent);
+  border-radius: 3px;
+  color: var(--oq-text);
+  background: var(--oq-surface);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.oq-path > strong {
+  font-family: var(--oq-serif);
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.oq-path-label {
+  color: var(--oq-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.oq-path-action {
+  margin-block-start: auto;
+  padding-block-start: 0.5rem;
+  color: var(--oq-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.oq-path:hover {
+  border-color: var(--oq-accent);
+}
+
+/* The accent passes AA against ground and surface in check:contrast. A visible
+   outline is independent of hover/color alone and follows keyboard focus. */
+:where(a, button, input, select, summary):focus-visible {
+  outline: 3px solid var(--oq-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .oq-paths { grid-template-columns: 1fr; }
+  .oq-path { padding: 1rem; }
+}
+
+/* Use the actual loaded semibold face, including bold links and inline code. */
+.sl-markdown-content :is(strong, b):not(:where(.not-content *)) {
+  font-weight: 600;
+  color: var(--oq-text);
+}
+
+.oq-eyebrow {
+  display: block;
+  margin-bottom: 0.9rem;
+  font-family: var(--oq-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--oq-accent);
+}
+
+/* Research map: an ordered reading aid, not a quantitative or performance chart.
+   Meaning lives in HTML text. Color, position and decorative glyphs are supplementary. */
+.oq-research-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-block: 2px solid var(--oq-text);
+  font-family: var(--oq-sans);
+}
+
+.oq-research-map > li {
+  min-width: 0;
+  padding: 1.1rem;
+  border-inline-end: 1px solid var(--oq-rule);
+}
+
+.oq-research-map > li:last-child { border-inline-end: 0; }
+.oq-research-map .oq-step { display: block; color: var(--oq-accent); font-family: var(--oq-mono); font-size: 0.8rem; }
+.oq-research-map strong { display: block; margin-block: 0.35rem 0.6rem; font-weight: 600; font-size: 1.12rem; }
+.oq-research-map p { margin-block: 0.65rem; font-size: 0.9rem; line-height: 1.5; }
+.oq-research-map a { color: var(--oq-accent); font-size: 0.85rem; text-decoration: underline; text-underline-offset: 0.18em; }
+.oq-research-map svg { display: block; width: 100%; max-width: 12rem; height: 3.5rem; color: var(--oq-muted); }
+.oq-research-map .oq-signal { stroke: var(--oq-accent); }
+
+@media (max-width: 60rem) {
+  .oq-research-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .oq-research-map > li:nth-child(2) { border-inline-end: 0; }
+  .oq-research-map > li:nth-child(-n+2) { border-block-end: 1px solid var(--oq-rule); }
+}
+
+@media (max-width: 30rem) {
+  .hero { padding-block: 1.5rem; }
+  .hero img { max-width: 88px; }
+  .hero .tagline { font-size: 1.25rem; }
+  .oq-research-map { grid-template-columns: 1fr; }
+  .oq-research-map > li { border-inline-end: 0; border-block-end: 1px solid var(--oq-rule); }
+  .oq-research-map > li:last-child { border-block-end: 0; }
+  .oq-research-map svg { max-width: 10rem; }
 }

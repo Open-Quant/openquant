@@ -51,7 +51,9 @@ def _normalize_column_name(name: str) -> str:
 
 def _canonicalize_columns(df: pl.DataFrame) -> pl.DataFrame:
     rename_map: dict[str, str] = {}
-    used_targets: set[str] = set()
+    # An exact canonical column takes precedence even if its alias appears first.
+    # Otherwise both columns would be renamed to the same target.
+    used_targets = set(df.columns).intersection(CANONICAL_OHLCV_COLUMNS)
     for col in df.columns:
         key = _normalize_column_name(col)
         if key in _COLUMN_ALIASES:
@@ -84,9 +86,15 @@ def _parse_ts(expr: pl.Expr) -> pl.Expr:
     Strings in `TS_FORMAT` are parsed with it; anything else (dates, ISO `T` forms) falls back
     to polars' format inference, as before.
     """
+    # strict=False turns bad values into nulls, but inference still raises if *none*
+    # can be parsed. A final known-valid date lets inference finish in that case;
+    # remove it before returning so empty/all-invalid inputs keep their original size.
+    inferred = (
+        expr.append(pl.lit("2000-01-01")).str.strptime(pl.Datetime, strict=False).head(expr.len())
+    )
     return pl.coalesce(
         expr.str.strptime(pl.Datetime, TS_FORMAT, strict=False),
-        expr.str.strptime(pl.Datetime, strict=False),
+        inferred,
     )
 
 
@@ -327,20 +335,22 @@ def clean_ohlcv(
     )
     sorted_lf = base_lf.sort(["symbol", "ts_us"])
 
-    duplicate_key_count = int(
-        sorted_lf.select(
-            (
+    duplicate_key_count = 0
+    if return_report:
+        duplicate_key_count = int(
+            sorted_lf.select(
                 (
-                    (pl.col("symbol") == pl.col("symbol").shift(1))
-                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
-                )
-                .cast(pl.UInt32)
-                .sum()
-            ).alias("duplicate_key_count")
+                    (
+                        (pl.col("symbol") == pl.col("symbol").shift(1))
+                        & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+                    )
+                    .cast(pl.UInt32)
+                    .sum()
+                ).alias("duplicate_key_count")
+            )
+            .collect()
+            .item(0, 0)
         )
-        .collect()
-        .item(0, 0)
-    )
 
     cleaned = (
         sorted_lf.unique(
@@ -916,17 +926,24 @@ def _as_symbols(symbols: str | Iterable[str]) -> list[str]:
     return out
 
 
+def _cache_component(value: str) -> str:
+    # quote(..., safe="") still leaves RFC-unreserved dots unchanged. Dot-only
+    # components must not resolve to this directory or its parent on the filesystem.
+    encoded = quote(value, safe="")
+    return encoded.replace(".", "%2E") if encoded in {".", ".."} else encoded
+
+
 def _source_dir(source: Any) -> str:
     name = getattr(source, "name", None)
     if not isinstance(name, str) or not name.strip():
         raise ValueError("source.name must be a non-empty string")
     version = str(getattr(source, "version", "") or "")
-    key = quote(name, safe="")
+    key = _cache_component(name)
     return f"{key}@{quote(version, safe='')}" if version else key
 
 
 def _cache_paths(root: Path, source: Any, symbol: str, start: date, end: date) -> tuple[Path, Path]:
-    base = root / _source_dir(source) / quote(symbol, safe="")
+    base = root / _source_dir(source) / _cache_component(symbol)
     stem = f"{start.isoformat()}_{end.isoformat()}"
     return base / f"{stem}.parquet", base / f"{stem}.json"
 
@@ -1025,15 +1042,31 @@ def fetch(
     cache_status: dict[str, str] = {}
     for sym in syms:
         data_path, meta_path = _cache_paths(root, src, sym, start_d, end_d)
+        request_metadata = {
+            "format": CACHE_FORMAT,
+            "source": src.name,
+            "source_version": str(getattr(src, "version", "") or ""),
+            "symbol": sym,
+            "start": start_d.isoformat(),
+            "end": end_d.isoformat(),
+        }
         frame: pl.DataFrame | None = None
         if not refresh and data_path.exists() and meta_path.exists():
-            cached = pl.read_parquet(data_path)
-            recorded = json.loads(meta_path.read_text(encoding="utf-8")).get("dataset_hash")
-            if recorded == dataset_hash(cached):
-                frame = cached
-                cache_status[sym] = "hit"
-            elif offline:
-                raise CacheMissError(f"cache entry {data_path} does not match its recorded hash")
+            try:
+                recorded = json.loads(meta_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                recorded = None
+            if isinstance(recorded, dict) and all(
+                recorded.get(key) == value for key, value in request_metadata.items()
+            ):
+                cached = pl.read_parquet(data_path)
+                if recorded.get("dataset_hash") == dataset_hash(cached):
+                    frame = cached
+                    cache_status[sym] = "hit"
+            if frame is None and offline:
+                raise CacheMissError(
+                    f"cache entry {data_path} does not match its request metadata or recorded hash"
+                )
         if frame is None:
             if offline:
                 raise CacheMissError(
@@ -1043,13 +1076,8 @@ def fetch(
                 src.fetch_symbol(sym, start_d, end_d), src.name, sym, start_d, end_d
             )
             entry = {
-                "format": CACHE_FORMAT,
-                "source": src.name,
-                "source_version": str(getattr(src, "version", "") or ""),
+                **request_metadata,
                 "terms": getattr(src, "terms", None),
-                "symbol": sym,
-                "start": start_d.isoformat(),
-                "end": end_d.isoformat(),
                 "rows": frame.height,
                 "dataset_hash": dataset_hash(frame),
                 "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
