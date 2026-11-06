@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-10-01'
+last_generated: '2026-11-05'
 audience:
   - quant-dev
   - platform-engineering
@@ -27,6 +27,10 @@ page (`python3 scripts/docs/generate_site_pages.py --write`; CI fails if the pag
 file disagree).
 
 ## Unreleased
+
+### Fixed
+
+- `data`: preserve input order when selecting the first or last OHLCV duplicate. Reload the raw source or refresh affected caches to replace outputs made by the earlier unstable sort.
 
 ## 0.1.0 - 2026-10-01
 

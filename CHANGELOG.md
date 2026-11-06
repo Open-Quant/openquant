@@ -14,6 +14,10 @@ file disagree).
 
 ## Unreleased
 
+### Fixed
+
+- `data`: preserve input order when selecting the first or last OHLCV duplicate. Reload the raw source or refresh affected caches to replace outputs made by the earlier unstable sort.
+
 ## 0.1.0 - 2026-10-01
 
 First release.
