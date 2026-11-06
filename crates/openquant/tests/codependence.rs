@@ -186,3 +186,62 @@ fn perfectly_anticorrelated_series_do_not_panic() {
     assert!((get_mutual_info(&x, &mirrored, None, true).unwrap() - 1.0).abs() < 1e-12);
     assert!(variation_of_information_score(&x, &mirrored, None, true).unwrap().abs() < 1e-12);
 }
+
+/// These ordinary decimal returns put the computed correlation just outside [-1, 1]
+/// through rounding. Perfect positive/negative dependence has known boundary distances.
+#[test]
+fn angular_distances_stay_finite_for_proportional_returns() {
+    let x = [-0.019515858338768028, 0.018977241163271315, 0.005709923350367178];
+    for scale in [1.7, -1.7] {
+        let y: Vec<f64> = x.iter().map(|v| v * scale).collect();
+        assert_close(
+            angular_distance(&x, &y).unwrap(),
+            if scale > 0.0 { 0.0 } else { 1.0 },
+            "angular boundary",
+        );
+        assert_close(absolute_angular_distance(&x, &y).unwrap(), 0.0, "absolute boundary");
+        assert_close(squared_angular_distance(&x, &y).unwrap(), 0.0, "squared boundary");
+    }
+}
+
+/// Summing ten copies of 0.1 rounds the mean away from the input value. That must not
+/// turn a constant input into a nonzero-variance series or enable automatic bin selection.
+#[test]
+fn decimal_constant_returns_are_rejected_by_correlation_consumers() {
+    use openquant::codependence::CodependenceError;
+
+    let constant = [0.1; 10];
+    let variable: Vec<f64> = (0..10).map(|i| f64::from(i) / 100.0).collect();
+    for (x, y) in [(constant.as_slice(), variable.as_slice()), (&variable, &constant)] {
+        for result in [
+            angular_distance(x, y),
+            absolute_angular_distance(x, y),
+            squared_angular_distance(x, y),
+            get_mutual_info(x, y, None, false),
+            variation_of_information_score(x, y, None, false),
+        ] {
+            assert!(matches!(result, Err(CodependenceError::ZeroVariance)), "{result:?}");
+        }
+        // Explicit bin counts do not require correlation; their existing contract remains.
+        assert_close(get_mutual_info(x, y, Some(2), false).unwrap(), 0.0, "constant MI");
+        assert_close(
+            variation_of_information_score(x, y, Some(2), true).unwrap(),
+            1.0,
+            "constant VI",
+        );
+    }
+}
+
+#[test]
+fn nonfinite_correlations_are_not_clamped_into_valid_distances() {
+    let y = [1.0, 2.0, 3.0];
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let x = [1.0, bad, 3.0];
+        assert!(angular_distance(&x, &y).unwrap().is_nan());
+        assert!(absolute_angular_distance(&x, &y).unwrap().is_nan());
+        assert!(squared_angular_distance(&x, &y).unwrap().is_nan());
+    }
+    // Underflow of the variance product gives an infinite correlation, not a valid bound.
+    let tiny = [1e-100, 2e-100, 3e-100];
+    assert!(angular_distance(&tiny, &tiny).unwrap().is_nan());
+}

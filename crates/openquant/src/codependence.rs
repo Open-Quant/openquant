@@ -69,6 +69,13 @@ fn corrcoef(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
     if x.len() < 2 {
         return Err(CodependenceError::InputTooShort);
     }
+    // Summation can round the mean away from a repeated decimal value and manufacture
+    // a tiny variance. Check finite constant inputs by value before centring them.
+    if (x[0].is_finite() && x.iter().all(|v| *v == x[0]))
+        || (y[0].is_finite() && y.iter().all(|v| *v == y[0]))
+    {
+        return Err(CodependenceError::ZeroVariance);
+    }
 
     let n = x.len() as f64;
     let mean_x = x.iter().sum::<f64>() / n;
@@ -90,7 +97,10 @@ fn corrcoef(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
         return Err(CodependenceError::ZeroVariance);
     }
 
-    Ok(cov / (var_x * var_y).sqrt())
+    let corr = cov / (var_x * var_y).sqrt();
+    // Roundoff can place a finite Pearson correlation just beyond its mathematical
+    // bounds, making angular-distance square roots NaN. Do not mask nonfinite results.
+    Ok(if corr.is_finite() { corr.clamp(-1.0, 1.0) } else { corr })
 }
 
 fn histogram(values: &[f64], n_bins: usize) -> CodependenceResult<Vec<usize>> {
