@@ -153,3 +153,57 @@ fn test_minimum_track_record_length() {
     let min_trl = minimum_track_record_length(1.14, 1.0, 0.0, 3.0, 0.05).unwrap();
     assert!((min_trl - expected(&reference(), "/min_trl")).abs() < 1e-7);
 }
+
+#[test]
+fn constant_return_sharpe_and_information_ratios() {
+    for value in [0.01, -0.01] {
+        for n in [10, 1000] {
+            let returns = vec![value; n];
+            for annualization in [1.0, 252.0] {
+                for benchmark in [-0.02, 0.0, 0.02] {
+                    let expected =
+                        if value > benchmark { f64::INFINITY } else { f64::NEG_INFINITY };
+                    assert_eq!(sharpe_ratio(&returns, annualization, benchmark), expected);
+                    assert_eq!(information_ratio(&returns, benchmark, annualization), expected);
+                }
+                assert!(sharpe_ratio(&returns, annualization, value).is_nan());
+                assert!(information_ratio(&returns, value, annualization).is_nan());
+            }
+        }
+    }
+}
+
+#[test]
+fn degenerate_sharpe_inputs_keep_ieee_behavior() {
+    for returns in [
+        vec![],
+        vec![0.01],
+        vec![0.0; 10],
+        vec![-0.0; 10],
+        vec![-0.0, 0.0],
+        vec![f64::NAN; 10],
+        vec![f64::INFINITY; 10],
+        vec![f64::NEG_INFINITY; 10],
+        vec![0.01, f64::NAN],
+        vec![0.01, f64::INFINITY],
+        vec![f64::INFINITY, f64::NEG_INFINITY],
+    ] {
+        assert!(sharpe_ratio(&returns, 1.0, 0.0).is_nan());
+        assert!(information_ratio(&returns, 0.0, 1.0).is_nan());
+    }
+    for annualization in [0.0, -1.0, f64::NAN] {
+        assert!(sharpe_ratio(&[0.01; 10], annualization, 0.0).is_nan());
+    }
+}
+
+#[test]
+fn identical_trial_sharpes_have_zero_deflation_benchmark() {
+    for value in [0.01, -0.01] {
+        for n in [10, 1000] {
+            assert_eq!(
+                deflated_sharpe_ratio(1.0, &vec![value; n], 250, 0.0, 3.0, false, true).unwrap(),
+                0.0
+            );
+        }
+    }
+}
