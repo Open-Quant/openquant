@@ -2,7 +2,7 @@
 title: "backtest_statistics"
 description: "Sharpe ratios with their uncertainty — probabilistic and deflated Sharpe, minimum track record length — plus drawdown, concentration and holding-period statistics."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-11-06'
 audience:
   - quant-dev
   - platform-engineering
@@ -216,8 +216,12 @@ assert!((sharpe_ratio(&r, 252.0, 0.0) / sharpe_ratio(&r, 1.0, 0.0) - 252f64.sqrt
   of one idea are highly correlated, so the *effective* number of trials is smaller than the
   count; AFML suggests clustering the trials ([`onc`](/modules/onc/)) and counting clusters.
   Counting too few trials is the more common error.
-- **`sharpe_ratio` does not validate.** An empty slice gives `NaN`, one return gives `NaN`,
-  constant returns give infinity.
+- **`sharpe_ratio` does not validate.** An empty slice or one return gives `NaN`. For positive
+  finite annualization and a finite risk-free rate, finite constant returns give signed infinity
+  for nonzero excess return, or `NaN` when the return equals the risk-free rate (0/0). Exactly
+  constant values are recognized without a tolerance; nearly constant series keep their computed
+  deviation. The shared mean and variance estimators are not generally overflow-safe for
+  nonconstant extreme values.
 
 ## Related modules
 

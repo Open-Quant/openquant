@@ -16,8 +16,9 @@
 //! - **Quantiles** interpolate between order statistics by one of the [`QuantileMethod`]s, with
 //!   `q` clamped into `[0, 1]`.
 //!
-//! The arithmetic is two-pass (the mean first, then the squared deviations from it), summed in
-//! input order, so results do not depend on which module calls them.
+//! Finite constant slices have their exact mean and zero variance/deviation. Otherwise the
+//! arithmetic is two-pass (the mean first, then the squared deviations from it), summed in input
+//! order. This is not an overflow-safe or compensated estimator for nonconstant inputs.
 //!
 //! ```
 //! use openquant::util::stats::{mean, quantile, std_dev, QuantileMethod};
@@ -32,6 +33,8 @@ use nalgebra::DMatrix;
 
 /// Arithmetic mean, `sum(values) / n`, or `None` when `values` is empty.
 ///
+/// A finite constant slice returns its constant value exactly, avoiding summation roundoff.
+///
 /// ```
 /// use openquant::util::stats::mean;
 ///
@@ -39,8 +42,11 @@ use nalgebra::DMatrix;
 /// assert_eq!(mean(&[]), None);
 /// ```
 pub fn mean(values: &[f64]) -> Option<f64> {
-    if values.is_empty() {
-        return None;
+    let &first = values.first()?;
+    // Equal values can acquire a rounded mean after summation. Compare bits so a mixture of
+    // positive and negative zero keeps the original summation's sign convention.
+    if first.is_finite() && values.iter().all(|v| v.to_bits() == first.to_bits()) {
+        return Some(first);
     }
     Some(values.iter().sum::<f64>() / values.len() as f64)
 }
@@ -63,7 +69,7 @@ pub fn variance(values: &[f64], ddof: usize) -> Option<f64> {
     if n == 0 || n <= ddof {
         return None;
     }
-    let mu = values.iter().sum::<f64>() / n as f64;
+    let mu = mean(values)?;
     let squares = values
         .iter()
         .map(|v| {
@@ -214,6 +220,88 @@ mod tests {
         assert_eq!(variance(&[5.0], 0), Some(0.0));
         assert_eq!(variance(&[5.0], 1), None);
         assert_eq!(variance(&[1.0, 2.0], 2), None);
+    }
+
+    #[test]
+    fn finite_constants_have_exact_mean() {
+        for value in [0.01, -0.01, f64::MAX, -f64::MAX, f64::MIN_POSITIVE, f64::from_bits(1)] {
+            for n in [1, 2, 10, 1000] {
+                let values = vec![value; n];
+                assert_eq!(mean(&values), Some(value), "value={value}, n={n}");
+            }
+        }
+    }
+
+    #[test]
+    fn finite_constants_have_zero_variance() {
+        for value in [0.01, -0.01, f64::MAX, -f64::MAX, f64::MIN_POSITIVE, f64::from_bits(1)] {
+            for n in [1, 2, 10, 1000] {
+                let values = vec![value; n];
+                for ddof in [0, 1, n - 1, n, usize::MAX] {
+                    let expected = (n > ddof).then_some(0.0);
+                    assert_eq!(
+                        variance(&values, ddof),
+                        expected,
+                        "value={value}, n={n}, ddof={ddof}"
+                    );
+                    assert_eq!(std_dev(&values, ddof), expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn signed_zero_statistics_keep_their_sign_conventions() {
+        for values in [vec![0.0; 10], vec![-0.0; 10], vec![-0.0, 0.0], vec![0.0, -0.0]] {
+            let expected_mean = values.iter().sum::<f64>() / values.len() as f64;
+            assert_eq!(mean(&values).unwrap().to_bits(), expected_mean.to_bits());
+            for ddof in [0, 1] {
+                assert_eq!(variance(&values, ddof).unwrap().to_bits(), 0.0_f64.to_bits());
+                assert_eq!(std_dev(&values, ddof).unwrap().to_bits(), 0.0_f64.to_bits());
+            }
+        }
+    }
+
+    #[test]
+    fn nonfinite_statistics_are_not_treated_as_finite_constants() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for values in [vec![value; 10], vec![0.01, value], vec![value, 0.01]] {
+                let expected_mean = values.iter().sum::<f64>() / values.len() as f64;
+                let actual_mean = mean(&values).unwrap();
+                if expected_mean.is_nan() {
+                    assert!(actual_mean.is_nan());
+                } else {
+                    assert_eq!(actual_mean, expected_mean);
+                }
+                assert!(variance(&values, 0).unwrap().is_nan());
+                assert!(std_dev(&values, 1).unwrap().is_nan());
+                assert_eq!(variance(&values, values.len()), None);
+            }
+        }
+        assert!(mean(&[f64::INFINITY, f64::NEG_INFINITY]).unwrap().is_nan());
+        assert!(variance(&[f64::INFINITY, f64::NEG_INFINITY], 1).unwrap().is_nan());
+    }
+
+    #[test]
+    fn nonconstant_statistics_keep_the_existing_arithmetic() {
+        let mut nearly_constant = vec![0.01; 10];
+        nearly_constant[9] = f64::from_bits(0.01_f64.to_bits() + 1);
+        assert!(variance(&nearly_constant, 1).unwrap() > 0.0);
+        for values in [
+            nearly_constant,
+            vec![0.03, 0.02, 0.01, -0.01, 0.02, 0.01, 0.0, -0.01, 0.01],
+            vec![f64::MAX, f64::MAX / 2.0],
+            vec![1e-300, 2e-300],
+        ] {
+            let mu = values.iter().sum::<f64>() / values.len() as f64;
+            assert_eq!(mean(&values).unwrap().to_bits(), mu.to_bits());
+            for ddof in [0, 1] {
+                let expected = values.iter().map(|v| (v - mu) * (v - mu)).sum::<f64>()
+                    / (values.len() - ddof) as f64;
+                let actual = variance(&values, ddof).unwrap();
+                assert_eq!(actual.to_bits(), expected.to_bits());
+            }
+        }
     }
 
     #[test]

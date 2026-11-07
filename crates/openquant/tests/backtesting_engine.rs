@@ -183,3 +183,27 @@ fn walk_forward_handles_huge_test_and_step_sizes() {
     assert_eq!(wf.splits.len(), 1);
     assert_eq!(wf.splits[0].test_indices, (10..24).collect::<Vec<_>>());
 }
+
+#[test]
+fn constant_cpcv_returns_use_engine_zero_sharpe_convention() {
+    let data = build_data(30);
+    for value in [0.01, -0.01] {
+        let result = run_cpcv(
+            &data,
+            &run_cfg(BacktestMode::CombinatorialPurgedCrossValidation),
+            &CpcvConfig { n_groups: 6, test_groups: 2, pct_embargo: 0.0 },
+            |split| Ok(vec![value; split.test_indices.len()]),
+        )
+        .unwrap();
+        for fold in &result.folds {
+            assert_eq!(fold.mean_return, value);
+            assert_eq!(fold.std_return, 0.0);
+            assert_eq!(fold.sharpe, 0.0);
+        }
+        for path in &result.path_distribution {
+            assert_eq!(path.mean_return, value);
+            assert_eq!(path.std_return, 0.0);
+            assert_eq!(path.sharpe, 0.0);
+        }
+    }
+}

@@ -6,7 +6,9 @@ use crate::helpers::{format_naive_datetimes, pair_timestamps_values, to_py_err};
 ///
 /// Computes `(mean - risk_free_rate) / std * sqrt(entries_per_year)` with the sample standard
 /// deviation (ddof=1), AFML 14.7.1. Nothing is validated: an empty list or a single return
-/// gives NaN, and constant returns give an infinite ratio.
+/// gives NaN. With positive finite `entries_per_year` and a finite risk-free rate, finite
+/// constant returns give signed infinity for nonzero excess return, or NaN when the return
+/// equals the risk-free rate (0/0).
 ///
 /// Parameters
 /// ----------

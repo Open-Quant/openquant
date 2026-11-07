@@ -270,7 +270,9 @@ pub fn drawdown_and_time_under_water(
 /// Computes `(mean - risk_free_rate) / std * sqrt(entries_per_year)` with the sample standard
 /// deviation (ddof = 1). `risk_free_rate` is per period, in the same units as `returns`;
 /// `entries_per_year` is the number of return periods per year (252 for daily). Nothing is
-/// validated: an empty slice or a single return gives `NaN`, constant returns give infinity.
+/// validated: an empty slice or a single return gives `NaN`. With positive finite
+/// `entries_per_year` and a finite risk-free rate, finite constant returns give signed infinity
+/// for nonzero excess return, or `NaN` when the return equals the risk-free rate (0/0).
 pub fn sharpe_ratio(returns: &[f64], entries_per_year: f64, risk_free_rate: f64) -> f64 {
     // Fewer than two returns leave the deviation undefined: `NaN`, as documented.
     let mean = stats::mean(returns).unwrap_or(f64::NAN);
