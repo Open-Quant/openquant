@@ -42,6 +42,7 @@ file disagree).
 
 ### Fixed
 
+- Docs: check the EF3M search contract without promising fixed parameter accuracy from random starts. ([#266](https://github.com/Open-Quant/openquant/pull/266))
 - `codependence`: avoid NaN angular distances from finite correlation roundoff and consistently reject finite constant series when correlation is required. ([#264](https://github.com/Open-Quant/openquant/pull/264))
 - Docs: preserve literal cache environment variables and paths in the data guide instead of rendering them as math. ([#263](https://github.com/Open-Quant/openquant/pull/263))
 - `data`: restore offset-aware ISO and timezone-aware datetime parsing on newer Polars, preserving the existing timezone-naive UTC output schema. ([#261](https://github.com/Open-Quant/openquant/pull/261))
