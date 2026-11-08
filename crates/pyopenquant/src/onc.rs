@@ -9,15 +9,16 @@ use crate::helpers::{matrix_from_rows, to_py_err};
 /// Snippets 4.1-4.2. Correlations become distances `sqrt((1 - rho) / 2)` (inputs clamped
 /// to `[-1, 1]`), each item is represented by its row of that matrix, and k-means is run
 /// for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each; the partition with the
-/// highest silhouette t-statistic `mean(S) / std(S)` wins. Clusters scoring below average
+/// highest silhouette quality `mean(S) / std(S)` wins (population deviation; a heuristic
+/// score, not a calibrated Student t-test). Clusters scoring below average
 /// are re-clustered and kept only if that improves their mean t-statistic. Negative
 /// correlation means far apart. Each k-means run is one k-means++ initialisation (as
 /// scikit-learn's KMeans), all drawn from one random stream seeded by `seed`, so results
-/// are deterministic. ONC is a random search: clean structure comes back the same under
-/// any seed, but on real data the partition can depend on the seed; compare a few seeds
+/// are deterministic. ONC is a random search: even clean structure has no universal
+/// seed-invariance guarantee; compare a few seeds
 /// and raise `repeat` before relying on one. The search starts at `k = 2`, so a matrix
-/// with no structure is still partitioned; a low mean silhouette is the sign the clusters
-/// are not real. Cost grows at least as `N^3`.
+/// with no structure is still partitioned; a low mean silhouette indicates weak separation
+/// under this representation, not a formal test of independence. Cost grows at least as `N^3`.
 ///
 /// Parameters
 /// ----------

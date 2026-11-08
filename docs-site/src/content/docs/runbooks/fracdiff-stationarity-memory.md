@@ -2,7 +2,7 @@
 title: "Runbook: fracdiff, stationarity versus memory"
 description: "Sweeps the fractional differencing order d per series, picks the smallest d that passes ADF, and checks that rule against simulated series whose memory is known. Committed results are on SYNTHETIC data."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -137,5 +137,6 @@ The notebook's last cell prints the package version, the `dataset_hash` of the s
 (`sha256:b311c219…`), the hash of the simulated controls, the seed (49) and the trial counts: 105
 (symbol, $d$) evaluations on the data, 210 more for the half-sample re-sweeps, and 25,200 on the
 simulations, which describe the method and select nothing. It also prints the git commit, to
-stderr. The trial registry (`openquant.evaluation`) is not on this branch yet, so the counts are
-recorded in the notebook's run manifest.
+stderr. These counts are recorded in the notebook's run manifest; this notebook does not register
+return-based strategy trials. `openquant.evaluation.TrialRegistry` is available for downstream
+strategy evaluations, but its presence does not retroactively register this feature sweep.

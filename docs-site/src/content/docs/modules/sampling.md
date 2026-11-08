@@ -2,7 +2,7 @@
 title: "sampling"
 description: "Label concurrency, average uniqueness and the sequential bootstrap, for training sets whose labels overlap in time."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -99,9 +99,33 @@ the book's $\{5/14,\,3/14,\,6/14\}$.
 </figure>
 
 `get_ind_matrix(label_endtime, bar_index)` returns the matrix itself, one row per bar and one
-column per label. `get_ind_mat_label_uniqueness` returns $u_{t,i}$ for every bar and label,
-`get_ind_mat_average_uniqueness` the mean of $\bar u_i$ over labels as a single number, and
-`num_concurrent_events(n_bars, spans, _)` just $c_t$.
+column per label. `bar_index` contains the bar positions to report, not merely the number of
+rows: its values may be sparse or reordered, and the matrix follows their supplied order.
+`get_ind_mat_label_uniqueness` returns $u_{t,i}$ **transposed**, with one row per label and
+one column per input matrix row (`result[label][bar_row]`);
+`get_ind_mat_average_uniqueness` the mean of $\bar u_i$ over labels that cover at least
+one reported bar as a single number, and
+`num_concurrent_events(n_bars, spans, _)` just $c_t$. The scalar mean excludes all-zero
+label columns and returns 0 when none are covered. In contrast,
+`get_av_uniqueness_from_triple_barrier` returns one value per input label, including 0 for
+a label covering no bar. Check coverage separately when selecting sparse rows.
+
+```python
+from openquant import sampling
+
+# Three bar rows, two label columns.
+ind = sampling.get_ind_matrix([(0, 1), (1, 2)], [0, 1, 2])
+assert ind == [[1, 0], [1, 1], [0, 1]]
+# The uniqueness result is label-first: two label rows, three bar columns.
+assert sampling.get_ind_mat_label_uniqueness(ind) == [
+    [1.0, 0.5, 0.0],
+    [0.0, 0.5, 1.0],
+]
+# Each row tests the actual listed position, here 4, then 2, then 8.
+assert sampling.get_ind_matrix([(2, 4)], [4, 2, 8]) == [[1], [1], [0]]
+assert sampling.get_ind_mat_average_uniqueness([[1, 0]]) == 1.0
+assert sampling.get_ind_mat_average_uniqueness([[0, 0]]) == 0.0
+```
 
 ## The sequential bootstrap
 
@@ -137,7 +161,7 @@ import random
 
 from openquant import sampling
 
-# 40 labels of 10 bars each, a new one every 3 bars: every label overlaps six others.
+# 40 labels of 10 bars each, a new one every 3 bars; interior labels overlap six others.
 n, length, step = 40, 10, 3
 spans = [(step * i, step * i + length - 1) for i in range(n)]
 ind = sampling.get_ind_matrix(spans, list(range(step * n + length)))
@@ -160,12 +184,75 @@ sequential bootstrap:     0.312
 ```
 
 Read the three numbers together. Sequential sampling recovers most of what a uniform
-bootstrap loses to repeated and adjacent draws, but it cannot exceed what the label set
-allows: with every label overlapping six others, no sample of 40 is much more than 30%
-unique. AFML's Monte Carlo (§4.5.4) reports a larger gap —
+bootstrap loses to repeated and adjacent draws. Here every draw covers exactly 10 bars,
+so a 40-draw sample has 400 label-bar memberships. Summed across active labels, uniqueness
+is 1 at each covered bar. The union can cover at most 127 bars, making the sample
+average at most $127/400 = 0.3175$, attained by taking every label once. This bound is
+specific to these equal-length spans; it is not a universal bootstrap ceiling. AFML's Monte Carlo (§4.5.4) reports a larger gap —
 median uniqueness of 0.6 against 0.7 — on random label sets with far less structural overlap.
 If average uniqueness is low, the first remedy is upstream: a wider
 [CUSUM threshold](/modules/filters/#choosing-h) or a shorter vertical barrier.
+
+## Bootstrap only the training fold
+
+`seq_bootstrap` returns positions in the indicator matrix's **label columns**. After
+selecting a training fold, those are local positions, not original dataset row numbers.
+Build the matrix from the training spans, map draws back through the training indices,
+and apply the same repeated index sequence to features, labels and fitting weights:
+
+```python
+import numpy as np
+from openquant import cross_validation as cv, sampling
+
+spans = [(0, 2), (2, 4), (4, 6), (6, 8), (8, 10), (10, 12)]
+starts, ends = np.array(spans).T
+train, test = cv.purged_kfold_splits(starts, ends, 3, 0.0)[0]
+train_spans = [spans[i] for i in train]
+# Keep the original bar-position clock; each column now names one training label.
+indicator = sampling.get_ind_matrix(train_spans, list(range(13)))
+local_draws = np.array(sampling.seq_bootstrap(
+    indicator, sample_length=5, random_state=7,
+))
+drawn_rows = train[local_draws]
+
+# Synthetic row identifiers make alignment visible; no model is fitted here.
+features = np.column_stack([np.arange(6), np.arange(6) + 10])
+labels = np.array([0, 1, 0, 1, 0, 1])
+train_weights = np.ones(len(train))  # illustrative unit fitting weights
+sampled_x = features[drawn_rows]
+sampled_y = labels[drawn_rows]
+sampled_weights = train_weights[local_draws]
+assert sampled_x[:, 0].tolist() == drawn_rows.tolist()
+assert len(sampled_y) == len(sampled_weights) == 5
+assert set(drawn_rows).issubset(set(train))
+assert not set(drawn_rows).intersection(test)
+print("training rows:", train.tolist(), "test rows:", test.tolist())
+print("local draws:", local_draws.tolist())
+print("original rows:", drawn_rows.tolist())
+```
+
+```text
+training rows: [3, 4, 5] test rows: [0, 1]
+local draws: [0, 1, 0, 2, 0]
+original rows: [3, 4, 3, 5, 3]
+```
+
+Row 2 was purged because its closed span touches the first test fold. This particular
+seed repeats row 3; repeated draws are valid and must remain repeated in the fitting
+arrays. Do not turn the result into a set. Warm-up indices, when used, must also refer
+to the local matrix columns.
+
+The sequential draw probabilities depend on overlap and previously selected columns,
+not the fitting weights supplied to a later learner. Return-attribution or decay weights
+are a separate choice: [recompute them inside the training fold](/modules/sample-weights/)
+and align them to `train` before indexing by `local_draws`. A repeated row contributes
+its fitting weight on every draw; multiplying that row by its draw count as well would
+count its multiplicity twice.
+
+Purged k-fold can train on rows later than the test fold, as this example does. It is
+not a walk-forward forecast. Choose a chronological training scheme when that is the
+research question, and keep preprocessing and model selection inside its training
+boundary. Sequential bootstrap changes sampling; it does not replace a valid split.
 
 ## From Rust
 
@@ -195,8 +282,13 @@ assert_eq!(drawn.len(), 3);
 assert!(drawn.iter().all(|&label| label < 3));
 ```
 
-A span whose start is after its end, a ragged matrix, a concurrency vector of the wrong
-length and a warm-up index beyond the last label are each an `InputError`.
+The matrix builders reject a span whose start is after its end. In contrast,
+`num_concurrent_events` silently skips such a span, so zero concurrency is not proof that
+the input spans were valid. Matrix consumers reject ragged rows; `bootstrap_loop_run`
+rejects a concurrency vector of the wrong length, and a nonempty sequential-bootstrap
+request rejects an out-of-range warm-up index. These errors are `InputError` in Rust and
+`ValueError` in Python. Pass a binary 0/1 matrix and finite, non-negative concurrency;
+shape checks do not validate all numerical contents.
 
 ## What to watch for
 

@@ -50,8 +50,11 @@
 //! - `confidence_level` is the **tail probability** (e.g. 0.05) for both tail metrics.
 //! - Expected shortfall and conditional drawdown are computed here (on each side's
 //!   inverse-variance portfolio), not by [`crate::risk_metrics`]. Expected shortfall is returned
-//!   as a positive loss; the drawdown is relative to the running peak of a wealth curve
-//!   starting at 1.
+//!   as the negated mean of returns at or below a nearest-quantile threshold, so it can be
+//!   negative for an all-positive tail. Drawdown is relative to the running peak of a wealth
+//!   curve starting at 1. These differ from the sign, quantile and absolute-drawdown
+//!   conventions of `risk_metrics`. Zero risks on both sides give the left branch all weight
+//!   under the current denominator-epsilon convention; ES has no negative-risk fallback.
 //!
 //! ```
 //! use nalgebra::DMatrix;

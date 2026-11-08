@@ -1,0 +1,2 @@
+# Numerical runtime for all offline labs; NumPy-only labs do not require SciPy.
+-r requirements-selection-intervals.txt

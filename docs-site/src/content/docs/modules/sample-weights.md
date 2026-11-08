@@ -2,7 +2,7 @@
 title: "sample_weights"
 description: "Training weights for overlapping labels: return attribution and time decay."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -47,7 +47,9 @@ $$
 
 where $c_t$ is the concurrency from [`sampling`](/modules/sampling/#concurrency-and-uniqueness)
 and the second step scales the weights to sum to the number of labels $I$, so their mean is 1
-and a learning rate tuned on unweighted data still means roughly the same thing.
+and a learning rate tuned on unweighted data still means roughly the same thing. This
+normalisation applies only when the raw total is positive. If every attributed return is
+zero, the function returns zero weights; it does not substitute uniform weights.
 
 ```python
 from datetime import datetime, timedelta
@@ -91,6 +93,22 @@ and a label collects every return whose *arrival* bar lies in `[start, end]`, in
 return that arrives at the event bar itself, which was earned before the event. This follows
 Snippet 4.10 exactly. It is why A and B above have identical weights although A starts a bar
 earlier: bar 0 is the first bar of the series and has no return to contribute.
+
+```python
+from openquant import sample_weights
+
+stamps = ["2024-01-01 00:00:00", "2024-01-01 00:01:00", "2024-01-01 00:02:00"]
+start, end = "2024-01-01 00:00:30", "2024-01-01 00:01:30"
+events = [(start, end, 1.0)]
+# Off-grid endpoints include the return arriving at 00:01.
+assert sample_weights.get_weights_by_return(events, stamps, [100.0, 110.0, 100.0]) == [
+    (start, 1.0)
+]
+# No attributed movement gives zero weights, not a unit-mean fallback.
+assert sample_weights.get_weights_by_return(events, stamps, [100.0, 100.0, 100.0]) == [
+    (start, 0.0)
+]
+```
 
 ## Weights by time decay
 
@@ -169,15 +187,17 @@ Both return `(event start, weight)` pairs in the order the events were given.
 - **Events that share a start time are ordered by input position.** Both functions return one
   weight per event, duplicates included. For time decay, events with the same start take
   consecutive places on the cumulative-uniqueness axis in the order you passed them, so the
-  one listed later counts as newer and, whenever `decay < 1`, weighs more. Swapping two such
-  events swaps which one that is; sort them first (by end time, say) if the choice should not
-  depend on input order.
+  one listed later counts as newer and can receive more weight. Weights may remain equal
+  when an event adds zero uniqueness or both positions fall in the clipped-zero region.
+  Swapping tied events can therefore change their assigned weights; sort them first (by
+  end time, say) if this choice should not depend on input order.
   Until [#91](https://github.com/Open-Quant/openquant/issues/91) the duplicates were dropped.
 - **Weights are fitted quantities.** Concurrency and cumulative uniqueness are computed over
   the events you pass. Compute weights on the training fold only; weights computed over the
   whole history leak the future's label density into the past.
-- **Timestamps must match exactly.** A label's span is matched to `close` by comparing
-  timestamps, so an event time that is not a bar time still works. An `end` before its
+- **Endpoints need not be bar times.** A label selects bars whose timestamps lie in its
+  closed interval `[start, end]`; neither endpoint needs an exact match. Supply the full
+  close series in ascending time order so adjacent prices define the intended returns. An `end` before its
   `start` is rejected with `SampleWeightsError::EndBeforeStart`, which names the first
   offending event (a `ValueError` from Python). From Python, timestamps are
   `"%Y-%m-%d %H:%M:%S"` strings with an optional fractional second.
@@ -192,4 +212,8 @@ Both return `(event start, weight)` pairs in the order the events were given.
 - [`cross-validation`](/modules/cross-validation/) — purged folds; compute weights inside
   them.
 - [`sb-bagging`](/modules/sb-bagging/) — the bagging ensemble for overlapping labels. It
-  accepts a `sample_weight` argument but does not use it yet.
+  uses `sample_weight` in fitting each base estimator; a repeatedly drawn row contributes
+  its supplied weight once per draw. This does not change the sequential-bootstrap draw
+  probabilities, which depend on the indicator matrix. If every sampled row has zero
+  supplied weight, that bag falls back to equal weights; zero sample weight is therefore
+  not a guarantee that a row can never affect a fitted estimator.

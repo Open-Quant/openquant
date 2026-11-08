@@ -2,7 +2,7 @@
 title: "backtest_statistics"
 description: "Sharpe ratios with their uncertainty — probabilistic and deflated Sharpe, minimum track record length — plus drawdown, concentration and holding-period statistics."
 status: authored
-last_authored: '2026-11-06'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -41,8 +41,8 @@ sidebar:
 ---
 
 A Sharpe ratio computed from a backtest is an estimate, from a finite sample, of a quantity
-that was then selected for being large. Both facts bias it upward, and neither is visible in
-the number itself. The statistics in this module that matter most are the ones that put the
+that may then be selected for being large. Sampling creates uncertainty; selecting the
+largest estimate introduces upward selection bias. Neither is visible in the number itself. The statistics in this module that matter most are the ones that put the
 uncertainty back: how likely is it that the true Sharpe ratio is above a benchmark (PSR),
 what that benchmark should be once you admit how many things you tried (DSR), and how long a
 track record has to be before the question can be answered at all (MinTRL). The Python module
@@ -51,10 +51,11 @@ is `openquant.backtest_stats`.
 ## Sharpe ratio, with error bars
 
 The estimated Sharpe ratio $\widehat{SR}$ of $T$ returns with skewness $\hat\gamma_3$ and
-kurtosis $\hat\gamma_4$ is asymptotically normal around the true value, with a variance that
-grows when returns are negatively skewed or fat-tailed (Bailey and López de Prado, 2012). The
-**probabilistic Sharpe ratio** is the resulting confidence that the true Sharpe ratio exceeds
-a benchmark $SR^*$:
+kurtosis $\hat\gamma_4$ has an asymptotic normal approximation under the sampling
+assumptions in [Bailey and López de Prado (2012)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1821643).
+For a positive Sharpe ratio, negative skew and larger kurtosis increase the variance in the
+formula below. The **probabilistic Sharpe ratio** transforms the standardized distance above
+a benchmark $SR^*$ into a one-sided confidence measure:
 
 $$
 \widehat{PSR}(SR^*) \;=\; Z\!\left[\frac{(\widehat{SR}-SR^*)\sqrt{T-1}}
@@ -63,7 +64,10 @@ $$
 
 with $Z$ the standard normal CDF. Two conventions are easy to get wrong and the function
 checks neither: **$\widehat{SR}$ is per period, not annualised**, and **$\hat\gamma_4$ is raw
-kurtosis, 3 for a normal distribution**, not excess.
+kurtosis, 3 for a normal distribution**, not excess. The calculation has no serial-correlation
+correction: it uses only the supplied count and moments, under the IID-return approximation.
+Overlapping returns do not become independent observations by increasing that count. PSR is
+not a posterior probability of skill or a guarantee of future returns.
 
 The **minimum track record length** inverts the same expression: the number of observations
 needed for $\widehat{PSR}(SR^*)$ to reach $1-\alpha$,
@@ -75,8 +79,9 @@ $$
 
 ## Deflating for the trials you ran
 
-If $N$ strategy configurations with no skill at all are backtested, the best of them still
-has a positive Sharpe ratio. With $\sigma_{SR}$ the standard deviation of the trials' Sharpe
+If $N>1$ independent zero-skill configurations are backtested, the maximum Sharpe estimate
+has positive expectation under the approximation below; a particular sample maximum can
+still be negative. With $\sigma_{SR}$ the standard deviation of the trials' Sharpe
 ratios, its expected value is approximately (Bailey and López de Prado, 2014)
 
 $$
@@ -85,13 +90,15 @@ SR_0 \;=\; \sigma_{SR}\Bigl[(1-\gamma)\,Z^{-1}\!\bigl(1-\tfrac1N\bigr)
 $$
 
 where $\gamma\approx0.5772$ is the Euler–Mascheroni constant. The **deflated Sharpe ratio**
-is simply $\widehat{PSR}(SR_0)$: the PSR measured against the Sharpe ratio that luck alone
-would have produced. `deflated_sharpe_ratio` takes the trials in one of two forms:
+is $\widehat{PSR}(SR_0)$: PSR measured against an estimated expected maximum under the
+zero-skill trial model. $SR_0$ is not an upper bound on what chance can produce. `deflated_sharpe_ratio` takes the trials in one of two forms:
 
 - `estimates_param = false`: `sr_estimates` is the list of every trial's Sharpe ratio.
-  $\sigma_{SR}$ and $N$ are computed from it.
+  $\sigma_{SR}$ and $N$ are computed from it. The implementation uses population deviation
+  (`ddof=0`) across these estimates, unlike the sample deviation in `sharpe_ratio`.
 - `estimates_param = true`: `sr_estimates` is `[σ_SR, N]`, for when the individual trials
-  were not kept.
+  were not kept. Supply a finite nonnegative deviation and a finite count greater than one;
+  the function does not fully validate those conditions.
 
 With `benchmark_out = true` it returns $SR_0$ instead of the probability.
 
@@ -142,8 +149,8 @@ the minimum track record is 736 days and the sample is 756. The non-normality co
 small at this Sharpe level, because it scales with $\widehat{SR}$ per period, which is 0.06.
 The number of trials is what moves the answer. If this backtest was the pick of a hundred
 variations, the luckiest of a hundred skill-less strategies would be expected to show a
-per-period Sharpe of 0.076 — *higher than the one observed* — and the probability that this
-strategy has any skill falls to 0.35.
+per-period Sharpe of 0.076 — *higher than the one observed* — and DSR against that hurdle
+is about 0.35. This does not mean the posterior probability of any skill is 35%.
 
 ## Describing the path
 
@@ -153,13 +160,31 @@ strategy has any skill falls to 0.35.
 | `information_ratio(returns, benchmark, entries_per_year)` | the same on `returns − benchmark`, where `benchmark` is one per-period number |
 | `drawdown_and_time_under_water(series, dollars)` | one drawdown per high-water mark that was followed by a dip, and the years spent under each |
 | `bets_concentration(returns)` | normalised Herfindahl index of the returns' shares of the total: 0 if every bet contributed equally, 1 if one bet made everything |
-| `all_bets_concentration(returns)` | that index for positive returns, for negative returns, and for the number of bets per day |
+| `all_bets_concentration(returns)` | that index for nonnegative returns (including zeros), for negative returns, and for the number of bets per day |
 | `average_holding_period(positions)` | average days a unit of position is held, weighting each exit by its size (Snippet 14.2) |
 | `timing_of_flattening_and_flips(positions)` | timestamps where the position went to zero or changed sign, plus the last timestamp (Snippet 14.1) |
 
-Concentration is the one to look at after the Sharpe ratio. A strategy whose positive
-concentration is 0.3 made most of its money on a handful of days, and its Sharpe ratio
-describes those days.
+Concentration helps identify whether performance depends on a small number of bets. Its
+interpretation depends on the number of observations and their shares; an index of 0.3 alone
+does not identify which days contributed. Use one sign at a time: mixed-sign inputs can
+cancel in the denominator and produce an index above 1. Fewer than three observations or
+a zero total return produce `None`.
+
+## Open positions and signed concentration
+
+These boundary examples distinguish reporting conventions from economic conclusions:
+
+```python
+import math
+from openquant import backtest_stats as bs
+
+stamps = ["2024-01-01 00:00:00", "2024-01-02 00:00:00", "2024-01-03 00:00:00"]
+assert bs.average_holding_period(stamps, [0.0, 1.0, 1.0]) is None
+assert bs.timing_of_flattening_and_flips(stamps, [0.0, 1.0, 1.0]) == stamps[-1:]
+assert bs.average_holding_period(stamps, [0.0, 1.0, 0.0]) == 1.0
+assert math.isclose(bs.bets_concentration([1.0, 1.0, -1.0]), 4.0)
+assert math.isnan(bs.sharpe_ratio([0.0, 0.0], 252.0, 0.0))
+```
 
 ## From Rust
 
@@ -216,12 +241,22 @@ assert!((sharpe_ratio(&r, 252.0, 0.0) / sharpe_ratio(&r, 1.0, 0.0) - 252f64.sqrt
   of one idea are highly correlated, so the *effective* number of trials is smaller than the
   count; AFML suggests clustering the trials ([`onc`](/modules/onc/)) and counting clusters.
   Counting too few trials is the more common error.
+- **Timestamps must be increasing and values finite.** The position and cumulative-path
+  functions process input order; `all_bets_concentration` uses the first and last dates to
+  define its calendar range. Sorting output event times does not repair out-of-order input.
+- **Holding period uses realized reductions and flips.** `average_holding_period` does not
+  close a remaining position at the final timestamp. It returns `None` if no position was
+  reduced, even though `timing_of_flattening_and_flips` includes that final timestamp.
 - **`sharpe_ratio` does not validate.** An empty slice or one return gives `NaN`. For positive
   finite annualization and a finite risk-free rate, finite constant returns give signed infinity
   for nonzero excess return, or `NaN` when the return equals the risk-free rate (0/0). Exactly
   constant values are recognized without a tolerance; nearly constant series keep their computed
   deviation. The shared mean and variance estimators are not generally overflow-safe for
   nonconstant extreme values.
+- **MinTRL is an approximate count, not a stopping guarantee.** Round a valid finite result
+  up to a whole observation. For a conventional one-sided confidence above 50%, use
+  `0 < alpha < 0.5`; the implementation also accepts endpoints and larger values, where
+  the squared inversion does not express the usual confidence requirement.
 
 ## Related modules
 

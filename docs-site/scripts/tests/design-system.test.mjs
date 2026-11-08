@@ -10,6 +10,28 @@ const walk = (node) => [node, ...(node.childNodes || []).flatMap(walk)];
 const attr = (node, name) => node.attrs?.find((item) => item.name === name)?.value;
 const text = (node) => walk(node).filter((item) => item.nodeName === '#text').map((item) => item.value).join(' ');
 
+test('Python docstring sections nest below their module, function, class or method', () => {
+  const apiRoot = path.join(root, 'dist/api/python');
+  let sections = 0;
+  let methodSections = 0;
+  for (const entry of fs.readdirSync(apiRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const nodes = walk(parse(fs.readFileSync(path.join(apiRoot, entry.name, 'index.html'), 'utf8')));
+    let parentDepth = 0;
+    for (const node of nodes) {
+      if (!/^h[1-6]$/.test(node.tagName ?? '')) continue;
+      const depth = Number(node.tagName[1]);
+      if (attr(node, 'class')?.split(/\s+/).includes('oq-doc-section')) {
+        assert.equal(depth, parentDepth + 1, `${entry.name}: ${text(node)}`);
+        sections++;
+        if (parentDepth === 4) methodSections++;
+      } else parentDepth = depth;
+    }
+  }
+  assert.ok(sections > 0, 'Check real generated docstring sections');
+  assert.ok(methodSections > 0, 'Check method sections as well as function sections');
+});
+
 test('research map exposes four ordered stages with real module links without JavaScript', () => {
   const nodes = walk(html());
   const map = nodes.find((node) => node.tagName === 'ol' && attr(node, 'class')?.includes('oq-research-map'));
@@ -64,4 +86,47 @@ test('data cache paths render literally instead of as inline math', () => {
   for (const literal of ['$OPENQUANT_DATA_CACHE', '$XDG_CACHE_HOME/openquant/data', '~/.cache/openquant/data']) {
     assert.ok(code.includes(literal), `Cache path should remain literal inline code: ${literal}`);
   }
+});
+
+
+test('Python reference links back to guides and exposes class members without JavaScript', () => {
+  const ref = JSON.parse(fs.readFileSync(path.join(root, 'src/data/pythonApiReference.json'), 'utf8'));
+  let classes = 0;
+  for (const mod of ref.modules) {
+    const nodes = walk(parse(fs.readFileSync(path.join(root, 'dist/api/python', mod.slug, 'index.html'), 'utf8')));
+    const context = nodes.find((n) => n.tagName === 'nav' && attr(n, 'aria-label') === 'Related documentation');
+    assert.ok(context, mod.import);
+    assert.ok(walk(context).some((n) => attr(n, 'href') === '/openquant/module-reference/api-task-guide/'
+      && text(n).trim() === 'Find an API by task'), mod.import);
+    for (const klass of mod.classes.filter((c) => c.methods.length)) {
+      const index = nodes.find((n) => n.tagName === 'nav' && attr(n, 'aria-label') === `${klass.name} members`);
+      assert.ok(index, `${mod.import}.${klass.name}`);
+      for (const method of klass.methods) {
+        const id = `${klass.name}.${method.name}`;
+        assert.ok(walk(index).some((n) => attr(n, 'href') === `#${id}`), id);
+        assert.ok(nodes.some((n) => attr(n, 'id') === id), id);
+      }
+      classes++;
+    }
+  }
+  assert.ok(classes > 0);
+  const evaluation = walk(parse(fs.readFileSync(path.join(root, 'dist/api/python/evaluation/index.html'), 'utf8')));
+  assert.ok(evaluation.some((n) => attr(n, 'href') === '/openquant/modules/evaluation/'));
+});
+
+test('Python module table has keyboard access and explicit table semantics', () => {
+  const nodes = walk(parse(fs.readFileSync(path.join(root, 'dist/api/python/index.html'), 'utf8')));
+  const scroll = nodes.find((n) => attr(n, 'class') === 'oq-table-scroll');
+  assert.equal(attr(scroll, 'tabindex'), '0');
+  assert.equal(attr(scroll, 'role'), 'region');
+  assert.ok(attr(scroll, 'aria-label'));
+  const table = walk(scroll).find((n) => n.tagName === 'table');
+  assert.ok(walk(table).some((n) => n.tagName === 'caption' && text(n).trim()));
+  assert.equal(walk(table).filter((n) => attr(n, 'scope') === 'col').length, 4);
+  assert.ok(walk(table).some((n) => attr(n, 'scope') === 'row'));
+});
+
+test('sidebar disclosure respects reduced motion', () => {
+  const css = fs.readFileSync(path.join(root, 'src/styles/starlight.css'), 'utf8');
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.sidebar-content\s+\.caret\s*\{\s*transition:\s*none/s);
 });

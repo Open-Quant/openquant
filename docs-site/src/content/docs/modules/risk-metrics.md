@@ -2,7 +2,7 @@
 title: "risk_metrics"
 description: "Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -10,6 +10,7 @@ module: "risk_metrics"
 api_surface: "both"
 citation:
   - "Artzner, P., Delbaen, F., Eber, J.-M. and Heath, D. (1999). Coherent measures of risk. Mathematical Finance 9(3), 203–228."
+  - "Acerbi, C. and Tasche, D. (2002). On the coherence of Expected Shortfall. Journal of Banking & Finance 26, 1487–1503. https://arxiv.org/abs/cond-mat/0104295"
   - "Rockafellar, R. T. and Uryasev, S. (2000). Optimization of conditional value-at-risk. Journal of Risk 2(3), 21–41."
   - "Chekhlov, A., Uryasev, S. and Zabarankin, M. (2005). Drawdown measure in portfolio optimization. International Journal of Theoretical and Applied Finance 8(1), 13–58."
 rust_api:
@@ -37,27 +38,31 @@ struct `RiskMetrics`; in Python they are functions in `openquant.risk`.
 
 **Variance** of a portfolio with weights $w$ and covariance $\Sigma$ is $w^\top\Sigma w$.
 
-**Value at risk** at level $\alpha$ is the $\alpha$-quantile of the returns: the return that
-is undercut with probability $\alpha$. It says where the tail starts and nothing about what
+**Value at risk** at level $\alpha$ is the $\alpha$-quantile of the returns. In a finite
+sample the fraction strictly below that threshold need not equal $\alpha$. It says where
+the tail starts and nothing about what
 is in it. Two portfolios can share a 5% VaR while one loses twice as much as the other on its
 bad days.
 
-**Expected shortfall** (conditional VaR) is the mean of what lies beyond that point,
+**The API's historical expected shortfall** is the mean of returns strictly below that point,
 
 $$
 \mathrm{ES}_\alpha \;=\; \mathrm{E}\bigl[\,r \mid r < \mathrm{VaR}_\alpha\,\bigr]
 $$
 
-and unlike VaR it is a coherent risk measure in the sense of Artzner et al. (1999): the
-expected shortfall of a combined book never exceeds the sum of its parts', which VaR can
-violate.
+using the empirical sample. This compatibility estimator is not the general coherent ES
+definition: it excludes every observation tied at VaR. For discrete distributions, simply
+conditioning on returns beyond a quantile can lose coherence; the exact definition and
+treatment of probability at the threshold matter. See
+[Acerbi and Tasche (2002)](https://arxiv.org/abs/cond-mat/0104295).
 
 **Conditional drawdown at risk** (Chekhlov, Uryasev and Zabarankin, 2005) applies the same
 idea to drawdowns. For a cumulative series $x$ — an equity curve, a price or a cumulative
 return — the drawdown is $d_t = \max_{s\le t} x_s - x_t$, in the units of $x$, and CDaR at
-level $\alpha$ is the mean of the worst $1-\alpha$ share of the $d_t$. It lies between the
+level $\alpha$ averages drawdowns at or above their empirical $\alpha$-quantile. It lies between the
 $\alpha$-quantile of the drawdowns and the maximum drawdown. Here `confidence_level` is that
-**upper-tail** level: 0.95 averages the worst 5% of drawdowns.
+**upper-tail** level: 0.95 targets the upper 5% tail, but discrete quantiles and ties can
+include a different share of observations.
 
 VaR and expected shortfall are returned **as returns, with their sign** — a 5% VaR of
 −0.0166 means a loss of 1.66% — and their `confidence_level` is the **tail probability**,
@@ -105,9 +110,36 @@ is simply the second-worst.
 Expected shortfall then averages the returns **strictly below** VaR. If none are, as with
 constant returns or $\alpha=0$, it returns `NaN` rather than an error.
 
+That strict cutoff can even violate subadditivity when interpreted as a loss-risk measure.
+These four rows are equally likely joint PnL scenarios, in monetary units; the combined book
+is their row-wise sum:
+
+```python
+from openquant import risk
+
+a = [-2.0, -2.0, -1.0, -1.0]
+b = [-2.0, 0.0, -1.0, 0.0]
+combined = [x + y for x, y in zip(a, b)]
+# Negate signed tail PnL to express a positive loss-risk number.
+def rho(pnl):
+    return -risk.calculate_expected_shortfall(pnl, 0.5)
+
+print(rho(a), rho(b), rho(combined))
+assert rho(combined) > rho(a) + rho(b)
+```
+
+```text
+2.0 1.5 4.0
+```
+
+The combined value, 4, exceeds the sum 3.5. This demonstrates a limitation of this
+implementation's tail-selection convention, not a failure of properly defined coherent ES.
+
 Conditional drawdown at risk takes the same "higher" quantile of the drawdowns and averages
 every drawdown **at or above** it, so its tail always holds at least the maximum drawdown and
-the result is never `NaN` on finite input.
+the result is never `NaN` on nonempty finite input with a valid confidence level.
+That does not guarantee a finite result: drawdown subtraction or summing the tail
+can overflow to positive infinity.
 
 ## From Rust
 
@@ -155,16 +187,24 @@ assert_eq!(
   and mlfinlab, which they copied, averaged the *running maximum* of the drawdown strictly
   above its quantile. That series only rises, so at 0.95 on a realistic equity curve they
   returned `NaN`. Numbers from those versions are not comparable with today's.
-- **Historical estimates cannot see what has not happened.** A 1% expected shortfall from 500
-  observations is the mean of five numbers. Nothing here fits a tail, scales with horizon, or
+- **Historical estimates cannot see what has not happened.** With 500 finite observations, the 1% VaR cutoff is at zero-based sorted index
+  `ceil(0.01 * 499) = 5`. Strict-tail ES therefore averages at most five observations;
+  ties at the cutoff can leave fewer, or an empty tail returning NaN. Nothing here fits a tail, scales with horizon, or
   weights recent data.
+- **Variance validates dimensions, not covariance quality.** The caller must supply a finite,
+  symmetric positive semidefinite covariance estimate in the same asset order as the weights.
+  An indefinite matrix can return negative variance without raising; the
+  [input-error guide](/setup/input-errors/#a-successful-call-can-still-require-investigation)
+  demonstrates this limitation.
 - **No annualisation and no horizon.** A VaR of daily returns is a one-day VaR. Scaling by
   $\sqrt{h}$ assumes independent, identically distributed returns, which is the assumption the
   rest of this library exists to avoid.
 - **The `_from_matrix` variants read the first column only**, silently ignoring the rest. They
   exist for mlfinlab compatibility, where the input was a one-column frame.
-- **`NaN` inputs sort to the end** and count toward $n$, which shifts the quantile. Drop them
-  first.
+- **`NaN` inputs count toward $n$** and are sorted by Rust's total floating-point order;
+  their position depends on the NaN's sign bit. They can shift the quantile in either direction.
+  Non-finite input is unsuitable here and is not comprehensively rejected by the API;
+  remove or resolve it before computing risk, rather than relying on a sorting convention.
 
 ## Related modules
 

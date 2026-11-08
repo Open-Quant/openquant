@@ -12,6 +12,33 @@ export type ModuleDoc = {
 
 export const moduleDocs: ModuleDoc[] = [
   {
+    slug: "availability",
+    module: "availability",
+    subject: "Data Ingestion and Quality",
+    summary: "Original-row training eligibility from declared source availability and label maturity clocks.",
+    handwritten: true,
+    apiSurface: "python-only",
+    pythonApis: ["availability.select_available_training", "availability.AvailabilitySelection"],
+  },
+  {
+    slug: "provenance",
+    module: "provenance",
+    subject: "Data Ingestion and Quality",
+    summary: "Decision-time revision selection and exact numeric value identity across cleaned-row reordering.",
+    handwritten: true,
+    apiSurface: "python-only",
+    pythonApis: ["provenance.make_revision", "provenance.select_revisions", "provenance.rejoin_selected"],
+  },
+  {
+    slug: "feature-assembly",
+    module: "feature_assembly",
+    subject: "Data Ingestion and Quality",
+    summary: "Complete ordered features from selected source bundles, with explicit missing-input exclusions and coverage.",
+    handwritten: true,
+    apiSurface: "python-only",
+    pythonApis: ["feature_assembly.assemble_features", "feature_assembly.AssemblyResult"],
+  },
+  {
     slug: "backtest-statistics",
     module: "backtest_statistics",
     subject: "Portfolio Construction and Risk",

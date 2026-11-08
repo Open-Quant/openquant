@@ -2,7 +2,7 @@
 title: "Runbook: bet sizing from predicted probabilities"
 description: "Does sizing meta-labeled bets by their predicted probability (AFML Snippets 10.1-10.3) beat a flat 0.5 filter, net of costs and deflated by every sizing choice tried? A pre-registered test of runbook 11's post hoc finding, on fresh SYNTHETIC planted-signal paths and no-signal controls."
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -65,6 +65,13 @@ turnover**:
 | H3a | At $\kappa = 0$, sized does not beat filter | **passes**: +0.01, $t$ = 0.4 |
 | H3b | At $\kappa = 0$, the best-of-grid DSR is ≥ 0.95 on at most 5% of paths | **passes**: 0 of 30 |
 | H3c | On `SYN_*`, neither sized nor the best of the grid has DSR ≥ 0.95 | **passes**: 0.004 and 0.075 |
+
+The control labels above report the notebook's pre-registered pass/fail rules. Passing
+H3a means the test did not detect a gain; it is not an equivalence test. Likewise, zero
+false discoveries in 30 independent null paths does not establish that the underlying
+rate is at most 5%: the exact one-sided 95% upper binomial bound is
+$1 - 0.05^{1/30} \approx 9.5\%$. The zero count is useful evidence, but more independent
+null paths are needed to substantiate a 5% calibration claim at that confidence level.
 
 ## Method
 
@@ -225,11 +232,14 @@ OPENQUANT_RUNBOOK_SYMBOLS=ES,NQ,CL \
 OPENQUANT_RUNBOOK_RANGE=2010-01-01:2024-12-31 \
 OPENQUANT_RUNBOOK_REGISTRY=$HOME/.openquant/trials-bet-sizing.json \
 OPENQUANT_FIGURE_DIR=/tmp/bet-sizing-figures \
-  uv run --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
+  uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
     notebooks/python/13_bet_sizing_from_probabilities.ipynb --out /tmp/13_on_my_data.ipynb
 ```
 
-`OPENQUANT_RUNBOOK_REGISTRY` keeps the control's trial registry between sessions, so every sizing
-configuration you try on your data counts toward its deflated Sharpe ratio. For a vendor API, set
-`SOURCE` in the notebook's parameters cell to an `openquant.data.CallableSource`.
+`OPENQUANT_RUNBOOK_REGISTRY` persists the control registry. Its key includes a shortened
+dataset hash and sizing-grid fields, not every global model setting. Repeating a key
+replaces that entry, even if its returns changed. Add new model/preprocessing choices and
+full data/protocol identity to the recorded configuration when adapting this study; see the
+[trial-identity contract](/workflows/research-notebook-contract/#trial-identity-is-part-of-the-method).
+For a vendor API, set `SOURCE` in the parameters cell to an `openquant.data.CallableSource`.
 `OPENQUANT_RUNBOOK_REPS` sets the number of Monte Carlo paths per strength (default 30).

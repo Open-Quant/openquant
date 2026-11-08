@@ -4,12 +4,12 @@ Notebook starter pack for the OpenQuant mid-frequency research flywheel.
 
 ## Notebooks
 
-Every notebook follows the notebook contract (docs site: Workflows > Notebook contract,
-`docs-site/src/content/docs/workflows/research-notebook-contract.md`), checked by
+Every notebook follows the [notebook contract](../../docs-site/src/content/docs/workflows/research-notebook-contract.md), checked by
 `just notebooks-lint`. A notebook is either an **API tour** (title `# API tour: ...`: shows how a
-few calls fit together on small synthetic inputs and claims nothing) or a **runbook** (title
-`# Runbook: ...`: a pre-registered hypothesis, controls, a trial registry and a promotion
-decision). Both end with an `nbrepro.footer(...)` reproducibility cell.
+few calls fit together on small synthetic inputs without making investment claims) or a
+**runbook** (title `# Runbook: ...`: a pre-registered hypothesis, controls, a trial inventory
+and a promotion decision). Return-based searches use a persistent trial registry; feature
+and variance experiments can use an explicit inventory instead. Both end with an `nbrepro.footer(...)` reproducibility cell.
 
 API tours:
 
@@ -33,7 +33,7 @@ Runbooks:
 Notebook 06 (a momentum heuristic with made-up probabilities, no cross-validation and no deflated
 Sharpe ratio) was removed in #47; notebook 11 replaces it.
 
-Every notebook runs offline. Notebooks 09 to 14 read market-shaped data through `openquant.data.fetch`, whose default
+Every notebook runs with local data under its committed defaults. Notebooks 09 to 14 read market-shaped data through `openquant.data.fetch`, whose default
 source is the committed SYNTHETIC sample (`SYN_A` to `SYN_E`, see `DATA_SOURCES.md`); the others generate
 synthetic series in memory. None of the committed outputs describe a real market.
 
@@ -41,38 +41,52 @@ synthetic series in memory. None of the committed outputs describe a real market
 
 ```bash
 uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
 ```
+
+The runner starts a kernel named `python3`. Check its environment and imported
+`openquant._core.__file__` if results suggest a different installation, and restart kernels
+after rebuilding the extension. See the [notebook research workflow](../../docs-site/src/content/docs/workflows/notebook-research-workflow.md)
+for interpreter and provenance checks.
 
 ## Execute the notebooks (`just notebooks-run`)
 
 ```bash
 just notebooks-run              # every NN_*.ipynb, in place, in a Jupyter kernel
-just notebooks-run --only 11    # one notebook
+just notebooks-run --only 11    # matching number prefix or stem
 just notebooks-run --check      # execute to a temp dir; fail if the committed outputs are stale
 ```
 
 `scripts/run_notebooks.py` executes each notebook with nbclient + ipykernel, so tables, printed output and
 figures are all saved in the `.ipynb`. Any cell error fails the run (exit status 1) after the other notebooks
 have run. Outputs are normalised so an unchanged notebook re-runs to an unchanged file: no execution
-timestamps, no Python patch version, positional cell ids, seeded data. A notebook can be excluded only by
+timestamps, no Python patch version, positional cell ids, seeded data. This normalization
+does not guarantee identical numerical results across every platform or dependency version. A notebook can be excluded only by
 listing it in `EXCLUDED` in `run_notebooks.py` with a reason; none is.
 
 Figures are drawn with `nbfigures.figure(name, draw)`, which shows the plot inline and writes
 `docs-site/public/figures/notebooks/<name>-light.svg` and `-dark.svg` in the docs-site identity colours, for
-pages to embed with the `light:sl-hidden` / `dark:sl-hidden` pair. A full run rewrites that directory.
+pages to embed with the `light:sl-hidden` / `dark:sl-hidden` pair. A full default run removes existing SVGs from that directory before regeneration; a failed
+run can therefore leave incomplete figure output.
+`--check` directs executed notebooks and figures to temporary locations; it is not a sandbox
+for data caches, registries or other file writes performed by notebook code. Kernels inherit
+environment variables, so inspect source/registry overrides before running. A selection
+with `--only` does not perform the full figure-directory comparison.
 
-CI (`.github/workflows/notebooks.yml`) runs `just notebooks-run` on pull requests that touch notebooks,
-Python or crates, and nightly, uploads the executed notebooks and figures as an artifact, and then runs
-`just notebooks-verify`, which fails if the committed outputs differ from the fresh ones by more than float
-noise (4 significant digits) and PNG bytes. **If you change a notebook or anything it calls, run
+The configured [notebook workflow](../../.github/workflows/notebooks.yml) runs
+`just notebooks-run` for matching pull-request/main-push paths, nightly and on manual dispatch.
+It uploads executed notebooks and figures, then runs `just notebooks-verify`. The latter
+compares files already on disk; it does not execute notebooks. Comparison rounds decimal numbers in output text
+to four significant digits and ignores stderr, raster-image bytes, execution counts, cell IDs
+and metadata. Full `--check` or `notebooks-verify` comparisons also check exported SVGs after normalization. Passing comparison
+therefore does not certify every metadata field or rendered pixel. **If you change a notebook or anything it calls, run
 `just notebooks-run` and commit the notebooks and figures.**
 
 One notebook, with the lower-level script:
 
 ```bash
-uv run --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells.py \
+uv run --no-sync --python .venv/bin/python notebooks/python/scripts/execute_notebook_cells.py \
   notebooks/python/08_algo_wheel_experiments.ipynb \
   --out notebooks/python/_executed/08_algo_wheel_experiments.ipynb
 ```
@@ -89,25 +103,28 @@ just notebooks-lint notebooks/python/11_meta_labeling_triple_barrier.ipynb
 error, a machine path or a package version on stdout. CI runs it in the `python-lint` job.
 
 The footer (`nbrepro.py`) prints the data hash and the seed on stdout and the git commit and
-package versions on stderr, which `just notebooks-verify` ignores, so a dependency bump does not
-make a notebook stale. Under `just notebooks-run` it prints that the containing commit pins them,
-so re-running does not rewrite every footer; run a notebook any other way and it prints the real
-commit and versions.
+package versions on stderr, which `just notebooks-verify` ignores, so a dependency-version string alone does not
+make a notebook stale; changed numerical output still can. Under `just notebooks-run` it prints that the containing commit pins them,
+so re-running does not rewrite every footer; direct runs print the real
+commit and versions unless `OPENQUANT_NOTEBOOK_PINNED=1` is already set. The pinned-footer marker does not verify a clean working tree or
+that the loaded native extension was built from that commit.
 
 ## Smoke run (CI-friendly)
 
 ```bash
-uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
 ```
 
-The smoke script mirrors core notebook logic with deterministic synthetic futures data.
+The smoke script exercises a subset of core component calls with synthetic data. It
+does not execute the notebook files, verify their saved outputs, or fit and test the
+runbooks' research hypotheses. Use the notebook runner for those checks.
 
 ## Bar diagnostics (AFML Ch.2)
 
 Compare time/tick/volume/dollar bar families with simple serial-dependence and heteroskedasticity proxies:
 
 ```bash
-uv run --python .venv/bin/python python notebooks/python/scripts/bar_diagnostics.py
+uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/bar_diagnostics.py
 ```
 
 The script prints:

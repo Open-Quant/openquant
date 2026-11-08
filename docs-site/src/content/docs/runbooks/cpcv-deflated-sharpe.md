@@ -2,7 +2,7 @@
 title: "Runbook: CPCV backtest with PSR and deflated Sharpe"
 description: "Best-of-74 strategy selection judged by the naive PSR, the deflated Sharpe ratio, a walk-forward path and CPCV path distributions, on SYNTHETIC data with a no-signal control and a planted signal."
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -34,7 +34,8 @@ A researcher backtests all 74 configurations of a moving-average crossover famil
 best one, and asks whether its Sharpe ratio is evidence of skill. AFML §11.6 says a best-of-N
 backtest mostly reports luck. §12.4 offers combinatorial purged cross-validation (CPCV) as a
 distribution of out-of-sample paths instead of one. §14.7 offers the deflated Sharpe ratio (DSR),
-which tests the best Sharpe ratio against SR0, the best that N skill-less trials would reach. This
+which tests the best Sharpe ratio against SR0, an estimate of the expected maximum Sharpe
+ratio among N skill-less trials. SR0 is not an upper bound on what a null trial can attain. This
 runbook checks those claims on data where the right answer is known.
 
 ## Design
@@ -112,7 +113,7 @@ Power scan, means over 200 datasets per strength (Sharpe ratios annualised):
   - The cost is power: 20% at a true Sharpe ratio of 0.74, and 49% at 1.19.
   - With a real signal, the trials' Sharpe ratios also differ for real reasons. That raises σ(SR),
     and so SR0 (0.93 against 0.27 on the headline datasets).
-- **CPCV and walk-forward both remove the selection bias.**
+- **CPCV and walk-forward reduce the observed selection bias in this simulation.**
   - Both land within about 0.1 of the true Sharpe ratio of what was selected. The in-sample best
     overstates it by 0.3 to 0.5.
   - CPCV's mean varies a little less across datasets than the single walk-forward path: s.d. 0.31

@@ -10,7 +10,8 @@
 //! 1. Convert correlations to distances `d_ij = sqrt((1 - rho_ij) / 2)` (inputs clamped to
 //!    `[-1, 1]`) and represent each item by its row of that distance matrix.
 //! 2. Run k-means for every `k` from 2 to `max(N - 1, 2)`, `repeat` times each, and keep the
-//!    partition with the highest t-statistic of the silhouettes, `mean(S) / std(S)`; equal
+//!    partition with the highest silhouette quality, `mean(S) / std(S)` with population
+//!    deviation. This is a heuristic score, not a calibrated Student t-test; equal
 //!    t-statistics go to the higher mean silhouette. Each run is one k-means++ initialisation
 //!    (the greedy variant scikit-learn uses) followed by Lloyd's algorithm, as Snippet 4.1 runs
 //!    scikit-learn's `KMeans(n_init=1)` `n_init` times.
@@ -32,8 +33,8 @@
 //!   [`get_onc_clusters_with_seed`]), drives every initialisation, so results are deterministic.
 //! - ONC is a random search: the partition kept is the best of `repeat` k-means runs per `k`,
 //!   and a partition with a high t-statistic may be a k-means local optimum that few
-//!   initialisations reach. On clean structure any seed finds the same answer. On real data it
-//!   need not: on the 30 breast-cancer features of `tests/fixtures/onc`, `repeat = 50` returns
+//!   initialisations reach. Clean structure can be stable across seeds, but is not guaranteed
+//!   to be. On real data: on the 30 breast-cancer features of `tests/fixtures/onc`, `repeat = 50` returns
 //!   one of a handful of partitions depending on the seed, all of them coarsenings of the same
 //!   eight groups. Compare a few seeds, and raise `repeat`, before reading much into a
 //!   particular partition. Cost grows at least as `N^3` (every `k`, `repeat` times, quadratic
@@ -143,8 +144,8 @@ pub fn check_improve_clusters<T: Clone>(
 /// symmetry and unit diagonal not checked). `repeat` is the number of k-means initialisations
 /// per candidate `k`. The number of clusters is chosen by the silhouette t-statistic; see the
 /// [module documentation](self) for the full procedure. The search starts at `k = 2`, so a
-/// matrix with no structure still comes back partitioned: a low mean silhouette is the sign
-/// that the clusters are not real. The exception is a matrix whose rows are all identical,
+/// matrix with no structure still comes back partitioned: a low mean silhouette indicates
+/// weak separation under this representation, not a formal test of independence. The exception is a matrix whose rows are all identical,
 /// such as all ones: there is nothing to separate, every k-means centroid is the same point,
 /// and the result is one cluster of every item, each scoring a silhouette of 0.
 ///

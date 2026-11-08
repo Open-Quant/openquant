@@ -2,7 +2,7 @@
 title: "sb_bagging"
 description: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a deliberately simple one-feature base learner."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -58,14 +58,20 @@ For each of `n_estimators` estimators, `fit(x, y, ind_mat, sample_weight)`:
    row's `sample_weight` if one is given (a row drawn twice counts twice).
 
 The classifier's base learner is a decision stump whose threshold is the *mean* of the
-feature over the sample — not a fitted split — predicting whichever side of it had the
-higher rate of `y == 1`. The regressor's is a one-variable least-squares line. `predict`
+feature over the sample, weighted when weights are supplied — not an optimised split.
+It predicts 1 on whichever side had the higher weighted rate of `y == 1`, and 0 on the
+other side. Equal rates assign class 1 to the side at or above the threshold. This compares
+the two sides rather than checking whether either rate exceeds 0.5: even all-zero training
+labels can produce class-1 predictions. The regressor's is a one-variable least-squares line. `predict`
 takes a majority vote (ties go to class 1) or the mean of the lines.
 
 `ind_mat` is the bars × labels indicator matrix from
 [`sampling.get_ind_matrix`](/modules/sampling/#concurrency-and-uniqueness); its columns must
 correspond one-to-one with the rows of `x`, and a different count is `DimensionMismatch`.
 `sample_weight`, if given, needs one finite, non-negative weight per row, not all zero.
+Weights affect the fitted stump or line, not sequential draw probabilities. A sampled bag
+whose total supplied weight is zero falls back to equal weights, so zero-weight rows are
+not guaranteed to be excluded from every fit.
 
 ```python
 import random
@@ -164,6 +170,19 @@ out-of-fold accuracy 0.717
 Only the classifier has a model object; the regressor is still reached through
 `fit_predict_sb_regressor` from Python.
 
+The stump's rate comparison is visible even on a single-class training set:
+
+```python
+from openquant import sampling, sb_bagging
+
+x = [[float(i)] for i in range(6)]
+ind = sampling.get_ind_matrix([(i, i) for i in range(6)], list(range(6)))
+model = sb_bagging.SequentiallyBootstrappedBaggingClassifier(n_estimators=1, random_state=7)
+model.fit(x, [0] * 6, ind)
+assert model.predict([[-100.0], [100.0]]) == [0, 1]
+# These votes describe the implemented rule, not empirical class frequencies.
+```
+
 ## From Rust
 
 ```rust
@@ -205,15 +224,22 @@ the existing estimators and adds up to the new `n_estimators`; lowering it is
 `estimators_samples` holds the row indices each estimator was trained on. With `oob_score`,
 `fit` sets `oob_score_value` to the accuracy (classifier) or R² (regressor) over the rows at
 least one estimator did not draw, each predicted only by those estimators; it is `None` if
-every row was drawn by every estimator. The same `random_state` and inputs reproduce a fit.
+every row was drawn by every estimator. OOB scores are unweighted even when training uses sample weights. The same
+`random_state`, inputs and sequence of fit calls reproduce a fit. Rust warm starts seed each
+new fit with `random_state + number_already_fitted` (wrapping at the `u64` limit); adding
+estimators in stages need not match training the final count in one call.
 
 ## What to watch for
 
-- **The base learner is the weak point.** A result from this module is a result from
-  sequentially bootstrapped bagging of one-feature stumps or lines, not of a real model.
+- **The base learner is deliberately limited.** Results describe sequentially bootstrapped
+  one-feature stumps or lines. Vote-share probabilities are not calibrated class
+  probabilities; inspect calibration before using them for position sizing.
+- **Warm start retains old estimators.** Matching column count is checked, but matching
+  feature meanings and training populations is the caller's responsibility. Changing data
+  between fits produces an ensemble containing models trained on different populations.
 - **Out-of-bag rows are still close to in-bag rows.** Sequential sampling makes the samples
   more unique, but a held-out label still overlaps drawn labels in time, so `oob_score`
-  remains optimistic when labels overlap (AFML §4.5). Treat it as a sanity check and score
+  can remain optimistic when labels overlap (AFML §4.5). Treat it as a sanity check and score
   the model under [purged cross-validation](/modules/cross-validation/).
 - **`max_features` above one column changes nothing** except the random stream, because only
   the first sampled feature is used. With several informative features each estimator sees

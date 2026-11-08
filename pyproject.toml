@@ -87,3 +87,9 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = ["pandas", "pandas.*", "sklearn", "sklearn.*"]
 ignore_missing_imports = true
+
+# SciPy is optional and confined to the offline research labs. Its runtime
+# dependency remains pinned by experiments/requirements-offline-research.txt.
+[[tool.mypy.overrides]]
+module = ["scipy", "scipy.*"]
+ignore_missing_imports = true

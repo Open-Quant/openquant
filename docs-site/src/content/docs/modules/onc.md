@@ -2,7 +2,7 @@
 title: "onc"
 description: "Optimal Number of Clusters: partition a correlation matrix with k-means, choosing the number of clusters by silhouette quality."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -40,7 +40,8 @@ a [deflated Sharpe ratio](/modules/backtest-statistics/#deflating-for-the-trials
 **Observations.** Convert the correlation matrix to the distance
 $d_{ij}=\sqrt{\tfrac12(1-\rho_{ij})}$. Each item is then represented by *its row of that
 matrix*, its distances to every other item, so two items are close when they relate to
-everything else in the same way. That is more robust than comparing the pair alone.
+everything else in the same way. K-means and silhouette scoring use Euclidean distances
+between these row vectors, not the individual entries $d_{ij}$ directly.
 
 **Quality.** For an item $i$, let $a_i$ be its mean distance to the other members of its
 cluster and $b_i$ its mean distance to the members of the nearest other cluster. Its
@@ -51,11 +52,14 @@ S_i \;=\; \frac{b_i-a_i}{\max(a_i,\,b_i)}
 $$
 
 which is near 1 for an item deep inside a well-separated cluster and negative for one that
-sits closer to a neighbouring cluster. The quality of a whole partition is the $t$-statistic
-of the silhouettes, $q=\mathrm{E}[S_i]/\sqrt{\mathrm{V}[S_i]}$: high when silhouettes are
-large *and* uniformly so.
+sits closer to a neighbouring cluster. Singletons and a one-cluster result receive 0.
+The quality of a whole partition is $q=\mathrm{E}[S_i]/\sqrt{\mathrm{V}[S_i]}$, using
+population deviation (`ddof=0`): high when silhouettes are large *and* uniformly so.
+The code calls this a silhouette “t-statistic”, but it is a selection score, not a
+Student t-test or a calibrated significance level. At deviation at most `1e-12`, a positive
+mean scores infinity; a nonpositive mean scores 0.
 
-**Base clustering.** Run k-means for every $k$ from 2 to $N-1$, `repeat` times each with
+**Base clustering.** Run k-means for every $k$ from 2 to $\max(N-1,2)$, `repeat` times each with
 different initialisations, and keep the partition with the highest $q$. Each run is one
 k-means++ initialisation followed by Lloyd's algorithm, as the book's Snippet 4.1 does with
 scikit-learn's `KMeans(n_init=1)`. Equal $q$ goes to the higher mean silhouette.
@@ -156,8 +160,7 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
 - **ONC is a random search, and on real data its answer can depend on the seed.** The
   partition kept is the best of `repeat` k-means runs per $k$, and the best one may be a
   k-means local optimum that few initialisations reach. The same matrix, `repeat` and seed
-  always give the same answer, and clean structure like the example above comes back the same
-  under any seed. Real data need not: on the 30 features of the breast-cancer data set, with
+  always give the same answer, but even visually clean structure has no universal seed-invariance guarantee. On real data: on the 30 features of the breast-cancer data set, with
   `repeat=50`, different seeds return eight, seven, six or five clusters, every one of them a
   merger of the same eight groups; scikit-learn's ONC does the same. Run a few seeds, and
   raise `repeat`, before reading much into one partition.
@@ -169,15 +172,34 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
   thousands is not, and the recursion multiplies it.
 - **It returns at least two clusters, except on identical rows.** The search starts at
   $k=2$, so a matrix with no structure still comes back partitioned. A low mean silhouette, or
-  a silhouette $t$-statistic near zero, is the sign that the clusters are not real. The one
+  a quality score near zero, indicates weak separation under this representation; neither
+  the score nor the returned count establishes independent bets. The one
   exception is a matrix whose rows are all the same, such as all ones: there is nothing to
   separate, and the result is a single cluster of every item with silhouettes of 0.
 - **Negative correlation is distance, not similarity.** With $d=\sqrt{\tfrac12(1-\rho)}$ a
   pair at $\rho=-1$ is as far apart as possible. If a strategy and its mirror image should
   count as the same bet, take absolute correlations first.
-- **The input must be a correlation matrix**: square, with at least two rows. Values are
-  clamped to $[-1,1]$ but symmetry and a unit diagonal are not checked. From Python it is a
+- **The input must be a correlation matrix**: square, with at least two rows. Supply finite entries, symmetry, a unit diagonal and positive semidefiniteness. Entries are
+  clamped to $[-1,1]$, but those matrix properties and finiteness are not comprehensively
+  validated; clipping is not a repair of an invalid correlation matrix. From Python it is a
   list of lists, and `clusters` comes back as a dict keyed by label.
+
+## A partition is not evidence of structure
+
+Even an identity correlation matrix is partitioned. This two-item example has no
+cross-correlation and returns two singleton clusters with zero silhouettes:
+
+```python
+from openquant import onc
+
+result = onc.get_onc_clusters([[1.0, 0.0], [0.0, 1.0]], 3)
+assert len(result["clusters"]) == 2
+assert result["silhouette_scores"] == [0.0, 0.0]
+```
+
+Treat a cluster count used as an effective trial count as a modelling choice. Check its
+sensitivity to the return window, representation and seed; clustering alone does not establish
+independence or validate a multiple-testing correction.
 
 ## Related modules
 
@@ -187,5 +209,5 @@ assert_eq!(get_onc_clusters(&corr, 0).unwrap_err(), OncError::InvalidRepeat);
   rather than a flat partition.
 - [`feature-importance`](/modules/feature-importance/) — cluster features, then measure
   importance per cluster.
-- [`backtest-statistics`](/modules/backtest-statistics/) — the number of clusters of trial
-  returns is the $N$ to deflate by.
+- [`backtest-statistics`](/modules/backtest-statistics/) — using a cluster count of trial
+  returns as a heuristic effective $N$, with the qualifications above.

@@ -3,7 +3,7 @@ title: "Performance"
 description: "Committed criterion and Python benchmark results, what each benchmark measures, and how CI gates regressions."
 status: generated
 generated_from: "benchmarks/"
-last_generated: '2026-09-26'
+last_generated: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -26,10 +26,12 @@ The numbers below are the benchmark results committed in `benchmarks/`. They are
 | `structural_breaks_get_sadf_sm_power` | `structural_breaks::get_sadf`, `sm_power` model with constant, on 320 log prices, minimum window 20, 5 fixed lags | 602.0 | 600.0–604.0 | [`perf_hotspots.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/perf_hotspots.rs) |
 | `synthetic_ticker_seq_bootstrap_2k_600` | `sampling::seq_bootstrap`: 240 draws from an indicator matrix of 600 labels over 2,000 bars | 383.9 | 360.3–409.8 | [`synthetic_ticker_pipeline.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/synthetic_ticker_pipeline.rs) |
 | `synthetic_ticker_pipeline_end_to_end` | EWMA, VaR/ES/CDaR, a 3×3 covariance and portfolio variance, and a 200-draw sequential bootstrap (360 labels over 1,200 bars) on 20,000 prices, in one pass | 61.72 | 60.90–62.48 | [`synthetic_ticker_pipeline.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/synthetic_ticker_pipeline.rs) |
-| `bet_sizing_bet_size_reserve_fit` | `bet_sizing::bet_size_reserve_full` on 500 synthetic events: fits the EF3M mixture (100 runs) and sizes every bet | 18.75 | 17.82–19.81 | [`perf_hotspots.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/perf_hotspots.rs) |
+| `bet_sizing_bet_size_reserve_fit` | `bet_sizing::bet_size_reserve_full` on 500 synthetic events: fits a two-normal mixture by EM (100 random restarts) and sizes every bet | 18.75 | 17.82–19.81 | [`perf_hotspots.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/perf_hotspots.rs) |
 | `synthetic_ticker_risk_metrics_var_es_cdar` | `RiskMetrics` value at risk, expected shortfall and conditional drawdown at risk (5%) on 119,999 returns | 8.01 | 7.50–8.60 | [`synthetic_ticker_pipeline.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/synthetic_ticker_pipeline.rs) |
 | `synthetic_ticker_ewma_100k` | `util::fast_ewma::ewma`, window 64, on 100,000 prices | 4.72 | 4.69–4.75 | [`synthetic_ticker_pipeline.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/synthetic_ticker_pipeline.rs) |
 | `bet_sizing_bet_size_reserve_reuse_fit` | `bet_sizing::bet_size_reserve` on the same 500 events, reusing already-fitted mixture parameters | 0.278 | 0.274–0.284 | [`perf_hotspots.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/benches/perf_hotspots.rs) |
+
+Descriptions reflect the current benchmark source; the committed timings are historical and were not rerun for this documentation. The `sm_power` fixture supplies log prices although that model logs its input internally; this is a timing fixture, not a recommended numerical example. Reserve fitting and sequential bootstrap use unseeded random draws. The benchmark called `pipeline_end_to_end` times a kernel chain, not the public research pipeline, provider I/O or model training. Its `iter_batched` fixture construction is outside the timed routine; reserve-reuse fitting is also performed before timing.
 
 `benchmarks/baseline_benchmarks.json` holds the same numbers: the baseline was last refreshed from this run.
 
@@ -47,11 +49,14 @@ Benchmarks that exist in `crates/openquant/benches/` but are not in `benchmarks/
 | `load_ohlcv_csv` | 400,000 | 234.6 | 235.6 | 1,704,667 | 120.3 |
 | `load_ohlcv_parquet` | 400,000 | 458.7 | 468.5 | 872,087 | 4.9 |
 
-There is no committed `benchmarks/data_processing/baseline.json`, so `just py-bench-data-compare` has nothing to compare against until one is made, and no CI job runs these benchmarks.
+There is no committed `benchmarks/data_processing/baseline.json`, and no CI job runs these benchmarks. Supply an independently retained result to the Python script's `--baseline` option for a descriptive comparison.
+
+The Python fixture is a deterministic complete minute grid. Each operation gets one warm-up; fixture generation and file writing are outside timing. File loads include cleaning and revisit warmed paths, so they are not cold-I/O measurements. The reported p95 is sorted sample index `max(floor(0.95*n)-1, 0)` (the fourth of five samples), so it can be below the mean. It is not an interpolated percentile or a calibrated tail-latency guarantee. p50 uses the upper-middle sample; standard deviation uses the population formula. Rows/s divides rows by mean time. MB/s uses frame estimated bytes for in-memory calls but file bytes for loads, divided by 1,000,000; these are different throughput denominators.
+The script's `--baseline` compares function names and mean times only, without a failure threshold or checks for matching dataset, build, dependencies or hardware. Use a release extension and match row counts, symbols, iterations, thread settings, toolchain and machine before interpreting changes.
 
 ## Regression gate
 
-`.github/workflows/benchmark-regression.yml` runs on pull requests that touch `crates/openquant/`, the workspace manifests, the toolchain pin or the benchmark scripts. It builds the pull request's merge base and its head, runs the `perf_hotspots` and `synthetic_ticker_pipeline` benches on both **on the same runner**, and fails if a benchmark's mean slowed down by more than 35% (`scripts/check_bench_thresholds.py`), or by more than its entry in `benchmarks/threshold_overrides.json`. A benchmark that stops producing a result fails the gate too. Comparing base and head back to back removes the machine-to-machine variation that made a gate against the committed baseline fail on unrelated changes. Because the workflow is path-filtered, it is not suitable as a required status check.
+`.github/workflows/benchmark-regression.yml` runs on pull requests that touch `crates/openquant/`, the workspace manifests, the toolchain pin or the benchmark scripts. It builds the pull request's merge base and its head, runs the `perf_hotspots` and `synthetic_ticker_pipeline` benches on both **on the same runner**, and fails if a benchmark's mean slowed down by more than 35% (`scripts/check_bench_thresholds.py`), or by more than its entry in `benchmarks/threshold_overrides.json`. A name present in the collected baseline but absent from the latest collection fails, as does comparing zero benchmarks. Both collections use the head's manifest: removing a name there excludes it from both. Comparing base and head back to back removes the machine-to-machine variation that made a gate against the committed baseline fail on unrelated changes. Because the workflow is path-filtered, it is not suitable as a required status check.
 
 | Benchmark | Allowed slowdown |
 | --- | ---: |
@@ -63,12 +68,16 @@ There is no committed `benchmarks/data_processing/baseline.json`, so `just py-be
 | `synthetic_ticker_seq_bootstrap_2k_600` | 35% |
 | `synthetic_ticker_pipeline_end_to_end` | 50% |
 
+The checker uses positive finite `mean_ms` values, not confidence intervals or a statistical significance test. It skips comparisons with baseline means below 0.05 ms; latest-only names have no regression baseline. The computed percentage must exceed its threshold to fail; rounded printed percentages can conceal a small excess. Same-runner timing still has load, thermal and run-order noise. CI uses 30 samples, 2 seconds warm-up and a 3-second measurement target.
+
+Collection is not a freshness check: `collect_bench_results.py` scans all existing `new/estimates.json` files, skips unreadable/malformed estimates and does not require every allowlisted name. Old results can survive a partial run. Use a fresh Criterion result directory (preserve previous evidence separately), verify the collected names against the intended manifest, and record the exact command, revision, toolchain, CPU, thread settings and raw estimates. The collector's timestamp records collection time; `--commit` is a supplied label, not verified measurement provenance. `just bench-collect` leaves that label empty.
+
 ## Reproduce
 
 ```bash
 just bench-all      # cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
 just bench-collect  # target/criterion -> benchmarks/latest_benchmarks.json (manifest only)
-just bench-check    # latest vs the committed baseline, with the thresholds CI uses
+just bench-check    # committed baseline: useful only with comparable hardware/configuration
 just py-bench-data  # Python data-layer benchmarks -> benchmarks/data_processing/latest.json
 python3 scripts/docs/generate_site_pages.py --write   # re-render this page
 ```

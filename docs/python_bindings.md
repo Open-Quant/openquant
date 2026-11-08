@@ -5,34 +5,39 @@ This repository includes a Python package built from Rust using PyO3 and maturin
 ## Quickstart
 
 Prerequisites:
-- Rust stable toolchain
+- The Rust toolchain pinned by `rust-toolchain.toml`, plus a native linker
 - `uv` (`https://docs.astral.sh/uv/`)
 
 From repo root:
 
 ```bash
 uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-uv run --python .venv/bin/python python -c "import openquant; print('openquant import ok')"
-uv run --python .venv/bin/python pytest python/tests -q
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
+uv run --no-sync --python .venv/bin/python python -c "import openquant; print('openquant import ok')"
+uv run --no-sync --python .venv/bin/python pytest python/tests -q
 ```
 
-`maturin develop` builds an unoptimised debug extension. Add `--release` (or run
-`just py-develop-release`) before timing anything or running heavy calls such as
-`structural_breaks.get_sadf`, which can take minutes per model in a debug build.
+The recipe installs locked dependencies without implicitly building the project, then
+builds an optimised extension explicitly. Rebuild after changing Rust or binding code,
+and restart any interpreter that already imported it. Omitting `--release` selects a
+debug build; use release for benchmarks and heavy research examples.
+
+For installation diagnostics and wheel verification, see the
+[Python setup guide](https://open-quant.github.io/openquant/setup/python-bindings/).
+The distribution is `pyopenquant`; the Python import is `openquant`.
 
 Quick performance showcase:
 
 ```bash
-uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
-uv run --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
+uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
+uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
 ```
 
 Build a wheel:
 
 ```bash
-uv run --python .venv/bin/python maturin build --manifest-path crates/pyopenquant/Cargo.toml --out dist
+uv run --no-sync --python .venv/bin/python maturin build --release --manifest-path crates/pyopenquant/Cargo.toml --out dist
 ```
 
 ## API Mapping (Initial Surface)
@@ -247,7 +252,7 @@ summary = openquant.pipeline.summarize_pipeline(pipe)
   - Use `%Y-%m-%d %H:%M:%S` timestamp strings, optionally with a fractional second
     (`%Y-%m-%d %H:%M:%S.%f`). `str(datetime)` produces this format.
 - `ModuleNotFoundError: No module named 'openquant'`
-  - Re-run `uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml`.
+  - Re-run `uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml`.
 
 ## Notes
 

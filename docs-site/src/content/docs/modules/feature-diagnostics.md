@@ -24,7 +24,7 @@ sidebar:
 ---
 
 This is the notebook-facing side of AFML Chapter 8: hand it a feature matrix and labels and
-it returns importance tables ready to read or plot. It is written in pure Python and is
+it returns importance tables ready to read or plot. Its Python implementation is
 **independent of the Rust [`feature_importance`](/modules/feature-importance/) module** — it
 does not call it, and it brings its own model. Read that page for what MDI, MDA and SFI mean
 and how each can mislead; this page covers what the Python functions do with them.
@@ -34,12 +34,14 @@ and how each can mislead; this page covers what the Python functions do with the
 The importance estimators and substitution report use the same model: a logistic
 regression of the 0/1 label on the features, fitted by Newton's method (iteratively
 reweighted least squares) with an L2 penalty of 0.001 on every coefficient, including
-the intercept. `sample_weight` weights each row's log-likelihood. The fixed model is the
-first thing to know about any number this module reports.
+the intercept. `sample_weight` weights each row's log-likelihood. Fitting is implemented in Python; the
+module also uses NumPy for PCA and Polars for tables. This fixed model determines what
+the importance scores can reveal.
 
 Importance is always importance *to a model*. A feature that matters through a threshold, an
-interaction, or any non-monotone effect is invisible to a linear model and will be scored as
-noise here.
+interaction, or a non-monotone effect can be missed unless the input features represent
+that effect. Such a feature may still receive importance through correlations with
+other columns; a low score does not establish that it contains no predictive information.
 
 Use these reports for screening. Measure importance for the model you will trade with
 [`feature_importance`](/modules/feature-importance/) or your own code.
@@ -160,8 +162,8 @@ Read across the `a_copy` row. MDA says it is nearly worthless, 0.016 against 0.6
 SFI says it is nearly as good as `a`: −0.482 against −0.474. Both are right. Given `a`, the model
 has no use for a noisier copy of it, and damaging the copy costs nothing; on its own, the
 copy carries almost all of `a`'s information. This is the substitution effect, and it is the
-reason to never drop a feature on one method's say-so: remove `a` from this set and `a_copy`
-becomes the most important feature in it.
+reason to assess removals by refitting and reevaluating the remaining set. Removing `a`
+can increase the credit assigned to `a_copy`, but its new rank must be measured.
 
 <figure>
 <img class="dark:sl-hidden" src="/figures/ch8-importance-light.svg" alt="Three bar charts of importance for five features. Under the coefficient-based MDI, feature a leads, b follows, and a_copy is small. Under MDA, a dominates, b is about two-thirds of it, and a_copy is near zero. Under SFI, measured as improvement over a coin flip, a and a_copy are nearly equal, b is clearly positive and both noise features are marginally negative." />
@@ -169,7 +171,9 @@ becomes the most important feature in it.
 <figcaption>Same data, same model, three answers. SFI is drawn as the gain over a coin flip's log loss of −0.693.</figcaption>
 </figure>
 
-SFI levels are out-of-sample log losses, so compare them with a coin flip's −0.693. The
+SFI levels here are cross-validated negative log losses. A constant probability 0.5
+scores −0.693; with imbalanced labels, also compare against a baseline probability fitted
+on the training fold rather than treating a fair coin as the only relevant benchmark. The
 informative features beat it, `b` by less because it carries less of the signal on its own;
 the noise features land just below it, which is what fitting pure noise costs out of sample.
 
@@ -192,31 +196,91 @@ block recording the split settings and `mean_base_score`.
 In the substitution report, `dilution_ratio` is joint importance over the sum of single
 importances, and `flag_substitution_risk` is set when it exceeds 1.15. In the example
 it is 1.02 and unflagged: the linear model concentrated on `a` and never split credit with
-the copy. A tree ensemble on the same data would split it, and the ratio would be well above
-one. The report is only as sensitive as the fixed model lets it be.
+the copy. Other models can share credit differently, so a tree ensemble requires its own
+measurement. The report is only as sensitive as the fixed model lets it be, and 1.15 is a
+heuristic flag threshold rather than a significance level.
+
+## Validate values as well as shapes
+
+The importance helpers convert `X`, `y` and `sample_weight` to floats and check
+rectangular shape and matching lengths. Feature and label conversion alone does not
+establish finite feature values or binary labels; weights receive the additional checks
+described above. Supply one sample per row, one
+feature per column, finite `X`, labels of exactly `0` or `1`, and finite nonnegative
+weights. Keep row ordering identical across these inputs and the event end indices.
+The standalone PCA helper additionally rejects nonfinite `X`; do not assume that
+validation applies to every importance helper.
+
+Every fitted and scored fold needs positive total weight. A positive total over the
+whole dataset is insufficient when weights are concentrated in a few rows. Inputs with
+no positive weight, and train/test folds without positive weight, raise `ValueError`.
+This avoids reporting a perfect-looking zero log loss without weighted evidence:
+
+```python
+from openquant import feature_diagnostics as fd
+
+try:
+    fd.sfi_importance(
+        [[float(i)] for i in range(6)], [0, 1, 0, 1, 0, 1],
+        sample_weight=[0.0] * 6, event_end_indices=list(range(6)),
+        n_splits=2, pct_embargo=0.0,
+    )
+except ValueError as exc:
+    assert "positive value" in str(exc)
+else:
+    raise AssertionError("zero-weight inputs must be rejected")
+print("zero-weight SFI is rejected")
+```
+
+```text
+zero-weight SFI is rejected
+```
+
+Check weight support on the actual training and test partitions before interpreting a
+report; do not replace missing weights with zeros simply to make lengths match. If valid
+weights still produce an unusable fold, revise the sampling or split design explicitly.
+These are caller-side checks, not guarantees that the current API rejects all invalid
+values. See [input-error diagnostics](/setup/input-errors/) for the distinction between
+successful execution and valid numerical inputs.
 
 ## What to watch for
 
 - **`mdi_importance` is not mean decrease impurity.** There are no trees. It bootstraps the
   rows `n_estimators` times, fits the linear model to each, and averages the normalised
   absolute coefficients. That is a reasonable in-sample ranking *if the features are on a
-  common scale* — it does not standardise them, so a feature measured in basis points will
-  outrank the same feature measured in percent. Standardise first, or ignore this column.
-- **MDA of a very persistent feature is still somewhat understated.** The column is shuffled
+  common scale* — it does not standardise them. Changing units changes coefficient
+  magnitudes and the effect of the L2 penalty, so a basis-point feature cannot be compared
+  directly with a percentage feature. Fit any scaling on training data only.
+- **Permutation depends on the distribution within each test fold.** The column is shuffled
   within each test fold, as in Snippet 8.3, with `random.Random(seed)` (`seed=42` by
   default, also taken by `substitution_effect_report`, and echoed in `cv["seed"]`). When a
   feature moves so slowly that one fold spans only a few of its swings, shuffling among the
-  fold's bunched-together values damages it less than shuffling the whole sample would. Up
-  to an autocorrelation of about 0.95 this is negligible; at 0.99 it is noticeable. Before
+  fold's bunched-together values can damage it less than shuffling the whole sample would.
+  There is no universal autocorrelation cutoff
+  below which the effect is negligible. Before
   [#98](https://github.com/Open-Quant/openquant/issues/98) was fixed the column was rotated
   by a few rows instead, and such a feature scored 0.103 instead of 0.646.
-- **`feature_screen_report` keeps the higher-variance feature of a correlated pair.** On the
-  example it rejects `a` and keeps `a_copy`, the noisier one, because noise adds variance.
-  The screen never looks at `y`, so it cannot know better. Use it to find the pairs; choose
-  which member to keep yourself.
-- **It is pure Python and quadratic in places.** Ordinary fits suit small notebook
-  experiments; exceptional recovery can be much slower, as described above. For larger
-  experiments, consider the Rust module with your own model.
+- **The correlation screen prioritizes coverage, then standard deviation.** It greedily
+  compares `(coverage, std)` for each correlated pair, keeping the earlier feature on a
+  tie. With equal coverage, a noisier or differently scaled column can win. The screen
+  does not use `y` to select features (it only checks a supplied label vector's conversion
+  and length); fit screening on training data and evaluate the selected set on
+  held-out data rather than interpreting the rule as predictive ranking.
+- **Full-sample preprocessing is not purged by the splitter.** The optional PCA branch in
+  `substitution_effect_report` fits scaling and PCA on all supplied rows before running
+  MDA folds. Its component comparison is descriptive, not a fully out-of-sample estimate.
+  The report also chooses correlated pairs using all supplied rows.
+  For evaluation, fit transforms separately on each training fold and apply them to its
+  test fold. The standalone PCA helper returns fitted means, scales and components; it
+  does not create a cross-validation pipeline.
+- **Error bars are descriptive.** For MDA and SFI, `stderr` is the sample deviation across
+  fold values divided by their count's square root. Overlapping training sets make folds
+  dependent; this is not automatically a calibrated confidence interval. MDI applies the
+  same formula across its bootstrap fits, describing resampling variation rather than
+  out-of-sample predictive uncertainty.
+- **Python fitting and repeated permutations can be expensive.** Benchmark the intended
+  row/feature/fold counts; the Rust feature-importance API uses a caller-supplied model,
+  so switching APIs is not a numerically identical replacement.
 - **`event_end_indices` are row positions, not timestamps**, and must be at or after each
   row's own index. Values past the last row are clipped.
 

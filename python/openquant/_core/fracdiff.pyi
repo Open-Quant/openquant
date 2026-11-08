@@ -14,11 +14,13 @@ def frac_diff(series: Sequence[float], diff_amt: float, thresh: float) -> list[f
     """Fractionally difference a series with an expanding window.
 
     Output `t` applies the first `t + 1` weights of `(1 - B)^d` to `series[0..=t]` (AFML
-    Snippet 5.2). Leading outputs whose weights on missing history exceed `thresh` of the
-    total absolute weight are NaN: `thresh=1.0` skips nothing (the mlfinlab default), AFML
-    uses 0.01. The growing number of terms causes a drift (AFML 5.5.1), so prefer
-    `frac_diff_ffd` for features. Pass levels (prices or log prices), not returns. Nothing
-    is validated; a NaN input poisons every later output. Cost is O(n^2).
+    Snippet 5.2). To compute the leading NaN count, generate `len(series)` oldest-first
+    weights, normalize their cumulative absolute sum, and count entries strictly greater
+    than `thresh`. This count depends on batch length. `thresh=1.0` skips nothing (the
+    mlfinlab default); AFML uses 0.01. Growing windows can introduce drift (AFML 5.5.1), so
+    prefer `frac_diff_ffd` for features. Pass levels (prices or log prices), not returns.
+    Numeric domains are not validated; a NaN input poisons every later output, even at
+    zero weight. Neither function guarantees stationarity. Cost is O(n^2).
 
     Parameters
     ----------
@@ -27,7 +29,7 @@ def frac_diff(series: Sequence[float], diff_amt: float, thresh: float) -> list[f
     diff_amt : float
         Differencing order `d`.
     thresh : float
-        Share of total absolute weight allowed on missing history before an output is NaN.
+        Threshold on normalized cumulative absolute weights used to count leading NaNs.
 
     Returns
     -------
@@ -41,9 +43,11 @@ def frac_diff_ffd(series: Sequence[float], diff_amt: float, thresh: float) -> li
     The weights are `get_weights_ffd(diff_amt, thresh, len(series))`; each output is their
     dot product with the matching trailing window, so the first `len(weights) - 1` outputs
     are NaN (AFML Snippet 5.3). A threshold too small for the data gives a window as long as
-    the series and a single non-NaN output. Each output uses only values at or before its own
-    position. Pass levels (prices or log prices), oldest first, not returns. Nothing is
-    validated; a NaN poisons every output whose window covers it.
+    the series and a single eligible output (which may still be nonfinite). Extending a
+    batch that hit its cap can change the window and earlier output availability. Each
+    dot product uses values at or before its own position. Pass levels (prices or log
+    prices), oldest first, not returns. Numeric domains are not validated; a NaN poisons
+    every window containing it, even at zero weight. Stationarity is not guaranteed.
 
     Parameters
     ----------
@@ -65,7 +69,8 @@ def get_weights(diff_amt: float, size: int) -> list[float]:
 
     The weights of `(1 - B)^d` follow `w_0 = 1`, `w_k = -w_{k-1} (d - k + 1) / k` (AFML
     Snippet 5.1). They are returned oldest lag first, so the last element is `w_0 = 1` and
-    the one before it is `-diff_amt`. Nothing is validated.
+    the one before it is `-diff_amt`. No numeric-domain validation is performed after
+    argument conversion.
 
     Parameters
     ----------
@@ -85,9 +90,10 @@ def get_weights_ffd(diff_amt: float, thresh: float, lim: int) -> list[float]:
 
     Uses the recursion of `get_weights` and stops before the first weight whose absolute
     value is below `thresh`, or once `lim` weights exist, whichever comes first (AFML
-    Snippet 5.3). For a non-integer `diff_amt` the weights never reach zero, so a `thresh`
-    of 0 or less (or NaN) means "cap only" and yields exactly `lim` weights. `thresh` is a
-    floor on a single weight's magnitude, not a share of cumulative weight as in `frac_diff`.
+    Snippet 5.3). A `thresh` of 0 or less (or NaN) never satisfies the strict stopping
+    comparison, even for zero weights: it means "cap only" and yields exactly `lim` weights.
+    `thresh` is a floor on a single weight's magnitude, not a share of cumulative weight as
+    in `frac_diff`.
 
     Parameters
     ----------

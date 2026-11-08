@@ -2,7 +2,7 @@
 title: "portfolio_optimization"
 description: "Mean-variance allocation with weight bounds: inverse variance, minimum volatility, maximum Sharpe ratio, and minimum risk for a target return."
 status: authored
-last_authored: '2026-09-24'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -51,7 +51,7 @@ All four are long-only and fully invested by default, $\sum_i w_i=1$ and $0\le w
 
 | `solution` | Problem |
 | --- | --- |
-| `"inverse_variance"` | weights proportional to the reciprocal of each variance; ignores correlation, then clamps to the bounds |
+| `"inverse_variance"` | weights proportional to the reciprocal of each variance; ignores correlation, then clamps to the bounds and redistributes the difference so weights sum to one |
 | `"min_volatility"` | minimise portfolio variance |
 | `"max_sharpe"` | maximise excess return over `risk_free_rate` per unit of volatility |
 | `"efficient_risk"` | minimise portfolio variance subject to an expected return of at least `target_return` |
@@ -77,6 +77,9 @@ it to zero afterwards is not the long-only optimum; the solver finds the constra
 Bounds come two ways. `tuple_bounds = (lo, hi)` applies to every asset; `bounds` sets them per
 asset by index and takes precedence (a `HashMap<usize, (f64, f64)>` in Rust, a list of
 `(index, lo, hi)` in Python).
+Upper bounds above 1 are capped at 1, and negative lower bounds allow shorting. Bounds for
+nonnegative indices at or above the asset count are ignored; negative Python indices raise
+`OverflowError`. Validate indices against the column order.
 
 ```python
 from openquant import portfolio
@@ -138,7 +141,7 @@ their mean (`ReturnsMethod::Mean`) or an exponentially weighted mean
 consistent choice for a one-period problem on weights, because a portfolio's simple return is
 the weighted sum of its assets' simple returns, which is not true of log returns.
 
-**Everything is annual.** The expected returns *and* the covariance are multiplied by the
+**Price-based annualisation assumes daily input rows.** The expected returns *and* the covariance are multiplied by the
 number of periods in a year, $252/\text{step}$, so `portfolio_return` is
 $\mu^\top w$, `portfolio_risk` is the annualised volatility $\sqrt{w^\top\Sigma w}$, and
 `portfolio_sharpe` is $(\mu^\top w-r_f)/\sqrt{w^\top\Sigma w}$ in annual units. Give
@@ -146,6 +149,21 @@ $\mu^\top w$, `portfolio_risk` is the annualised volatility $\sqrt{w^\top\Sigma 
 returns the same annualised $\mu$ and $\Sigma$ without solving anything, so passing them to
 `allocate_from_inputs` reproduces the result from prices. `resample_by` of `"W"` or `"M"`
 keeps every 5th or 21st row first, and the annualisation factor becomes 252/5 or 252/21.
+This is fixed-row sampling, not calendar-week or calendar-month aggregation. A trailing
+incomplete block is dropped; unknown frequency strings silently use a step of 1.
+
+**Short inputs have an inconsistent fallback.** With fewer rows than one resampling block,
+the current implementation keeps all original rows but still annualises by `252 / step`.
+For example, Rust's `compute_expected_and_covariance` with `ReturnsMethod::Mean` and three
+daily prices `[100, 110, 121]` produces an expected return of 25.2 with no resampling, 5.04
+with `"W"`, and 1.2 with `"M"`, even though all three calls use the same daily returns.
+These are moment estimates, not a guarantee that an allocator accepts the resulting zero
+covariance: `"inverse_variance"`, for example, rejects a zero diagonal. Do not treat that
+fallback as a valid weekly or monthly estimate.
+One complete block leaves only one price and raises `NoData` (`ValueError` in Python).
+Two complete blocks provide one return, whose covariance is set to zero. Three complete
+blocks provide the minimum two returns for sample covariance; much more history is needed
+for a stable estimate. Prepare and check the sample frequency and retained row count explicitly.
 
 ## From Rust
 
@@ -183,6 +201,11 @@ assert!(matches!(
 ));
 ```
 
+If you start with long-format observations rather than prepared moments, follow
+[Align observations and calculate portfolio weights](/workflows/multi-asset-allocation/).
+It explicitly aligns dates, fixes asset-column order and carries that order through
+sample covariance to named weights, with units and the fitting date stated.
+
 ## What to watch for
 
 - **With `allocate_from_inputs` the units are yours.** `portfolio_sharpe` is
@@ -191,8 +214,9 @@ assert!(matches!(
   overstates the Sharpe ratio by $\sqrt{252}$. The weights do not depend on the scale of
   $\Sigma$, only the reported risk and Sharpe ratio do.
 - **`portfolio_sharpe` is reported for every solution**, not only `"max_sharpe"`; it is the
-  Sharpe ratio of the portfolio returned, against `risk_free_rate`. It is 0 only when the
-  portfolio's risk is 0. Before [#110](https://github.com/Open-Quant/openquant/issues/110)
+  Sharpe ratio of the portfolio returned, against `risk_free_rate`. It is forced to 0 when the
+  portfolio's risk is 0; with positive risk it is also 0 when expected excess return is 0.
+  Before [#110](https://github.com/Open-Quant/openquant/issues/110)
   was fixed it was 0 for the other three solutions, and from prices it divided an annual
   return by a daily volatility, so it read about 16 times ($\sqrt{252}$) too high.
 - **It is in-sample.** The maximum-Sharpe portfolio's `portfolio_sharpe` is the best ratio on
@@ -211,12 +235,20 @@ assert!(matches!(
 - **The covariance is the plain sample covariance.** With more assets than a few dozen
   observations per asset it is poorly conditioned, and every weakness described above gets
   worse. Shrink it, or denoise it, before passing it to `allocate_from_inputs`.
+- **Supplied covariance must be symmetric and positive semidefinite.** The inverse-variance
+  branch validates its diagonal, not the whole matrix. For example, `[[1, -2], [-2, 1]]`
+  has positive diagonal entries but gives $w^\top\Sigma w=-0.5$ at weights `(0.5, 0.5)`.
+  The current result calculation clamps that negative value to zero before taking its square
+  root. Accepting this invalid input is an implementation limitation: a reported zero risk
+  does not establish that the covariance is valid or the portfolio riskless.
 
 ## Related modules
 
 - [`cla`](/modules/cla/) — the whole efficient frontier from the same inputs, by the
-  critical line algorithm. From the same prices, or the same $\mu$ and $\Sigma$, the two
-  modules find the same maximum-Sharpe portfolio.
+  critical line algorithm. With matching effective bounds and inputs, zero risk-free rate,
+  and a common supported positive-return problem, the two solve the same maximum-Sharpe
+  objective. Their accepted inputs differ: CLA can return an allocation when all expected
+  returns are negative, whereas this module's `"max_sharpe"` rejects that case.
 - [`hrp`](/modules/hrp/), [`hcaa`](/modules/hcaa/) — allocation without inverting $\Sigma$
   or estimating $\mu$.
 - [`risk-metrics`](/modules/risk-metrics/) — tail risk of the resulting portfolio.

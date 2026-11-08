@@ -65,7 +65,10 @@ $$
 
 with $Z$ the standard normal CDF. Unlike the Rust function, `minimum_track_record_length`
 returns `math.inf` when $\widehat{SR} \le SR^*$: no track record of that quality is long
-enough.
+enough under this approximation. As with the lower-level functions, these summaries do
+not correct for serial dependence or turn PSR into a posterior probability of skill.
+Use a conventional `0 < alpha < 0.5` for confidence above 50%; the accepted `(0, 1)` range
+is broader than that usual interpretation.
 
 
 ### When the uncertainty nearly cancels
@@ -107,23 +110,28 @@ SR_0 = \sigma_{SR}\Bigl[(1-\gamma)\,Z^{-1}\!\bigl(1-\tfrac1N\bigr)+\gamma\,Z^{-1
 $$
 
 where $\sigma_{SR}$ is the standard deviation of the trials' Sharpe ratios and $\gamma \approx
-0.5772$ the Euler–Mascheroni constant. The formula is easy; $N$ is the hard part. Nobody
+0.5772$ the Euler–Mascheroni constant. This is an expected maximum under the trial model,
+not an upper bound on chance outcomes. The formula is easy; $N$ is the hard part. Nobody
 remembers how many variants they tried last week, and every forgotten trial makes the DSR
 too kind.
 
 `TrialRegistry(path)` keeps the count. Each `record(config, returns)` stores the
 configuration, the SHA-256 of its canonical JSON, a UTC timestamp and the trial's Sharpe
-ratio, $T$, skewness and kurtosis in a JSON file at `path`. The file is re-read before every
+ratio, $T$, skewness and kurtosis in a JSON file at `path`. It does not store the return
+series, source data, code revision or period definition unless you include their identifiers
+in the configuration. The file is re-read before every
 write and replaced atomically, so a registry opened tomorrow, in another notebook or another
 process, continues the same count. `registry.deflated_sharpe_ratio(returns)` then deflates
 with $N$ = the number of registered trials and $\sigma_{SR}$ = the population standard
 deviation of their Sharpe ratios.
 
 A configuration whose returns are constant — typically all zeros, because its filter took no
-bet — has no Sharpe ratio, but it was still tried. `record` stores it with Sharpe 0 (what a
-strategy with no excess return earns), skewness 0 and kurtosis 3, instead of raising. It
-counts towards $N$ and its 0 enters $\sigma_{SR}$, like any other trial. A caller that caught
-an error and skipped such configurations would undercount $N$ and deflate too weakly.
+bet — has no finite Sharpe ratio, but it was still tried. `record` stores it with Sharpe 0,
+skewness 0 and kurtosis 3 as a bookkeeping convention, instead of raising. This applies
+even to constant positive or negative returns; the stored zero is not their computed Sharpe.
+The trial counts towards $N$ and its zero enters $\sigma_{SR}$. Preserve such trials to avoid
+undercounting; because both count and dispersion change, adding a trial need not increase
+the expected-maximum hurdle monotonically.
 
 ```python
 import random
@@ -175,17 +183,37 @@ trial Sharpe dispersion: 0.0352   luckiest of 50 expected at: 0.0801 per day
 DSR: 0.446
 ```
 
-Taken alone, the eight-day rule passes every single-strategy test: an annualised Sharpe ratio
-of 1.19, 97% confidence that it beats zero, and a minimum track record of 488 days against
-the 656 it has. Only the registry knows it was the best of fifty. The luckiest of fifty
+Taken alone, the eight-day rule looks strong on these summaries: annualised Sharpe
+1.19, PSR about 0.97 and approximate minimum track record 488 observations against
+the 656 supplied. Only the registry knows it was the best of fifty. The luckiest of fifty
 skill-less rules with this spread of results would be expected to reach 0.080 per day, more
-than the 0.075 this one shows, and the deflated Sharpe ratio falls to 0.45 — a coin flip, which
-is the right answer for a random walk.
+than the 0.075 this one shows, and DSR falls to 0.45. This value belongs to this particular
+sample and assumed trial model; a null experiment is not required to return 0.5.
 
 The same deflation is available without a registry:
 `deflated_sharpe_ratio(returns, trial_sharpes)` with every trial's per-period Sharpe ratio,
 or `deflated_sharpe_ratio(returns, n_trials=N, sharpe_std=σ)`; `expected_max_sharpe(N, σ)`
 returns $SR_0$ alone.
+
+## Refreshing a shared registry
+
+Writing re-reads the file, but a second instance keeps its prior snapshot until refreshed.
+This example also makes the constant-return placeholder explicit:
+
+```python
+import tempfile
+from pathlib import Path
+from openquant import evaluation as ev
+
+with tempfile.TemporaryDirectory() as directory:
+    path = Path(directory) / "trials.json"
+    writer, reader = ev.TrialRegistry(path), ev.TrialRegistry(path)
+    trial = writer.record({"case": "constant-positive"}, [0.01, 0.01, 0.01])
+    assert trial.sharpe == 0.0  # registry placeholder, not a finite computed Sharpe
+    assert reader.n_trials == 0
+    reader.reload()
+    assert reader.n_trials == 1
+```
 
 ## Meta-labeling and the probability of failure
 
@@ -193,10 +221,11 @@ Meta-labeling (AFML §3.6) puts a secondary model on top of a primary one: the p
 picks the side, the secondary decides whether to take the bet. The meta-label of a bet is 1
 if the primary model's bet made money. `meta_label_metrics(meta_labels, meta_predictions,
 threshold)` scores the overlay — bets taken when the prediction is at least `threshold` —
-against the primary model alone, which takes every bet and so has recall 1 and precision
-equal to its hit rate. `strategy_failure_probability` then asks the Chapter 15 question of
-either set of bets: the probability that, over the investor's horizon, the precision falls
-below what the target Sharpe ratio requires (see [`strategy_risk`](/modules/strategy-risk/)
+against the primary model alone, which takes every bet and has precision equal to its hit
+rate. Its recall is 1 when at least one bet is profitable, and 0 under the zero-denominator
+convention when none are profitable. `strategy_failure_probability` then asks the Chapter 15 question of
+either set of bets: the fitted IID-bootstrap share for which precision falls at or below
+what the target Sharpe ratio requires over the chosen horizon (see [`strategy_risk`](/modules/strategy-risk/)
 for the method; `failure_probability` is its `empirical_failure_probability`).
 
 ```python
@@ -233,9 +262,11 @@ with overlay: P(annualised Sharpe < 1 over the next year) = 0.00
 
 The F1 score barely moves, and that is the lesson of the example rather than a flaw in it:
 the overlay trades recall for precision, and F1 weighs the two equally. What the overlay buys
-is visible in the last two lines. With symmetric payouts the Sharpe ratio is driven by
-precision, so filtering out the weakest half of the bets turns a strategy that misses its
-target more often than not into one that almost never does, despite taking half as many bets.
+is visible in the last two lines of this synthetic example. Precision and bet frequency
+both enter the fixed-payout Sharpe model. The overlay has higher fitted precision and fewer
+bets, producing a much smaller bootstrap failure estimate here. A displayed `0.00` is a
+rounded finite-simulation estimate, not a guarantee of no future failures. Neither parameter
+uncertainty, dependence between bets nor out-of-sample model degradation is included.
 
 ## API
 
@@ -254,8 +285,10 @@ target more often than not into one that almost never does, despite taking half 
 Returns must hold at least three finite values and must not be constant, except in
 `TrialRegistry.record`, which records constant returns as Sharpe 0 (above). `n_trials` must
 be an integer of at least 2, `alpha` must lie in $(0, 1)$, and a registry must hold two
-trials before it can deflate. Violations raise `ValueError` (or `TypeError` for non-numeric input) before anything
-is computed.
+trials before it can deflate. Ordinary validation failures raise `ValueError` or `TypeError`.
+Finite inputs alone do not guarantee finite intermediate moments: extremely large values
+can overflow, and tiny differences can underflow. Use sensible return units and inspect
+outputs rather than treating validation as a numerical-stability guarantee.
 
 ## What to watch for
 
@@ -266,13 +299,17 @@ is computed.
   JSON, so re-running a notebook does not inflate $N$ — but two genuinely different
   experiments with the same config (a different data window, say) must say so in the config,
   or the second overwrites the first.
-- **Correlated trials overstate $N$ and understate $\sigma_{SR}$.** Fifty lookbacks of one
+- **Correlated trials complicate the effective count and dispersion.** Fifty lookbacks of one
   momentum rule are not fifty independent ideas. The formula assumes independent trials;
   AFML suggests clustering them ([`onc`](/modules/onc/)) and counting clusters. In the example
   the correction still bites because the trials disagree enough, but with near-identical
-  variants $\sigma_{SR}$ collapses and so does $SR_0$.
+  variants $\sigma_{SR}$ can collapse and so can $SR_0$. The registry does not estimate
+  correlations or an effective number of independent trials.
 - **Every Sharpe ratio in one registry must be per period at one frequency.** Mixing daily and
   weekly trials makes $\sigma_{SR}$ meaningless. Use one registry per frequency and dataset.
+- **Reads use an in-memory snapshot.** `trials`, `n_trials` and the scoring methods do not
+  automatically notice another writer. Call `reload()` before reporting a shared registry,
+  or construct a new instance. This does not add a lock or protect concurrent writes.
 - **The registry is a file, not a database.** Writes are atomic and each re-reads the file
   first, so sequential runs and separate sessions share one count; two processes recording at
   the same instant can still lose one write.
@@ -285,5 +322,6 @@ is computed.
   module calls, and a longer treatment of what they assume.
 - [`strategy-risk`](/modules/strategy-risk/) — the Chapter 15 failure probability.
 - [`labeling`](/modules/labeling/) — triple-barrier and meta-labels.
-- [`backtesting-engine`](/modules/backtesting-engine/) — CPCV paths, whose Sharpe ratios are
-  trials too.
+- [`backtesting-engine`](/modules/backtesting-engine/) — CPCV paths and experiment tracking.
+  Paths from one configuration are dependent resamples, not automatically independent
+  configuration-search trials; define the trial inventory before computing DSR.

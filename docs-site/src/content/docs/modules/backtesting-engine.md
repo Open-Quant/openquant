@@ -2,7 +2,7 @@
 title: "backtesting_engine"
 description: "Walk-forward, purged cross-validation and combinatorial purged cross-validation splits, with the out-of-sample paths CPCV produces."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -108,7 +108,7 @@ complete paths. With $N=6$ and $k=2$: 15 splits, each group tested 5 times, 5 pa
 <figure>
 <img class="dark:sl-hidden" src="/figures/ch12-cpcv-light.svg" alt="A grid of six groups by fifteen splits. Each split has exactly two filled cells, the groups it tests. Each group has five filled cells, numbered 0 to 4 from left to right. Path 0 is made of the cells numbered 0: splits 0, 0, 1, 2, 3 and 4 for groups 0 to 5." />
 <img class="light:sl-hidden" src="/figures/ch12-cpcv-dark.svg" alt="A grid of six groups by fifteen splits. Each split has exactly two filled cells, the groups it tests. Each group has five filled cells, numbered 0 to 4 from left to right. Path 0 is made of the cells numbered 0: splits 0, 0, 1, 2, 3 and 4 for groups 0 to 5." />
-<figcaption>AFML's figure 12.1. Path <em>j</em> takes each group's returns from the <em>j</em>-th split that tested it, so every path covers the whole sample once, each piece predicted by a model that never saw it.</figcaption>
+<figcaption>AFML's figure 12.1. Path <em>j</em> takes each group's returns from the <em>j</em>-th split that tested it, so every path covers the whole sample once. Test targets are excluded from that split's training indices; the evaluator must also isolate feature information.</figcaption>
 </figure>
 
 `CpcvResult::path_assignments` records that mapping and `path_distribution` holds each path's
@@ -117,6 +117,13 @@ mean, deviation and `sharpe`.
 The example trades a return series with some momentum. Its "model" chooses between a 1-bar
 and a 10-bar lookback by whichever earned more on the training rows, so what is traded in a
 test block depends on the training set, as it would with a fitted model.
+
+This example demonstrates split and path assembly, not a leakage-free research design.
+Purging covers the supplied label spans only. A training row's lookback can still read
+held-out returns: in the first CPCV split below, the first training row is 84, and its
+10-row feature uses rows 74–83, including test rows 74–79. The example's recorded scores
+retain that limitation. Before using such scores for model selection, account for feature
+lookbacks and information availability in the training exclusions as well as label overlap.
 
 ```rust
 use chrono::{Duration, NaiveDate};
@@ -279,6 +286,83 @@ pair-by-pair purge. The engine's own training sets appear in `result["splits"]` 
 only; the model was trained on the ones you used. Walk-forward and purged-CV modes are
 not bound; purged k-fold splits come from `cross_validation.purged_kfold_splits`.
 
+## Restore split and sample order before assembly
+
+A saved prediction vector or an asynchronous worker result needs two identities:
+the originating split and the original sample position. `split_values[s]` must belong
+to `splits[s]`, and its values must follow that split's `test_indices`. Equal lengths
+alone cannot detect swapped samples or swapped split results. Preserve the original
+split definitions, label spans, group settings and model/data revision with the outputs;
+do not reconstruct their identity from worker completion order.
+
+The following transport check deliberately returns workers and their rows in reverse
+order. It restores both orders by ID and verifies every assembled cell. Its numeric
+values encode identities only; they are neither model probabilities nor strategy returns.
+
+```python
+import numpy as np
+from openquant import cross_validation as cv, backtesting_engine as bt
+
+t0 = np.arange(12) * 2
+t1 = t0 + 1
+splits = cv.cpcv_splits(t0, t1, 4, 2, 0.0)
+assignments = cv.cpcv_paths(4, 2)
+# Workers can finish in any order; preserve the split ID and original sample IDs.
+worker_results = {}
+for split in reversed(splits):
+    test = split["test_indices"]
+    # Diagnostic values encode identity, not probabilities or returns.
+    split_id = split["split_id"]
+    assert split_id not in worker_results  # reject repeated worker results before insertion
+    worker_results[split_id] = [
+        (int(i), float(i) + split["split_id"] / 100) for i in test[::-1]
+    ]
+assert set(worker_results) == {split["split_id"] for split in splits}
+ordered_values = []
+reversed_values = []
+for split in splits:  # canonical split order, not completion order
+    test = split["test_indices"]
+    rows = worker_results[split["split_id"]]
+    assert len(rows) == len(test)
+    assert len({i for i, _ in rows}) == len(rows)
+    by_id = dict(rows)
+    assert set(by_id) == set(test)
+    ordered_values.append([by_id[int(i)] for i in test])
+    reversed_values.append([value for _, value in rows])
+
+paths = bt.assemble_cpcv_paths(ordered_values, splits, assignments)
+assert paths.shape == (3, 12)
+# Equal-sized groups here: each covers three original sample positions.
+for p, assignment in enumerate(assignments):
+    for i in range(12):
+        assert paths[p, i] == i + assignment[i // 3] / 100
+
+# Shape checks cannot detect a semantically reversed vector.
+wrong = bt.assemble_cpcv_paths(reversed_values, splits, assignments)
+assert wrong.shape == paths.shape and not np.array_equal(wrong, paths)
+print("verified path matrix:", paths.shape)
+print("same-length reversed values detected by identity assertions")
+```
+
+```text
+verified path matrix: (3, 12)
+same-length reversed values detected by identity assertions
+```
+
+Keep each `(split_id, sample_id)` result separate. CPCV tests the same sample under
+multiple training sets, so averaging those values by sample before assembly discards
+the split identity needed for a path. Reject duplicates, missing IDs and unexpected IDs
+before indexing; the example's assertions illustrate these checks for this fixture.
+Retain `splits` and `assignments` from the same split configuration. The equal three-row
+groups are specific to this example, not a general rule for uneven dataset sizes.
+
+`assemble_cpcv_paths` only places values. It does not fit, calibrate, score or establish
+that they were produced out of sample. For classification probabilities, compute the
+appropriate classification metric against aligned labels after assembly. Do not pass
+probabilities into `run_cpcv` as if they were returns: that function summarizes a supplied
+return stream, and converting predictions into such a stream requires an explicit
+position, execution, cost and observation-frequency policy.
+
 ## What to watch for
 
 - **`sharpe` is a t-statistic, not an annualised Sharpe ratio.** It is
@@ -286,8 +370,8 @@ not bound; purged k-fold splits come from `cross_validation.purged_kfold_splits`
   with sample length and cannot be compared across folds of different sizes. For an
   annualised figure compute `mean_return / std_return * sqrt(periods per year)` yourself.
 - **CPCV paths are not independent.** They are rearrangements of the same 15 sets of
-  predictions and share most of their returns. The spread across paths understates the true
-  uncertainty; it is a lower bound on how fragile the result is, not a confidence interval.
+  predictions and share most of their returns. Their spread is a descriptive distribution
+  across dependent paths, not a confidence interval or a guaranteed lower bound on uncertainty.
 - **In walk-forward mode the embargo removes nothing.** Training data lies entirely *before*
   the test block, and only samples after a block are embargoed, so `pct_embargo` has no
   effect there. If you want a gap between training and test in walk-forward, leave it out of

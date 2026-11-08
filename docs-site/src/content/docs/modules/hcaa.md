@@ -2,7 +2,7 @@
 title: "hcaa"
 description: "Hierarchical allocation down the cluster tree, cut into a chosen number of clusters, with a choice of risk measure: variance, standard deviation, expected shortfall, conditional drawdown, Sharpe ratio or equal splits."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -64,7 +64,8 @@ variance, and:
 | `"sharpe_ratio"` | the left half's share of the two Sharpe ratios |
 | `"equal_weighting"` | one half, always |
 
-The first four give less to the riskier side. `"sharpe_ratio"` gives *more* to the better
+The first four use inverse-risk shares when both side risks are positive. Zero and
+negative tail estimates need special care; see the limitations below. `"sharpe_ratio"` gives *more* to the better
 side and needs expected returns: pass `expected_asset_returns`, or a return history
 (`asset_returns` or prices), from which they are estimated as a mean or
 (`calculate_expected_returns = "exponential"`) an exponentially weighted mean of returns,
@@ -133,7 +134,8 @@ that matches what you are afraid of.
 
 Minimum variance is far more concentrated than the rest, 87% in bonds. Variance is quadratic
 in volatility, so a fourfold difference in volatility becomes a sixteenfold difference in the
-split. Standard deviation is usually the more sensible default.
+split. In this example, standard deviation produces a less concentrated allocation; that is
+a choice of objective, not a general guarantee of better out-of-sample performance.
 
 The last two lines show the cut. With three clusters, each group gets the weight the two top
 splits give it, bonds a half and the others a quarter, shared equally inside. With no cut the
@@ -207,11 +209,11 @@ clusters is measured from the distances between their assets. The updates are sc
 
 **What Ward means here.** Ward's criterion is defined for points in Euclidean space, and
 scipy's `method="ward"` (R's `ward.D2`) applies its update to whatever distances it is given.
-Both matrices this module clusters are genuinely Euclidean. $d_{ij}=\sqrt{2(1-\rho_{ij})}$ is
+For a valid positive-semidefinite correlation matrix, both distance constructions are Euclidean. $d_{ij}=\sqrt{2(1-\rho_{ij})}$ is
 the distance between the two assets' return series after each is demeaned and scaled to unit
 length (factor the correlation matrix as $XX^\top$ and the rows of $X$ are such points), and
 $\tilde d$ is the Euclidean distance between the columns of $d$. So Ward here is Ward's
-minimum-variance method on actual points, not an approximation; the fixture generator checks
+minimum-variance method on actual points under that input condition; the fixture generator checks
 this by running scipy's Ward on the points $X$ and getting the same tree. This is what
 mlfinlab's HCAA does (`linkage(squareform(d), method="ward")`) for $d$, and what R
 HierPortfolios' HCAA does (`hclust(dist(D), "ward.D2")`) for $\tilde d$.
@@ -309,6 +311,15 @@ assert!(matches!(
 ));
 ```
 
+Python returns `(weights, ordered_indices)`: weights are in the original
+`asset_names` order, while `ordered_indices` is the leaf permutation. For `N` names,
+prices and returns have `N` columns and covariance has shape `N × N`; names do not
+perform alignment. Omit unused optional matrices or pass `None`: Python validates
+every supplied matrix before the core applies input precedence, so even an unused
+empty or ragged matrix raises `ValueError`. See the [HRP input-shape example](/modules/hrp/#input-shapes-and-python-errors)
+for this shared binding behavior. HCAA core shape failures are
+`HcaaError::DimensionMismatch`, also mapped to Python `ValueError`.
+
 ## What to watch for
 
 - **Choose `optimal_num_clusters`.** There is no gap statistic; the default is no cut, and
@@ -319,14 +330,17 @@ assert!(matches!(
   below the root: in the example, a half for the bonds and a quarter each for the others.
 - **Expected shortfall and conditional drawdown are computed here, not in
   [`risk-metrics`](/modules/risk-metrics/).** Both are historical estimates from the half's
-  inverse-variance portfolio. The drawdown measure builds a wealth curve from the returns and
-  averages the worst drawdowns. `risk_metrics`' function of the same name does the same from
-  a wealth curve you pass it, but takes the upper-tail level (0.95) where this module takes
-  the tail probability (0.05).
-- **The Python default metric is `"equal_weighting"`**, which is the least useful of the six
-  for the reason above. Pass `allocation_metric` explicitly.
-- **Tail metrics on short histories are noisy.** A 5% tail of 750 days is 38 observations,
-  and one of them can decide a split. The weights move more from sample to sample than the
+  inverse-variance portfolio. HCAA expected shortfall negates the mean of returns at or below
+  its nearest-quantile threshold; `risk_metrics` averages returns strictly below a higher
+  quantile and preserves the return sign. HCAA drawdown compounds a wealth curve starting at
+  1, divides each peak-to-trough loss by its running peak, and averages values at or above
+  the nearest quantile at `1 - confidence_level`. `risk_metrics` instead uses absolute
+  peak-to-trough differences and a higher quantile on the supplied cumulative curve.
+  Passing 0.95 there instead of 0.05 here does not make the estimators equivalent.
+- **The Python default metric is `"equal_weighting"`**, but it does not generally give
+  equal capital per asset. Pass `allocation_metric` explicitly to choose the objective.
+- **Tail metrics on short histories are noisy.** A 5% tail of 750 days contains only about 38 observations
+  without ties; threshold ties can include more. One observation can materially change a split. The weights move more from sample to sample than the
   variance-based ones do.
 - **`"sharpe_ratio"` brings back the problem HRP was built to avoid.** It depends on expected
   returns, the least reliable input in portfolio construction, and a mean of daily returns is
@@ -341,8 +355,45 @@ assert!(matches!(
   one exposure single linkage can do better (see [which linkage](#which-linkage)).
 - **Results differ from [HRP](/modules/hrp/) even with `"minimum_variance"`.** HRP halves the
   ordered leaf list at its midpoint, which can cut across a branch of the tree; this module
-  splits only at the tree's own branches. They agree when every branch happens to divide
-  the list in half and both use the same tree (the same `distance=`, and `linkage="single"`).
+  splits only at the tree's own branches. Their variance-allocation rules agree, apart from
+  numerical conventions, when HCAA uses no cut, every branch divides the list in half, and
+  both use the same covariance and tree (the same `distance=`, and `linkage="single"`).
+
+## Tail-risk edge cases
+
+An all-positive lower tail gives a **negative** expected-shortfall loss estimate. Unlike the
+Sharpe branch, the ES branch has no negative-risk fallback. Its inverse-risk formula can
+therefore favour the smaller gain or clip a mixed-sign allocation to 0 or 1. If both side
+risks are zero, the denominator epsilon makes the left share 1, not an equal split.
+These are current implementation limitations, not recommended allocation policies:
+
+```python
+from openquant import hcaa
+
+# A supplied covariance isolates the tail calculation from covariance estimation.
+weights, _ = hcaa.allocate_hcaa(
+    ["a", "b"], asset_returns=[[0.01, 0.03]] * 4,
+    covariance_matrix=[[1.0, 0.0], [0.0, 1.0]], allocation_metric="expected_shortfall")
+assert abs(weights[0] - 0.75) < 1e-12  # loss estimates are -0.01 and -0.03
+zero_risk, _ = hcaa.allocate_hcaa(
+    ["a", "b"], asset_returns=[[0.0, 0.0]] * 4,
+    covariance_matrix=[[1.0, 0.0], [0.0, 1.0]], allocation_metric="conditional_drawdown_risk")
+assert zero_risk == [1.0, 0.0]
+```
+
+Supply aligned, finite histories and a finite symmetric positive-semidefinite covariance
+with positive diagonal. The implementation checks dimensions and positive diagonals but does
+not establish those other properties; correlation clipping and a zero floor on cluster
+variance do not validate an invalid covariance. Validate a finite tail probability in
+`[0, 1]` yourself: out-of-range values are clamped by the quantile helper, not rejected.
+
+Prices are optionally resampled by positional blocks (5 rows for weekly, 21 for monthly),
+not calendar dates; incomplete trailing blocks are dropped, and too-short input falls back
+to the original rows. Returns supplied directly take precedence over prices and are not
+resampled. Estimated means always multiply by 252, even after resampling; covariance stays
+in the units of the input returns. That common positive mean scale cancels in the Sharpe
+split, but these intermediate ratios are not conventional annualised Sharpe ratios and
+subtract no risk-free rate. Supplied expected returns should use one consistent scale.
 
 ## Related modules
 

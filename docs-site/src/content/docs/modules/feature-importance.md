@@ -2,7 +2,7 @@
 title: "feature_importance"
 description: "MDI, MDA and SFI feature importance, and a PCA cross-check, for models validated on purged folds."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -71,11 +71,16 @@ $$
 $$
 
 where $s^{\max}$ is the best attainable score: 0 for negative log loss, 1 for accuracy and F1.
-A value of 1 means damaging the feature destroyed everything the model had; 0 means the model
-did not need it; negative means the model did better without it. Scores here *are* weighted
+For a nonzero denominator, a fold value of 1 means the baseline score reached
+$s^{\max}$, even if the shuffled score remains good; it does not mean all predictive
+information was destroyed. Zero normally means no score change, and a negative value means
+the shuffled test data scored better. A zero denominator (or one within `1e-12` of zero
+for accuracy/F1), or a nonfinite ratio, contributes 0. Zero is therefore not always evidence
+that the feature is irrelevant. Scores here *are* weighted
 by `sample_weight` on the test fold, as Snippet 8.3 does. The last argument is the seed for
-the shuffles: the same seed gives the same result, and a different seed a slightly different
-one.
+the shuffles: it reproduces the permutations within that implementation. Seed the estimator
+separately for reproducible fits. Python uses NumPy and Rust uses `StdRng`, so matching seed
+numbers do not imply identical permutations across languages.
 
 **Single feature importance** (§8.4.1). Cross-validate the model on each feature alone.
 There is nothing to substitute for, so correlated features cannot hide each other. The value
@@ -152,8 +157,33 @@ noise   MDA -0.006 ± 0.002   SFI -0.696 ± 0.001
 ```
 
 The `±` is `ImportanceStats::std`, which despite the name is the standard error of the mean
-across folds. Each method follows its snippet: MDI and MDA divide pandas' sample standard
-deviation (ddof 1) by $\sqrt{n}$, SFI divides numpy's population deviation (ddof 0).
+across folds (across trees for MDI). MDA uses sample deviation (ddof 1), SFI population
+deviation (ddof 0), each divided by the square root of the fold count. MDI computes sample
+deviation over nonzero entries but divides by the square root of the **total** tree count.
+These are descriptive summaries; overlapping training sets mean folds are not independent
+replicates, so the displayed standard errors are not automatically confidence intervals.
+
+The weighted Python SFI path can be checked without fitting a model:
+
+```python
+from openquant import feature_importance as fi
+
+y = [0, 1, 0, 1]
+t = list(range(4))
+proba = [[0.1], [0.1], [0.1], [0.1]]  # predicts class 0 for every row
+plain = fi.sfi_from_probabilities(y, t, t, proba, n_splits=2, scoring="accuracy")
+weighted = fi.sfi_from_probabilities(
+    y, t, t, proba, n_splits=2, scoring="accuracy", sample_weight=[9, 1, 9, 1]
+)
+assert plain["f0"]["mean"] == 0.5
+assert weighted["f0"]["mean"] == 0.9
+
+# Perfect baseline accuracy gives MDA 1 even though shuffled accuracy is still 0.5.
+mda = fi.mda_from_probabilities(
+    y, t, t, [0.1, 0.9, 0.1, 0.9], proba, n_splits=2, scoring="accuracy"
+)
+assert mda["f0"]["mean"] == 1.0
+```
 
 ## The PCA cross-check
 
@@ -175,7 +205,8 @@ input is constant, the rank coefficients here return 0.
 
 `openquant.feature_importance` scores with the Rust functions above, but the model stays in
 Python. MDA and SFI always run on purged k-fold splits built from the label spans `t0` and
-`t1`, which are required arguments: called without them, every function raises. There is no
+`t1`, which are required arguments: called without them, those functions raise. MDI only aggregates supplied tree importances
+and does not use event spans. There is no
 argument for passing folds of your own.
 
 | Function | Model | Result |
@@ -236,6 +267,32 @@ f2 -0.027 -0.709 0.133
 The three columns are MDA, SFI and (from made-up per-tree importances) MDI. SFI is scored by
 negative log loss, so every value is negative and the least negative feature is best.
 
+### Preserve rows and feature columns when supplying probabilities
+
+For the public Python wrapper, `sfi_from_probabilities` takes a **samples × features**
+matrix: entry `[i, j]` belongs to original row `i` and a model trained on feature `j`
+alone. For `mda_from_probabilities`, `base_proba` is a length-`n_samples` vector and
+`permuted_proba[i, j]` is the same fold model's prediction for row `i` after shuffling
+feature `j` within that fold's test rows. MDA permutation columns are not SFI model
+columns. All entries are probabilities of class 1, not hard labels or returns.
+
+Keep `feature_names` in exactly that column order. The wrapper transposes the matrix
+for the native call; do not pre-transpose it yourself. Sorting the names alone, or
+joining prediction batches by their arrival order, can produce a well-shaped but
+mislabelled result. Retain stable row IDs and the feature/model identifier with saved
+predictions, then reconstruct rows alongside `y`, `t0`, `t1` and scoring weights.
+The [saved-prediction assembly example](/modules/backtesting-engine/#restore-split-and-sample-order-before-assembly)
+shows explicit identity checks for a different interface.
+
+These feature-importance scorers rebuild **purged k-fold**, with each row tested once.
+Use the exact same spans, row order, split count and embargo that produced the
+predictions. CPCV predictions or paths are not a direct replacement: they can contain
+several test predictions for one original row from different training sets. Do not
+average or select them into this matrix and then claim the scorer's purged-fold
+provenance. Shape checks cannot establish how an external model was fitted. Retain
+its split and preprocessing evidence; the probability-only scorer does not fit models,
+shuffle features or apply training weights on your behalf.
+
 ## What to watch for
 
 - **MDA of a very persistent feature is still somewhat understated.** The shuffle happens
@@ -247,16 +304,26 @@ negative log loss, so every value is negative and the least negative feature is 
   [#98](https://github.com/Open-Quant/openquant/issues/98) was fixed the column was rotated
   by one row instead of shuffled, which left such a feature almost unchanged and scored it at
   about 3% of the i.i.d. value.
-- **MDI treats zero as missing.** Snippet 8.2 does this because it trains with
-  `max_features=1`, where a zero means "this feature was never offered to the tree". With any
-  other setting a zero means "offered and useless", and dropping it inflates the mean: a
-  feature given `[0.0, 0.2, 0.0]` by three trees is averaged as 0.2, not 0.067. Either train
-  the forest as the book does or replace zeros with a tiny positive number first.
+- **MDI treats zero as missing.** This follows Snippet 8.2's aggregation convention, not
+  evidence about why a tree assigned zero importance. A feature given `[0.0, 0.2, 0.0]`
+  by three trees has a pre-normalisation mean of 0.2, not 0.067. Check whether that
+  convention matches the forest you supplied; this function cannot distinguish a feature
+  that was not selected from one that offered no useful split.
 - **A standard error from one fold or one tree is reported as 0**, not NaN as pandas would
   give. With MDI, a feature that only one tree split on also gets 0.
-- **SFI scores on unweighted test folds.** It delegates to
-  [`ml_cross_val_score`](/modules/cross-validation/#what-to-watch-for), which passes weights
-  to `fit` only. MDA weights both.
+- **SFI weighting differs by entry point.** Rust `single_feature_importance` delegates to
+  [`ml_cross_val_score`](/modules/cross-validation/#what-to-watch-for), passing weights
+  to `fit` only. Rust `single_feature_importance_from_proba` and both Python SFI entry points
+  weight the test score. MDA passes weights to training fits and test scoring.
+- **Keep event rows aligned and sorted by start time.** Apply the same stable sort to
+  features, labels, weights and spans before building purged folds. For probability-based
+  entry points, use predictions from the exact folds rebuilt by the scorer, in input
+  row positions; the scorer cannot verify that those predictions were out of sample.
+- **Pass an unfitted estimator.** Python tries `sklearn.base.clone`, falling back to
+  `deepcopy` if scikit-learn is absent or cloning raises `TypeError`. The fallback can copy
+  fitted state. Rust reuses the supplied classifier across fits. Ensure `fit` resets learned
+  state rather than accumulating it across folds. Accuracy and F1 in Rust use the trait
+  `predict` method; Python probability entry points threshold class-1 probabilities at 0.5.
 - **`plot_feature_importance` writes a CSV.** The name is mlfinlab's; there is no plotting in
   the Rust crate. With `output_path = None` it does nothing.
 - **Substitution is not solved by any single method.** Two correlated features split MDI,

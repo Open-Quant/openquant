@@ -2,7 +2,7 @@
 title: "combinatorial_optimization"
 description: "Exhaustive search over small integer problems, and over single-instrument trading paths with a fixed cost per trade, as an exact baseline for heuristic solvers."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,8 +42,8 @@ Some problems have no convexity to exploit. A fixed commission per trade, a lot 
 threshold rule: each makes the objective jump, and a gradient-based optimiser either cannot
 be applied or finds a local answer. AFML's Chapter 21 takes the blunt route. If the choices
 are discrete and finite, list every one, score it, and keep the best. Nothing about the
-objective needs to be smooth, convex or even continuous, and the answer is the global
-optimum. The price is that the number of candidates grows exponentially, which is why the
+objective needs to be smooth, convex or even continuous. For a fixed, deterministic
+objective and comparison sense, the answer is the global optimum over the enumerated set. The price is that the number of candidates grows exponentially, which is why the
 chapter is about quantum computers.
 
 This module does the listing and scoring on an ordinary CPU, for two shapes of problem, and
@@ -160,8 +160,9 @@ assert_eq!(best_trades(0.1)?.best_path.trades, [0, 0, 0, 0, 0]);
 | 0.03 | `[3, 0, 0, 0, -3]` | 0.042 |
 | 0.1 | `[0, 0, 0, 0, 0]` | 0 |
 
-An optimiser that drops the ticket term, as a convex relaxation must, gives the first row's
-answer at every cost. Each row is a global optimum over the 256 feasible paths.
+An optimiser that simply drops the ticket term gives the first row's answer at every cost.
+A convex relaxation need not drop it entirely: it may retain a lower-bound cost model,
+whose solution still needs checking against the original discrete objective. Each row is a global optimum over the 256 feasible paths.
 
 ## Checking a heuristic against the exact answer
 
@@ -173,9 +174,12 @@ short the adapter fell.
 `solve_with_adapter` runs an adapter on its own, on a box of any size: `max_enumeration` caps
 enumeration and does not apply to it. It checks the answer rather than trusting it. The
 decision must be a point of the box, and the reported objective must match the objective
-re-evaluated at that decision, or the call fails with `InvalidAdapterResult`. So the gap
-`compare_exact_and_adapter` reports is never floored: it is the true shortfall, and it cannot
-be negative because the exact optimum is the best value in the same box.
+re-evaluated at that decision within `1e-9 * max(1, abs(value))`, or the call fails with
+`InvalidAdapterResult`. The returned score is replaced with that re-evaluated value.
+The gap is not floored. It is nonnegative for a stable, deterministic objective and sense
+shared by both runs, subject to floating-point arithmetic. The trait does not enforce that
+contract: changing state, random draws or external data between evaluations can invalidate
+the comparison and even produce a negative gap. Freeze those inputs before comparing solvers.
 
 ```rust
 use openquant::combinatorial_optimization::{
@@ -255,7 +259,8 @@ gap of 28 is what an exact baseline is for: without it, the heuristic's answer l
   a box small enough to enumerate.
 - **`enumerate_trading_paths` holds every path in memory**, and
   `solve_trading_trajectory_exact` calls it, so memory grows with the path count, not just
-  time. `solve_exact` over a `DecisionSchema` visits candidates without storing them.
+  time. `solve_exact` over a `DecisionSchema` visits combinations without storing them all,
+  but first materializes each variable's grid of values.
 - **`max_paths` counts feasible paths, and a schema with exactly that many is accepted.**
   Before this was fixed, a schema with exactly `max_paths` feasible paths was rejected
   whenever the terminal-inventory constraint pruned a path after the last one was found.
@@ -263,6 +268,9 @@ gap of 28 is what an exact baseline is for: without it, the heuristic's answer l
 - **An objective cannot mark a candidate infeasible.** Returning an error aborts the whole
   search, and so does a non-finite score (`ObjectiveNotFinite`). Constraints that the box or
   the inventory bounds cannot express must be a large finite penalty.
+- **The objective is caller-defined arithmetic.** Return finite scores with consistent units
+  and a fixed `ObjectiveSense`; the solver does not make forecasts causal or calibrate
+  penalties. Even two finite extreme scores can overflow their reported difference.
 - **Ties go to the first candidate found.** The comparison is strict, and enumeration is in
   lexicographic order from the lower bounds, so among equal scores the smallest decision
   (or the path that trades lowest first) wins.

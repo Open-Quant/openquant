@@ -35,7 +35,7 @@ const NOTES = {
     'Assembled automatically from <code>moduleDocs.ts</code>. No human has reviewed this page.',
   draft: 'This page is known to be incomplete. Treat its contents as provisional.',
   authored:
-    'Written against the code. Runnable Python examples are executed; Rust module examples are compile-checked. No human has reviewed this page yet.',
+    'Written against the code; not yet reviewed by a human. CI runs eligible Python examples and compile-checks Rust module examples and the core workflow. Explicitly skipped Python examples receive syntax checks only.',
   reviewed:
     'A human has read this page end to end. It has not been verified line by line against the code.',
   validated:
@@ -58,10 +58,10 @@ const note = banner?.content ?? statusNote;
 
 {
   (label || note) && (
-    <div class="sl-banner" data-pagefind-ignore>
+    <aside class="sl-banner" aria-label="Documentation status" data-pagefind-ignore>
       {label && <span class={`doc-status doc-status--${status}`}>{label}</span>}
       {note && <Fragment set:html={note} />}
-    </div>
+    </aside>
   )
 }
 

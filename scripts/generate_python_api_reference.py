@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import ast
 import copy
+import importlib
 import inspect
 import json
 import sys
@@ -219,7 +220,9 @@ def compiled_module(name: str, module: types.ModuleType, import_path: str, slug:
 
 def _split_params(signature: str) -> list[str]:
     inner = signature[1 : signature.rindex(")")] if ")" in signature else ""
-    out, depth, cur = [], 0, []
+    out: list[str] = []
+    depth = 0
+    cur: list[str] = []
     for ch in inner:
         if ch in "[(":
             depth += 1
@@ -313,10 +316,18 @@ def build() -> dict:
         else:
             # Wrapped by a pure-Python module of the same name; reachable as _core.<name>.
             modules.append(compiled_module(name, mod, f"openquant._core.{name}", f"core-{name}"))
-    for name in sorted(openquant.__all__):
+    # Explicitly importable public source modules need not be root re-exports.
+    # Discover from this imported package so installed-package and source checks
+    # document the same tree rather than silently omitting newer namespaces.
+    source_modules = {
+        path.stem
+        for path in Path(openquant.__file__).parent.glob("*.py")
+        if not path.stem.startswith("_")
+    }
+    for name in sorted(set(openquant.__all__) | source_modules):
         if name in reexported:
             continue
-        modules.append(python_module(name, getattr(openquant, name)))
+        modules.append(python_module(name, importlib.import_module(f"openquant.{name}")))
     modules.sort(key=lambda m: m["import"])
     return {
         "generatedBy": "scripts/generate_python_api_reference.py",

@@ -6,13 +6,15 @@
 //! slice or the timestamps at those positions.
 //!
 //! - [`cusum_filter_indices`] accumulates log returns `ln(p_t / p_{t-1})` in separate upward
-//!   and downward accumulators floored at zero, and fires when either crosses the threshold
-//!   `h` (in log-return units). Only the side that fired is reset.
+//!   and downward accumulators: the positive side is floored at zero, the negative side
+//!   capped at zero. It fires on a strict threshold crossing of `h` (in log-return units).
+//!   Only the side that fired is reset.
 //! - [`z_score_filter_indices`] fires when the price is at or above its rolling mean plus
 //!   `k` rolling sample standard deviations (ddof = 1, matching pandas). It is one-sided and
 //!   has no reset; it is not from AFML.
 //!
-//! Neither filter looks ahead: the decision at bar `t` uses only data up to `t`.
+//! Each decision uses prices up to bar `t`; a caller-supplied dynamic threshold must also
+//! use only information available at that bar to avoid look-ahead.
 //!
 //! ```
 //! use openquant::filters::{cusum_filter_indices, Threshold};

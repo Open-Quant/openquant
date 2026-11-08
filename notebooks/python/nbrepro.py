@@ -2,8 +2,9 @@
 
 The notebook contract (``docs-site/src/content/docs/workflows/research-notebook-contract.md``)
 ends every notebook with a ``## Reproducibility`` section whose code cell calls
-:func:`footer`. It records the four things needed to reproduce the run: the git
-commit, a content hash of the data, the package version and the seed.
+:func:`footer`. It records supplied data/configuration identifiers and a seed, plus environment
+information outside pinned mode. These fields support reproduction but do not
+preserve inputs, verify the loaded extension, or establish complete provenance.
 
 What goes where, and why:
 
@@ -13,18 +14,15 @@ What goes where, and why:
 * **stderr**: what differs between machines or commits without the results
   changing: the git commit, the package and dependency versions, and any
   platform-dependent hash passed in ``stderr=``. The committed-output check
-  ignores stderr, so a dependency bump (a new polars, say) cannot make a
-  notebook "stale".
+  ignores stderr, so a version-string change alone cannot make a notebook
+  "stale". Changed computations or figure output can still fail comparison.
 
-When the notebook runner executes the repository's notebooks
-(``just notebooks-run``, which sets ``OPENQUANT_NOTEBOOK_PINNED=1``), the
-commit and the versions are not printed at all: the committed notebook is
-pinned by the commit that contains it, whose ``uv.lock`` and ``Cargo.lock``
-fix every version, and CI re-executes it at that commit and fails if the
-outputs differ. Printing the parent commit and the local versions there would
-only rewrite every notebook on every run. Run a notebook any other way (in
-Jupyter, or with ``execute_notebook_cells.py`` on your own data) and the real
-values are printed.
+When the notebook runner sets ``OPENQUANT_NOTEBOOK_PINNED=1``, actual commit
+and version strings are replaced by stable references to the containing commit
+and lockfiles. This avoids output churn; it does not check a clean working tree,
+locked dependencies, or extension/source agreement. Without that environment
+value, actual commit and version strings are printed. Direct notebook execution
+can inherit the value too; unset it when collecting independent provenance.
 """
 
 from __future__ import annotations
@@ -78,9 +76,9 @@ def config_digest(config: Any) -> str:
 def frame_hash(frame: Any, *, decimals: int | None = 10) -> str:
     """``openquant.data.dataset_hash`` of a polars frame, floats rounded to ``decimals``.
 
-    Rounding keeps the hash identical across platforms whose math libraries
-    differ in the last bit (data generated in memory with ``exp``/``sin``);
-    pass ``decimals=None`` to hash the exact values.
+    Rounding reduces sensitivity to small floating-point differences; values
+    on opposite sides of a rounding boundary can still hash differently.
+    Pass ``decimals=None`` to hash the unrounded values.
     """
     import polars as pl
     from openquant.data import dataset_hash

@@ -18,7 +18,8 @@
 //!
 //! Conventions: `precision` is in `[0, 1]`; `annual_bet_frequency` is bets per year;
 //! payouts are per-bet returns in the same units; Sharpe ratios are annualised. Bets are
-//! assumed independent and identically distributed, so overlapping bets overstate `n`.
+//! assumed independent and identically distributed. Overlap does not itself determine outcome
+//! dependence or its effect on aggregate variance; the estimator applies no correction to `n`.
 //!
 //! Payouts need only `pi_plus > pi_minus`: the formulas are the mean over the standard
 //! deviation of a two-valued bet, which is defined whatever the signs. In §15.4 the payouts

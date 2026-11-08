@@ -2,7 +2,7 @@
 title: "Runbook: HRP vs IVP and CLA out of sample"
 description: "AFML §16.6's Monte Carlo, re-run with the openquant bindings: out-of-sample variance of HRP, inverse-variance and CLA minimum-variance portfolios on SYNTHETIC data."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -34,17 +34,30 @@ specific shocks that fall out of sample), HRP's out-of-sample portfolio variance
 - **H1:** lower than CLA's minimum-variance portfolio, and
 - **H2:** comparable to or lower than inverse-variance weighting (IVP).
 
-Each is tested on the per-run paired log variance ratio, one-sided at 5%.
+The notebook uses the per-run paired log variance ratio. H1 requires $t > 1.645$;
+H2's historical rule only requires $t > -1.645$. That second rule means no significant
+evidence of worse performance; by itself it does not establish equivalence or non-inferiority.
+A claim of practical comparability would need a pre-specified margin and an interval test.
+The observed H2 statistic here is strongly positive ($t = 40.6$), supporting lower variance
+in this simulation rather than merely passing the permissive historical rule.
 
 ## Method
 
 As in Snippet 16.5: at each rebalance, every 22 observations from row 260, estimate the covariance on
 the previous 260 rows only, compute weights with
 [`hrp.allocate_hrp`](/modules/hrp/), [`cla.allocate_cla`](/modules/cla/)
-(`solution="min_volatility"`), IVP ($w_i\propto 1/\sigma_i^2$) and equal weight, and hold them for the
-next 22 rows. Each run yields a 260-row out-of-sample series per method. A test cell checks that
+(`solution="min_volatility"`), IVP ($w_i\propto 1/\sigma_i^2$) and equal weight, and use that
+weight vector for each of the next 22 rows. Each run yields a 260-row out-of-sample series per method. A test cell checks that
 replacing every row from the rebalance date on leaves the weights bit-identical. Costs: 10 bps per unit
 of one-way turnover.
+
+The simulator computes each row as the asset-return vector dotted with the fixed target
+weights. It does not evolve holdings as asset prices drift. Its cost proxy is the sum of
+absolute changes between successive target vectors, charged on the first row of each
+window (including the initial purchase); the reported mean turnover excludes that initial
+purchase. Maintaining fixed weights within a window would itself require trading, whose
+cost is omitted here. Interpret these results as a portfolio-weight experiment, not a
+fully costed buy-and-hold execution simulation.
 
 ## Result (2,000 runs, SYNTHETIC)
 

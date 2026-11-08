@@ -2,7 +2,7 @@
 title: "dynamic_allocation"
 description: "Exact multi-asset portfolio trajectories on a discrete weight grid, scored by Sharpe ratio after square-root transaction costs."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -70,6 +70,19 @@ numerator; the denominator uses gross-return variance. Variances are summed with
 cross-horizon covariance terms. There is no annualization or risk-free-rate subtraction.
 There is also no terminal liquidation cost: only transitions into the supplied horizons
 are charged. If scores tie, the first trajectory in the book's product order wins.
+
+The cost coefficient is measured in return units per square root of absolute weight
+change. It is not a proportional fee rate: with `c=0.001` and a weight change of
+`0.25`, this model charges `0.001 * sqrt(0.25) = 0.0005` (5 basis points of return),
+whereas a proportional 10-basis-point fee would charge `0.00025`. Use decimal
+returns for means, squared decimal-return units for covariance, and cost coefficients
+on that same return scale.
+
+Transitions compare consecutive **target weights** directly. The implementation does
+not drift holdings with asset returns, update wealth, or compound the horizon means.
+Identical consecutive targets incur zero modeled transition cost even when maintaining
+those targets in a realized portfolio would require rebalancing. This objective is a
+forecast trajectory score, not a self-financing backtest.
 
 ## Four candidates, checked individually
 
@@ -174,6 +187,32 @@ assert_eq!(result.weights, vec![vec![1.0, 0.0]]);
 assert_eq!(result.trajectories_evaluated, 4);
 assert!((result.sharpe_ratio - 0.45).abs() < 1e-12);
 ```
+
+## Finite inputs do not guarantee finite arithmetic
+
+The current implementation validates input finiteness and rejects a nonpositive or
+nonfinite accumulated variance, but does not reject overflow in costs, the mean numerator,
+or the final Sharpe ratio. Even a four-candidate search can return an infinite score:
+
+```python
+import math
+from openquant import dynamic_allocation as da
+
+result = da.dynamic_optimal_portfolio(
+    [[1e308], [1e308]], [[[1.0]], [[1.0]]], [[0.0], [0.0]],
+    k=1, max_trajectories=4)
+assert math.isinf(result["sharpe_ratio"])
+# Standalone scoring also accepts finite off-grid weights, whose arithmetic can overflow.
+score = da.trajectory_sharpe_ratio(
+    [[4.0]], [[1e308]], [[[1.0]]], [[1e308]], [0.0])
+assert math.isnan(score)
+```
+
+These are implementation limitations, not meaningful portfolio estimates. Use representable
+input scales and check all returned costs and scores for finiteness before interpreting a
+result. The trajectory cap limits candidate count, not numerical magnitude. The search
+retains the weight set and horizon-by-weight return/variance tables plus its current and
+best paths; it does not retain every complete trajectory.
 
 ## Where this fits
 

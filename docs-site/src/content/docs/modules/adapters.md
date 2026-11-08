@@ -45,8 +45,12 @@ are the contract for these Python-only helpers.
 Frontier point IDs default to `p0`, `p1`, …; indicator row indices default to
 0, 1, … and labels to `label_0`, `label_1`, …. The matrix is row-major (bars ×
 labels), and entries are cast to integers. An empty matrix returns only an empty
-`bar_index` column. Custom labels must be unique and cannot use the reserved name
-`bar_index`. Optional sequences must also match their corresponding rows.
+`bar_index` column. For nonempty matrices, optional sequences must also match their
+corresponding rows. The empty-matrix shortcut ignores `bar_index` and `label_names`.
+
+Custom label names must be unique and cannot use the reserved name `bar_index`;
+collisions raise `ValueError`. Matrix values are converted with `int`, without a
+binary-value check, so fractional values can be truncated.
 
 ## Convert and buffer signals
 
@@ -90,9 +94,12 @@ and `Float64` columns. Empty timestamped adapter inputs also preserve datetime c
 ## Parsing and error handling
 
 Timestamp columns use the [shared parser](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py).
-The parser attempts datetime parsing with `strict=False`; unparseable entries in
-a recognizable date series become null. If no format can be inferred (for example,
-a series containing only invalid strings), Polars can raise a parsing error. A frame with matching lengths can therefore still contain unusable timestamps.
+The shared parser returns timezone-naive UTC datetimes at microsecond precision.
+Offset-aware strings preserve their UTC instant; naive strings retain their clock readings
+and are treated as UTC. Unparseable strings become null, including a series containing
+only invalid strings: the shared parser supplies a temporary valid sentinel for format
+inference and removes it before returning. Normalize mixed formats before conversion.
+A frame with matching lengths can therefore still contain unusable timestamps.
 Inspect nulls before joining or plotting; no adapter checks chronological order or
 whether an event's end follows its start.
 
@@ -103,6 +110,7 @@ frame = to_polars_signal_frame(
     ["2024-01-02 09:30:00", "bad timestamp"], [0.1, 0.2]
 )
 print("null timestamps:", frame["ts"].null_count())
+assert to_polars_signal_frame(["bad timestamp"], [0.1])["ts"].null_count() == 1
 try:
     to_polars_weights_frame(["CL", "GC"], [1.0])
 except ValueError as error:
@@ -113,6 +121,10 @@ except ValueError as error:
 null timestamps: 1
 ValueError
 ```
+
+Numerical columns use Polars' inferred dtypes; the adapters do not reject `NaN`, infinity,
+out-of-range probabilities, negative volatility or weights that fail to sum to one.
+Validate domains before passing these frames to a trading or evaluation stage.
 
 `to_pandas(frame)` delegates to Polars' pandas conversion and raises a helpful
 `RuntimeError` when pandas is absent. Install pandas before using the bridge; PyArrow is already a package dependency. Conversion

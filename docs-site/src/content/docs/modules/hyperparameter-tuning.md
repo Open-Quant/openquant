@@ -2,7 +2,7 @@
 title: "hyperparameter_tuning"
 description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -56,12 +56,14 @@ the `(start, end)` span of every label, which is what the purge needs.
   of the listed values.
 - `randomized_search(builder, space, n_iter, seed, data, n_splits, pct_embargo, scoring)`
   draws `n_iter` parameter sets from distributions: `Choice`, `Uniform`, `LogUniform`, or
-  `IntRangeInclusive`. It is reproducible for a given `seed`.
+  `IntRangeInclusive`. The parameter draws are reproducible for a given `seed`; seed any stochastic model
+  separately in the builder.
 
 Both return a `SearchResult`: `best_params`, `best_score`, and every `SearchTrial` with its
 per-fold scores. Each trial builds a new model per fold, fits it with the training weights,
 and scores the test fold **with the test weights** — the correction Snippet 9.1 makes to
-scikit-learn.
+scikit-learn. The trial mean gives each fold equal weight; it does not pool all test
+observations or weight folds by their total sample weight.
 
 ## Scoring decides what you find
 
@@ -195,8 +197,8 @@ bound. The parts that need no model are, and the fit loop runs in Python:
 - `classification_score(y_true, probabilities, sample_weight=None, scoring="neg_log_loss")`
   is the weighted score above; `scoring` may also be `"accuracy"` or `"balanced_accuracy"`.
 - `purged_search(make_estimator, param_sets, X, y, t0, t1, *, n_splits, pct_embargo, scoring,
-  sample_weight)` builds a model per candidate with `make_estimator(params)`, fits it on each
-  purged fold with the training weights, and scores the test fold with `classification_score`
+  sample_weight)` calls `make_estimator(params)` for a fresh model for each candidate and
+  fold, fits it on the training rows with their weights, and scores the test fold with `classification_score`
   and the test weights, as `grid_search` does. It returns `best_params`, `best_score` and
   `trials`.
 
@@ -255,14 +257,20 @@ search = GridSearchCV(model, {"C": [0.01, 0.1, 1.0]}, cv=splits, scoring="neg_lo
 search.fit(X, y, sample_weight=w)  # weights reach fit, not the score
 ```
 
+For the complete boundary between candidate search, refitting and final evaluation,
+follow [Select a model and evaluate a chronological holdout](/workflows/model-selection-holdout/).
+Its executable example fits preprocessing inside each fold and asserts that the reserved
+holdout never enters selection or fitting.
+
 ## What to watch for
 
 - **The search does not refit.** `SearchResult` holds parameters and scores, not a model.
   Build and fit the winner yourself, on the training span.
 - **Ties go to the last trial**, as the accuracy search shows. Order the grid so that the
   simplest or most conservative configuration comes last if you want ties broken that way.
-  A `NaN` mean score is treated as equal to everything, so check `trials` when a model can
-  fail to fit.
+  This applies to finite scores. Rust treats an incomparable `NaN` mean as equal during
+  selection; Python ignores a later `NaN`, but an initial `NaN` remains the winner. Check
+  that every fold score and trial mean is finite before accepting the result.
 - **Every trial is a trial.** The best of 200 configurations looks good partly because it is
   the best of 200. `trials.len()` is the number to carry into a
   [deflated Sharpe ratio](/modules/backtest-statistics/) or any other multiple-testing
@@ -273,8 +281,15 @@ search.fit(X, y, sample_weight=w)  # weights reach fit, not the score
 - **The embargo starts where the purge ends**, after each test fold only (Snippet 7.3), so
   `pct_embargo` removes that many samples beyond the purge; see
   [`cross-validation`](/modules/cross-validation/#where-the-embargo-starts).
-- **Labels must be 0 or 1** and probabilities finite and in $[0,1]$; anything else is a
-  `TuningError`, as are negative weights and a fold left empty by purging.
+- **Validate labels and weights before searching.** Supply finite, exact 0/1 labels and
+  finite nonnegative weights with positive totals in each scored fold. Probability values
+  outside $[0,1]$ or nonfinite probabilities are rejected, as are negative weights. However,
+  current label checks admit `NaN`, and weight checks admit `NaN` and positive infinity.
+  Even finite weights can overflow their sum; rescale large weights and check the returned
+  scores. An empty purged fold is an error.
+- **Keep rows aligned and ordered by event start.** Apply the same stable sort to features,
+  labels, weights, `t0` and `t1` before searching; the splitter does not validate ordering.
+  See [cross-validation](/modules/cross-validation/) for a sorting example.
 
 ## Related modules
 

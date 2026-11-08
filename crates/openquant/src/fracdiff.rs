@@ -1,8 +1,9 @@
 //! Fractional differentiation (AFML chapter 5).
 //!
-//! Differencing a series `d` times for real-valued `d` keeps part of its memory while
-//! (for a large enough `d`) making it stationary: AFML §5.2's stationarity-versus-memory
-//! dilemma. The weights come from the binomial expansion of `(1 - B)^d` (Snippet 5.1),
+//! Differencing a series `d` times for real-valued `d` explores AFML §5.2's trade-off
+//! between stationarity and memory. Stationarity is not guaranteed by the order alone;
+//! assess the actual finite-window feature on training data. The weights come from the
+//! binomial expansion of `(1 - B)^d` (Snippet 5.1),
 //! applied either on an expanding window ([`frac_diff`], Snippet 5.2) or on a fixed-width
 //! window ([`frac_diff_ffd`], Snippet 5.3). The fixed-width form is the one to use for
 //! features, because every output is the same function of the same number of lags.
@@ -64,10 +65,9 @@ pub fn get_weights(diff_amt: f64, size: usize) -> Vec<f64> {
 /// empty vector when `lim == 0` and `[1.0]` when `lim == 1`; the result never has more than
 /// `lim` elements.
 ///
-/// The cap is what guarantees termination: for a non-integer `diff_amt` the weights never
-/// reach zero, so a `thresh <= 0` (or `NaN`) never stops the expansion and the result has
-/// exactly `lim` weights. Such a threshold is accepted, not rejected, and simply means "cap
-/// only".
+/// The cap guarantees termination: a `thresh <= 0` (or `NaN`) never satisfies the strict
+/// stopping comparison, even for zero weights, and the result has exactly `lim` weights.
+/// Such a threshold is accepted, not rejected, and simply means "cap only".
 ///
 /// `thresh` is a floor on a single weight's magnitude, not a share of cumulative weight as in
 /// [`frac_diff`].
@@ -103,9 +103,10 @@ pub fn get_weights_ffd(diff_amt: f64, thresh: f64, lim: usize) -> Vec<f64> {
 /// Fractionally differences `series` with an expanding window (AFML Snippet 5.2).
 ///
 /// Output `t` applies the first `t + 1` weights of `(1 - B)^d` to `series[0..=t]`. The
-/// leading outputs, where the weights that would apply to missing history exceed `thresh`
-/// of the total absolute weight, are `NaN`. `thresh = 1.0` skips nothing (the mlfinlab
-/// default); AFML uses 0.01. The growing number of terms introduces a window-induced drift
+/// leading `NaN` count is computed from `series.len()` oldest-first weights: normalize
+/// their cumulative absolute sum and count entries strictly greater than `thresh`. This
+/// count depends on batch length. `thresh = 1.0` skips nothing (the mlfinlab default); AFML
+/// uses 0.01. The growing number of terms can introduce a window-induced drift
 /// (§5.5.1), which is why [`frac_diff_ffd`] is preferred for features.
 ///
 /// `series` is a level (log price or price), oldest first. The output has the same length.
@@ -155,7 +156,9 @@ pub fn frac_diff(series: &[f64], diff_amt: f64, thresh: f64) -> Vec<f64> {
 /// The weights are [`get_weights_ffd`]`(diff_amt, thresh, series.len())`; every output is the
 /// dot product of those weights with the matching trailing window, so the first
 /// `weights.len() - 1` outputs are `NaN`. A threshold too small for the data yields a window
-/// as long as the series and a single non-`NaN` output.
+/// as long as the series and a single eligible output (which may still be nonfinite).
+/// Extending a batch that hit its cap can change the window and earlier output availability.
+/// A `NaN` poisons every window containing it, even if its weight is zero.
 ///
 /// `series` is a level (log price or price), oldest first. The output has the same length.
 /// Each output uses only values at or before its own position. Cost is `O(n * width)`.

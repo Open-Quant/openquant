@@ -2,7 +2,7 @@
 title: Notebook contract
 description: The sections, reproducibility footer and committed-output rules every notebook under notebooks/python/ follows, what `just notebooks-lint` checks, and how a runbook differs from an API tour.
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -10,10 +10,11 @@ sidebar:
   order: 4
 ---
 
-Every notebook under `notebooks/python/` is committed with its outputs and executed in CI, so a
-reader takes its numbers as evidence. This contract makes that evidence checkable: a reader knows
-where to find the claim, the data behind it and the decision, and anyone can rerun it and get the
-same numbers. `just notebooks-lint` checks the structural rules on every pull request. How to run
+The numbered `NN_*.ipynb` notebooks under `notebooks/python/` are committed with outputs
+and selected by the CI runner. This contract makes their claims checkable: a reader knows
+where to find the claim, its data and decision, and can rerun it under the stated environment
+and comparison tolerances. API-tour outputs illustrate calls rather than establish research
+results. `just notebooks-lint` checks the structural rules on every pull request. How to run
 the notebooks, and what else CI checks, is on [Notebook Research Workflow](/workflows/notebook-research-workflow/).
 
 ## Two kinds of notebook
@@ -43,8 +44,8 @@ The notebooks today:
 | `08_algo_wheel_experiments` | API tour: `research.run_flywheel_grid` |
 | `09` to `14` | Runbooks, each with a page under Runbooks |
 
-A tour that grows a question worth answering becomes a runbook: add the research sections, a
-trial registry and controls, and change the title. Do not add a hypothesis to a tour and leave the
+A tour that grows a question worth answering becomes a runbook: add the research sections,
+an appropriate trial record and controls, and change the title. Do not add a hypothesis to a tour and leave the
 rest out.
 
 ## Runbook sections
@@ -55,8 +56,9 @@ for anything else. Runbooks 09 to 14 are the reference implementations.
 1. **Setup.** Imports and one parameters cell. Every parameter that could change a result is set
    here, before the first full run, with a comment saying why it has that value. The seed is set
    here. The data source defaults to the committed SYNTHETIC sample (`openquant.data.fetch` with no
-   source), and environment variables (`OPENQUANT_RUNBOOK_SOURCE` and similar) point it at the
-   reader's own file without editing the notebook.
+   source). Document how a reader supplies their own data. Several notebooks accept
+   `OPENQUANT_RUNBOOK_SOURCE` and similar variables; notebook 10 instead exposes a `SOURCE`
+   parameter. The runner does not translate one setting into the other.
 2. **Hypothesis.** Written before the first full run, and says so. Each hypothesis is falsifiable
    and states its pass criterion as a number: a test statistic and threshold, a deflated Sharpe
    ratio of at least 0.95, a count out of N paths. Say what would count against the candidate, and
@@ -67,8 +69,11 @@ for anything else. Runbooks 09 to 14 are the reference implementations.
    method can be checked before it is believed.
 4. **Method.** The pipeline, with the AFML snippet or paper each step comes from; the cost model;
    the cross-validation scheme with its purge and embargo; and the trial grid. Record every
-   configuration in an `openquant.evaluation.TrialRegistry` before selecting among them, including
-   configurations added after the first look (mark them post hoc). If any fitted feature has
+   return-based strategy configuration in an `openquant.evaluation.TrialRegistry` before selecting
+   among them, including configurations added after the first look (mark them post hoc).
+   A feature sweep or variance-only comparison without Sharpe-based selection still needs an
+   explicit inventory of configurations and post hoc choices; notebooks 09 and 10 record these
+   without computing a DSR. If any fitted feature has
    memory (see below), say how the Method controls for it.
 5. **Results.** Tables and figures, with no interpretation beyond captions. Each result names the
    hypothesis it answers. Include the look-ahead and leakage checks as executed assertions, not
@@ -80,14 +85,57 @@ for anything else. Runbooks 09 to 14 are the reference implementations.
    a narrower thing), then what later work should use or avoid, with caveats and follow-ups. A
    decision reached on synthetic data describes the *method*, and says so.
 8. **Self-review checklist.** A Markdown checklist, ticked or not, covering at least: no look-ahead
-   (tested), trial count recorded and deflated against, costs included, seeds fixed, data
+   (tested), trial count recorded and deflated against when evaluating selected Sharpe ratios,
+   costs included where returns are modeled, seeds fixed, data
    labelled, the null control for features with memory (below) where one applies, and what the
    notebook does not cover. An unticked item says why.
 9. **Reproducibility.** The footer below, as the last cell.
 
-Every annualised statistic states its annualisation factor, which is the bar frequency of the
-data, not 252 unless the bars are daily. A Sharpe ratio annualised from one-minute synthetic bars
-is large and means little; say so next to it.
+Every annualised statistic states the observation frequency of the **return stream being
+scored**, not merely the frequency of the input prices. Overlapping event outcomes are not
+one-minute account returns just because the labels came from minute bars. Construct an
+account return path before assigning it a calendar annualisation factor, or report an
+unannualised event statistic. Even a correctly annualised synthetic Sharpe is not evidence
+of trading performance.
+
+For revised or delayed data, record the availability basis and selection cutoff separately
+from the observation period. Retain the exact selected values and versions, the selection
+policy, raw snapshot and retrieval evidence alongside the notebook. A footer data hash
+identifies content under its hashing rules; it does not prove that content was available
+at a historical decision. Use the [point-in-time walkthrough](/workflows/point-in-time-data/)
+and its [evidence checklist](/workflows/point-in-time-data/#interpret-the-evidence-before-using-a-result)
+to separate synthetic checks, provider replay and live receipt evidence. The notebook
+linter does not verify these availability claims.
+
+## Trial identity is part of the method
+
+`TrialRegistry.record` identifies a trial by canonical configuration JSON, not by its returns.
+Recording the same configuration again replaces that entry. A persistent file therefore
+preserves only the distinctions actually included in the configuration: include the data
+revision/hash, evaluation period, relevant model and preprocessing settings, cost assumptions
+and code/protocol revision when those distinguish experiments. Keep return frequency
+consistent within the trial comparison. Do not assume that a footer hash also enters the
+registry key.
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from openquant.evaluation import TrialRegistry
+
+with TemporaryDirectory() as directory:
+    registry = TrialRegistry(Path(directory) / "trials.json")
+    config = {"feature": "ret_1", "data_revision": "A", "cost_bps": 5.0}
+    registry.record(config, [0.01, -0.02, 0.03])
+    registry.record(config, [0.02, -0.01, 0.01])  # changed returns, same identity
+    assert registry.n_trials == 1
+    registry.record({**config, "data_revision": "B"}, [0.02, -0.01, 0.01])
+    assert registry.n_trials == 2
+```
+
+This example demonstrates bookkeeping, not a rule to pool unrelated datasets into one DSR.
+Define the comparison population and preserve all attempted configurations before selection.
+The existing runbooks' keys cover their stated grids; when adapting a notebook, inspect its
+actual `record(...)` call before relying on a persistent registry to track new choices.
 
 ## Features with memory: a null through the same splits
 
@@ -131,7 +179,7 @@ import nbrepro
 nbrepro.footer(
     seed=SEED,
     data_hash=meta["dataset_hash"],  # or nbrepro.frame_hash(frame) for data built in memory
-    config=CONFIG,  # printed as a 12-digit digest
+    config=CONFIG,  # printed as a 12-character hexadecimal digest
     trials=registry.n_trials,  # any other keyword is printed on stdout
     stderr={"Monte Carlo hash": MC_HASH},  # correct but platform-dependent values
 )
@@ -150,17 +198,22 @@ version** and the **seed**. They go to two streams:
   just by printing a new version number.
 
 When `just notebooks-run` executes the repository's notebooks, it sets
-`OPENQUANT_NOTEBOOK_PINNED=1`, and the footer prints that the commit containing the notebook pins
-the code and, through `uv.lock` and `Cargo.lock`, every version, instead of the local commit and
-versions. The commit a committed notebook belongs to is the one that contains it, and CI
-re-executes it at that commit and fails if the outputs differ, so the pinned text is accurate.
-Printing the parent commit and the local versions would only rewrite every notebook on every run.
-Run a notebook any other way (in Jupyter, or with `execute_notebook_cells.py` on your own data)
-and the footer prints the real commit and versions.
+`OPENQUANT_NOTEBOOK_PINNED=1`. The footer then prints a stable statement referring to the
+containing commit and lockfiles instead of the actual local revision and versions. This avoids
+rewriting environment text on every run, but the marker is not a provenance check: it does
+not verify a clean checkout, locked dependencies or that the loaded extension matches source.
+CI separately installs locked Python dependencies, builds the extension and executes the
+notebooks before comparison. For local evidence, record the actual revision, dirty state,
+interpreter and extension paths alongside the result.
 
-`nbrepro.frame_hash(frame)` is `openquant.data.dataset_hash` with floats rounded to 10 decimals,
-so data generated in memory with `exp` or `sin` hashes the same on every platform. Pass
-`decimals=None` for the exact hash.
+In Jupyter or `execute_notebook_cells.py`, the footer prints actual commit/version values
+when `OPENQUANT_NOTEBOOK_PINNED` is not `1`. An inherited value of `1` still suppresses them;
+unset it when collecting provenance for an independent run.
+
+`nbrepro.frame_hash(frame)` is `openquant.data.dataset_hash` with floats rounded to 10 decimal
+places. This reduces sensitivity to small floating-point differences, but values on opposite
+sides of a rounding boundary can still hash differently; it is not a guarantee of platform
+invariance. Pass `decimals=None` to hash the unrounded frame.
 
 ## Committed outputs
 
@@ -176,9 +229,20 @@ Notebooks are committed executed, and the outputs are part of the review:
 - Figures are drawn with `nbfigures.figure(name, draw)`, which exports both site themes to
   `docs-site/public/figures/notebooks/`.
 
-`just notebooks-run` executes the notebooks in a Jupyter kernel and rewrites them with their
-outputs; `just notebooks-verify` (CI) fails if the committed outputs differ from a fresh run by more
-than float noise. See `notebooks/python/README.md`.
+`just notebooks-run` executes the notebooks in fresh Jupyter kernels and rewrites their
+outputs. `just notebooks-verify` only compares current files with `HEAD`; it does not execute
+anything. CI runs these two steps in that order. For a fresh comparison without rewriting
+notebooks or site figures, use `just notebooks-run --check`.
+
+The comparator checks cell sources and output structure, normalizes decimal output numbers
+to four significant digits, ignores stderr and raster image bytes, and normalizes exported
+SVG identifiers and embedded raster bytes. It does not prove visual equality. `--only`
+limits notebooks and omits exported SVG comparison; a full run is needed for that figure
+check. See `notebooks/python/README.md` and `scripts/run_notebooks.py` in that directory.
+
+The comparator also ignores execution counts, cell IDs, and cell/notebook metadata.
+Notebook lint separately requires execution counts on nonempty code cells; neither check
+replaces recording the actual environment and source provenance for a research run.
 
 ## What `just notebooks-lint` checks
 
@@ -192,8 +256,12 @@ than float noise. See `notebooks/python/README.md`.
 - **footer**: the last cell is a code cell in the Reproducibility section that calls
   `nbrepro.footer` with `seed=` and `data_hash=`, and its committed output has `data hash:` and
   `seed:` lines on stdout and `git sha:` and `package:` lines on stderr;
-- **outputs**: every code cell is executed, no output is an error, no output contains a machine
+- **outputs**: every nonempty code cell has an execution count, no output is an error, no output contains a machine
   path, and no stdout or displayed result prints a package version.
+
+The lint cannot establish that a hypothesis preceded the first experiment, that every trial
+was registered, or that the assertions detect leakage. Preserve a dated protocol and changes
+to it, and review the method and trial keys separately from structural lint.
 
 It reports every problem as `path: rule: message` and exits 1 if there are any. Run it on one
 notebook with `just notebooks-lint notebooks/python/11_meta_labeling_triple_barrier.ipynb`.

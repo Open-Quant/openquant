@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-05'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -65,11 +65,17 @@ It runs the checks declared in
 [`docs-site/package.json`](https://github.com/Open-Quant/openquant/blob/main/docs-site/package.json):
 
 1. Build the site and stage Rust API documentation with `stage:rustdoc`.
-2. Check the generated agent index and test the navigation checker, then check
-   built paths, anchors and redirects.
+2. Run the design/accessibility, agent-index and navigation-checker tests, then
+   check built paths, anchors and redirects.
 3. Check API drift, page status/schema, theme contrast, coverage and generated pages.
-4. Compile Rust snippets on module pages, execute runnable Python snippets and
-   check the generated Python reference against the built extension.
+4. Compile Rust snippets on module pages and the complete Rust core workflow,
+   execute runnable Python snippets and check the generated Python reference
+   against the built extension.
+
+The design/accessibility checks inspect rendered markup and source/style rules. They
+do not exercise keyboard, screen-reader, zoom or mobile interactions in a browser.
+The aggregate stops at its first failing command; later checks have not run.
+Record the failing command and run unaffected checks separately when useful.
 
 With npm, invoke those scripts individually with `npm run SCRIPT`; the
 aggregate `check:docs` command currently uses `bun run` internally.
@@ -95,10 +101,73 @@ The checker also verifies fragment anchors and relative links, not just files. I
 resolve under the `/openquant` base path once built — a link that works
 in `astro dev` can still 404 in production if it omits the base.
 
-**`check:api-drift` fails.** The inventory under `scripts/` no longer
-matches the code. If you changed a public API on purpose, regenerate the
-inventory from the repository root and commit the result; if you did not,
-you have changed a public API by accident and the gate is doing its job.
+**`check:api-drift` fails.** Read the error first: the source-derived inventory
+may be stale, or the binding documentation checks may have found a missing contract.
+The generated file is `docs-site/src/data/apiInventory.ts`; the generator is under
+`scripts/`. This is a symbol/source scan, not a Rust/Python behavioral parity test.
+Inspect the public API diff before regenerating from the repository root:
+
+```bash
+python3 scripts/generate_api_inventory.py --check
+# Only after reviewing the intended source changes:
+python3 scripts/generate_api_inventory.py
+```
+
+**`check:python-reference` fails.** This is a different artifact:
+`docs-site/src/data/pythonApiReference.json`. The generator checks compiled function
+names and parameter names against the stubs, then combines compiled documentation
+with public Python source. Confirm the selected package and extension paths before
+rebuilding or regenerating; an old extension or another installed checkout can
+produce a misleading result. See [bindings setup](/setup/python-bindings/).
+
+**A Python example fails, times out or prints different output.** The checker writes
+one standalone script per fence under `target/doc-python-examples/`, then runs it
+from the repository root. Its final failure report names that file; inspect it and
+reproduce the same inputs before changing the page. Each runnable fence has its own process,
+so a variable or import from an earlier fence is not available.
+
+You can prefer the prepared environment from the repository root:
+
+```bash
+DOC_PYTHON="$PWD/.venv/bin/python" node docs-site/scripts/check-doc-python-examples.mjs
+```
+
+`DOC_PYTHON` is the first candidate, **not a strict interpreter selection**. If its
+`import openquant` probe fails, the gate tries the checkout's `.venv` interpreters,
+then `python3`. Read the `via ...` path in the gate's opening summary. When a local
+native extension is present under `python/openquant/`, the checker prepends the
+checkout's Python source to `PYTHONPATH`; otherwise an installed package can satisfy
+the import. Confirm the actual package and extension paths before treating a pass
+as evidence for this checkout.
+
+| Report | Meaning and next check |
+| --- | --- |
+| `FAIL` | The process exited unsuccessfully. Read the traceback and the saved script; verify package paths, fixture paths and the API contract. |
+| `TIMEOUT` | A runnable block exceeded the default 180,000 ms limit, or terminated with SIGTERM. Check build mode and workload before setting `DOC_PYTHON_TIMEOUT_MS` to a larger positive millisecond value. |
+| `STALE` | The process succeeded, but its stdout differs from the following eligible `text` fence after normalizing line endings, trailing spaces and outer whitespace. Check the expected numbers and their conventions; the comparison does not use a numerical tolerance. |
+| `skip` | The fence received a syntax check only. Its imports, calls and displayed results were not executed. |
+
+A Python fence's output can be matched to a later `text` fence before the next Python
+fence, even with prose between them. Use `doc-output=skip` only for text that is not
+program output; use the documented per-fence execution skip for examples that need
+unavailable caller data. Skipping a block is a coverage exception to report, not a
+fix for a runnable example that fails.
+
+**Coverage or generated pages are stale.** Run the owning generator from the
+repository root, then review its diff:
+
+```bash
+python3 scripts/docs/check_coverage.py --check
+python3 scripts/docs/generate_site_pages.py --check
+# After the underlying documentation/notebook/source change is ready:
+python3 scripts/docs/check_coverage.py --write
+python3 scripts/docs/generate_site_pages.py --write
+```
+
+Coverage counts module claims and page classifications; it does not establish
+citation quality, numerical correctness or example execution. Generated-gallery
+updates do not rewrite authored runbook pages. Update those separately when the
+canonical notebook's interpretation changes.
 
 **`check:content-schema` fails.** The message names the file and the rule.
 The taxonomy is defined at the top of
@@ -106,9 +175,9 @@ The taxonomy is defined at the top of
 
 | `status` | Means | Date field it must carry |
 |---|---|---|
-| `generated` | emitted from `src/data/moduleDocs.ts`; nobody has read it | `last_generated` |
+| `generated` | emitted from the page's declared source; claims no human review | `last_generated` |
 | `draft` | hand-written, known incomplete; claims nothing | **none** |
-| `authored` | complete and checked, not yet read by a human | `last_authored` |
+| `authored` | written against the code, not yet read by a human; not a test receipt | `last_authored` |
 | `reviewed` | a human read the page end to end | `last_validated` |
 | `validated` | reviewed *and* checked against the code it describes | `last_validated` |
 

@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -14,7 +14,8 @@ Each entry is a symptom you can match against your terminal, the cause, and
 the fix. Entries marked **reproduced** were triggered and fixed on a real
 machine while writing this page; entries marked **not reproduced** are
 derived from reading the source or the CI configuration and have not been
-observed here. Believe the second kind less.
+observed in the original troubleshooting session. **Source-checked** entries identify
+implementation behavior without claiming the failure was reproduced on your machine.
 
 ## Rust toolchain and Python interpreter disagree on architecture
 
@@ -42,7 +43,7 @@ Confirm the mismatch:
 
 ```bash
 rustup show | head -3        # "Default host: x86_64-apple-darwin"
-python3 -c "import platform; print(platform.machine())"   # "arm64"
+uv run --no-sync --python .venv/bin/python python -c "import platform; print(platform.machine())"  # selected interpreter
 ```
 
 **Fix** — add the missing standard library:
@@ -51,9 +52,9 @@ python3 -c "import platform; print(platform.machine())"   # "arm64"
 rustup target add aarch64-apple-darwin
 ```
 
-That is enough; the x86_64 host toolchain cross-compiles to arm64 without
-further setup. To fix it properly, reinstall `rustup` natively (it will
-tell you to: `warn: Rustup is not running natively`).
+This resolved the recorded missing-standard-library failure. A cross-build also needs
+the platform linker and SDK; installing a Rust target does not provide those. Prefer a
+native toolchain matching the selected interpreter when possible.
 
 **Status: reproduced.** This is the error that blocked the first bindings
 build on the machine this page was written on, and `rustup target add`
@@ -69,59 +70,56 @@ returned non-zero exit status 1
 hint: This usually indicates a problem with the package or the build environment.
 ```
 
-**Cause** — this is almost never a `uv` problem. `uv sync` builds this
-project through `maturin`, and `uv` reports only maturin's exit status;
-the actual compiler error is further up in the output and easy to scroll
-past. In practice it is the architecture mismatch above, a missing linker,
-or a Rust compile error.
+**Cause** — a plain `uv sync` installs this project through maturin's PEP 517 hook.
+The final nonzero status is a summary; inspect the earlier output for the actual cause,
+which can include architecture, linker, compiler or build-environment errors.
 
 **Fix** — capture the whole log and read upward from the bottom for the
 first `error[E...]` or `error:` line:
 
 ```bash
-uv sync --group dev > sync.log 2>&1; grep -n "^error" sync.log | head
+uv sync --locked --group dev > sync.log 2>&1
+rg -n "error|Caused by" sync.log
 ```
 
-Then fix *that*, not the `uv` message. If you only want the bindings and
-not the full project environment, prefer the path CI uses, which reports
-compiler errors directly:
+To isolate the project build, use the same environment as [Python bindings setup](/setup/python-bindings/).
+Do not recreate an existing environment just to diagnose it:
 
 ```bash
-uv venv --python 3.11 .venv
-uv run --python .venv/bin/python --with maturin \
-  maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
 ```
+
+The first command can still fail while resolving or installing dependencies; it only
+skips installing OpenQuant itself. The second exposes the native build directly without
+another automatic project sync.
 
 **Status: reproduced.**
 
 ## `maturin: command not found`
 
-**Symptom** — `just py-develop`, or a hand-run `maturin develop`, exits
-127.
+**Symptom** — a bare `maturin develop` is not found by the shell, or a
+`uv run --no-sync ... maturin` invocation cannot find maturin in its environment.
 
-**Cause** — `maturin` is not a global tool in this project. It is a
-build-system requirement (`pyproject.toml`, `[build-system] requires`) and
-a dev dependency (`[dependency-groups] dev`). Nothing installs it onto
-your `PATH`.
+**Cause** — maturin is a build-system requirement and a dev dependency, not a
+guaranteed global command. A successful isolated PEP 517 build does not establish that
+maturin is installed in your shell's environment. Unlike a bare shell command,
+`just py-develop` uses `uv run`, which normally synchronizes the project's dependencies;
+inspect its full error rather than assuming a global PATH failure.
 
-**Fix** — get it into the environment you are running from, either by
-materialising the dev group:
-
-```bash
-uv venv --python 3.11 .venv
-uv sync --group dev
-```
-
-or per-invocation, which is what the `docs-checks` job in
-`.github/workflows/ci.yml` does:
+**Fix** — from an existing checkout environment, install the locked development tools
+and then invoke maturin through that environment:
 
 ```bash
-uv run --python .venv/bin/python --with maturin \
-  maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin --version
 ```
 
-**Status: reproduced** (`maturin` is absent from `PATH` on a machine that
-has built this project successfully).
+If `.venv` does not exist, follow [Python bindings setup](/setup/python-bindings/) first.
+There is no need to install a separate global maturin merely to use these commands.
+
+**Status: source-checked.** The dependency declarations and invocation paths are read
+from `pyproject.toml` and `justfile`; no missing-tool failure was induced in this session.
 
 ## `import openquant` fails after a successful build
 
@@ -137,25 +135,32 @@ or
 ImportError: dynamic module does not define module export function (PyInit__core)
 ```
 
-**Cause** — two different versions of the same mistake: the interpreter
-importing is not the interpreter the extension was built for. `maturin
-develop` installs into whichever environment it is *run inside*. The
-extension is stamped with a specific ABI —
-`PYO3_ENVIRONMENT_SIGNATURE="cpython-3.11-64bit"` appears in maturin's own
-cargo invocation — and CPython will not load a module built for a
-different minor version.
+**Cause** — the first error can mean the package is absent from the selected
+interpreter's environment. The second means the loaded native library lacks
+the expected `PyInit__core` export; check for a stale or incorrectly named
+extension instead of assuming it is the same installation-path problem.
+
+The default maturin build enables `pyo3/abi3-py311` in `pyproject.toml`.
+Its `cp311-abi3` wheel uses CPython's stable ABI for Python 3.11 and later;
+a different supported CPython minor version alone does not require a rebuild.
+Platform and architecture compatibility still matter. A custom build without
+the stable-ABI feature may be interpreter-specific.
 
 **Fix** — always name the interpreter explicitly, on both sides. Every
-`just py-*` recipe does this for exactly this reason:
+`just py-*` build/test recipe selects `.venv/bin/python`. For diagnosis, suppress
+automatic syncing so the check observes the existing environment:
 
 ```bash
-uv run --python .venv/bin/python python -c "import openquant, sys; print(sys.executable)"
+uv run --no-sync --python .venv/bin/python python -c "import sys; print(sys.executable); import openquant; print(openquant.__file__); import openquant._core; print(openquant._core.__file__)"
 ```
 
-If `sys.executable` is not the `.venv/bin/python` you built against,
-that is the bug. Rebuild with the interpreter you intend to use; a
-`.venv` recreated on a different Python minor version needs a rebuild,
-not just a re-install.
+Printing the interpreter first still gives useful evidence when the import
+fails. If the paths point to another checkout or environment, install into
+the intended one and remove unintended path overrides. A recreated `.venv`
+needs the package and its dependencies installed again; a compatible abi3
+wheel can be reused. If the native export error remains, rebuild from this
+checkout with the explicit maturin command in [bindings setup](/setup/python-bindings/)
+and check which extension path is being loaded. Restart processes that imported the old binary.
 
 **Status: not reproduced.** The reasoning is read off maturin's build
 environment and the `[lib] name = "_core"` / `module-name =
@@ -211,7 +216,7 @@ Command Line Tools were already present.
 **Symptom** — `cargo` or `maturin` output ends in `signal: 9, SIGKILL` or
 `Killed`, usually while compiling `polars`.
 
-**Cause** — this workspace depends on `polars 0.46` and `nalgebra 0.32`.
+**Cause** — this workspace depends on `polars 0.55` and `nalgebra 0.35`.
 Cargo compiles as many crates in parallel as you have cores, and several
 polars crates are individually memory-hungry. On a machine with less than
 about 2 GB of RAM per core, the peak overlaps and the OOM killer wins.
@@ -254,29 +259,26 @@ before any of it becomes a DataFrame. A Python `str` and `float` cost
 tens of bytes each in object overhead alone, so peak memory is a large
 multiple of the Arrow-backed frame you started from.
 
-**Fix** — do not hand the whole history to one call. The function already
-loops per symbol, so the remaining axis is time: slice with polars (which
-stays in Arrow memory) and concatenate the bar frames.
+**Fix** — reduce the data retained at once without splitting a symbol's
+ordered input stream. Load and process complete symbols separately, and
+persist completed outputs instead of retaining every symbol's frame. This
+can reduce simultaneous input/output storage, but it does not remove the
+per-symbol Python-list cost.
 
-```python doc-check=skip
-import polars as pl
-from openquant import bars
+Do not treat independent time chunks followed by concatenation as equivalent
+to one call. Each call starts a new aggregation state. Tick, volume and dollar
+bars can lose unfinished bars at a boundary; time bars retain a trailing
+partial bar and start the next call with a new anchor. A calendar-date boundary
+does not in general fix either problem. The Python wrappers do not expose
+state to carry an unfinished bar into the next call.
 
-pieces = [
-    bars.build_dollar_bars(chunk, dollar_value_per_bar=5_000_000.0)
-    for chunk in df.sort("ts").iter_slices(2_000_000)
-]
-out = pl.concat(pieces, how="vertical").sort(["symbol", "ts"])
-```
+If one complete symbol still exceeds the memory budget, use more memory or
+implement state-preserving streaming and verify it against a single-pass
+reference. There is no general safe chunk size for the existing wrappers.
 
-Choose the slice boundary on a date, not a row count, if you need bar
-edges to be exactly reproducible — a bar that straddles a chunk boundary
-will be split.
-
-**Status: not reproduced.** The memory characteristic is read directly
-from `python/openquant/bars.py`; no allocation profile was measured, and
-the 2-million-row slice above is a starting point rather than a tuned
-value.
+**Status: source-checked.** The materialization and per-call state behavior
+come from `python/openquant/bars.py` and the Rust bar builders; no peak-memory
+profile was measured here.
 
 ## The slow structural-break test looks stalled
 
@@ -303,11 +305,75 @@ cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
 **Status: reproduced** (the `#[ignore]` annotation and its reason string
 are verbatim from the test file).
 
+## An optional pandas or scikit-learn import fails
+
+The base package declares NumPy, Polars and PyArrow as runtime dependencies. Pandas
+and scikit-learn are not included in the repository's development dependency group,
+and no pandas/scikit-learn installation extra is declared. A successful base import
+therefore does not establish that these optional integrations are available.
+
+| Symptom | Relevant operation | Next step |
+| --- | --- | --- |
+| `RuntimeError: pandas is not installed` | `adapters.to_pandas(frame)` checks for pandas before delegating to Polars | Add pandas to the environment that calls the bridge, or continue using the Polars frame. |
+| `ModuleNotFoundError: No module named 'sklearn'` | Your code imports an external estimator or `GridSearchCV` | Add the distribution named `scikit-learn` to that research environment. The import name is `sklearn`. |
+| A custom estimator behaves differently when scikit-learn is present | `feature_importance` attempts `sklearn.base.clone`; without it, or on `TypeError`, it uses `deepcopy` | Inspect the [estimator cloning contract](/modules/feature-importance/) and ensure each fold starts from the intended unfitted state. |
+
+Inspect the interpreter you actually use:
+
+```python
+import importlib.util
+import sys
+
+print("interpreter:", sys.executable)
+for module in ("openquant", "pandas", "sklearn"):
+    print(module, "available" if importlib.util.find_spec(module) else "not installed")
+```
+
+An available module spec means Python can locate it, not that importing it or loading
+its compiled dependencies will succeed. If an installed package fails to import, retain
+the full exception and check dependency consistency in the same environment:
+
+```bash
+uv pip check --python .venv/bin/python
+```
+
+In a separate research project managed by uv, `uv add pandas` or `uv add scikit-learn`
+records the chosen optional dependency in that project's metadata and lockfile. Running
+those commands in this repository changes its project files. An ad hoc environment-only
+install is not recorded in `uv.lock` and a later exact sync may remove it. Record optional
+versions with the result and restart an existing notebook kernel after changing its
+environment. The native OpenQuant examples do not require scikit-learn merely because
+some APIs also accept scikit-learn-style estimators.
+
 ## Docs-site gates
 
 Failures in `check:links`, `check:api-drift` and `check:content-schema`
 are maintainer gates, not first-run problems. They are documented where
 they are run, on [Local Build Setup](/setup/local-build/#when-a-gate-fails).
+
+## The call succeeds, but the numbers disagree
+
+First distinguish a contract mismatch from a numerical defect. Confirm the interpreter,
+package and extension paths using the import checks above, then reduce the comparison to
+one function with explicit inputs. A package version alone cannot identify the loaded code.
+For validation exceptions or non-finite output, start with [Diagnose input errors](/setup/input-errors/).
+
+| Difference you see | Compare before changing the calculation |
+| --- | --- |
+| Sharpe differs by a fixed scale | Match return frequency, `sqrt(periods_per_year)` and risk-free units. The low-level `backtest_stats.sharpe_ratio` takes a per-period risk-free value; the pipeline accepts an annual rate. See the [executed comparison](/workflows/python-core-workflow/). |
+| Sharpe differs slightly on a short sample | The low-level ratio uses sample standard deviation (`ddof=1`); NumPy's default is `ddof=0`. Compare the same observations, including whether a leading zero was added to a backtest frame. |
+| Allocator Sharpe differs from strategy Sharpe | The allocator reports its fitted portfolio on supplied price/return inputs. The convenience pipeline's strategy curve is a separate calculation; its weights do not drive that curve. Check [portfolio conventions](/modules/portfolio-optimization/) and [pipeline accounting](/modules/pipeline/). |
+| A saved CLA result reports positive expected returns although every supplied forecast is zero | Earlier versions perturbed the last forecast. Current code preserves the vector and solves the equal-return minimum-variance point. Check the loaded revision and the [equal-return contract](/modules/cla/#equal-return-inputs-preserve-the-forecasts), then compare reported means with the original forecasts. |
+| ES differs at a quantile boundary | This implementation averages observations strictly below its VaR cutoff. Ties can reduce the selected tail or make it empty. Compare the actual selected observations, not just the requested percentage. |
+| Two CV runs have different training rows | Match label spans, their units and input order, the number of splits and the embargo fraction. Purging uses closed spans; embargo is based on sample positions. Use [split diagnostics](/modules/cross-validation/) to explain exclusions. |
+| A hash matches but a result differs | Content hashing normalizes row order. Check the order consumed by the calculation, duplicate policy, protocol settings and loaded binary; a data hash is not a complete execution identity. |
+
+Use a small deterministic example and an independent reference with the same conventions.
+Keep the expected formula or reference implementation separate from the function under test.
+Do not loosen tolerances, fill NaN with zero, or discard inconvenient observations merely to
+make the results agree. If the matched comparison still differs, report the inputs, expected
+and actual values, conventions and revision with the reproducer. Statistical sampling
+uncertainty and floating-point rounding require different explanations.
 
 ## Still stuck
 
@@ -316,7 +382,9 @@ Open an issue with the output of:
 ```bash
 rustc --version && cargo --version && uv --version
 rustup show | head -5
-python3 -c "import platform, sys; print(platform.machine(), sys.version)"
+uv run --no-sync --python .venv/bin/python python -c "import platform, sys; print(sys.executable, platform.machine(), sys.version)"
 ```
 
-The first three lines resolve most of the entries above on sight.
+Include the exact failing command and its first substantive error, plus the interpreter
+and extension paths when import succeeds. Redact credentials or private source locations
+from logs before sharing them.

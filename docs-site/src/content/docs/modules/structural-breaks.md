@@ -2,7 +2,7 @@
 title: "structural_breaks"
 description: "Tests for a change of regime in a price series: the supremum ADF test for explosive behaviour, a Chow-type Dickey-Fuller test, and the Chu-Stinchcombe-White CUSUM test."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -35,7 +35,9 @@ is the moment that stops being true: a mean-reverting spread starts trending, a 
 turns explosive. AFML's Chapter 17 treats break statistics as *features* — a number per bar
 saying how strongly the recent past looks like a different regime — and notes that they are
 valuable precisely because few participants compute them. This module implements three of the
-chapter's tests. All take **log prices**.
+chapter's tests. Use **log prices** for the ADF and Chow examples below. The SADF
+`sm_poly_2`, `sm_exp` and `sm_power` models instead take positive levels, such as prices,
+because they apply their own logarithm.
 
 ## Supremum ADF: is the series explosive?
 
@@ -58,7 +60,10 @@ $$
 
 `get_sadf(series, model, add_const, min_length, lags)` returns that series. `lags` is $L$ (in
 Rust, `SadfLags::Fixed(L)` or an explicit `SadfLags::Array` of lag numbers). `model` chooses
-the specification:
+the specification. `min_length` counts regression rows after lag construction. For a
+maximum lag `L`, the first returned value belongs to input position
+`L + 1 + min_length` (zero-based); timestamps are not inspected, so gaps remain ordinary
+adjacent observations. The return length is `n - L - 1 - min_length` when positive.
 
 | `model` | Regression |
 | --- | --- |
@@ -78,7 +83,8 @@ $$
 \mathrm{SMT}_t \;=\; \sup_{t_0\,\le\, t-\tau}\;\frac{\lvert\hat\beta_{t_0,t}\rvert}{\hat\sigma_{\hat\beta_{t_0,t}}}
 $$
 
-so it is never negative. For these models `add_const` is ignored and `lags` only sets where
+so a finite statistic is never negative (an endpoint with no usable regression returns
+`-inf`). For these models `add_const` is ignored and `lags` only sets where
 the output starts, and three of them take a logarithm, so they need a *positive* input:
 prices, not log prices. AFML also describes dividing by $(t-t_0)^{\varphi}$ to favour
 longer windows; that penalty is not implemented ($\varphi=0$).
@@ -90,7 +96,11 @@ explosive and stays so. For each candidate date it fits
 $\Delta y_t=\delta\,y_{t-1}\,D_t[\tau^*]+\varepsilon_t$, with the dummy $D_t$ equal to 1 after
 the date, and reports the $t$-statistic of $\delta$.
 `get_chow_type_stat(log_prices, min_length)` returns one statistic per candidate date from
-`min_length` to `n − min_length`; the date with the largest value is the estimated break.
+`min_length` through `n − min_length − 1`; the date with the largest value is the estimated
+break. Each candidate statistic uses the **entire supplied series**, including observations
+after that candidate date. It is a retrospective estimate available at the end of that
+series, not a causal feature available at the candidate date. Recompute on each historical
+prefix if using this test in a backtest.
 
 ## The two compared
 
@@ -143,10 +153,10 @@ Chow-type, whole sample, crash included: peak +1.18 for a break at bar 72
 <figcaption>The example's series and its SADF. The shaded span is the run-up.</figcaption>
 </figure>
 
-Before the run-up SADF sits around −1.1, which is what a random walk gives. Inside it the
-statistic climbs to 3.8 on the last bar before the crash, and it first crosses 1.5 — in the
-region of the 95% critical values Phillips, Wu and Yu tabulate — at bar 227, thirteen bars
-before the top. That is late. The run-up had been under way for 47 bars, and detecting
+Before the run-up SADF sits around −1.1 in this particular simulated random walk. Inside
+it the statistic climbs to 3.8 on the last bar before the crash, and it first crosses the
+illustrative threshold 1.5 at bar 227, thirteen bars before the top. This threshold was not
+calibrated for this example and does not establish a 5% false-positive rate. That is late. The run-up had been under way for 47 bars, and detecting
 explosiveness needs enough of it to have happened.
 
 The Chow-type lines show that test's assumption at work. On the run-up alone it is emphatic,
@@ -154,6 +164,61 @@ The Chow-type lines show that test's assumption at work. On the run-up alone it 
 means nothing, because the series did not *stay* explosive. AFML's §17.4.2 makes this the
 reason to prefer SADF, which looks at windows ending at each bar and is unaffected by what
 comes after.
+
+## Check when a statistic is available
+
+A statistic indexed by bar `t` can use the price at that bar. It is available after that
+observation arrives; a strategy must choose an execution time that respects this delay.
+The following check changes only future observations. With fixed settings and the same
+input origin, historical SADF values stay unchanged. A Chow statistic assigned to an old
+candidate break date can change because its regression includes the later observations.
+
+```python
+import math
+import random
+from openquant import structural_breaks as sb
+
+rng = random.Random(31)
+log_prices = [math.log(100.0)]
+for _ in range(79):
+    log_prices.append(log_prices[-1] + rng.gauss(0.0, 0.01))
+cut = 50  # the first unavailable observation at the decision time
+changed_future = log_prices[:cut] + [
+    value + 0.03 * (i + 1) for i, value in enumerate(log_prices[cut:])
+]
+
+# Keep the same origin, model, lags and minimum regression length.
+prefix = sb.get_sadf(log_prices[:cut], "linear", True, 12, 1)
+original = sb.get_sadf(log_prices, "linear", True, 12, 1)
+perturbed = sb.get_sadf(changed_future, "linear", True, 12, 1)
+first_bar = cut - len(prefix)
+assert first_bar == 14
+for i, value in enumerate(prefix):
+    assert math.isfinite(value)
+    assert math.isclose(value, original[i], rel_tol=1e-10, abs_tol=1e-10)
+    assert math.isclose(value, perturbed[i], rel_tol=1e-10, abs_tol=1e-10)
+assert first_bar + len(prefix) - 1 == cut - 1
+
+# A Chow candidate dated bar 12 still uses the whole supplied sample.
+chow = sb.get_chow_type_stat(log_prices, 12)
+changed_chow = sb.get_chow_type_stat(changed_future, 12)
+assert not math.isclose(chow[0], changed_chow[0], rel_tol=1e-6, abs_tol=1e-6)
+print(f"SADF: {len(prefix)} unchanged values, bars {first_bar}..{cut - 1}")
+print("Chow: changing observations after bar 49 changes an earlier candidate statistic")
+```
+
+```text
+SADF: 36 unchanged values, bars 14..49
+Chow: changing observations after bar 49 changes an earlier candidate statistic
+```
+
+For a historical decision at bar 49, compute Chow from `log_prices[:50]` and timestamp
+any derived feature at that decision, not at its estimated break date. The test above
+checks these functions with fixed inputs and settings; it does not establish that upstream
+price adjustments, feature selection or hyperparameter tuning were available at that time.
+Changing the input origin to a trailing slice is a different calculation, especially for
+`sm_power`'s position-based time trend. Keep enough data and verify the output-to-bar offset
+again when changing lags or the look-back policy.
 
 ## From Rust
 
@@ -192,7 +257,7 @@ assert!(matches!(
   before [#104](https://github.com/Open-Quant/openquant/issues/104), divided by
   $\hat\sigma_t^{2}\sqrt{t-n}$, so the result depended on the units of the series: on random
   walks with a 1% step it exceeded its critical value on 94% of bars. It now follows the book
-  and is unchanged by rescaling the series; on the same walks it exceeds the critical value on
+  and is unchanged by positive rescaling of the series; on the same walks it exceeds the critical value on
   about 4% of bars at any step size. Since
   [#173](https://github.com/Open-Quant/openquant/issues/173) $\hat\sigma_t^2$ is also the
   book's mean of the squared differences up to bar $t$; it used to divide their sum by one
@@ -210,9 +275,12 @@ assert!(matches!(
   through a debug build ([#77](https://github.com/Open-Quant/openquant/issues/77)). Use
   `maturin develop --release` or `just py-develop-release`.
 - **Critical values are not supplied.** SADF does not follow a Dickey–Fuller distribution;
-  its critical values depend on the sample length and `min_length` and come from simulation
-  (Phillips, Shi and Yu, 2015). As a feature this does not matter, since the model learns its
-  own thresholds. As a test, simulate random walks of your length and read off the quantile.
+  critical values require a specified null model and calibration matching the model, lags,
+  deterministic terms, sample length, `min_length` and window search. A quantile for one
+  endpoint does not by itself control the chance of any alarm over repeated monitoring.
+  The example's 1.5 line is illustrative, not a supplied critical value. When used as a
+  feature, fit any thresholds, transformations and model choices on training data only;
+  learning a threshold does not establish statistical significance or out-of-sample validity.
 - **`"quadratic"` and the `sm_` models changed in
   [#166](https://github.com/Open-Quant/openquant/issues/166).** Before it, `"quadratic"` had
   only the squared trend (no linear $t$), the `sm_` models took the supremum of the *signed*

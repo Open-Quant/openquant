@@ -12,7 +12,8 @@ convention as ``docs-site/scripts/figures/_svg.py``::
 The light variant is also displayed inline, so the executed notebook carries
 the plot as ``image/png``. The colours are the identity tokens in
 ``docs/design/identity/tokens.md``. SVGs are written without a date, creator or
-random ids, so an unchanged figure is byte-identical after a re-run.
+random ids. Byte stability also depends on the draw callback, data,
+Matplotlib version and fonts; compare both themes when changing figures.
 """
 
 from __future__ import annotations

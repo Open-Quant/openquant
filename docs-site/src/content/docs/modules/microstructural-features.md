@@ -2,7 +2,7 @@
 title: "microstructural_features"
 description: "Spread, price-impact, order-flow and entropy features estimated from bars or from trades."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -74,8 +74,9 @@ Most price data carries no record of the things a trader most wants to know abou
 how wide the spread was, how far a given order would have moved the price, whether the flow
 was one-sided. Market microstructure theory offers ways to *infer* them from what is
 recorded, and AFML's Chapter 19 collects those estimators as features. The ones that need
-only bars go back decades and work on any history; the ones that need signed trades are
-sharper and need tick data. Chapter 18's entropy estimators, which measure how predictable a
+only bars can be applied without trade signs; others require tick data. Their interpretation
+depends on sampling, data quality and model assumptions, rather than one input type being
+universally more accurate. Chapter 18's entropy estimators, which measure how predictable a
 sequence of price moves is, live here too. The Python module is `openquant.microstructural`.
 
 ## The estimators
@@ -164,8 +165,8 @@ Three of these are good news with a caveat each. Roll recovers the spread to wit
 runs high here because price impact adds negative autocorrelation of its own, which the
 model attributes to the spread. Corwin–Schultz gets the right order of magnitude from highs
 and lows alone, but a quarter of its values are exactly zero: the estimator goes negative
-whenever a window's volatility swamps the spread and is floored, so its *mean* is usable and
-its individual values are not. Bulk volume classification, given nothing but closes and
+for some windows and is floored. Averaging does not remove the resulting truncation bias
+or establish that the estimate is accurate on a different market. Bulk volume classification, given nothing but closes and
 volume, correlates 0.67 with the true buy share.
 
 Kyle's lambda is the instructive failure: 0.0094 against a true 0.0020. The regression is of
@@ -182,18 +183,22 @@ investigating. The route has two steps.
 
 **Encode** the series as a string. `encode_tick_rule_array` maps tick signs to letters
 (`1 → a`, `−1 → b`, `0 → c`). For returns or volumes, `quantile_mapping(values, n_letters)`
-builds a codebook with equally populated bins and `sigma_mapping(values, step)` one with bins
-of fixed width; `encode_array` applies either, one letter per value. Both mappings reject an
+builds representative values at nearest sample quantiles from 0.01 through 1.0, and
+`sigma_mapping(values, step)` builds fixed-step representative values. `encode_array` assigns
+the nearest representative, using the first on ties; these are not quantile-boundary bins
+and need not have equal populations. Duplicate representatives can leave symbols unused. Both mappings reject an
 empty array and `NaN` values, `sigma_mapping` rejects a step that is not a positive finite
 number, and `encode_array` raises on a `NaN` value or an empty codebook rather than dropping
 anything, so the message is always as long as the input.
 
-**Estimate** the entropy of the string, in bits per symbol:
+**Estimate** the string statistics. Shannon, plug-in and Kontoyiannis use bits per symbol;
+the Lempel–Ziv function returns a dimensionless dictionary-size ratio, not a comparable
+bit-rate estimate:
 
 | Function | Estimator |
 | --- | --- |
 | `get_shannon_entropy(msg)` | $-\sum p\log_2 p$ over single symbols; ignores order entirely |
-| `get_plug_in_entropy(msg, w)` | Shannon entropy of overlapping words of length `w`, divided by `w` |
+| `get_plug_in_entropy(msg, w)` | Shannon entropy of the `len(msg) - w` overlapping words ending before the last character, divided by `w` |
 | `get_lempel_ziv_entropy(msg)` | size of the Lempel–Ziv dictionary divided by message length; lower means more repetition |
 | `get_konto_entropy(msg, window)` | Kontoyiannis' estimator from longest-match lengths; `window = 0` uses an expanding window, and a fixed window is clamped to half the message length (Snippet 18.4) |
 
@@ -201,6 +206,19 @@ Only the last three can see *structure*. The string `abababab…` has a Shannon 
 exactly 1 bit, the same as a fair coin, because it has as many `a`s as `b`s; its plug-in
 entropy with three-letter words is 0.33 and its Kontoyiannis entropy 0.21, against 1.00 and
 0.87 for a random string of the same length (400 symbols, a Kontoyiannis window of 20).
+
+## Encoding and normalization boundaries
+
+```python
+from openquant import microstructural as ms
+
+values = [0.0, 1.0, 2.0, 3.0, 100.0]
+codebook = ms.quantile_mapping(values, 2)
+assert [ord(ch) for ch in ms.encode_array(values, codebook)] == [0, 0, 0, 0, 1]
+assert ms.get_plug_in_entropy("ab", 1) == 0.0
+assert ms.get_shannon_entropy("ab") == 1.0
+assert ms.get_vpin([100.0, 1.0], [100.0, 1.0], 2)[-1] == 50.5
+```
 
 ## From Rust
 
@@ -237,6 +255,19 @@ Rust-only.
 
 ## What to watch for
 
+- **Fit codebooks on training data only.** Quantiles and fixed-step ranges use every supplied
+  observation. Reusing a full-history codebook inside historical folds leaks distribution
+  information. Hold the fitted codebook fixed when encoding the corresponding test span.
+- **The plug-in estimator excludes the final word.** For `"ab"` and word length 1 it sees
+  only `"a"` and returns 0, while single-symbol Shannon entropy over the full string is 1.
+  At word length equal to message length it returns 0 from an empty set of words. This is
+  an implementation convention, not evidence of predictability.
+- **Validate aligned prices and volumes yourself.** The functions have different input
+  checks; a matching length does not establish positive finite prices, positive volumes or
+  buy volume within total volume. Use positive rolling windows, and at least 2 for BVC.
+  BVC uses the current price change and current trailing sample deviation; it is available
+  after the current bar closes, not before its return occurs.
+
 - **`get_trades_based_hasbrouck_lambda` changed in a fix.** Earlier versions regressed the
   *absolute* return on signed volume, so buys and sells cancelled and the estimate was near
   zero under balanced flow. It now regresses the signed return, as in AFML: on 5,000 simulated
@@ -250,7 +281,9 @@ Rust-only.
   anything that is not a liquid, mean-reverting tick series.
 - **VPIN divides by the current bar's volume**, not the window's. It is the published measure
   only on **volume bars**, where every bar has the same volume. On time bars a quiet bar
-  inflates it and a busy bar deflates it.
+  inflates it and a busy bar deflates it; the result can exceed 1. This bar-based function
+  also differs from the streaming implementation, which accumulates absolute imbalance
+  per event without netting opposite directions across events; see its [aggregation example](/modules/streaming-hpc/#event-aggregation-changes-the-score).
 - **Bar-based lambdas are means of ratios, not regressions.** One bar with tiny volume
   contributes an enormous $\Delta p/V$ and dominates the window. Winsorise, or use volume or
   dollar bars so that the denominators are comparable.

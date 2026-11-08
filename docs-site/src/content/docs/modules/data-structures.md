@@ -2,7 +2,7 @@
 title: "data_structures"
 description: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades."
 status: authored
-last_authored: '2026-11-06'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -88,6 +88,12 @@ same-direction trades, which is a simpler condition than AFML's count of the dom
 within the bar. Use them as fixed-threshold variants, and do not cite them as the book's
 bars.
 
+Their direction is the tick rule: up-ticks are +1, down-ticks −1, and unchanged prices
+retain the previous sign. The first trade establishes the price reference and contributes
+no direction; unchanged initial prices remain unsigned. After each completed bar, direction
+state resets and the next trade establishes a fresh reference. A run counts signed ticks,
+including unchanged prices that retain a sign, rather than strictly changing prices only.
+
 ## The point, on data
 
 The example builds one synthetic session in which seventeen minutes carry far more trading
@@ -166,8 +172,8 @@ in a quieter session. The Python defaults (`ticks_per_bar=50`, `volume_per_bar=1
 `dollar_value_per_bar=5_000_000`) suit no instrument in particular. Pick a number, then check
 the bar count and `bars.bar_diagnostics` before trusting what is built on top.
 
-Because thresholds are in absolute units, a dollar threshold fixed in 2015 produces several
-times as many bars on the same instrument in 2024. Over long histories, re-derive the
+Because thresholds are in absolute units, a fixed dollar threshold can produce different
+bar counts as traded dollar volume changes. Over long histories, re-derive the
 threshold per period or scale it by a rolling average of daily dollar volume.
 
 ## From Rust
@@ -205,7 +211,8 @@ trades is valid and yields no bars.
   through `openquant.bars`, which is the resolution of a Python `datetime`). But the Python
   builders first pass the frame through `data.clean_ohlcv`, which removes rows that repeat a
   `(symbol, ts)` pair, so two trades with exactly the same stamp collapse into one. If your
-  feed stamps several trades identically, build bars in Rust.
+  feed stamps several trades identically, the Rust functions or list-based
+  `openquant._core.bars` builders preserve those rows; supply them in chronological order.
 - **The Python builders take OHLCV rows, not trades.** They read `close` as the trade price
   and `volume` as the trade size. Feeding them one-minute OHLCV bars works and is sometimes
   what you want, but the result is a bar of bars: its high and low come from minute closes,
@@ -220,6 +227,35 @@ trades is valid and yields no bars.
   still has the same columns and types as a populated result: microsecond datetimes for `ts` and
   `start_ts`, a string `symbol`, `Int64` `n_obs`, and `Float64` prices, volume and dollar value.
   Time bars still keep each symbol's trailing partial bar.
+
+- **Order, cleaning and sessions are caller responsibilities at the native boundary.**
+  Rust and `_core.bars` process the supplied order without sorting or validating trade
+  prices/volumes. Frame wrappers sort each symbol and remove canonical-column nulls, but
+  do not turn `NaN` or infinity into valid observations. Validate finite positive prices
+  and finite nonnegative sizes yourself. There is no automatic daily/session reset.
+- **Calls do not carry unfinished bars forward.** Splitting one symbol by date or arbitrary
+  row chunks resets accumulation, drops unfinished tick/volume/dollar bars, and emits extra
+  partial time bars. Processing complete symbol histories separately preserves the
+  per-symbol behavior; processing separate sessions is an explicit change of bar definition.
+- **Inspect diagnostics per symbol.** `bar_diagnostics` computes returns within symbols,
+  then pools them for lag-1 correlations. Multiple symbols therefore introduce artificial
+  adjacent pairs at symbol boundaries. With fewer than three pooled returns, all reported
+  statistics except `n_bars` are zero, which does not establish low volatility or independence.
+
+A call boundary is not a session boundary recognized by the builder:
+
+```python
+from openquant import _core
+
+stamps = ["2024-01-02 23:59:00", "2024-01-03 00:01:00"]
+prices, volumes = [100.0, 101.0], [1.0, 1.0]
+assert len(_core.bars.build_tick_bars(stamps, prices, volumes, 2)) == 1
+assert sum(len(_core.bars.build_tick_bars([t], [p], [v], 2))
+           for t, p, v in zip(stamps, prices, volumes)) == 0
+assert len(_core.bars.build_time_bars(stamps, prices, volumes, 60)) == 1
+assert sum(len(_core.bars.build_time_bars([t], [p], [v], 60))
+           for t, p, v in zip(stamps, prices, volumes)) == 2
+```
 
 ## Related modules
 

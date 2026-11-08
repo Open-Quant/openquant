@@ -2,7 +2,7 @@
 title: "hpc_parallel"
 description: "AFML's atoms and molecules: split a job into contiguous chunks of equal work, run a callback over each in serial or on threads, and get the outputs back in order."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,7 +42,7 @@ threads, and returns the outputs in molecule order with a timing report.
 
 ## Equal atoms or equal work
 
-`PartitionStrategy::Linear` gives every molecule the same number of atoms, AFML's `linParts`.
+`PartitionStrategy::Linear` gives molecules atom counts differing by at most one, AFML's `linParts`.
 With $N$ atoms and $M$ molecules, molecule $i$ ends at
 
 $$
@@ -56,22 +56,26 @@ $(b_i^2-b_{i-1}^2)/2$, and under linear boundaries molecule $i$ costs $2i-1$ uni
 of $M$ molecules is $2M-1$ times as expensive as the first.
 
 `PartitionStrategy::Nested`, AFML's `nestedParts`, picks the boundaries that make those costs
-equal:
+approximately equal:
 
 $$
 b_i = \operatorname{round}\!\left(N\sqrt{i/M}\right)
 \quad\Longrightarrow\quad
-\frac{b_i^2-b_{i-1}^2}{2} = \frac{N^2}{2M}\ \text{ for every } i .
+\frac{b_i^2-b_{i-1}^2}{2} \approx \frac{N^2}{2M}.
 $$
 
 Early molecules get many cheap atoms, late molecules a few expensive ones. The book solves a
 quadratic for each boundary so that the discrete sums $\sum k$ match; this is the continuous
-form of the same rule, and the two differ by an atom or so.
+form of the same rule before rounding. The implementation also clamps each boundary so
+every remaining molecule receives at least one atom; this can substantially change the
+formula when there are nearly as many molecules as atoms. With `N=M`, every molecule
+contains exactly one atom, regardless of strategy.
 
 `HpcParallelConfig::mp_batches` is the book's `mpBatches`. The job is split into
-`workers × mp_batches` molecules, so with `mp_batches > 1` each thread takes several and a
-slow molecule delays only its own thread's share. It is the remedy when costs are uneven
-in a way neither strategy predicts.
+up to `workers × mp_batches` molecules, capped at the atom count. With `mp_batches > 1`,
+a worker can take several molecules and a
+slow molecule occupies only one worker while the others take remaining jobs. More batches
+can improve load balancing when neither strategy predicts costs, but add scheduling overhead.
 
 ## From Rust
 
@@ -132,7 +136,8 @@ putting the pieces together is the caller's job, here a `concat`. That matches t
 where the callback takes a `molecule` argument and `mpPandasObj` concatenates what comes back.
 
 `dispatch_async` runs the same thing on a background thread and returns a handle, with
-`is_finished()` to poll and `wait()` to collect the report.
+`is_finished()` to poll and `wait()` to collect the report. It takes ownership of the input
+vector; dropping the handle does not cancel the background computation.
 
 ## What to watch for
 
@@ -141,13 +146,19 @@ where the callback takes a `molecule` argument and `mpPandasObj` concatenates wh
   whose result depends on where the molecule boundaries fall will give different answers in
   the two modes. The book's single-thread debugging mode has the same property. Compare
   flattened outputs, as the example does, not per-molecule ones.
+- **Ordered outputs do not imply ordered execution.** Thread scheduling, callback side
+  effects and the first error to arrive can vary between runs. `Send + Sync` permits safe
+  sharing; it does not make a callback deterministic. Derive random seeds from stable atom
+  identities, and preserve those identities when assembling results.
 - **`partition_imbalance_ratio` measures atoms, not work.** It is the largest molecule's atom
   count over the mean. A well-balanced nested partition reports 2.0 in the example, and a
   linear partition of a triangular job reports 1.0 while its last molecule does seven times
   the work of its first.
 - **Nested assumes cost rises with the index.** The book's `nestedParts` takes an
   `upperTriang` flag for jobs whose cost *falls* with the index; this module has no such flag.
-  For those, reverse the atoms before calling and the outputs afterwards.
+  For those, reverse the atoms before calling. If each callback emits one result per atom
+  in slice order, concatenate and reverse that flat result, or map by original atom index.
+  Reversing only the outer vector of molecule outputs does not restore within-molecule order.
 - **A failing callback does not cancel the run.** In threaded mode every molecule still
   executes, and the first error to arrive is returned once all have finished; in serial mode
   the run stops at the first error. Either way no partial outputs are returned.

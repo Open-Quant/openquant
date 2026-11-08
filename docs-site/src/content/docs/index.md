@@ -17,7 +17,7 @@ hero:
       link: /openquant/agents/
       variant: minimal
 status: authored
-last_authored: '2026-11-05'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -46,6 +46,25 @@ Functions take plain sequences, and the data-loading layer works in Polars frame
     <span class="oq-path-action">Open the agent guide →</span>
   </a>
 </nav>
+
+## Start with your task
+
+| I want to… | Start here | What to keep |
+| --- | --- | --- |
+| Check that the library runs locally | [Quickstart](/quickstart/) | The synthetic result and the interpreter used to produce it |
+| See where a model actually fits | [End-to-end research journey](/workflows/research-journey/) | One JSON report linking observations, events, training folds and predictions |
+| Select parameters before a final chronological assessment | [Model selection and holdout](/workflows/model-selection-holdout/) | Development-only search, fold-local preprocessing, an explicit refit and the untouched holdout score |
+| Select only revisions available at a research cutoff | [Point-in-time data](/workflows/point-in-time-data/) | Availability timestamps, selection policy and selected revisions; a hash does not establish provider truth |
+| Load my own CSV or Parquet | [Data loading and provenance](/modules/data/), then the [CSV example](/examples/catalog/) | Cleaned data, quality report, source terms and dataset hash |
+| Turn aligned observations into named portfolio weights | [Multi-asset allocation workflow](/workflows/multi-asset-allocation/) | Common timestamps, asset-column order, moment units and the final fitting date |
+| Reproduce a documented experiment | [Research runbooks](/runbooks/) and [notebook execution](/workflows/notebook-research-workflow/) | The selected notebook, its outputs and the comparison limits |
+| Find an exact call or port it to Rust | [Python API](/api/python/) or [Rust API](/api/rust/openquant/) | Argument order, return shape and the module's caller preconditions |
+| Fix a build or import failure | [Troubleshooting](/setup/troubleshooting/) | The interpreter path, extension path and failing command |
+
+The quickstart consumes synthetic probabilities. The research journey fits a fixed baseline
+inside walk-forward folds; the model-selection walkthrough adds a parameter search and a
+separate final holdout. Use the latter two to follow training boundaries. Their classification
+results do not provide a trading P&L backtest.
 
 ## A research workflow, at a glance
 
@@ -152,7 +171,7 @@ build fails before this page goes stale.
 
 Start with a task, then follow the linked module to its API and examples:
 
-- **Prepare data and labels:** [bars](/modules/data-structures/),
+- **Prepare data and labels:** [load and inspect data](/modules/data/), [bars](/modules/data-structures/),
   [filters](/modules/filters/) and [labeling](/modules/labeling/).
 - **Validate without overlapping labels leaking across folds:**
   [purged cross-validation](/modules/cross-validation/) and
@@ -170,7 +189,8 @@ signatures and return values, or [Rust API](/api/rust/openquant/) for the core.
 ## What the checks establish
 
 - **Examples:** the docs gate executes runnable Python snippets and checks their
-  documented output. Rust examples on module pages are compile-checked, not executed.
+  documented output. Rust module examples and the complete Rust core workflow are
+  compile-checked, not executed.
   Explicitly skipped Python snippets are syntax-checked only.
 - **Review status:** each page carries its own status. *Authored* is not a human
   review; *generated* is not a correctness claim. The
@@ -184,7 +204,8 @@ signatures and return values, or [Rust API](/api/rust/openquant/) for the core.
 ## Where to go next
 
 - **To run something:** [Quickstart](/quickstart/), then the
-  [Python workflow](/workflows/python-core-workflow/).
+  [research journey](/workflows/research-journey/) for fitting and prediction, or the
+  [Python workflow](/workflows/python-core-workflow/) for the convenience pipeline.
 - **To work on the Rust core:** [Prerequisites](/setup/prerequisites/),
   [Local build](/setup/local-build/), [Rust workflow](/workflows/rust-core-workflow/).
 - **To review methodology:**

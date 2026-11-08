@@ -15,8 +15,9 @@ type SnapshotRow = (i64, f64, Option<f64>, Option<f64>, Option<f64>, bool, Optio
 ///
 /// AFML Chapter 22 (§22.6.4-22.6.5). VPIN runs on a volume clock: events fill buckets of
 /// `bucket_volume` (an event that overflows a bucket is split, keeping its buy/sell ratio),
-/// and VPIN is the mean of `|V_buy - V_sell| / bucket_volume` over the last `support_buckets`
-/// full buckets. `vpin_cdf_threshold` applies to the empirical CDF of VPIN over the last
+/// and the score averages the last `support_buckets` full buckets. Inside a bucket it sums
+/// each event's absolute imbalance before summing across events; opposite one-sided events
+/// do not cancel. This differs from net-bucket VPIN and depends on input event aggregation. `vpin_cdf_threshold` applies to the empirical CDF of VPIN over the last
 /// `cdf_lookback` VPIN values (one per completed bucket, ties counted half), not to raw VPIN;
 /// e.g. 0.99 with `cdf_lookback >= 50`. HHI is `sum_v (Q_v / sum_j Q_j)^2`, weighting venues
 /// by their share of volume over the last `lookback_events` events. An event alerts when

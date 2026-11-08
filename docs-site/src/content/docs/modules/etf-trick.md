@@ -2,7 +2,7 @@
 title: "etf_trick"
 description: "Turn a rebalanced basket of futures, or a single rolled contract, into one continuous series whose changes are achievable PnL."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -125,7 +125,10 @@ later than §2.4.1.
 `get_futures_roll_series` computes the cumulative roll gap for a single chain. Each row says
 which contract it quotes (`security`) and which contract is front on that date
 (`current_security`); rows where the two differ are ignored, so you can pass the whole
-quote table. At each change of front contract the gap is the new contract's open minus the
+quote table. The retained rows are then sorted by date. The returned values follow that
+filtered, sorted order and contain no dates: apply the same filter and sort to prices before
+pairing them with the gaps. They do not align with the original unfiltered input rows.
+At each change of front contract the gap is the new contract's open minus the
 old one's previous close, and the gaps are accumulated.
 
 ```rust
@@ -161,8 +164,9 @@ for (row, gap) in chain.iter().zip(&gaps) {
 2024-01-08  CLH4  close 73.00  gap +0.00  rolled 73.00
 ```
 
-Subtract the gap series from the raw prices to get the rolled series. With
-`roll_backward = true` the most recent prices are left untouched and history is shifted
+For `"absolute"`, subtract the gap series from the aligned front-contract prices to get the
+rolled series. The example's input already contains only front-contract rows in date order.
+With `roll_backward = true` the most recent prices are left untouched and history is shifted
 (Snippet 2.2), which keeps the series aligned with the live market; with `false`, history is
 fixed and recent prices move. `"absolute"` accumulates price differences; `"relative"`
 accumulates ratios, returned as a factor to divide by.
@@ -170,7 +174,9 @@ accumulates ratios, returned as a factor to divide by.
 An absolute backward roll can push old prices negative after years of contango. AFML's
 remedy (Snippet 2.3) is to work with returns of the rolled series against the *raw* previous
 price and compound them into a price-of-one-dollar series; that step is not implemented
-here, and `"relative"` is the simpler way to stay positive.
+here. Relative adjustment preserves positivity only when the input prices and adjustment
+factors are positive. The function does not reject zero old closes, negative roll ratios,
+or non-finite prices; validate those inputs before relying on a positive continuous series.
 
 Both examples on this page are the program in `crates/openquant/examples/docs_etf_trick.rs`;
 the output shown is what it prints.
@@ -187,6 +193,10 @@ the output shown is what it prints.
   drift in the last decimal place from a floating-point calculation register as a rebalance
   on every bar, and every bar then earns only open-to-close. Round allocations before passing
   them in.
+- **ETF tables must already be chronological.** Constructors compare their row indices for
+  equality but do not sort or check date order; the value calculation follows the supplied
+  order. This differs from `get_futures_roll_series`, which sorts the retained front-contract
+  quotes by date.
 - **`from_csv` reads every file in full.** The `batch_size` argument of `get_etf_series`
   exists for mlfinlab compatibility: it must be at least 3 for the CSV source and does not
   bound memory.

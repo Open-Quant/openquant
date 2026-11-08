@@ -2,7 +2,7 @@
 title: "filters"
 description: "The symmetric CUSUM filter and a rolling z-score filter, for sampling events from a price series."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -40,7 +40,8 @@ decides *which* bars is the first modelling choice in the pipeline, and everythi
 
 CUSUM is a quality-control method (Page, 1954) for detecting that the mean of a process has
 shifted away from a target. Applied to returns with a target of zero, it accumulates upward
-and downward drift separately and floors each accumulator at zero:
+and downward drift separately, flooring the positive accumulator and capping the negative
+accumulator at zero:
 
 $$
 \begin{aligned}
@@ -54,10 +55,11 @@ the accumulator that fired is reset to zero. This is AFML's Snippet 2.4 with one
 the snippet differences whatever series it is given, and this implementation always takes
 log returns of `close`. Pass prices, not returns.
 
-The floor is what makes the filter useful. A price that wanders up 0.9% and back down does
-not trigger it and leaves no residue, whereas a Bollinger-band rule fires repeatedly while a
-price hovers at the band. CUSUM needs a full run of length $h$ from the last reset, in one
-direction net of reversals, so it fires once per move.
+A reversal can erase one accumulator while building the other. Returning to the starting
+price does not erase both: a rise of 0.009 log units followed by an equal fall leaves the
+negative accumulator at −0.009. A further fall of 0.002 then crosses a threshold of 0.01.
+A sustained move can also trigger repeatedly, each time the relevant accumulator exceeds
+$h$ after its previous reset; there is no universal "one event per move" guarantee.
 
 ```python
 import math
@@ -75,7 +77,7 @@ for i in range(600):
     close.append(price)
     stamps.append((start + timedelta(minutes=i)).strftime("%Y-%m-%d %H:%M:%S"))
 
-h = 0.01  # fire when the cumulative log return since the last event reaches 1%
+h = 0.01  # fire when an accumulator strictly exceeds 1% in log-return units
 events = filters.cusum_filter_indices(close, h)
 volatile = [i for i in events if 300 <= i < 400]
 print(f"{len(events)} events from {len(close)} bars; {len(volatile)} of them in the volatile 100")
@@ -181,7 +183,20 @@ using it:
   mean is not. Negate the series to sample the downside.
 - It works on **price levels**, not returns, so on a trending series the price sits above its
   trailing mean and the filter fires in runs rather than once per move.
-- It has no reset, so consecutive bars above the band are consecutive events.
+- It has no reset, so consecutive bars at or above the band are consecutive events.
+  With a constant series, the standard deviation is zero and equality fires on every
+  eligible bar, even for a positive threshold. A one-observation standard-deviation window
+  falls back to zero. Use positive window lengths and finite inputs; this function does
+  not apply CUSUM's threshold validation.
+
+```python
+import math
+from openquant import filters
+
+prices = [math.exp(x) for x in [0.0, 0.009, 0.0, -0.002]]
+assert filters.cusum_filter_indices(prices, 0.01) == [3]
+assert filters.z_score_filter_indices([100.0] * 4, 2, 2, 3.0) == [1, 2, 3]
+```
 
 ## From Rust
 
@@ -200,19 +215,29 @@ assert!(matches!(too_short, Err(FilterError::MissingDynamicThreshold { index: 3,
 ```
 
 `cusum_filter_timestamps` and `z_score_filter_timestamps` return the timestamps at the event
-positions instead, and report a timestamp slice that is too short as
-`FilterError::TimestampIndexOutOfBounds`.
+positions instead. Rust reports `FilterError::TimestampIndexOutOfBounds` only when a
+selected event position is missing from the timestamp slice; it does not require equal
+lengths up front. Python requires equal price/timestamp lengths and parses every timestamp.
+Neither interface sorts the series or checks chronological order: supply prices oldest
+first with timestamps and dynamic thresholds aligned positionally.
 
 ## What to watch for
 
-- **No look-ahead, but no warm-up either.** The filter uses only returns up to bar $t$, so its
-  events are safe to label. Its accumulators start at zero at the first bar, so the first
+- **Causality depends on the threshold too.** CUSUM uses returns up to bar $t$, but a
+  dynamic threshold derived from future data still leaks information. Construct thresholds
+  from information available at the event close. Accumulators start at zero, so the first
   event on a series that starts mid-move comes late; drop a burn-in stretch if that matters.
 - **Both accumulators can be non-zero at once.** Only the side that fires is reset. After an
   upward event, $S^{-}$ keeps whatever downward drift it had.
 - **Events are bars, not trades.** An event at bar $t$ is known at the *close* of bar $t$.
   Entering at that close is optimistic; [`labeling`](/modules/labeling/) measures outcomes
   from the event bar's close, so any execution delay is yours to model.
+
+- **Prices are not validated.** Supply finite positive CUSUM prices and check their
+  adjacent ratios are representable: the implementation takes `log(close[t] / close[t-1])`,
+  not a difference of logs. Missing values, zero prices and overflow can corrupt event
+  selection without raising an error. Rust additionally leaves threshold finiteness and
+  sign to the caller; Python validates CUSUM thresholds as described above.
 
 ## Related modules
 

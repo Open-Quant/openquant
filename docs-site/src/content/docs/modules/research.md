@@ -2,7 +2,7 @@
 title: "research"
 description: "Synthetic datasets, transaction-cost heuristics, research comparison grids, and promotion flags."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -121,6 +121,16 @@ Its leaderboard sorts passing candidates first, then descending net Sharpe and
 realized Sharpe, with input index breaking ties. It returns `records`, a Polars
 `leaderboard` and full `runs`. Ranking many configurations on one sample creates
 selection bias; reserve independent evaluation data.
+
+`run_names` must match the configuration count, but duplicate names are accepted.
+The returned `runs` stay in input order; leaderboard rows are ranked, so use
+`run_index` to relate the two rather than zipping them by position. When the CLI
+writes artifacts, it validates names as nonempty single path components and rejects
+duplicate target directories before running the grid. Names with separators, absolute
+paths, Windows drive prefixes, or `.`/`..` are rejected. Existing output directories
+and symlinks at the target are also rejected rather than overwritten. Use distinct
+run names and a fresh output location; these CLI protections are separate from the
+lower-level in-memory research API's acceptance of duplicate display names.
 
 `research_run_manifest(config, dataset_meta=None)` adds a 12-character SHA-256
 prefix of the sorted JSON configuration and optional supplied dataset metadata.

@@ -369,9 +369,10 @@ pub struct AdapterComparison {
     /// How far short of the exact optimum the adapter fell, in objective units:
     /// `exact - adapter` when maximising and `adapter - exact` when minimising.
     ///
-    /// Not floored. It is `>= 0` because [`solve_with_adapter`] has checked that the adapter's
-    /// decision is in the box and its value is the objective there, and the exact optimum is
-    /// the best value over the whole box; 0 means the adapter found an optimum.
+    /// Not floored. For a deterministic objective with a stable sense and values across
+    /// calls, it is `>= 0`: the checked adapter decision lies in the box and the exact
+    /// result is best over that box. A stateful or changing objective invalidates this
+    /// comparison; adapter re-evaluation alone cannot establish stability.
     pub objective_gap_vs_exact: f64,
 }
 
