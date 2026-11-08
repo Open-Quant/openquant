@@ -49,6 +49,7 @@
 //! # }
 //! ```
 
+use crate::util::exact_product::recover_overflowed_mean;
 use crate::util::stats;
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
@@ -379,7 +380,9 @@ pub fn implied_frequency_asymmetric(
 ///
 /// From a record of per-bet outcomes (`> 0` is a win; zero counts as a loss): estimates the
 /// payouts as the mean win and mean loss (so `pi_minus <= 0 < pi_plus`), the frequency as `len / years_elapsed`, and the
-/// required precision `p*` with [`implied_precision_asymmetric`]. It then bootstraps the
+/// required precision `p*` with [`implied_precision_asymmetric`]. Overflowed finite class
+/// means are recovered exactly before final binary64 rounding; ordinary means, including
+/// the existing constant-input behavior, are unchanged. It then bootstraps the
 /// precision `bootstrap_iterations` times from samples of
 /// `floor(frequency * investor_horizon_years)` bets (at least 1), drawn with replacement by a
 /// [`StdRng`] seeded with `cfg.seed`, and reports the share of samples at or below `p*`
@@ -450,7 +453,10 @@ pub fn estimate_strategy_failure_probability(
         ));
     }
 
-    let payout = AsymmetricPayout { pi_plus: mean(&pos), pi_minus: mean(&neg) };
+    let payout = AsymmetricPayout {
+        pi_plus: recover_overflowed_mean(&pos, mean(&pos)),
+        pi_minus: recover_overflowed_mean(&neg, mean(&neg)),
+    };
     validate_payout(payout)?;
 
     let n = bet_outcomes.len() as f64 / cfg.years_elapsed;

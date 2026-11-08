@@ -46,6 +46,8 @@ file disagree).
 
 ### Fixed
 
+- Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
+
 - `sample_weights`: recover log returns when finite positive price ratios underflow, become subnormal or overflow, while preserving ordinary-ratio arithmetic and invalid-price behavior.
 
 - `hyperparameter_tuning`: enforce the documented exact 0/1 label contract before fitting and scoring; previously tolerated near-binary values now raise an error rather than receiving inconsistent class interpretations. Callers must explicitly encode classes before tuning.
