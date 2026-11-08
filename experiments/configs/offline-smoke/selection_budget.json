@@ -1,0 +1,12 @@
+{
+  "alpha": 0.05,
+  "candidate_counts": [
+    2
+  ],
+  "probabilities": [
+    0.5
+  ],
+  "row_budgets": [
+    4
+  ]
+}

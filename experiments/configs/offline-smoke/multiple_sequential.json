@@ -1,0 +1,15 @@
+{
+  "alpha": 0.05,
+  "families": [
+    "iid_null"
+  ],
+  "horizon": 4,
+  "n_candidates": 2,
+  "qs": [
+    0.55,
+    0.65,
+    0.8
+  ],
+  "repetitions": 2,
+  "seed": 19
+}

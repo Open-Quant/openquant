@@ -1,0 +1,12 @@
+{
+  "families": [
+    "isotropic"
+  ],
+  "n_assets": 2,
+  "repetitions": 2,
+  "seed": 137,
+  "shrinkages": [
+    0
+  ],
+  "train_size": 8
+}

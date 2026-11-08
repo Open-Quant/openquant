@@ -429,8 +429,12 @@ fn trial_sharpe_std(values: &[f64]) -> f64 {
 ///
 /// Units follow [`probabilistic_sharpe_ratio`]: per-period Sharpe ratios, raw kurtosis. The
 /// result is a number of return periods. It is only meaningful when
-/// `observed_sr > benchmark_sr`: the difference is squared, so an underperforming strategy
-/// gets a finite positive answer and an equal one gets infinity.
+/// `observed_sr > benchmark_sr` and `0 < alpha < 0.5`: squaring loses the signs of both
+/// the Sharpe difference and the confidence quantile. An underperforming strategy gets
+/// a finite positive algebraic answer, and an equal one gets infinity for a nonzero
+/// quantile. The accepted endpoints and larger alpha values are retained for algebraic
+/// compatibility, not as a one-sided confidence inversion. The high-level Python
+/// `evaluation.minimum_track_record_length` rejects alpha outside `(0, 0.5)`.
 ///
 /// # Errors
 ///

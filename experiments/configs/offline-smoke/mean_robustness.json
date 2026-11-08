@@ -1,0 +1,9 @@
+{
+  "alpha": 0.05,
+  "families": [
+    "gaussian"
+  ],
+  "repetitions": 2,
+  "sample_size": 4,
+  "seed": 41
+}

@@ -1,0 +1,13 @@
+{
+  "horizons": [
+    1
+  ],
+  "lags": [
+    0
+  ],
+  "repetitions": 2,
+  "seed": 101,
+  "training_multipliers": [
+    1
+  ]
+}
