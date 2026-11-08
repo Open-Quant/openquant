@@ -24,8 +24,10 @@
 //!   volume classification); nothing here classifies trades. Volumes are in any consistent
 //!   unit (shares, contracts, notional), the same unit as [`VpinConfig::bucket_volume`].
 //! - VPIN is on a volume clock: an event that overflows a bucket is split between it and the
-//!   next, keeping its buy/sell ratio. VPIN is the mean of `|V_buy - V_sell| / bucket_volume`
-//!   over the last `support_buckets` full buckets, in `[0, 1]`.
+//!   next, keeping its buy/sell ratio. The score averages bucket contributions over the last
+//!   `support_buckets` full buckets. Within a bucket it sums each event's absolute imbalance
+//!   before summing across events, so opposite one-sided events do not cancel. This differs
+//!   from net-bucket VPIN and depends on how flow is aggregated into input events.
 //! - The three rolling windows run on different clocks: VPIN over `support_buckets` buckets,
 //!   its CDF over `cdf_lookback` buckets, HHI over `lookback_events` events.
 //! - HHI is `sum_v (Q_v / sum_j Q_j)^2` over venue volumes `Q_v` in its window, in
@@ -262,8 +264,8 @@ pub struct ParallelStreamingReport {
 /// (AFML §22.6.5; Easley, López de Prado and O'Hara, 2012).
 ///
 /// Memory is bounded by `support_buckets + cdf_lookback` values. Each completed bucket costs
-/// `O(cdf_lookback)` to update the sorted history; an event that spans many buckets loops
-/// once per bucket it fills.
+/// `O(cdf_lookback)` to update the sorted history. Large-event replay is capped at
+/// `support_buckets + cdf_lookback + 2` bucket updates; see [`Self::update`].
 ///
 /// ```
 /// use openquant::streaming_hpc::{VpinConfig, VpinState};
@@ -740,8 +742,10 @@ pub fn run_streaming_pipeline(
 /// of each (AFML Chapter 22 on HPC for streaming analytics).
 ///
 /// Parallelism is across streams; each stream is processed sequentially. Only the alert count
-/// and the last snapshot of each stream are kept: call [`run_streaming_pipeline`] per stream
-/// for the full path. An empty `streams` slice gives an empty report.
+/// and the last snapshot of each stream are returned. Each worker first materializes the
+/// full per-stream report, so transient memory includes that snapshot vector. Call
+/// [`run_streaming_pipeline`] per stream for the full path. An empty `streams` slice gives
+/// an empty report.
 ///
 /// ```
 /// use openquant::hpc_parallel::{ExecutionMode, HpcParallelConfig, PartitionStrategy};

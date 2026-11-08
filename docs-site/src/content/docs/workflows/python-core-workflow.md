@@ -1,8 +1,8 @@
 ---
 title: Python Core Workflow
-description: One runnable Python script from raw OHLCV to a promotion decision, with its output.
+description: A Python API tour of CSV ingestion and a separate synthetic pipeline, with Rust/Python conventions made explicit.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -10,16 +10,19 @@ sidebar:
   order: 2
 ---
 
-The Python surface is a research loop, not a wrapper: it goes from a CSV
-to a *decision* — promote this candidate, or don't. This page is one
-script that runs the whole loop, and its actual output.
+This script connects two API demonstrations: it loads a small CSV fixture and builds
+bars, then starts a separate synthetic dataset for the convenience pipeline and its
+promotion flags. The CSV bars do not feed that second example, and no predictive model
+is trained here. The flags illustrate configured checks, not a validated research decision.
+For one connected path through features, training folds and out-of-sample predictions,
+use the [end-to-end research journey](/workflows/research-journey/).
 
 You need the bindings built first ([Python Bindings
 Setup](/setup/python-bindings/)). Run everything below from the
 repository root:
 
 ```bash
-uv run --python .venv/bin/python python workflow.py
+uv run --no-sync --python .venv/bin/python python workflow.py
 ```
 
 For the namespace-by-namespace symbol list, see the [Module Reference
@@ -123,9 +126,10 @@ believe a dead strategy is alive.
 charge gives 0.0034, against a gross return of -0.0013. The strategy was
 already losing; costs made it lose almost four times as much.
 
-**Both leakage guards passed and the candidate was still rejected.** The
-guards are necessary, not sufficient — they say the inputs were coherent,
-not that the result is good.
+**Both ordering guards passed and the candidate was still rejected.** These
+checks verify increasing timestamps and sorted event indices. They do not audit
+feature availability or model training; the legacy alignment/look-ahead fields
+are constants, as explained below.
 
 ## What each stage is doing, and why
 
@@ -134,16 +138,23 @@ not that the result is good.
 `load_ohlcv` does three things that matter before any modelling:
 canonicalises the header (`Date` → `ts`, `Ticker` → `symbol`, `Adj Close`
 → `adj_close`, and about a dozen more aliases in `data.py`), sorts by
-symbol and timestamp, and de-duplicates — keeping the *last* row for a
-repeated `(symbol, ts)`, which is the right convention when a vendor
-restates a bar.
+symbol and timestamp, and de-duplicates — by default keeping the *last surviving
+input row* for a repeated `(symbol, ts)`. Stable sorting preserves input order
+among tied keys; it does not establish which vendor revision was available at a
+historical decision time.
 
 Pass `return_report=True` whenever the data is not yours. The
-deduplication is silent otherwise, and a silently dropped restatement is
-how a look-ahead bug enters a backtest without anyone noticing.
+deduplication is silent otherwise. Keeping a later restatement can introduce
+look-ahead just as easily as discarding the wrong row. Resolve point-in-time
+availability upstream, before cleaning: neither `dedupe_keep="first"` nor
+`"last"` can establish it from the bar timestamp alone. Preserve revision
+provenance separately because the cleaner discards extra columns.
 `data.data_quality_report(df)` gives you the same diagnostics for a frame
-you already hold, and `data.align_calendar(df, interval="1d")` fills the
-grid when you need one bar per period per symbol.
+you already hold. `data.align_calendar(df, interval="1d")` inserts missing grid
+rows with null prices/volume and `is_missing_bar=True`; it does not impute them.
+Its grid is anchored at each symbol's first timestamp and includes weekends and
+holidays, rather than following an exchange calendar. Request its alignment
+report to inspect input rows that fall off that grid.
 
 ### Stage 2 — bars sampled on activity
 
@@ -158,7 +169,9 @@ to remove by sampling this way.
 :::caution[Memory]
 `bars` crosses the PyO3 boundary with plain Python lists — one of
 timestamp *strings* — so peak memory is a large multiple of the Arrow
-frame you started from. On multi-million-row inputs, slice first. See
+frame you started from. Process complete symbols separately if that reduces
+the data held at once; independent time slices reset aggregation state and
+are not generally equivalent to one call. See
 [Troubleshooting](/setup/troubleshooting/#python-runs-out-of-memory-building-bars-from-a-large-dataset).
 :::
 
@@ -202,6 +215,15 @@ spread + a volatility-scaled slippage term (`commission_bps` 1.5,
 recomputed after that charge. Gross and net will differ, sometimes by
 enough to change the sign of the decision — which is the point.
 
+These are comparison heuristics, not a full execution model. The slippage term
+uses per-bar strategy-return volatility times a fixed `sqrt(252)`, even when
+`periods_per_year` differs. `gross_total_return` is final gross equity minus one;
+`net_total_return` subtracts the summed cost estimate from it rather than
+recompounding the cost-adjusted returns. `net_sharpe` does use those per-bar
+cost-adjusted returns, but does **not** subtract `risk_free_rate`, unlike the
+pipeline's `realized_sharpe`. Keep those definitions explicit when comparing
+the fields or choosing thresholds.
+
 `promotion` is then four boolean gates, all of which must hold for
 `promote_candidate`:
 
@@ -212,8 +234,8 @@ enough to change the sign of the decision — which is the point.
 | `passed_alignment_guard` | `leakage_checks["timestamps_increasing"]` |
 | `passed_event_order_guard` | `leakage_checks["event_indices_sorted"]` |
 
-Two of the four are leakage guards, not performance thresholds. A
-candidate cannot be promoted on returns alone.
+Two of the four are ordering checks, not performance thresholds or a model-training
+audit. The flag cannot establish that a candidate is ready for research promotion.
 
 ### Feature diagnostics, before you trust any of it
 
@@ -239,6 +261,50 @@ worth naming what each function answers:
 
 MDI and MDA routinely rank features differently. That is information
 about your features, not a bug.
+
+## Carrying a workflow between Python and Rust
+
+Compare the contracts at the layer you call, not just similarly named functions.
+The [Rust walkthrough](/workflows/rust-core-workflow/) composes individual functions;
+this page uses wrappers that add frames, defaults and cost estimates.
+
+| Convention | What to preserve when moving between languages |
+| --- | --- |
+| Annualisation and risk-free rate | The pipeline takes an **annual** risk-free rate and divides by `periods_per_year` for realised Sharpe. `backtest_stats.sharpe_ratio` and Rust `backtest_statistics::sharpe_ratio` instead take a **per-return-period** rate. Python's public pipeline infers annualisation when omitted; the Rust config and compiled `_core` default to 252. Pass it explicitly for a comparison. |
+| Matrix orientation | Pipeline `asset_prices` is observations × assets in both languages: Python nested rows or Rust `DMatrix`, with names in column order. This does not generalise to every API: sampling indicators are bars × labels, while ensemble aggregation expects models × observations. Check the module's shape contract. |
+| Time and row alignment | Pipeline timestamps are strings in Python and `NaiveDateTime` in Rust. The Python CV wrapper converts datetimes to int64 nanoseconds; integer bar indices pass through unchanged. Keep both span columns in one unit, sort events by start and apply the same ordering to features, targets and weights. The splitter does not validate that ordering. |
+| Label overlap | Purged CV treats label spans as closed intervals: touching endpoints overlap. Returned indices identify rows in the supplied order. This differs from the half-open `[start, end)` lifetime used by active-bet averaging. |
+| Return stream and output shape | A triple-barrier label return is an event outcome, possibly overlapping other events. The pipeline's gross strategy returns are a per-bar account path using the previous bar's position, with `n-1` returns for `n` closes. The Python backtest frame prepends a zero for timestamp alignment. Neither event returns nor that padding should silently change the sample used for a Sharpe comparison. |
+
+Use public Python wrappers when their contracts fit the task. Calling `_core` directly can
+bypass conversions or default inference; matching a Rust function name is not enough to
+establish parity. See [cross-validation](/modules/cross-validation/) for split shapes and
+[backtest statistics](/modules/backtest-statistics/) for score definitions.
+
+This example checks the pipeline's annual-rate convention against the lower-level Sharpe
+function shared by the Python binding and Rust core:
+
+```python
+import math
+from openquant import backtest_stats, pipeline, research
+
+ds = research.make_synthetic_futures_dataset(n_bars=80, seed=7)
+periods, annual_rf = 252.0 * 390.0, 0.04
+out = pipeline.run_mid_frequency_pipeline_frames(
+    ds.timestamps, ds.close, ds.model_probabilities, ds.asset_prices,
+    model_sides=ds.model_sides, asset_names=ds.asset_names,
+    periods_per_year=periods, risk_free_rate=annual_rf,
+)
+returns = out["backtest"]["strategy_returns"]  # no frame-alignment zero
+per_period = backtest_stats.sharpe_ratio(returns, 1.0, annual_rf / periods)
+annualised = backtest_stats.sharpe_ratio(returns, periods, annual_rf / periods)
+assert math.isclose(annualised, per_period * math.sqrt(periods), rel_tol=1e-12)
+assert math.isclose(annualised, out["risk"]["realized_sharpe"], rel_tol=1e-12)
+assert len(returns) == len(ds.close) - 1
+assert out["frames"]["backtest"].height == len(ds.close)
+# Passing the annual rate directly to the low-level function changes the calculation.
+assert not math.isclose(annualised, backtest_stats.sharpe_ratio(returns, periods, annual_rf))
+```
 
 ## Where to go next
 

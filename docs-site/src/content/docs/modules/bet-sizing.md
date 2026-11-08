@@ -2,7 +2,7 @@
 title: "bet_sizing"
 description: "From a model's confidence, or a price forecast, to a position size: probability-based sizing, averaging of live bets, discretisation, dynamic limit prices and concurrency-based sizing."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -66,13 +66,17 @@ $$
 
 where $p$ is the probability of the predicted class, $K$ the number of classes and $s$ the
 side. $m$ lies in $[-1, 1]$: a fraction of the maximum position. `get_signal` is exactly this;
-with `pred` omitted it returns the unsigned size.
+with `pred` omitted it returns the signal before side multiplication, which is still negative for
+$p < 1/K$. The stated bound assumes a side of +1 or −1.
 
 Two further steps make it tradeable. Signals stay alive until their label's end time, so at
 any moment several are open; `avg_active_signals` replaces each with the mean of the signals
 live at that instant (§10.4), which stops the position from flipping every time a new one
 arrives. Then `discrete_signal` rounds to a step (§10.5), so that a change from 0.337 to
-0.328 does not generate an order. `bet_size_probability` runs all three.
+0.328 does not generate an order. `bet_size_probability` makes averaging optional and disables discretisation when its step
+is zero. With averaging enabled it returns sorted unique start/end change points, including
+flat exit points. Without averaging it returns one row per input event at its start, in
+input order; it does not add closing orders.
 
 <figure>
 <img class="dark:sl-hidden" src="/figures/ch10-bet-size-light.svg" alt="Two curves. Left: bet size against predicted probability for a two-class model, rising from zero at a probability of one half, nearly linearly at first, and saturating at one as the probability approaches one. Right: bet size against the gap between forecast and market price, an S-shaped curve through zero that passes through 0.95 at a gap of ten." />
@@ -130,13 +134,26 @@ forecast 100, market  90.0: size 0.950, hold  95, limit 97.57
 
 The first table is the shape of the function: a 55% call earns an 8% position and a 70% call
 a third. It is cautious where most classifiers live, and a model whose probabilities are not
-calibrated will be sized wrongly by exactly the amount of its miscalibration — calibrate
-before sizing.
+calibrated can receive inappropriate sizes. The probability-to-size transformation is
+nonlinear, so a probability error is not an equal-sized position error. Calibrate before sizing.
 
 The second shows what averaging is for. At 11:00 the 0.70 long has expired, and a new short
 at −0.162 arrives while the 0.90 long is still open: the book moves to +0.328, not to −0.162.
 At 13:00 nothing is live and the position is flat. Note the rounding at 12:00: −0.162 becomes
 −0.2, because the step rounds to nearest, not toward zero.
+
+The standalone rounding function and the probability wrapper handle negative steps differently:
+
+```python
+from openquant import bet_sizing
+
+start = ["2024-01-02 09:00:00"]
+end = ["2024-01-02 10:00:00"]
+assert bet_sizing.discrete_signal([0.337], -0.1) == [0.337]
+sized = bet_sizing.bet_size_probability(start, end, [0.7], [1.0], 2, -0.1, False)
+assert abs(sized[0][1] - 0.3) < 1e-12
+assert bet_sizing.get_signal([0.2], 2)[0] < 0  # no side supplied, still negative
+```
 
 ## From a price forecast
 
@@ -201,14 +218,18 @@ m_t^{\text{reserve}} =
 \end{cases}
 $$
 
-`bet_size_budget` is the first: it reaches full size only when concurrency is at its
-historical maximum, which keeps capacity in reserve for the moment signals pile up.
+`bet_size_budget` is the first. It normalises each side by its own maximum concurrent
+count; a side with no bets contributes zero. Net size +1 requires long concurrency at its
+maximum and no concurrent shorts (and conversely for −1).
 `bet_size_reserve` is the second, with $F$ the CDF of a mixture of two Gaussians fitted to
 $c_t$. `bet_size_reserve_full` fits that mixture by EM **from random starting points, so its
-output changes from run to run**; fit once, keep the five parameters
+output can change from run to run**; fit on a training history, keep the five parameters
 `[mu1, mu2, sigma1, sigma2, p1]`, and pass them to `bet_size_reserve` for reproducible sizes.
 The maxima in the budget formula are taken over the sample you pass in, so computing it on a
-full backtest and trading on it looks ahead.
+full backtest and trading on it looks ahead. The same applies to fitting the reserve
+mixture on future concurrency. These functions return rows only at event starts, in input
+order, including duplicate starts; unlike active-signal averaging, they do not add end-time
+rows or closing orders.
 
 ## From Rust
 
@@ -242,7 +263,15 @@ assert!(matches!(get_w(2.0, 0.9, "logistic"), Err(BetSizingError::InvalidFunctio
   exactly $\pm 1$; clip probabilities if your model emits hard 0s and 1s.
 - **A signal is live on $[t_0, t_1)$.** At its own end time it no longer counts, which is why
   13:00 and 16:00 in the example are flat.
-- **A `step_size` of zero or less disables discretisation** rather than raising.
+- **Negative steps differ between entry points.** `discrete_signal` returns inputs
+  unchanged for `step_size <= 0`. `bet_size_probability` uses `abs(step_size)`, so a
+  negative step still rounds; only zero disables its discretisation. Positive steps round
+  halfway cases away from zero and clamp the result to $[-1,1]$.
+- **Validate probability inputs and sides.** Supply finite probabilities in $[0,1]$,
+  `num_classes >= 2`, and aligned sides of +1 or −1. These domains are not all checked:
+  standalone `get_signal` silently truncates when a supplied `pred` has a different length.
+  Concurrency sizing counts any positive side as long and every other side as short, so
+  zero is not an instruction to stand aside; remove inactive events first.
 - **`bet_size_dynamic` broadcasts.** Each of its four inputs must have length 1 or the common
   length; anything else is `BetSizingError::ShapeMismatch`.
 - **Timestamps from Python are strings**, `"%Y-%m-%d %H:%M:%S"` with an optional fractional

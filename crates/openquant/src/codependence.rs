@@ -6,10 +6,12 @@
 //! [`crate::hrp`], [`crate::hcaa`] and [`crate::onc`]).
 //!
 //! - [`angular_distance`], [`absolute_angular_distance`] and [`squared_angular_distance`]
-//!   turn a Pearson correlation `rho` into a metric on `[0, 1]`. The first treats
+//!   turn a Pearson correlation `rho` into a distance in `[0, 1]`; distinct raw series
+//!   can have zero distance. The first treats
 //!   `rho = -1` as maximally distant (long-only books); the other two as identical
 //!   (long-short books).
-//! - [`distance_correlation`] (Székely et al., 2007) is zero only under independence.
+//! - [`distance_correlation`] (Székely et al., 2007) estimates a population quantity
+//!   that is zero exactly under independence; its sample value is not an independence test.
 //! - [`get_mutual_info`] and [`variation_of_information_score`] (Meilă, 2007) are estimated
 //!   from equal-width histograms, with the bin count from
 //!   [`get_optimal_number_of_bins`] (Hacine-Gharbi et al., 2012) when none is given.
@@ -270,8 +272,10 @@ pub fn squared_angular_distance(x: &[f64], y: &[f64]) -> CodependenceResult<f64>
 /// Distance correlation of `x` and `y` (Székely et al., 2007).
 ///
 /// Double-centres the matrices of pairwise absolute differences within each series and
-/// returns `dCov(x, y) / sqrt(dVar(x) dVar(y))`, in `[0, 1]`, which is zero only when the
-/// series are independent. Builds two `n x n` matrices: memory is `O(n^2)` (about 16 MB at
+/// returns the sample estimate `dCov(x, y) / sqrt(dVar(x) dVar(y))`, in `[0, 1]`.
+/// The population quantity is zero exactly under independence; independent samples generally
+/// have a positive estimate. This function does not return a test or p-value.
+/// Builds two `n x n` matrices: memory is `O(n^2)` (about 16 MB at
 /// 1,000 observations).
 ///
 /// # Errors

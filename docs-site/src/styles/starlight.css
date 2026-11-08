@@ -224,6 +224,7 @@ h1,
 }
 
 h1 {
+  overflow-wrap: anywhere;
   line-height: 1.08;
   letter-spacing: -0.015em;
 }
@@ -425,7 +426,7 @@ h1 {
 /* ── Page status line ────────────────────────────────────────────────────────
    Every doc page declares a `status` in its frontmatter, and the Starlight `Banner` override in
    src/components/DocStatusBanner.astro renders the pill from that field, so a reader can tell
-   whether a page was machine-generated, is a draft, or has been read by a human. The status is
+   whether a page is generated, authored, or records a review date. The status is
    carried by the word in the pill; all three use the one accent. */
 .sl-banner {
   background: var(--oq-ground);
@@ -672,4 +673,66 @@ mobile-starlight-toc .toggle {
   .oq-research-map > li { border-inline-end: 0; border-block-end: 1px solid var(--oq-rule); }
   .oq-research-map > li:last-child { border-block-end: 0; }
   .oq-research-map svg { max-width: 10rem; }
+}
+
+
+/* Generated reference navigation stays usable at narrow widths and high zoom. */
+.oq-api-context,
+.oq-member-index {
+  font-family: var(--oq-sans);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.oq-member-index ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  padding-inline-start: 1.25rem;
+}
+.oq-api-item :is(h3, h4),
+.oq-api-context a,
+.oq-member-index a,
+.oq-doc-entries dt {
+  overflow-wrap: anywhere;
+}
+.oq-signature {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.oq-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.sl-markdown-content .oq-table-scroll table {
+  display: table;
+  overflow: visible;
+  width: 100%;
+}
+.oq-table-scroll caption {
+  text-align: start;
+  font-weight: 600;
+  padding-block: 0.5rem;
+}
+.oq-table-scroll th[scope='row'] {
+  text-transform: none;
+  font-weight: 400;
+}
+.oq-table-scroll:focus-visible {
+  outline: 3px solid var(--oq-accent);
+  outline-offset: 3px;
+}
+
+/* Starlight's sidebar caret animates independently of the Markdown disclosure rule. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-content .caret { transition: none; }
+}
+
+/* Raw API docstring examples retain whitespace and can be scrolled by keyboard. */
+.oq-doc pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.oq-doc pre:focus-visible {
+  outline: 3px solid var(--oq-accent);
+  outline-offset: 3px;
 }

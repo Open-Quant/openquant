@@ -2,7 +2,7 @@
 title: End-to-end research journey
 description: Follow one synthetic dataset through bars, labels, training weights and walk-forward predictions.
 status: authored
-last_authored: '2026-11-05'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -26,13 +26,26 @@ this example does not establish profitability, independence or absence of every
 form of leakage.
 :::
 
+## Choose the next step
+
+- **New installation:** complete the [quickstart](/quickstart/), then return here to see
+  how training differs from consuming supplied probabilities.
+- **Ready to run this example:** follow [Run one command](#run-one-command), then
+  [read the JSON report](#read-the-artifact-before-the-score).
+- **Bringing your own data:** first use [data loading and quality reports](/modules/data/).
+  Adapt the script explicitly; it generates its own synthetic observations and is not a
+  CSV-import command. Preserve the [connected handoffs](#the-connected-path).
+- **Looking for a saved research experiment:** use the [runbook gallery](/runbooks/)
+  and [notebook execution guide](/workflows/notebook-research-workflow/). This page's
+  script produces a JSON classification report, not an executed research notebook.
+
 ## Run one command
 
 First complete [Python bindings setup](/setup/python-bindings/). From that same
 repository root, with the extension built into its environment:
 
 ```bash
-uv run --python .venv/bin/python python examples/research_journey.py \
+uv run --no-sync --python .venv/bin/python python examples/research_journey.py \
   --out /tmp/openquant-journey.json
 ```
 
@@ -149,6 +162,85 @@ Do not sum or compound `event_return`: these are overlapping label outcomes, not
 non-overlapping account return series. Accuracy also ignores the size of gains and
 losses, transaction costs and capacity.
 
+## Read back and check the handoffs
+
+Run this from the repository root with the same Python environment as the example.
+`check_report(path)` can inspect a saved JSON report without recomputing it. To make the
+snippet runnable on its own, the final lines generate a fresh report at a unique temporary
+path, read it back, then remove that temporary directory. Your earlier saved report is not
+overwritten. Keep a durable report from [Run one command](#run-one-command) for comparisons.
+
+```python
+import json
+import math
+import subprocess
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+
+def check_report(path):
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
+    events, folds, predictions = report["events"], report["folds"], report["predictions"]
+    assert len(events) == report["data"]["event_rows"]
+    assert [e["sample_id"] for e in events] == list(range(len(events)))
+    assert all(0 <= e["start_bar"] <= e["end_bar"] < report["data"]["bar_rows"]
+               for e in events)
+    by_fold = {fold["split_id"]: fold for fold in folds}
+    assert len(by_fold) == len(folds)
+    expected = set()
+    for fold in folds:
+        train, test = fold["train_indices"], fold["test_indices"]
+        assert train and test and not set(train).intersection(test)
+        assert all(0 <= i < len(events) for i in train + test)
+        assert len(fold["training_weights"]) == len(train)
+        assert all(math.isfinite(w) and w >= 0 for w in fold["training_weights"])
+        assert max(events[i]["end_bar"] for i in train) < min(events[i]["start_bar"] for i in test)
+        expected.update((fold["split_id"], i) for i in test)
+    observed = [(p["split_id"], p["sample_id"]) for p in predictions]
+    assert len(observed) == len(set(observed)) and set(observed) == expected
+    assert len({p["sample_id"] for p in predictions}) == len(predictions)
+    for prediction in predictions:
+        event = events[prediction["sample_id"]]
+        fold = by_fold[prediction["split_id"]]
+        bucket = "nonnegative" if event["feature"] >= 0 else "negative"
+        assert prediction["probability"] == fold["bucket_probabilities"][bucket]
+        assert prediction["constant_probability"] == fold["constant_probability"]
+        assert all(prediction[key] == event[key] for key in ("t0", "t1", "label"))
+        assert math.isfinite(prediction["probability"]) and 0 <= prediction["probability"] <= 1
+    threshold = report["config"]["decision_threshold"]
+    correct = sum(p["label"] == (p["probability"] >= threshold) for p in predictions)
+    assert predictions and math.isclose(report["metrics"]["accuracy"], correct / len(predictions))
+    print(f"Checked {len(events)} events, {len(folds)} folds, {len(predictions)} predictions")
+    return report
+
+
+with TemporaryDirectory() as directory:
+    output = Path(directory) / "journey.json"
+    subprocess.run([sys.executable, "examples/research_journey.py", "--out", str(output)],
+                   check=True, capture_output=True, text=True)
+    report = check_report(output)
+```
+
+```text
+Checked 201 events, 4 folds, 160 predictions
+```
+
+The counts above describe the default fixture. The assertions instead check relationships:
+event IDs index the event list, training labels end before a test begins, each prediction
+belongs to a recorded test fold, and reported accuracy agrees with those prediction rows.
+They do not prove that the fitted model used only those rows or that features were available
+historically. The script's [integration tests](https://github.com/Open-Quant/openquant/blob/main/python/tests/test_research_journey.py)
+add independent weight arithmetic and perturbation checks; neither is a profitability test.
+
+Before comparing two saved reports, compare `config`, the observation/bar hashes and
+`provenance`, then inspect fold membership and predictions. A changed seed or source is a
+different experiment. The JSON stores hashes rather than the complete observation/bar
+frames, so it cannot reconstruct an external dataset by itself. Retain the actual inputs
+and their historical availability alongside adapted reports. A commit and example-source
+hash identify recorded source information, not a verified native binary or a clean checkout.
+
 ## Where the other modules fit
 
 Not every module belongs in one mandatory pipeline. Choose the next task:
@@ -163,6 +255,10 @@ Not every module belongs in one mandatory pipeline. Choose the next task:
 | How sensitive is validation to the split? | [Cross-validation](/modules/cross-validation/) and [CPCV engine](/modules/backtesting-engine/). CPCV also trains on observations after a middle test fold; purging labels does not make that equivalent to forward-only forecasting. |
 | How should repeated trials be reported? | [Evaluation](/modules/evaluation/) and its trial registry. Record every trial and the assumptions behind PSR/DSR; neither fixes an adaptively reused holdout. |
 | How do I retain comparable runs? | [Research tools](/modules/research/), manifests and the [notebook research workflow](/workflows/notebook-research-workflow/). Keep inputs, configuration, software version and failed candidates, not just the winner. |
+
+For exact parameter and return definitions while adapting a stage, use the
+[Python API reference](/api/python/). If installation or imports fail, return to
+[troubleshooting](/setup/troubleshooting/) before changing the example's logic.
 
 ## Instructions for an agent adapting this example
 

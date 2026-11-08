@@ -1,15 +1,18 @@
 """Research evaluation: is a backtest's Sharpe ratio evidence of skill?
 
-A thin layer over the compiled `backtest_stats` and `strategy_risk` modules that works
-from a returns series instead of from pre-computed moments:
+An evaluation layer built on the compiled `backtest_stats` and `strategy_risk` modules,
+working from a returns series instead of pre-computed moments. It also retains the
+original returns for numerical recovery when rounded moments lose uncertainty:
+
 
 - `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`
   (Bailey and López de Prado 2012, 2014; AFML Chapter 14, §14.7);
 - `meta_label_metrics`: precision, recall and F1 of a meta-labeling overlay against the
   primary model it filters (AFML Chapter 3, §3.6);
 - `strategy_failure_probability` (AFML Chapter 15, §15.4);
-- `TrialRegistry`: a JSON file that records every configuration tried, across runs, so the
-  deflated Sharpe ratio deflates by the number of trials actually run.
+- `TrialRegistry`: a JSON file keyed by explicit configurations. Re-recording a key
+  replaces its entry; the DSR count includes only distinct recorded keys. Include the
+  data and protocol choices that distinguish trials; unrecorded choices are not inferred.
 
 Conventions, shared with `backtest_stats`: every Sharpe ratio here is **per period**
 (mean over sample standard deviation, not annualised), skewness and kurtosis are the
@@ -166,9 +169,12 @@ def _return_moments(r: list[float]) -> ReturnMoments:
 
 
 def probabilistic_sharpe_ratio(returns: Iterable[float], benchmark_sr: float = 0.0) -> float:
-    """PSR: the probability that the true per-period Sharpe ratio exceeds `benchmark_sr`.
+    """PSR: an approximate one-sided confidence measure against `benchmark_sr`.
 
     PSR(SR*) = Z[(SR - SR*)·sqrt(T - 1) / sqrt(1 - γ3·SR + (γ4 - 1)/4·SR²)].
+    Sharpe ratios are per period and kurtosis is raw. This moment-based normal
+    approximation does not correct for serial dependence or give a posterior
+    probability of skill.
     Severely cancelled uncertainty is recovered from the original float inputs
     with exact rational arithmetic and 80-digit square roots. This exceptional
     path is slower and can differ from passing rounded moments to the native API.
@@ -202,7 +208,11 @@ def deflated_sharpe_ratio(
     n_trials: int | None = None,
     sharpe_std: float | None = None,
 ) -> float:
-    """DSR: the PSR measured against SR0, the best Sharpe ratio luck alone would produce.
+    """DSR: the PSR against the expected maximum Sharpe under a zero-skill trial model.
+
+    SR0 is an expected value, not an upper bound on chance outcomes. The trial model
+    assumes independent configurations; this function does not estimate their
+    dependence or an effective trial count. PSR's interpretation limits also apply.
 
     Give the trials either as `trial_sharpes` — every configuration's per-period Sharpe
     ratio, including this one — or as `n_trials` and `sharpe_std`, the count and the
@@ -428,7 +438,12 @@ def strategy_failure_probability(
     seed: int = 42,
     kde_bandwidth: float | None = None,
 ) -> dict[str, Any]:
-    """Probability that the strategy misses an annualised `target_sharpe` (AFML §15.4).
+    """Conditional bootstrap estimate of missing an annualised target (AFML §15.4).
+
+    The fitted model uses mean winning/non-winning payouts, observed annual bet
+    frequency and IID resampling of individual historical outcomes. It does not
+    model payout uncertainty, serial dependence, changing frequency or edge decay.
+    This is not a calibrated future failure probability for an arbitrary strategy.
 
     Calls `strategy_risk.estimate_strategy_failure_probability` on the per-bet outcomes
     and returns its report; `failure_probability` is its `empirical_failure_probability`,
@@ -507,10 +522,11 @@ class TrialRegistry:
 
         Constant returns (for example all zeros from a configuration that took no bet) have
         no Sharpe ratio, but the configuration was still tried, so it is recorded rather than
-        rejected: with Sharpe 0, skewness 0 and kurtosis 3 (the normal values). Sharpe 0 is
-        what a strategy with no excess return earns. The trial counts towards `n_trials` and
-        its 0 enters `sharpe_std()`, so `deflated_sharpe_ratio` deflates by it like any other
-        trial. Dropping it instead would undercount the trials and deflate too weakly.
+        rejected: with Sharpe 0, skewness 0 and kurtosis 3 as bookkeeping placeholders.
+        This convention also applies to constant nonzero returns, whose Sharpe is not zero.
+        The trial counts towards `n_trials` and its 0 enters `sharpe_std()`. Dropping it
+        undercounts trials, but adding it changes both count and dispersion, so the resulting
+        deflation hurdle need not increase monotonically.
         """
         r = _as_returns(returns)
         try:

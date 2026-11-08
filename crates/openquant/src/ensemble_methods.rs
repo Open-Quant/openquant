@@ -30,8 +30,9 @@
 //! - Correlations are Pearson correlations of whatever rows are passed. For the `ρ̄` the
 //!   formula means, pass the models' **errors** (residuals), not raw predictions of a common
 //!   target, which mostly measure that every model tracks the target.
-//! - The formula assumes equal variances and a single average correlation; clusters of
-//!   near-identical models or a few strong models among weak ones break it.
+//! - The formula assumes equal variances. Pair correlations may differ, including clusters
+//!   of similar models; their arithmetic mean still gives the identity. Unequal variances
+//!   require the full covariance sum divided by the squared model count.
 //! - Randomised functions take an explicit `seed` and are reproducible for a given seed.
 //!
 //! ```
@@ -452,10 +453,11 @@ pub fn aggregate_classification_probability_mean(
 
 /// Mean Pearson correlation over all pairs of model rows: the `ρ̄` of AFML §6.3.1.
 ///
-/// Pass the models' **errors** (residuals), or predictions of a de-meaned target, to get the
-/// `ρ̄` that [`bagging_ensemble_variance`] means; on raw predictions of a common target this
-/// mostly measures that every model tracks the target. A pair involving a constant row
-/// contributes a correlation of 0.
+/// To assess error variance with [`bagging_ensemble_variance`], pass models' **errors**
+/// (prediction minus the matching observed target) on aligned, out-of-sample observations.
+/// Raw predictions of a common target also reflect that shared target; subtracting a
+/// constant mean does not remove it because Pearson correlation is translation invariant.
+/// A pair involving a constant row contributes 0 by convention, not as evidence of independence.
 ///
 /// ```
 /// use openquant::ensemble_methods::average_pairwise_prediction_correlation;
@@ -504,8 +506,10 @@ pub fn average_pairwise_prediction_correlation(
 ///
 /// `single_estimator_variance` is `σ̄²`, the (common) variance of one estimator's
 /// predictions; `average_correlation` is `ρ̄`, e.g. from
-/// [`average_pairwise_prediction_correlation`]. As `N` grows the result falls to the floor
-/// `σ̄² ρ̄`. See the module example.
+/// [`average_pairwise_prediction_correlation`]. For fixed nonnegative `ρ̄`, the limit as
+/// `N` grows is `σ̄² ρ̄`. For `N > 1`, a feasible average correlation must be at least
+/// `-1/(N-1)`, since the variance of the sum cannot be negative. This bound is not checked;
+/// an impossible combination can return a negative value. See the module example.
 ///
 /// # Errors
 ///

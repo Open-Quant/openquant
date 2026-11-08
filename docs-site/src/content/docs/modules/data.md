@@ -2,7 +2,7 @@
 title: "data"
 description: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting."
 status: authored
-last_authored: '2026-11-06'
+last_authored: '2026-11-07'
 citation:
   - 'OpenQuant python/openquant/data.py: loading, cleaning, calendar alignment, cache and hash contracts.'
   - 'OpenQuant python/tests/test_data_module.py and python/tests/test_data_fetch.py: data quality, calendar, cache and provenance tests.'
@@ -45,7 +45,7 @@ sidebar:
 
 Before any AFML workflow begins, raw market data must be fetched, loaded into a consistent schema, cleaned of duplicates and formatting issues, and aligned to a regular time grid. This module handles that ingestion layer.
 
-`fetch(symbols, start, end, source=..., cache_dir=...)` gets daily OHLCV bars from a pluggable source. The source is any object with a `name` and a `fetch_symbol(symbol, start, end)` method (the `DataSource` protocol). Three sources ship with the module. `LocalSampleSource` reads the bundled synthetic sample and is the default. `LocalFileSource` reads your own CSV or Parquet file. `CallableSource` wraps your own function, which calls your vendor with your key. Each (source, symbol, date range) request is cached as a Parquet file and a JSON sidecar under `<cache_dir>/<source>[@<version>]/<symbol>/<start>_<end>.parquet`. A repeated request is served from disk without calling the source, so it works offline, and `offline=True` makes that a guarantee. The returned frame is the canonical `clean_ohlcv` frame, and it has passed `data_quality_report`.
+`fetch(symbols, start, end, source=..., cache_dir=...)` fetches OHLCV through a pluggable source, intended for daily-bar research. The source is any object with a `name` and a `fetch_symbol(symbol, start, end)` method (the `DataSource` protocol). Three sources ship with the module. `LocalSampleSource` reads the bundled synthetic sample and is the default. `LocalFileSource` reads your own CSV or Parquet file. `CallableSource` wraps your own function, which calls your vendor with your key. Each (source, symbol, date range) request is cached as a Parquet file and a JSON sidecar under `<cache_dir>/<source>[@<version>]/<symbol>/<start>_<end>.parquet`. A repeated request is served from disk without calling the source, so it works offline, and `offline=True` makes that a guarantee. The returned frame is the canonical `clean_ohlcv` frame, and it has passed `data_quality_report`.
 
 `dataset_hash(df)` is a deterministic SHA-256 of a table's contents. `record_dataset_hash(manifest, df, **meta)` writes that hash, with the source, terms and request, into a run manifest, so every result can name the exact data behind it. `experiments/run_pipeline.py` records it in every `run_manifest.json`.
 
@@ -56,6 +56,15 @@ dots in names such as `BRK.B` retain their existing cache paths.
 A cache hit requires both a matching content hash and a sidecar whose cache format,
 source, source version, symbol and date range match the request. Mismatched or malformed
 sidecars trigger a refetch; with `offline=True`, they raise `CacheMissError` instead.
+This recovery does not cover every disk failure: an unreadable/corrupt Parquet file or a
+filesystem permission error can propagate its underlying error, even in offline mode.
+`refresh=True` bypasses the cache; combined with `offline=True`, it raises `CacheMissError`
+rather than contacting a source.
+
+`fetch` filters to inclusive dates but does not resample intraday input into daily bars,
+verify an expected frequency, or require coverage of every requested date. Missing rows
+can survive the structural checks. Datetime request bounds use their own calendar dates;
+normalize them to the intended request timezone before passing them.
 
 The loaders accept CSV or Parquet files with flexible column naming (e.g., "timestamp", "datetime", "date" all map to "ts"; "ticker" or "asset" map to "symbol") and produce a standardized Polars DataFrame with canonical OHLCV columns. Deduplication handles duplicate (symbol, timestamp) keys, and calendar alignment generates a regular grid with explicit gap markers.
 
@@ -226,6 +235,12 @@ tie). The missing weekday is therefore counted as a gap.
 
 ## Cleaning and provenance contracts
 
+Before canonical cleaning, resolve which revisions were available at the research
+cutoff. The [point-in-time data workflow](/workflows/point-in-time-data/) demonstrates
+selection and evidence with an offline standard-library example. Cleaning drops extra
+columns, including availability or revision fields; a content hash does not reconstruct
+that history or establish that a provider’s timestamps are truthful.
+
 `clean_ohlcv` produces columns `ts, symbol, open, high, low, close, volume,
 adj_close`, ordered by symbol and timestamp. It drops extra columns and rows
 with null canonical fields, including unparseable timestamps; a missing
@@ -248,6 +263,9 @@ shuffled or multi-chunk input keeps that order within each key. `load_ohlcv`,
 Earlier Python cleanup could choose a different duplicate because its key sort
 was unstable. Reload the raw source (or use `fetch(..., refresh=True)`) to rebuild
 affected outputs; existing caches are not automatically recomputed by this fix.
+For `LocalFileSource`, recreate the source object first: its file-derived version is captured
+at construction and its loaded frame is cached on the instance. `refresh=True` bypasses the
+on-disk request cache but does not reload that in-memory frame.
 
 These behaviors are implemented in
 [data.py](https://github.com/Open-Quant/openquant/blob/main/python/openquant/data.py)
@@ -255,7 +273,8 @@ and exercised in the [data tests](https://github.com/Open-Quant/openquant/blob/m
 
 `quality_failures` requires at least one row, no duplicate keys, and no nulls.
 It does **not** reject gaps or validate price economics (for example, a negative
-price or high below low). Passing it means this structural quality bar passed,
+price or high below low). `NaN` and infinity are not nulls and are not rejected either.
+Passing it means this structural quality bar passed,
 not that the data are suitable for a particular study.
 
 The content hash sorts column names and rows, preserving duplicates, and hashes
@@ -264,14 +283,70 @@ order and Parquet layout; integer widths map to one integer kind, floating
 widths to Float64, and datetimes to microseconds. A hash identifies this
 normalized content, not file bytes, source authenticity or permission to use it.
 `record_dataset_hash` mutates and returns the supplied manifest, recording the
-hash version, row count and any source metadata supplied by the caller.
+hash version, row count and any source metadata supplied by the caller. When given only
+`digest=...`, it records that string without checking its format or recomputing content;
+with both a frame and digest, it checks their agreement.
+
+The digest alone cannot preserve duplicate revision order: reversing rows leaves a raw
+frame's hash unchanged, but can change the result of keep-last cleaning. Record the cleaned
+input actually used by a study, plus its duplicate policy and source revision ordering.
+Similarly, `fetch(..., return_meta=True)` takes source terms from the current source object,
+even on a cache hit; it does not return the original sidecar's `fetched_at` or original terms.
+Keep acquisition metadata separately when that history matters.
+
+### Recreate a file source after editing its input
+
+This local example distinguishes the request cache from the source object's cached frame:
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import polars as pl
+from openquant.data import LocalFileSource, fetch
+
+with TemporaryDirectory() as directory:
+    path, cache = Path(directory) / "bars.csv", Path(directory) / "cache"
+    def write_price(price):
+        pl.DataFrame({
+            "ts": ["2024-01-02"], "symbol": ["A"],
+            "open": [price], "high": [price], "low": [price], "close": [price],
+            "volume": [1.0],
+        }).write_csv(path)
+    write_price(100.0)
+    source = LocalFileSource(path)
+    def read(source, **options):
+        return fetch("A", "2024-01-02", "2024-01-02", source=source,
+                     cache_dir=cache, **options)["close"].to_list()
+    assert read(source) == [100.0]
+    write_price(101.0)
+    assert read(source, refresh=True) == [100.0]  # same source's in-memory frame
+    replacement = LocalFileSource(path)
+    assert replacement.version != source.version
+    assert read(replacement) == [101.0]
+```
+
+A raw content hash also does not encode keep-last revision order:
+
+```python
+import polars as pl
+from openquant.data import clean_ohlcv, dataset_hash
+
+raw = pl.DataFrame({
+    "ts": ["2024-01-02"] * 2, "symbol": ["A"] * 2,
+    "open": [100.0, 101.0], "high": [100.0, 101.0],
+    "low": [100.0, 101.0], "close": [100.0, 101.0], "volume": [1.0, 1.0],
+})
+assert dataset_hash(raw) == dataset_hash(raw.reverse())
+assert clean_ohlcv(raw)["close"].to_list() == [101.0]
+assert clean_ohlcv(raw.reverse())["close"].to_list() == [100.0]
+```
 
 ## Common Pitfalls
 
 - Treating the bundled sample as market data. It is synthetic, so any result computed on it says nothing about real markets.
 - Committing cached data without checking the source terms; the bundled sample and externally fetched data have different provenance.
 - Expecting a cached range to serve a sub-range. The cache key is the exact (source, symbol, start, end), so a different range is a new fetch.
-- Forgetting to check the quality report for gaps — missing bars silently create NaN features downstream.
+- Forgetting to inspect gaps: returns can span multiple intended periods, and alignment can introduce null features downstream.
 - Using align_calendar with an interval shorter than the data's actual frequency — this creates many synthetic missing-bar rows.
 - Using align_calendar with bars that are not on the grid. Each symbol's grid starts at its first bar and steps by `interval`, so a bar stamped off that grid (a daily bar at a different time of day, an irregular intraday print) is not in the output. `align_calendar(df, interval=..., return_report=True)` returns `(aligned, report)` with those bars in `report["off_grid_bars"]` and their number in `report["off_grid_bar_count"]`; without `return_report` a `UserWarning` says how many were dropped. The `_core.data.align_calendar` and `align_calendar_df` bindings take the same `return_report` flag.
 

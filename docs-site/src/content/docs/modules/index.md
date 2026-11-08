@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-10-10'
+last_generated: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,7 +13,7 @@ sidebar:
 
 This is the canonical index of every OpenQuant module: one page each, with
 purpose, APIs, formulas, examples, and implementation notes. It lists the same
-42 modules twice over — by subject, and by the language surface they are
+45 modules twice over — by subject, and by the language surface they are
 reachable through — because those are the two questions readers arrive with.
 For the AFML chapter each module implements, see
 [By AFML Chapter](/module-reference/by-afml-chapter/).
@@ -23,7 +23,10 @@ For the AFML chapter each module implements, see
 ### Data Ingestion and Quality
 
 - [`adapters`](/modules/adapters/) — Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers.
+- [`availability`](/modules/availability/) — Original-row training eligibility from declared source availability and label maturity clocks.
 - [`data`](/modules/data/) — Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting.
+- [`feature_assembly`](/modules/feature-assembly/) — Complete ordered features from selected source bundles, with explicit missing-input exclusions and coverage.
+- [`provenance`](/modules/provenance/) — Decision-time revision selection and exact numeric value identity across cleaned-row reordering.
 
 ### Event-Driven Data and Labeling
 
@@ -131,6 +134,7 @@ For the AFML chapter each module implements, see
 ### Python namespaces
 
 - [`adapters`](/modules/adapters/) — `to_polars_signal_frame`, `to_polars_event_frame`, `to_polars_backtest_frame`, `to_polars_weights_frame`, `to_polars_indicator_matrix`, `to_polars_frontier_frame`, `SignalStreamBuffer`, `to_pandas`
+- [`availability`](/modules/availability/) — `select_available_training`, `AvailabilitySelection`
 - [`backtest_stats`](/modules/backtest-statistics/) — `sharpe_ratio`, `information_ratio`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`, `timing_of_flattening_and_flips`, `average_holding_period`, `bets_concentration`, `all_bets_concentration`, `drawdown_and_time_under_water`
 - [`backtesting_engine`](/modules/backtesting-engine/) — `cpcv_path_count`, `run_cpcv`, `assemble_cpcv_paths`
 - [`bars`](/modules/data-structures/) — `build_time_bars`, `build_tick_bars`, `build_volume_bars`, `build_dollar_bars`, `bar_diagnostics`
@@ -144,6 +148,7 @@ For the AFML chapter each module implements, see
 - [`ensemble`](/modules/ensemble-methods/) — `bias_variance_noise`, `bootstrap_sample_indices`, `sequential_bootstrap_sample_indices`, `aggregate_regression_mean`, `aggregate_classification_vote`, `aggregate_classification_probability_mean`, `average_pairwise_prediction_correlation`, `bagging_ensemble_variance`, `recommend_bagging_vs_boosting`
 - [`evaluation`](/modules/evaluation/) — `return_moments`, `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `expected_max_sharpe`, `minimum_track_record_length`, `meta_label_metrics`, `strategy_failure_probability`, `config_hash`, `TrialRegistry`
 - [`fast_ewma`](/modules/util-fast-ewma/) — `ewma`
+- [`feature_assembly`](/modules/feature-assembly/) — `assemble_features`, `AssemblyResult`
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — `mdi_importance`, `mda_importance`, `sfi_importance`, `orthogonalize_features_pca`, `substitution_effect_report`
 - [`feature_importance`](/modules/feature-importance/) — `mean_decrease_impurity`, `mean_decrease_accuracy`, `single_feature_importance`, `mda_from_probabilities`, `sfi_from_probabilities`
 - [`filters`](/modules/filters/) — `cusum_filter_indices`, `cusum_filter_timestamps`, `z_score_filter_indices`, `z_score_filter_timestamps`
@@ -156,6 +161,7 @@ For the AFML chapter each module implements, see
 - [`onc`](/modules/onc/) — `get_onc_clusters`
 - [`pipeline`](/modules/pipeline/) — `run_mid_frequency_pipeline`, `run_mid_frequency_pipeline_frames`, `summarize_pipeline`, `infer_periods_per_year`
 - [`portfolio`](/modules/portfolio-optimization/) — `allocate_inverse_variance`, `allocate_min_vol`, `allocate_max_sharpe`, `allocate_efficient_risk`, `allocate_with_solution`, `allocate_from_inputs`
+- [`provenance`](/modules/provenance/) — `make_revision`, `select_revisions`, `rejoin_selected`
 - [`research`](/modules/research/) — `make_synthetic_futures_dataset`, `run_flywheel_iteration`, `run_flywheel_grid`, `research_run_manifest`, `ResearchDataset`
 - [`risk`](/modules/risk-metrics/) — `calculate_value_at_risk`, `calculate_expected_shortfall`, `calculate_conditional_drawdown_risk`, `calculate_variance`, `calculate_value_at_risk_from_matrix`, `calculate_expected_shortfall_from_matrix`, `calculate_conditional_drawdown_risk_from_matrix`
 - [`sample_weights`](/modules/sample-weights/) — `get_weights_by_return`, `get_weights_by_time_decay`

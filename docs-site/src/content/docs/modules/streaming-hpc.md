@@ -2,7 +2,7 @@
 title: "streaming_hpc"
 description: "VPIN and a venue-concentration HHI updated event by event in constant memory, with an alert when both cross their thresholds, and a synthetic flash crash to calibrate on."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -49,9 +49,10 @@ VPIN, the volume-synchronised probability of informed trading, and a variant of 
 Herfindahl–Hirschman index of market fragmentation — over ten years of S&P 500 trades,
 and made the computation fast enough to matter.
 
-This module keeps both indicators as incremental state. Each event updates them in constant
-time, memory stays bounded however long the stream runs, and an alert fires when VPIN is high
-relative to its own recent history and HHI is above its threshold at the same time.
+This module keeps both indicators as incremental state. Engine memory is bounded by its
+configured windows; update cost depends on those windows and the number of buckets processed.
+The batch runner also retains one snapshot per input event. An alert fires when the
+VPIN-like score is high relative to its recent history and HHI is above its threshold.
 
 ## The two indicators
 
@@ -64,10 +65,19 @@ $$
 \mathrm{VPIN} = \frac{1}{n}\sum_{\tau=1}^{n}\frac{\lvert V^B_\tau - V^S_\tau\rvert}{V}
 $$
 
-over the last $n$ = `support_buckets` full buckets. It is 0 when every bucket is balanced and
-1 when every bucket is all buying or all selling. Because buckets are equal-volume, a burst of
-trading fills buckets faster and VPIN reacts in fewer events, which is the point of the
-volume clock.
+over the last $n$ = `support_buckets` full buckets. **The current streaming implementation
+uses a different aggregation inside each bucket:** it adds each event's absolute imbalance
+before summing. If $v_{i,\tau}$ units of event $i$ enter bucket $\tau$, its bucket score is
+
+$$
+\frac{1}{V}\sum_i v_{i,\tau}\frac{|b_i-s_i|}{b_i+s_i}.
+$$
+
+Opposite one-sided events therefore do not cancel. A buy-only event followed by an equal
+sell-only event gives score 1, even though the combined bucket has equal buy and sell volume;
+a single balanced event gives 0. The score depends on how the input flow is aggregated into
+events and should not be interpreted as the net-bucket formula above. Equal-volume buckets
+still make higher-volume events advance the indicator faster.
 
 **HHI** measures how concentrated trading is across venues (Hirschman, 1980). With $Q_v$ the
 volume traded on venue $v$ over the last $L$ = `lookback_events` events,
@@ -78,7 +88,7 @@ $$
 
 It is $1/K$ when $K$ venues share the volume evenly and 1 when one venue has all of it.
 
-**The alert** does not compare VPIN with a fixed level. As in the chapter's calibration
+**The alert** does not compare the score with a fixed level. As in the chapter's calibration
 (§22.6.5, following Easley, López de Prado and O'Hara, 2011), it uses the *cumulative
 distribution function* of VPIN: $F(\mathrm{VPIN})$ is the rank of the current VPIN among its
 last `cdf_lookback` values, one recorded per completed bucket, current value included, with
@@ -86,9 +96,23 @@ ties counting half. A threshold such as $\tau_V = 0.99$ therefore means "VPIN is
 of its recent history", which adapts to each instrument's normal level of toxicity. The alert
 fires when $F(\mathrm{VPIN})\ge\tau_V$ *and* $\mathrm{HHI}\ge\tau_H$.
 `normalized_risk_score` is $\min\left(F(\mathrm{VPIN})/\tau_V,\ \mathrm{HHI}/\tau_H\right)$,
-so it is at least 1 exactly when the alert fires. The CDF and the score are `None`, and the
-alert is false, until VPIN has $n$ full buckets and `cdf_lookback` values of history and HHI
-has $L$ events.
+so it is at least 1 exactly when the alert fires. The CDF is `None` until the VPIN history is full; HHI is `None` until it has $L$ events.
+The normalized score remains `None`, and the alert false, until both are available.
+
+## Event aggregation changes the score
+
+```python
+from openquant import streaming_hpc
+
+config = dict(bucket_volume=20.0, support_buckets=1, lookback_events=1,
+              cdf_lookback=2, vpin_cdf_threshold=0.75, hhi_threshold=0.5)
+split_flow = [(0, 100.0, 10.0, 0.0, 0), (1, 100.0, 0.0, 10.0, 0)]
+combined_flow = [(0, 100.0, 10.0, 10.0, 0)]
+split = streaming_hpc.run_streaming_pipeline(split_flow, **config)
+combined = streaming_hpc.run_streaming_pipeline(combined_flow, **config)
+assert split["snapshots"][-1][2] == 1.0
+assert combined["snapshots"][-1][2] == 0.0
+```
 
 ## A synthetic flash crash
 
@@ -151,8 +175,8 @@ alerts: 6
 
 The calm stream has VPIN $|120-130|/250 = 0.04$ and HHI $0.2504$ (printed as 0.250). The
 venues take turns, so the last 50 events split 13/13/12/12 across the four venues rather than
-exactly a quarter each: $(2\cdot 13^2 + 2\cdot 12^2)/50^2 = 626/2500$. VPIN needs 10,000 units of volume, 40 events, before it reports; its CDF needs 100 more
-values, one per bucket, and first reports at event 435. On a perfectly steady stream every
+exactly a quarter each: $(2\cdot 13^2 + 2\cdot 12^2)/50^2 = 626/2500$. VPIN needs 10,000 units of volume, 40 events, before it reports; its CDF needs 100
+values including the first available VPIN value, one per completed bucket, and first reports at event 435. On a perfectly steady stream every
 value ties, so the CDF sits at 0.5. Two events into the crash, VPIN moves above everything in
 its history and the CDF jumps to its ceiling, $1 - 0.5/100 = 0.995$. HHI is slower: crash
 events carry more volume, but venue 0 still needs until event 723 to push HHI past 0.5, and
@@ -235,13 +259,20 @@ assert_eq!(report.stream_summaries[0].latest_hhi, Some(1.0));
 
 ## What to watch for
 
+- **Input order is the clock for processing.** `timestamp_ns` is copied into snapshots but
+  does not sort, validate or advance state. Order events before calling and keep independent
+  instruments in separate engines. Calling the batch runner again starts fresh windows.
+- **The synthetic example detects a change after it begins.** Its first alert is 23 events
+  after the configured crash onset; it does not demonstrate advance prediction. The
+  normalized risk score is a threshold ratio, not a calibrated probability of loss.
+
 - **The CDF flags jumps, not persistence.** VPIN's CDF is taken over a rolling history of
   `cdf_lookback` values. Once a sustained high-VPIN regime fills that history it becomes the
   new normal, and the CDF falls back toward 0.5 even though VPIN is still high; in the example
   the alert lasts six events. Choose `cdf_lookback` long relative to the episodes you want to
   cover, and remember the CDF reports nothing until the history is full: a crash that comes
   before that is never ranked, as the first three streams in the Rust example show.
-- **`vpin_cdf` is a probability, not a VPIN level.** Because ties count half, the largest value
+- **`vpin_cdf` is an empirical rank, not a crash probability or raw VPIN level.** Because ties count half, the largest value
   the CDF can take is $1 - 0.5/\texttt{cdf\_lookback}$ (0.995 for 100). A threshold above
   that, or outside $(0, 1)$, could never fire and is rejected. Likewise the HHI threshold must
   be in $(0, 1]$, since the HHI never exceeds 1. The parallel runner checks the config once,
@@ -257,12 +288,15 @@ assert_eq!(report.stream_summaries[0].latest_hhi, Some(1.0));
   `lookback_events` events. When volume per event changes, as in the crash above, one reacts
   faster than another, and the AND rule makes the alert as slow as the slowest.
 - **The latency metrics time the engine, not your pipeline.** `avg_event_latency_micros` and
-  `max_event_latency_micros` are wall-clock times of `on_event` calls, which take around a
-  microsecond each; they vary from run to run and exclude parsing, queueing and I/O.
+  `max_event_latency_micros` are wall-clock times of `on_event` calls. They depend on hardware,
+  configuration and input, and exclude parsing, queueing and I/O. HHI scans active venues;
+  completed VPIN buckets update a sorted history with linear insertion/removal cost.
+  Large-event replay is capped by the configured windows, not by a universal latency bound.
 - **The parallel runner returns summaries only.** `run_streaming_pipeline_parallel` keeps the
   alert count and the last snapshot of each stream; to see the path of each stream, call
   `run_streaming_pipeline` per stream. Parallelism is across streams; a single stream is
-  sequential by nature. It is Rust-only.
+  sequential by nature. Internally each worker still creates the full per-stream report
+  before extracting its summary, so peak memory is not summary-only. It is Rust-only.
 - **The synthetic stream is a switch, not a model.** Two fixed regimes and a hard change
   between them make it good for checking wiring and reaction time, and useless for estimating
   false-positive rates. The chapter's point about calibration — 20% false positives cut to 7%

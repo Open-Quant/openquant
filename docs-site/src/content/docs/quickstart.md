@@ -2,7 +2,7 @@
 title: Quickstart
 description: Install OpenQuant and get one real result out of it.
 status: authored
-last_authored: '2026-11-05'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,12 +13,12 @@ sidebar:
 This is the human learning path. For repository automation, use the
 [agent guide](/agents/) alongside it.
 
-Three steps, ending in a number OpenQuant computed for you. Budget
-**20–30 minutes**, nearly all of it the Rust compile in step 2.
+Three steps produce a synthetic result you can inspect. Allow time for a native Rust
+build; its duration depends on your machine and whether dependencies are cached.
 
 You need a Rust toolchain, a linker, and `uv`. If you do not have them,
-start at [Prerequisites](/setup/prerequisites/) and come back — it is
-four commands.
+start at [Prerequisites](/setup/prerequisites/) and return here after installing the
+tools for your platform.
 
 ## Step 1 — Clone
 
@@ -37,15 +37,16 @@ to use a packaged release instead.
 
 ```bash
 uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
 
-uv run --python .venv/bin/python python -c "import openquant; print('openquant bindings import ok')"
+uv run --no-sync --python .venv/bin/python python -c "import openquant; print('openquant bindings import ok')"
 ```
 
 This compiles the Rust extension, including `polars`, `nalgebra` and their
-dependency trees — so **expect 10–20 minutes on a cold cache**. Later
-builds are incremental and take seconds.
+dependency trees. Later builds can reuse cached work. If you already have a source
+checkout, use its environment and rebuild after changing Rust or binding code; restart
+any running notebook kernel before importing the rebuilt extension.
 
 The import check should print:
 
@@ -54,8 +55,7 @@ openquant bindings import ok
 ```
 
 If it does not, [Troubleshooting](/setup/troubleshooting/) has the
-failures worth knowing about, and the architecture mismatch one is the
-most common on macOS.
+import, toolchain and architecture checks to run next.
 
 ## Step 3 — Get a result
 
@@ -68,8 +68,8 @@ from openquant.research import make_synthetic_futures_dataset, run_flywheel_iter
 # four instruments. No market data feed required.
 dataset = make_synthetic_futures_dataset(n_bars=192, seed=7)
 
-# One full AFML iteration: events -> sizing -> backtest -> portfolio ->
-# risk, then trading costs and promotion gates.
+# Exercise events -> sizing -> backtest -> portfolio -> risk,
+# then estimated trading costs and promotion gates. No model is fitted.
 result = run_flywheel_iteration(dataset)
 
 print("leakage checks:")
@@ -89,11 +89,13 @@ for k, v in result["promotion"].items():
 Run it:
 
 ```bash
-uv run --python .venv/bin/python python first_run.py
+uv run --no-sync --python .venv/bin/python python first_run.py
 ```
 
 Here is what it printed on the machine this page was written on. The
-dataset is seeded, so you should see the same numbers:
+dataset is seeded; the example checker compares the printed output. Floating-point
+rounding can vary across builds, so use the stages and fields to diagnose a mismatch
+before interpreting a small numerical difference as a model change:
 
 ```text
 leakage checks:
@@ -136,7 +138,7 @@ trust the wrong thing.
 
 ## What you just ran
 
-`run_flywheel_iteration` executed the full AFML loop: CUSUM event
+`run_flywheel_iteration` connected these components: CUSUM event
 sampling, probability-to-position sizing, a backtest, portfolio
 allocation and risk metrics — then charged the result
 for commission, spread and slippage, and applied promotion gates.
@@ -156,8 +158,12 @@ model probabilities you hand it. That part is your job.
 -0.000197; `net_total_return` is -0.001511. The gap is `estimated_cost`,
 which is `turnover` (3.6) times a per-turn charge built from commission,
 spread and a volatility-scaled slippage term. `net_sharpe` is recomputed
-after that charge. For a mid-frequency strategy this gap is usually the
-whole story.
+after per-bar position-change charges. These are simplified cost estimates,
+not simulated order fills: initial entry is not charged, `net_total_return`
+subtracts total cost from gross compounded return, and `net_sharpe` uses the
+per-bar net-return series. They are not two views of one compounded net equity
+curve. The net Sharpe calculation does not subtract a risk-free rate; the gross
+realized Sharpe does when you configure one.
 
 **`portfolio_sharpe` is not your strategy's Sharpe.** It reads 25.3 above
 while `realized_sharpe` is -2.70. They answer different questions:
@@ -187,13 +193,22 @@ ratio](/runbooks/cpcv-deflated-sharpe/)).
 
 | If you want to… | Go here |
 |---|---|
+| Fit a baseline and trace out-of-sample predictions | [End-to-end research journey](/workflows/research-journey/) |
+| Select parameters before one chronological holdout | [Model selection and holdout](/workflows/model-selection-holdout/) |
+| Align asset histories and calculate named weights | [Multi-asset allocation](/workflows/multi-asset-allocation/) |
 | Understand each stage of that loop | [Python Core Workflow](/workflows/python-core-workflow/) |
-| Do the same thing in Rust | [Rust Core Workflow](/workflows/rust-core-workflow/) |
-| Run it on your own CSV | [Examples Catalog](/examples/catalog/) |
+| Follow a separate Rust component walkthrough | [Rust Core Workflow](/workflows/rust-core-workflow/) |
+| Check which data revisions were available at a cutoff | [Point-in-time data workflow](/workflows/point-in-time-data/) |
+| Load and inspect your own CSV or Parquet | [Data loading and provenance](/modules/data/), then [Examples Catalog](/examples/catalog/) |
+| Reproduce a research notebook and inspect its evidence | [Research runbooks](/runbooks/) and [Notebook research workflow](/workflows/notebook-research-workflow/) |
+| Choose a Python wrapper or Rust API for a task | [Find an API by task](/module-reference/api-task-guide/) |
+| Check a function's arguments and returned fields | [Python API reference](/api/python/) |
 | Build and test the repo itself | [Local Build Setup](/setup/local-build/) |
+
+For your own data, loading the file is only ingestion. Define features, labels and
+training boundaries before generating model probabilities; the [research journey](/workflows/research-journey/)
+shows that handoff. The convenience pipeline does not train a predictive model for you.
 
 The repo's own test suite and documentation gates are *maintainer*
 commands, not first-run commands. They live on [Local Build
-Setup](/setup/local-build/); running them proves the repository is
-healthy, which is a different question from whether OpenQuant is useful
-to you.
+Setup](/setup/local-build/); passing them verifies their covered checks, not the validity of your research design.

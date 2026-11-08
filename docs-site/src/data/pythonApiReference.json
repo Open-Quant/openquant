@@ -282,6 +282,27 @@
       "slug": "adapters"
     },
     {
+      "classes": [
+        {
+          "doc": "Immutable original-row selection and explicit exclusion reasons.\n\n``candidate_indices`` and ``eligible_indices`` preserve supplied candidate\norder. ``exclusions`` contains ``(original_index, reasons)`` tuples in that\nsame relative order. Every candidate occurs in exactly one output partition.\nA row can have multiple reasons. ``fit_time_ns`` is exact UTC Unix nanoseconds.",
+          "methods": [],
+          "name": "AvailabilitySelection",
+          "signature": "(NamedTuple)"
+        }
+      ],
+      "doc": "Audit supplied source-availability and label-maturity clocks before fitting.\n\nThis module is implemented using only the Python standard library. The package's\nnormal ``openquant`` import still initializes its native extension and other\nexisting dependencies; direct-file tests do not establish full-package readiness.\n\nThe helper is a conservative historical-vintage filter, not a cross-validation\nsplitter. It cannot reconstruct revisions, authenticate timestamps, establish\nstatistical independence, or replace purging, embargo or fold-local preprocessing.",
+      "functions": [
+        {
+          "doc": "Filter original sample indices using declared information-availability clocks.\n\nParameters\n----------\ndecision_times\n    Historical sample decisions. Missing decisions are invalid. Ties and\n    arbitrary row order are allowed; this function does not sort or split.\nlabel_end_times\n    End of each label's information span; ``None`` means unresolved/unknown.\n    Known ends cannot precede their decisions. Zero-length spans are valid.\nlabel_available_times\n    Actual usable publication time of the finalized label; ``None`` means\n    unknown/unreleased. Known publication cannot precede decision or known\n    label end. A resolution timestamp alone is not a publication timestamp.\nfeature_available_times\n    Latest actual source/revision availability needed for ALL exact historical\n    raw/source feature values in each row, BEFORE fold-local learned transforms. ``None`` means unknown/missing information.\n    This is not a batch ``computed_at`` time: deterministic reconstruction\n    from past-only inputs can run later. The caller must preserve source\n    metadata, align it with the retained rows, and fit learned transforms\n    only within training folds. A scaler or PCA fitted at fit_time on eligible\n    training rows can legitimately depend on later training rows relative to\n    an individual historical decision. Do not pass that transform's fitted_at\n    as source availability. Audit historical source snapshots, intersect the\n    splitter's training indices, then fit learned transforms/model on those\n    training rows and apply them to held-out rows. This helper inspects no\n    feature values or learned preprocessing state.\nfit_time\n    Cutoff at which information published at that exact time is already\n    usable. Sample decisions must be strictly earlier than this cutoff.\nclock\n    Required explicit clock domain. ``unix_ns`` accepts exact integer UTC\n    Unix nanoseconds in int64 range, excluding the NaT sentinel. ``utc``\n    accepts aware builtin datetime or extended ISO strings with seconds,\n    at most six fractional digits, and ``Z`` or a known ``±HH:MM`` offset.\n    Naive clocks, unknown ``-00:00``, submicrosecond strings, offset seconds\n    in strings, datetime subclasses, floating epoch seconds and implicit bar\n    positions are not converted. Builtin aware datetime objects may carry\n    valid subminute/fractional timezone offsets, normalized exactly here.\n    Use explicit integer nanoseconds for finer observation clocks.\nlabel_end_inclusive\n    False by default: label end must be strictly before fit. This conservative\n    boundary excludes a closed label span ending exactly where a test window\n    starts at fit. True permits equality under an after-observation maturity\n    convention. Label publication still must be at or before fit in both modes.\n    Neither convention replaces purging against actual test intervals.\ncandidate_indices\n    Optional pre-existing splitter's train indices. The result is only a\n    subset of these indices in their supplied order, never a replacement split.\n    Indices must be unique and in range. None audits all rows.\n\nReturns\n-------\nAvailabilitySelection\n    Immutable original indices and explicit reasons, suitable for indexing\n    the same aligned feature/label arrays. None clocks cause row exclusions;\n    malformed clocks, length mismatches and known chronology inconsistencies\n    raise ValueError, including on noncandidate rows. Inputs are not mutated.\n\nNotes\n-----\n``clean_ohlcv`` currently discards extra metadata and emits UTC-naive\nmicroseconds. Preserve availability and stable row identity separately before\ncleaning; explicitly attach UTC only when that upstream contract is verified.\nNever reconstruct source availability from event time or silently realign by\nposition after cleaning dropped or sorted rows. CV's t1 is label resolution,\nand its integer input may mean bars; callers must explicitly convert actual\nUTC clocks here. Passing arbitrary integers cannot prove their physical units.",
+          "name": "select_available_training",
+          "signature": "(\n    decision_times: Iterable[Timestamp],\n    label_end_times: Iterable[Timestamp | None],\n    label_available_times: Iterable[Timestamp | None],\n    feature_available_times: Iterable[Timestamp | None],\n    *,\n    fit_time: Timestamp,\n    clock: Clock,\n    label_end_inclusive: bool = False,\n    candidate_indices: Iterable[int] | None = None,\n) -> AvailabilitySelection"
+        }
+      ],
+      "import": "openquant.availability",
+      "kind": "python",
+      "slug": "availability"
+    },
+    {
       "classes": [],
       "doc": "",
       "functions": [
@@ -576,7 +597,7 @@
           "signature": "(x: Sequence[float], y: Sequence[float]) -> float"
         },
         {
-          "doc": "Distance correlation of two series (Székely et al., 2007).\n\nDouble-centres the matrices of pairwise absolute differences within each series and\nreturns `dCov(x, y) / sqrt(dVar(x) * dVar(y))`, in `[0, 1]`, which is zero only when the\nseries are independent (unlike Pearson correlation). Memory is `O(n^2)` (about 16 MB at\n1,000 observations).\n\nParameters\n----------\nx : list[float]\n    First series.\ny : list[float]\n    Second series, paired with `x`.\n\nReturns\n-------\nfloat\n    The distance correlation.\n\nRaises\n------\nValueError\n    If `x` and `y` differ in length, have fewer than two observations, or either series\n    is constant.",
+          "doc": "Distance correlation of two series (Székely et al., 2007).\n\nDouble-centres the matrices of pairwise absolute differences within each series and\nreturns the sample estimate `dCov(x, y) / sqrt(dVar(x) * dVar(y))`, in `[0, 1]`.\nThe population quantity is zero exactly under independence; independent samples generally\nhave a positive estimate. This function does not return a test or p-value.\nMemory is `O(n^2)` (about 16 MB at\n1,000 observations).\n\nParameters\n----------\nx : list[float]\n    First series.\ny : list[float]\n    Second series, paired with `x`.\n\nReturns\n-------\nfloat\n    The distance correlation.\n\nRaises\n------\nValueError\n    If `x` and `y` differ in length, have fewer than two observations, or either series\n    is constant.",
           "name": "distance_correlation",
           "signature": "(x: Sequence[float], y: Sequence[float]) -> float"
         },
@@ -881,7 +902,7 @@
           "signature": "(\n    per_model_predictions: Sequence[Sequence[float]],\n) -> float"
         },
         {
-          "doc": "Variance of the average of N estimators, `sigma2 * (rho + (1 - rho) / N)` (AFML 6.3.1).\n\nAs N grows the result falls to the floor `sigma2 * rho`, which no number of estimators\nmoves: redundant, correlated estimators limit what bagging can achieve.\n\nParameters\n----------\nsingle_estimator_variance : float\n    Common variance `sigma2` of one estimator's predictions; must be finite and\n    non-negative.\naverage_correlation : float\n    Average pairwise correlation `rho` between estimators, in `[-1, 1]`, e.g. from\n    `average_pairwise_prediction_correlation`.\nn_estimators : int\n    Number of estimators N; must be positive.\n\nReturns\n-------\nfloat\n    The variance of the ensemble average.\n\nRaises\n------\nValueError\n    If `single_estimator_variance` is negative, NaN or infinite, `average_correlation` is\n    outside `[-1, 1]`\n    or NaN, or `n_estimators` is 0.",
+          "doc": "Variance of the average of N estimators, `sigma2 * (rho + (1 - rho) / N)` (AFML 6.3.1).\n\nFor fixed nonnegative rho, the limit as N grows is `sigma2 * rho`. For N > 1,\na feasible average correlation must be at least `-1/(N-1)`; this bound is not\nchecked, so an impossible combination can return a negative value.\n\nParameters\n----------\nsingle_estimator_variance : float\n    Common variance `sigma2` of one estimator's predictions; must be finite and\n    non-negative.\naverage_correlation : float\n    Average pairwise correlation `rho` between estimators, in `[-1, 1]`, e.g. from\n    `average_pairwise_prediction_correlation`.\nn_estimators : int\n    Number of estimators N; must be positive.\n\nReturns\n-------\nfloat\n    The variance of the ensemble average.\n\nRaises\n------\nValueError\n    If `single_estimator_variance` is negative, NaN or infinite, `average_correlation` is\n    outside `[-1, 1]`\n    or NaN, or `n_estimators` is 0.",
           "name": "bagging_ensemble_variance",
           "signature": "(\n    single_estimator_variance: float,\n    average_correlation: float,\n    n_estimators: int,\n) -> float"
         },
@@ -953,7 +974,7 @@
               "signature": "() -> None"
             },
             {
-              "doc": "Register one configuration's backtest returns and persist the registry.\n\nConstant returns (for example all zeros from a configuration that took no bet) have\nno Sharpe ratio, but the configuration was still tried, so it is recorded rather than\nrejected: with Sharpe 0, skewness 0 and kurtosis 3 (the normal values). Sharpe 0 is\nwhat a strategy with no excess return earns. The trial counts towards `n_trials` and\nits 0 enters `sharpe_std()`, so `deflated_sharpe_ratio` deflates by it like any other\ntrial. Dropping it instead would undercount the trials and deflate too weakly.",
+              "doc": "Register one configuration's backtest returns and persist the registry.\n\nConstant returns (for example all zeros from a configuration that took no bet) have\nno Sharpe ratio, but the configuration was still tried, so it is recorded rather than\nrejected: with Sharpe 0, skewness 0 and kurtosis 3 as bookkeeping placeholders.\nThis convention also applies to constant nonzero returns, whose Sharpe is not zero.\nThe trial counts towards `n_trials` and its 0 enters `sharpe_std()`. Dropping it\nundercounts trials, but adding it changes both count and dispersion, so the resulting\ndeflation hurdle need not increase monotonically.",
               "name": "record",
               "signature": "(config: Any, returns: Iterable[float]) -> Trial"
             },
@@ -977,7 +998,7 @@
           "signature": ""
         }
       ],
-      "doc": "Research evaluation: is a backtest's Sharpe ratio evidence of skill?\n\nA thin layer over the compiled `backtest_stats` and `strategy_risk` modules that works\nfrom a returns series instead of from pre-computed moments:\n\n- `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`\n  (Bailey and López de Prado 2012, 2014; AFML Chapter 14, §14.7);\n- `meta_label_metrics`: precision, recall and F1 of a meta-labeling overlay against the\n  primary model it filters (AFML Chapter 3, §3.6);\n- `strategy_failure_probability` (AFML Chapter 15, §15.4);\n- `TrialRegistry`: a JSON file that records every configuration tried, across runs, so the\n  deflated Sharpe ratio deflates by the number of trials actually run.\n\nConventions, shared with `backtest_stats`: every Sharpe ratio here is **per period**\n(mean over sample standard deviation, not annualised), skewness and kurtosis are the\npopulation moment ratios, and kurtosis is **raw** (3 for a normal distribution).",
+      "doc": "Research evaluation: is a backtest's Sharpe ratio evidence of skill?\n\nAn evaluation layer built on the compiled `backtest_stats` and `strategy_risk` modules,\nworking from a returns series instead of pre-computed moments. It also retains the\noriginal returns for numerical recovery when rounded moments lose uncertainty:\n\n\n- `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`\n  (Bailey and López de Prado 2012, 2014; AFML Chapter 14, §14.7);\n- `meta_label_metrics`: precision, recall and F1 of a meta-labeling overlay against the\n  primary model it filters (AFML Chapter 3, §3.6);\n- `strategy_failure_probability` (AFML Chapter 15, §15.4);\n- `TrialRegistry`: a JSON file keyed by explicit configurations. Re-recording a key\n  replaces its entry; the DSR count includes only distinct recorded keys. Include the\n  data and protocol choices that distinguish trials; unrecorded choices are not inferred.\n\nConventions, shared with `backtest_stats`: every Sharpe ratio here is **per period**\n(mean over sample standard deviation, not annualised), skewness and kurtosis are the\npopulation moment ratios, and kurtosis is **raw** (3 for a normal distribution).",
       "functions": [
         {
           "doc": "SHA-256 of the configuration's canonical JSON (sorted keys, no whitespace).\n\nTwo configurations hash equal exactly when they serialise to the same JSON, so key\norder does not matter but `1` and `1.0` differ. Raises `TypeError` for a configuration\nJSON cannot represent.",
@@ -985,7 +1006,7 @@
           "signature": "(config: Any) -> str"
         },
         {
-          "doc": "DSR: the PSR measured against SR0, the best Sharpe ratio luck alone would produce.\n\nGive the trials either as `trial_sharpes` — every configuration's per-period Sharpe\nratio, including this one — or as `n_trials` and `sharpe_std`, the count and the\nstandard deviation of their Sharpe ratios. `TrialRegistry.deflated_sharpe_ratio`\ntakes both from a registry.",
+          "doc": "DSR: the PSR against the expected maximum Sharpe under a zero-skill trial model.\n\nSR0 is an expected value, not an upper bound on chance outcomes. The trial model\nassumes independent configurations; this function does not estimate their\ndependence or an effective trial count. PSR's interpretation limits also apply.\n\nGive the trials either as `trial_sharpes` — every configuration's per-period Sharpe\nratio, including this one — or as `n_trials` and `sharpe_std`, the count and the\nstandard deviation of their Sharpe ratios. `TrialRegistry.deflated_sharpe_ratio`\ntakes both from a registry.",
           "name": "deflated_sharpe_ratio",
           "signature": "(\n    returns: Iterable[float],\n    trial_sharpes: Sequence[float] | None = None,\n    *,\n    n_trials: int | None = None,\n    sharpe_std: float | None = None,\n) -> float"
         },
@@ -1005,7 +1026,7 @@
           "signature": "(\n    returns: Iterable[float],\n    benchmark_sr: float = 0.0,\n    alpha: float = 0.05,\n) -> float"
         },
         {
-          "doc": "PSR: the probability that the true per-period Sharpe ratio exceeds `benchmark_sr`.\n\nPSR(SR*) = Z[(SR - SR*)·sqrt(T - 1) / sqrt(1 - γ3·SR + (γ4 - 1)/4·SR²)].\nSeverely cancelled uncertainty is recovered from the original float inputs\nwith exact rational arithmetic and 80-digit square roots. This exceptional\npath is slower and can differ from passing rounded moments to the native API.",
+          "doc": "PSR: an approximate one-sided confidence measure against `benchmark_sr`.\n\nPSR(SR*) = Z[(SR - SR*)·sqrt(T - 1) / sqrt(1 - γ3·SR + (γ4 - 1)/4·SR²)].\nSharpe ratios are per period and kurtosis is raw. This moment-based normal\napproximation does not correct for serial dependence or give a posterior\nprobability of skill.\nSeverely cancelled uncertainty is recovered from the original float inputs\nwith exact rational arithmetic and 80-digit square roots. This exceptional\npath is slower and can differ from passing rounded moments to the native API.",
           "name": "probabilistic_sharpe_ratio",
           "signature": "(returns: Iterable[float], benchmark_sr: float = 0.0) -> float"
         },
@@ -1015,7 +1036,7 @@
           "signature": "(returns: Iterable[float]) -> ReturnMoments"
         },
         {
-          "doc": "Probability that the strategy misses an annualised `target_sharpe` (AFML §15.4).\n\nCalls `strategy_risk.estimate_strategy_failure_probability` on the per-bet outcomes\nand returns its report; `failure_probability` is its `empirical_failure_probability`,\nthe share of bootstrapped precisions at or below the precision the target requires.",
+          "doc": "Conditional bootstrap estimate of missing an annualised target (AFML §15.4).\n\nThe fitted model uses mean winning/non-winning payouts, observed annual bet\nfrequency and IID resampling of individual historical outcomes. It does not\nmodel payout uncertainty, serial dependence, changing frequency or edge decay.\nThis is not a calibrated future failure probability for an arbitrary strategy.\n\nCalls `strategy_risk.estimate_strategy_failure_probability` on the per-bet outcomes\nand returns its report; `failure_probability` is its `empirical_failure_probability`,\nthe share of bootstrapped precisions at or below the precision the target requires.",
           "name": "strategy_failure_probability",
           "signature": "(\n    bet_outcomes: Iterable[float],\n    years_elapsed: float,\n    target_sharpe: float,\n    investor_horizon_years: float,\n    *,\n    bootstrap_iterations: int = 1000,\n    seed: int = 42,\n    kde_bandwidth: float | None = None,\n) -> dict[str, Any]"
         }
@@ -1037,6 +1058,67 @@
       "import": "openquant.fast_ewma",
       "kind": "compiled",
       "slug": "fast_ewma"
+    },
+    {
+      "classes": [
+        {
+          "doc": "AssemblyResult(feature_spec: 'tuple[FeatureSpec, ...]', requested_rows: 'tuple[tuple[str, int], ...]', rows: 'tuple[FeatureRow, ...]', excluded: 'tuple[ExcludedRow, ...]', coverage: 'tuple[FeatureCoverage, ...]')",
+          "methods": [
+            {
+              "doc": "",
+              "name": "requested_count",
+              "signature": "() -> int"
+            },
+            {
+              "doc": "",
+              "name": "complete_count",
+              "signature": "() -> int"
+            },
+            {
+              "doc": "",
+              "name": "excluded_count",
+              "signature": "() -> int"
+            }
+          ],
+          "name": "AssemblyResult",
+          "signature": ""
+        },
+        {
+          "doc": "ExcludedRow(row_id: 'str', decision_ns: 'int', missing: 'tuple[MissingFeature, ...]')",
+          "methods": [],
+          "name": "ExcludedRow",
+          "signature": ""
+        },
+        {
+          "doc": "FeatureCoverage(name: 'str', source_id: 'str', payload_field: 'str', present: 'int', missing_source: 'int', missing_field: 'int')",
+          "methods": [],
+          "name": "FeatureCoverage",
+          "signature": ""
+        },
+        {
+          "doc": "Output record; assemble_features establishes lineage and clock invariants.\n\nDirect construction is not a validation API. Values use typed equality.",
+          "methods": [],
+          "name": "FeatureRow",
+          "signature": ""
+        },
+        {
+          "doc": "MissingFeature(name: 'str', source_id: 'str', payload_field: 'str', reason: 'str')",
+          "methods": [],
+          "name": "MissingFeature",
+          "signature": ""
+        }
+      ],
+      "doc": "Project complete, ordered numeric feature rows from selected source bundles.\n\nClocks are exact builtin int64 UTC Unix nanoseconds, excluding NaT. Values keep\nbuiltin numeric types and signed zero; no transforms, imputation or coercion run.\nAliases may project the same source field into distinct named columns; this does\nnot imply independence. Each contributing source bundle is retained once.\n\nEvery supplied bundle is revalidated, including unused records. Valid unused\nsources do not change projection. Required sources for requested rows must have\nexactly the requested decision, even when a required field is missing. Missing\ninputs exclude rows explicitly; availability is aggregated only for complete\nrows. Coverage does not establish representativeness. The declared specification\ncannot prove it includes every real dependency, and provenance is an association\nguard, not authentication. Mapping keys collapsed upstream cannot be recovered.\nNormal package imports still initialize the existing native dependencies.",
+      "functions": [
+        {
+          "doc": "Return complete rows in request order, values in declared feature order.\n\nEmpty requests are valid; an empty specification is not. Missing source and\nfield counts are per feature over all requests, including excluded rows.\nNo empty or partial row receives an aggregate availability timestamp.",
+          "name": "assemble_features",
+          "signature": "(\n    feature_spec: Iterable[FeatureSpec],\n    decisions: Mapping[str, int],\n    selection: Selection,\n) -> AssemblyResult"
+        }
+      ],
+      "import": "openquant.feature_assembly",
+      "kind": "python",
+      "slug": "feature_assembly"
     },
     {
       "classes": [],
@@ -1116,12 +1198,12 @@
       "doc": "",
       "functions": [
         {
-          "doc": "Symmetric CUSUM filter returning event positions (AFML section 2.5.2.1, Snippet 2.4).\n\nFor each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are\nupdated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when\n`S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the\naccumulator that fired is reset to zero. The decision at bar `t` uses only data up to\n`t`. Unlike AFML's snippet, which differences whatever series it is given, this always\ntakes log returns of prices.\n\nParameters\n----------\nclose : list[float]\n    Strictly positive close prices, oldest first.\nthreshold : float | Sequence[float]\n    CUSUM threshold `h` in log-return units: one number for every bar, or one value per\n    bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple\n    of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the\n    first return is at bar 1), so it may be NaN; every other value, and a scalar, must be\n    finite and non-negative.\n\nReturns\n-------\nlist[int]\n    0-based positions into `close` of the event bars, in increasing order; empty for\n    fewer than two prices.\n\nRaises\n------\nTypeError\n    If `threshold` is a string, or is neither a number nor a sequence of numbers.\nValueError\n    If a per-bar `threshold` does not have one value per price, or a threshold that is\n    read is negative or not finite.",
+          "doc": "Symmetric CUSUM filter returning event positions (AFML section 2.5.2.1, Snippet 2.4).\n\nFor each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are\nupdated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when\n`S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the\naccumulator that fired is reset to zero. The decision uses prices up to bar `t`; the\ncaller must also construct dynamic thresholds from information available by `t`.\nUnlike AFML's snippet, which differences whatever series it is given, this always\ntakes log returns of prices.\n\nParameters\n----------\nclose : list[float]\n    Strictly positive close prices, oldest first.\nthreshold : float | Sequence[float]\n    CUSUM threshold `h` in log-return units: one number for every bar, or one value per\n    bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple\n    of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the\n    first return is at bar 1), so it may be NaN; every other value, and a scalar, must be\n    finite and non-negative.\n\nReturns\n-------\nlist[int]\n    0-based positions into `close` of the event bars, in increasing order; empty for\n    fewer than two prices.\n\nRaises\n------\nTypeError\n    If `threshold` is a string, or is neither a number nor a sequence of numbers.\nValueError\n    If a per-bar `threshold` does not have one value per price, or a threshold that is\n    read is negative or not finite.",
           "name": "cusum_filter_indices",
           "signature": "(close: Sequence[float], threshold: Any) -> list[int]"
         },
         {
-          "doc": "Symmetric CUSUM filter returning event timestamps (AFML section 2.5.2.1, Snippet 2.4).\n\nRuns `cusum_filter_indices` on `close` and maps each event position to its timestamp.\n\nFor each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are\nupdated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when\n`S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the\naccumulator that fired is reset to zero. The decision at bar `t` uses only data up to\n`t`. Unlike AFML's snippet, which differences whatever series it is given, this always\ntakes log returns of prices.\n\nParameters\n----------\nclose : list[float]\n    Strictly positive close prices, oldest first.\ntimestamps : list[str]\n    One timestamp per price, as `\"%Y-%m-%d %H:%M:%S\"` (an optional fractional second is\n    accepted).\nthreshold : float | Sequence[float]\n    CUSUM threshold `h` in log-return units: one number for every bar, or one value per\n    bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple\n    of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the\n    first return is at bar 1), so it may be NaN; every other value, and a scalar, must be\n    finite and non-negative.\n\nReturns\n-------\nlist[str]\n    Timestamps of the event bars, in bar order, formatted as `\"%Y-%m-%d %H:%M:%S\"` (with\n    fractional seconds only when present).\n\nRaises\n------\nTypeError\n    If `threshold` is a string, or is neither a number nor a sequence of numbers.\nValueError\n    If a timestamp cannot be parsed, `close` and `timestamps` differ in length, a\n    per-bar `threshold` does not have one value per price, or a threshold that is read\n    is negative or not finite.",
+          "doc": "Symmetric CUSUM filter returning event timestamps (AFML section 2.5.2.1, Snippet 2.4).\n\nRuns `cusum_filter_indices` on `close` and maps each event position to its timestamp.\n\nFor each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are\nupdated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when\n`S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the\naccumulator that fired is reset to zero. The decision uses prices up to bar `t`; the\ncaller must also construct dynamic thresholds from information available by `t`.\nUnlike AFML's snippet, which differences whatever series it is given, this always\ntakes log returns of prices.\n\nParameters\n----------\nclose : list[float]\n    Strictly positive close prices, oldest first.\ntimestamps : list[str]\n    One timestamp per price, as `\"%Y-%m-%d %H:%M:%S\"` (an optional fractional second is\n    accepted).\nthreshold : float | Sequence[float]\n    CUSUM threshold `h` in log-return units: one number for every bar, or one value per\n    bar aligned with `close` (a list, NumPy array or pandas Series), typically a multiple\n    of a daily-volatility estimate. Element 0 of a per-bar sequence is never read (the\n    first return is at bar 1), so it may be NaN; every other value, and a scalar, must be\n    finite and non-negative.\n\nReturns\n-------\nlist[str]\n    Timestamps of the event bars, in bar order, formatted as `\"%Y-%m-%d %H:%M:%S\"` (with\n    fractional seconds only when present).\n\nRaises\n------\nTypeError\n    If `threshold` is a string, or is neither a number nor a sequence of numbers.\nValueError\n    If a timestamp cannot be parsed, `close` and `timestamps` differ in length, a\n    per-bar `threshold` does not have one value per price, or a threshold that is read\n    is negative or not finite.",
           "name": "cusum_filter_timestamps",
           "signature": "(\n    close: Sequence[float],\n    timestamps: Sequence[str],\n    threshold: Any,\n) -> list[str]"
         },
@@ -1145,22 +1227,22 @@
       "doc": "",
       "functions": [
         {
-          "doc": "Fractionally difference a series with an expanding window.\n\nOutput `t` applies the first `t + 1` weights of `(1 - B)^d` to `series[0..=t]` (AFML\nSnippet 5.2). Leading outputs whose weights on missing history exceed `thresh` of the\ntotal absolute weight are NaN: `thresh=1.0` skips nothing (the mlfinlab default), AFML\nuses 0.01. The growing number of terms causes a drift (AFML 5.5.1), so prefer\n`frac_diff_ffd` for features. Pass levels (prices or log prices), not returns. Nothing\nis validated; a NaN input poisons every later output. Cost is O(n^2).\n\nParameters\n----------\nseries : list[float]\n    Levels, oldest first.\ndiff_amt : float\n    Differencing order `d`.\nthresh : float\n    Share of total absolute weight allowed on missing history before an output is NaN.\n\nReturns\n-------\nlist[float]\n    Differenced series, same length as `series`, with leading NaNs.",
+          "doc": "Fractionally difference a series with an expanding window.\n\nOutput `t` applies the first `t + 1` weights of `(1 - B)^d` to `series[0..=t]` (AFML\nSnippet 5.2). To compute the leading NaN count, generate `len(series)` oldest-first\nweights, normalize their cumulative absolute sum, and count entries strictly greater\nthan `thresh`. This count depends on batch length. `thresh=1.0` skips nothing (the\nmlfinlab default); AFML uses 0.01. Growing windows can introduce drift (AFML 5.5.1), so\nprefer `frac_diff_ffd` for features. Pass levels (prices or log prices), not returns.\nNumeric domains are not validated; a NaN input poisons every later output, even at\nzero weight. Neither function guarantees stationarity. Cost is O(n^2).\n\nParameters\n----------\nseries : list[float]\n    Levels, oldest first.\ndiff_amt : float\n    Differencing order `d`.\nthresh : float\n    Threshold on normalized cumulative absolute weights used to count leading NaNs.\n\nReturns\n-------\nlist[float]\n    Differenced series, same length as `series`, with leading NaNs.",
           "name": "frac_diff",
           "signature": "(series: Sequence[float], diff_amt: float, thresh: float) -> list[float]"
         },
         {
-          "doc": "Fractionally difference a series with a fixed-width window (FFD).\n\nThe weights are `get_weights_ffd(diff_amt, thresh, len(series))`; each output is their\ndot product with the matching trailing window, so the first `len(weights) - 1` outputs\nare NaN (AFML Snippet 5.3). A threshold too small for the data gives a window as long as\nthe series and a single non-NaN output. Each output uses only values at or before its own\nposition. Pass levels (prices or log prices), oldest first, not returns. Nothing is\nvalidated; a NaN poisons every output whose window covers it.\n\nParameters\n----------\nseries : list[float]\n    Levels, oldest first.\ndiff_amt : float\n    Differencing order `d`.\nthresh : float\n    Minimum absolute weight kept in the window (see `get_weights_ffd`).\n\nReturns\n-------\nlist[float]\n    Differenced series, same length as `series`, with leading NaNs.",
+          "doc": "Fractionally difference a series with a fixed-width window (FFD).\n\nThe weights are `get_weights_ffd(diff_amt, thresh, len(series))`; each output is their\ndot product with the matching trailing window, so the first `len(weights) - 1` outputs\nare NaN (AFML Snippet 5.3). A threshold too small for the data gives a window as long as\nthe series and a single eligible output (which may still be nonfinite). Extending a\nbatch that hit its cap can change the window and earlier output availability. Each\ndot product uses values at or before its own position. Pass levels (prices or log\nprices), oldest first, not returns. Numeric domains are not validated; a NaN poisons\nevery window containing it, even at zero weight. Stationarity is not guaranteed.\n\nParameters\n----------\nseries : list[float]\n    Levels, oldest first.\ndiff_amt : float\n    Differencing order `d`.\nthresh : float\n    Minimum absolute weight kept in the window (see `get_weights_ffd`).\n\nReturns\n-------\nlist[float]\n    Differenced series, same length as `series`, with leading NaNs.",
           "name": "frac_diff_ffd",
           "signature": "(series: Sequence[float], diff_amt: float, thresh: float) -> list[float]"
         },
         {
-          "doc": "First `size` fractional-differencing weights of order `diff_amt`.\n\nThe weights of `(1 - B)^d` follow `w_0 = 1`, `w_k = -w_{k-1} (d - k + 1) / k` (AFML\nSnippet 5.1). They are returned oldest lag first, so the last element is `w_0 = 1` and\nthe one before it is `-diff_amt`. Nothing is validated.\n\nParameters\n----------\ndiff_amt : float\n    Differencing order `d` (may be fractional).\nsize : int\n    Number of weights to return.\n\nReturns\n-------\nlist[float]\n    `size` weights, oldest lag first (empty when `size` is 0).",
+          "doc": "First `size` fractional-differencing weights of order `diff_amt`.\n\nThe weights of `(1 - B)^d` follow `w_0 = 1`, `w_k = -w_{k-1} (d - k + 1) / k` (AFML\nSnippet 5.1). They are returned oldest lag first, so the last element is `w_0 = 1` and\nthe one before it is `-diff_amt`. No numeric-domain validation is performed after\nargument conversion.\n\nParameters\n----------\ndiff_amt : float\n    Differencing order `d` (may be fractional).\nsize : int\n    Number of weights to return.\n\nReturns\n-------\nlist[float]\n    `size` weights, oldest lag first (empty when `size` is 0).",
           "name": "get_weights",
           "signature": "(diff_amt: float, size: int) -> list[float]"
         },
         {
-          "doc": "Fixed-width-window fractional-differencing weights of order `diff_amt`.\n\nUses the recursion of `get_weights` and stops before the first weight whose absolute\nvalue is below `thresh`, or once `lim` weights exist, whichever comes first (AFML\nSnippet 5.3). For a non-integer `diff_amt` the weights never reach zero, so a `thresh`\nof 0 or less (or NaN) means \"cap only\" and yields exactly `lim` weights. `thresh` is a\nfloor on a single weight's magnitude, not a share of cumulative weight as in `frac_diff`.\n\nParameters\n----------\ndiff_amt : float\n    Differencing order `d` (may be fractional).\nthresh : float\n    Minimum absolute weight to keep.\nlim : int\n    Maximum number of weights.\n\nReturns\n-------\nlist[float]\n    At most `lim` weights, oldest lag first (last element `1.0`); empty when `lim` is 0.",
+          "doc": "Fixed-width-window fractional-differencing weights of order `diff_amt`.\n\nUses the recursion of `get_weights` and stops before the first weight whose absolute\nvalue is below `thresh`, or once `lim` weights exist, whichever comes first (AFML\nSnippet 5.3). A `thresh` of 0 or less (or NaN) never satisfies the strict stopping\ncomparison, even for zero weights: it means \"cap only\" and yields exactly `lim` weights.\n`thresh` is a floor on a single weight's magnitude, not a share of cumulative weight as\nin `frac_diff`.\n\nParameters\n----------\ndiff_amt : float\n    Differencing order `d` (may be fractional).\nthresh : float\n    Minimum absolute weight to keep.\nlim : int\n    Maximum number of weights.\n\nReturns\n-------\nlist[float]\n    At most `lim` weights, oldest lag first (last element `1.0`); empty when `lim` is 0.",
           "name": "get_weights_ffd",
           "signature": "(diff_amt: float, thresh: float, lim: int) -> list[float]"
         }
@@ -1394,7 +1476,7 @@
       "doc": "",
       "functions": [
         {
-          "doc": "Optimal Number of Clusters (ONC) partition of a correlation matrix.\n\nNot from AFML: López de Prado, Machine Learning for Asset Managers (2020), section 4.4,\nSnippets 4.1-4.2. Correlations become distances `sqrt((1 - rho) / 2)` (inputs clamped\nto `[-1, 1]`), each item is represented by its row of that matrix, and k-means is run\nfor every `k` from 2 to `max(N - 1, 2)`, `repeat` times each; the partition with the\nhighest silhouette t-statistic `mean(S) / std(S)` wins. Clusters scoring below average\nare re-clustered and kept only if that improves their mean t-statistic. Negative\ncorrelation means far apart. Each k-means run is one k-means++ initialisation (as\nscikit-learn's KMeans), all drawn from one random stream seeded by `seed`, so results\nare deterministic. ONC is a random search: clean structure comes back the same under\nany seed, but on real data the partition can depend on the seed; compare a few seeds\nand raise `repeat` before relying on one. The search starts at `k = 2`, so a matrix\nwith no structure is still partitioned; a low mean silhouette is the sign the clusters\nare not real. Cost grows at least as `N^3`.\n\nParameters\n----------\ncorr_mat : list[list[float]]\n    `N x N` correlation matrix (`N >= 2`), one inner list per row. Symmetry and a unit\n    diagonal are not checked.\nrepeat : int\n    Number of k-means initialisations per candidate `k`; must be positive.\nseed : int, default 42\n    Seed of the random stream behind every k-means initialisation (the Rust\n    `DEFAULT_SEED` when omitted).\n\nReturns\n-------\ndict[str, Any]\n    `ordered_correlation` (list[list[float]], the input permuted so each cluster's\n    members are contiguous), `clusters` (dict[int, list[int]], cluster label to member\n    indices in the input's row order) and `silhouette_scores` (list[float], one per\n    item in the input's row order; 0 for a singleton cluster's member).\n\nRaises\n------\nValueError\n    If `corr_mat` is empty or ragged, or the core rejects the input (e.g. `repeat` of\n    0, a non-square matrix or fewer than two rows, or NaN entries that leave no\n    candidate partition).",
+          "doc": "Optimal Number of Clusters (ONC) partition of a correlation matrix.\n\nNot from AFML: López de Prado, Machine Learning for Asset Managers (2020), section 4.4,\nSnippets 4.1-4.2. Correlations become distances `sqrt((1 - rho) / 2)` (inputs clamped\nto `[-1, 1]`), each item is represented by its row of that matrix, and k-means is run\nfor every `k` from 2 to `max(N - 1, 2)`, `repeat` times each; the partition with the\nhighest silhouette quality `mean(S) / std(S)` wins (population deviation; a heuristic\nscore, not a calibrated Student t-test). Clusters scoring below average\nare re-clustered and kept only if that improves their mean t-statistic. Negative\ncorrelation means far apart. Each k-means run is one k-means++ initialisation (as\nscikit-learn's KMeans), all drawn from one random stream seeded by `seed`, so results\nare deterministic. ONC is a random search: even clean structure has no universal\nseed-invariance guarantee; compare a few seeds\nand raise `repeat` before relying on one. The search starts at `k = 2`, so a matrix\nwith no structure is still partitioned; a low mean silhouette indicates weak separation\nunder this representation, not a formal test of independence. Cost grows at least as `N^3`.\n\nParameters\n----------\ncorr_mat : list[list[float]]\n    `N x N` correlation matrix (`N >= 2`), one inner list per row. Symmetry and a unit\n    diagonal are not checked.\nrepeat : int\n    Number of k-means initialisations per candidate `k`; must be positive.\nseed : int, default 42\n    Seed of the random stream behind every k-means initialisation (the Rust\n    `DEFAULT_SEED` when omitted).\n\nReturns\n-------\ndict[str, Any]\n    `ordered_correlation` (list[list[float]], the input permuted so each cluster's\n    members are contiguous), `clusters` (dict[int, list[int]], cluster label to member\n    indices in the input's row order) and `silhouette_scores` (list[float], one per\n    item in the input's row order; 0 for a singleton cluster's member).\n\nRaises\n------\nValueError\n    If `corr_mat` is empty or ragged, or the core rejects the input (e.g. `repeat` of\n    0, a non-square matrix or fewer than two rows, or NaN entries that leave no\n    candidate partition).",
           "name": "get_onc_clusters",
           "signature": "(\n    corr_mat: Sequence[Sequence[float]],\n    repeat: int,\n    seed: int = 42,\n) -> Any"
         }
@@ -1470,6 +1552,61 @@
       "import": "openquant.portfolio",
       "kind": "compiled",
       "slug": "portfolio"
+    },
+    {
+      "classes": [
+        {
+          "doc": "Bundles in incoming row order; their original selection positions and drops.\n\nDropped keys are in original selected order. Missing selection groups remain\nmissing; they cannot be reintroduced as cleaned rows.",
+          "methods": [],
+          "name": "RejoinResult",
+          "signature": "(NamedTuple)"
+        },
+        {
+          "doc": "Candidate for a stable sample row and source stream; revision IDs scoped to both.\n\nMultiple event times may belong to a sample/source group. The caller owns the\ngroup definition; this is not inference of identity from timestamps or OHLCV.\nevent_ns means an observed input event, not a forecast target/validity time;\navailability must not precede that observation. Integers use canonical hex\nencoding, so no decimal conversion limit or binary64 rounding is imposed.\nUse ``make_revision`` to accept mappings or pairs. Direct construction also\nvalidates all fields. Payload field order is normalized, numeric values are not.",
+          "methods": [
+            {
+              "doc": "",
+              "name": "key",
+              "signature": "() -> Key"
+            }
+          ],
+          "name": "Revision",
+          "signature": ""
+        },
+        {
+          "doc": "Schema-tagged digest binds decision, IDs, clocks and exact typed payload.\n\nDigest is consistency evidence, not a signature or external attestation.\nReconstructing a bundle with fabricated but consistent inputs recomputes it.",
+          "methods": [],
+          "name": "SelectedRevision",
+          "signature": ""
+        },
+        {
+          "doc": "Bundles and missing groups, each in original decisions mapping order.",
+          "methods": [],
+          "name": "Selection",
+          "signature": ""
+        }
+      ],
+      "doc": "Bind exact selected numeric values to declared revisions across row reordering.\n\nThis is an association/consistency guard, NOT provider authentication. A caller can\nbackdate metadata or swap identities and construct a new self-consistent bundle;\nSHA256 cannot detect that without an external trusted anchor. Selection is latest\nonly relative to supplied history: omitted candidates cannot be discovered. A\nbundle does not attest that selection policy executed or history was complete;\na caller may directly bundle an eligible older revision. Identical payloads with\nforged/swapped physical identities cannot recover discarded provenance. Python frozen\nobjects are convenience invariants, not a security boundary.\n\nOrder: retain stable sample/source IDs and raw revisions; select at the decision\nBEFORE cleaning drops nulls or resolves duplicate events; retain bundles beside\ncleaned rows; rejoin by IDs and compare exact payloads. This strict API rejects\nall unknown clocks/nonfinite or null payloads globally, including future records.\nIt never drops an invalid latest revision to resurrect an older value. A later\nvalid publication is excluded at earlier decisions by the explicit as-of policy.\n\nPayloads are flat named builtin integers/floats. Types and signed zero matter:\ninteger 1 differs from float 1.0. Cleaner coercion, rounding, renamed fields and\nlearned transformations fail exact binding. If needed, explicitly normalize\nvalues with precision-loss checks BEFORE constructing revisions; this module\nperforms no numeric coercion. Mapping inputs cannot reveal duplicate fields\nalready collapsed upstream; use pairs to reject duplicates before collapse.\nNormal package import still initializes existing native/package dependencies.",
+      "functions": [
+        {
+          "doc": "Construct an immutable, validated candidate without coercing numeric values.",
+          "name": "make_revision",
+          "signature": "(\n    row_id: str,\n    source_id: str,\n    revision_id: str,\n    event_ns: int,\n    available_ns: int,\n    payload: object,\n) -> Revision"
+        },
+        {
+          "doc": "Bind reordered/subset cleaned rows to exactly matching selected payloads.\n\nEvery row is (row_id, source_id, event_ns, numeric payload). Duplicate/unknown keys and\nany typed-value mismatch fail closed. No positional fallback, rounding\ntolerance, field dropping or revision reselection. Empty rows are permitted\nonly with explicit require_all=False and dropped-key output.",
+          "name": "rejoin_selected",
+          "signature": "(\n    selection: Selection,\n    rows: Iterable[tuple[str, str, int, object]],\n    *,\n    require_all: bool = True,\n) -> RejoinResult"
+        },
+        {
+          "doc": "Select latest eligible (event, availability), before canonical row cleaning.\n\nAll supplied records and decisions validate. Same full revision identities\nwith conflicting content reject globally, even if future or unrequested.\nExact duplicates are idempotent. Distinct winning revision IDs at equal clocks\nreject even if their values agree. No lexical revision-ID tiebreak is implied.\nUnknown decision groups return missing, never a prior row or positional match.",
+          "name": "select_revisions",
+          "signature": "(\n    revisions: Iterable[Revision],\n    decisions: Mapping[Key, int],\n) -> Selection"
+        }
+      ],
+      "import": "openquant.provenance",
+      "kind": "python",
+      "slug": "provenance"
     },
     {
       "classes": [
@@ -1740,7 +1877,7 @@
           "signature": "(\n    events: int = 1000,\n    crash_start_fraction: float = 0.7,\n    calm_venues: int = 3,\n    shock_venue: int = 0,\n) -> list[tuple[int, float, float, float, int]]"
         },
         {
-          "doc": "Run the VPIN/HHI early-warning engine over a stream of events, one snapshot per event.\n\nAFML Chapter 22 (§22.6.4-22.6.5). VPIN runs on a volume clock: events fill buckets of\n`bucket_volume` (an event that overflows a bucket is split, keeping its buy/sell ratio),\nand VPIN is the mean of `|V_buy - V_sell| / bucket_volume` over the last `support_buckets`\nfull buckets. `vpin_cdf_threshold` applies to the empirical CDF of VPIN over the last\n`cdf_lookback` VPIN values (one per completed bucket, ties counted half), not to raw VPIN;\ne.g. 0.99 with `cdf_lookback >= 50`. HHI is `sum_v (Q_v / sum_j Q_j)^2`, weighting venues\nby their share of volume over the last `lookback_events` events. An event alerts when\n`vpin_cdf >= vpin_cdf_threshold` and `hhi >= hhi_threshold`. Events are processed in input\norder; timestamps are carried through but neither validated nor used.\n\nParameters\n----------\nevents : list[tuple[int, float, float, float, int]]\n    `(timestamp_ns, price, buy_volume, sell_volume, venue_id)` rows, e.g. from\n    `generate_synthetic_flash_crash_stream`. Buy and sell volumes are already classified\n    by the caller; `venue_id` is a non-negative int.\nbucket_volume : float\n    Volume per VPIN bucket, in the units of the event volumes; finite and > 0.\nsupport_buckets : int\n    Number of completed buckets in the VPIN mean; must be > 0.\nlookback_events : int\n    Number of events in the HHI window; must be > 0.\nvpin_cdf_threshold : float\n    Alert threshold on the CDF of VPIN, in `(0, 1)` and at most `1 - 0.5 / cdf_lookback`\n    (the largest value the CDF can take).\nhhi_threshold : float\n    Alert threshold on HHI (1 means one venue carries all the volume), in `(0, 1]`.\ncdf_lookback : int\n    Number of past VPIN values the CDF is taken over; must be >= 2.\n\nReturns\n-------\ndict[str, Any]\n    Keys:\n    - `snapshots`: list of `(timestamp_ns, price, vpin, hhi, normalized_risk_score,\n      is_alert, vpin_cdf)` tuples, one per event in input order. `vpin`, `hhi`, `vpin_cdf`\n      and `normalized_risk_score` (`min(vpin_cdf / vpin_cdf_threshold,\n      hhi / hhi_threshold)`) are `None` until their windows fill, and `is_alert` is\n      `False` then. `vpin_cdf` is last so that the first six positions keep their meaning.\n    - `metrics`: dict with `processed_events` (int), `events_per_sec`,\n      `avg_event_latency_micros`, `max_event_latency_micros` and `runtime_secs` (floats;\n      wall-clock timings that vary between runs).\n    - `alert_count`: number of alerting snapshots (int).\n\nRaises\n------\nValueError\n    If a configuration value is out of range (see above), or an event has a price that is\n    not finite and > 0, a negative or non-finite volume, or zero total volume. The run\n    stops at the first invalid event and returns no partial result.",
+          "doc": "Run the VPIN/HHI early-warning engine over a stream of events, one snapshot per event.\n\nAFML Chapter 22 (§22.6.4-22.6.5). VPIN runs on a volume clock: events fill buckets of\n`bucket_volume` (an event that overflows a bucket is split, keeping its buy/sell ratio),\nand the score averages the last `support_buckets` full buckets. Inside a bucket it sums\neach event's absolute imbalance before summing across events; opposite one-sided events\ndo not cancel. This differs from net-bucket VPIN and depends on input event aggregation. `vpin_cdf_threshold` applies to the empirical CDF of VPIN over the last\n`cdf_lookback` VPIN values (one per completed bucket, ties counted half), not to raw VPIN;\ne.g. 0.99 with `cdf_lookback >= 50`. HHI is `sum_v (Q_v / sum_j Q_j)^2`, weighting venues\nby their share of volume over the last `lookback_events` events. An event alerts when\n`vpin_cdf >= vpin_cdf_threshold` and `hhi >= hhi_threshold`. Events are processed in input\norder; timestamps are carried through but neither validated nor used.\n\nParameters\n----------\nevents : list[tuple[int, float, float, float, int]]\n    `(timestamp_ns, price, buy_volume, sell_volume, venue_id)` rows, e.g. from\n    `generate_synthetic_flash_crash_stream`. Buy and sell volumes are already classified\n    by the caller; `venue_id` is a non-negative int.\nbucket_volume : float\n    Volume per VPIN bucket, in the units of the event volumes; finite and > 0.\nsupport_buckets : int\n    Number of completed buckets in the VPIN mean; must be > 0.\nlookback_events : int\n    Number of events in the HHI window; must be > 0.\nvpin_cdf_threshold : float\n    Alert threshold on the CDF of VPIN, in `(0, 1)` and at most `1 - 0.5 / cdf_lookback`\n    (the largest value the CDF can take).\nhhi_threshold : float\n    Alert threshold on HHI (1 means one venue carries all the volume), in `(0, 1]`.\ncdf_lookback : int\n    Number of past VPIN values the CDF is taken over; must be >= 2.\n\nReturns\n-------\ndict[str, Any]\n    Keys:\n    - `snapshots`: list of `(timestamp_ns, price, vpin, hhi, normalized_risk_score,\n      is_alert, vpin_cdf)` tuples, one per event in input order. `vpin`, `hhi`, `vpin_cdf`\n      and `normalized_risk_score` (`min(vpin_cdf / vpin_cdf_threshold,\n      hhi / hhi_threshold)`) are `None` until their windows fill, and `is_alert` is\n      `False` then. `vpin_cdf` is last so that the first six positions keep their meaning.\n    - `metrics`: dict with `processed_events` (int), `events_per_sec`,\n      `avg_event_latency_micros`, `max_event_latency_micros` and `runtime_secs` (floats;\n      wall-clock timings that vary between runs).\n    - `alert_count`: number of alerting snapshots (int).\n\nRaises\n------\nValueError\n    If a configuration value is out of range (see above), or an event has a price that is\n    not finite and > 0, a negative or non-finite volume, or zero total volume. The run\n    stops at the first invalid event and returns no partial result.",
           "name": "run_streaming_pipeline",
           "signature": "(\n    events: Sequence[tuple[int, float, float, float, int]],\n    bucket_volume: float,\n    support_buckets: int,\n    lookback_events: int,\n    vpin_cdf_threshold: float,\n    hhi_threshold: float,\n    cdf_lookback: int,\n) -> Any"
         }

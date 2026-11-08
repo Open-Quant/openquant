@@ -42,9 +42,9 @@ Requires a Rust toolchain (pinned by `rust-toolchain.toml`), Python 3.11+ and
 ```bash
 git clone https://github.com/Open-Quant/openquant.git && cd openquant
 uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-uv run --python .venv/bin/python python -c "import openquant; print('ok')"
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
+uv run --no-sync --python .venv/bin/python python -c "import openquant; print('ok')"
 ```
 
 The Python distribution name is `pyopenquant`; the import name is `openquant`.
@@ -54,7 +54,11 @@ to an unrelated project.
 The extension crate (`crates/pyopenquant`) is built into a wheel with maturin and is
 never published to crates.io.
 
-## Quick Start
+## Maintainer validation
+
+For a first result, follow the [Quickstart](https://open-quant.github.io/openquant/quickstart/).
+The commands below test and benchmark the implementation.
+
 ```bash
 # Fast validation (what CI runs on every PR)
 cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
@@ -73,23 +77,19 @@ python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchma
 
 ## Research Flywheel (Python + Rust)
 ```bash
-# Python env + bindings
-uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-
+# After the installation above, from the repository root:
 # Notebook logic smoke + reproducible experiment run
-uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
-uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
+uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
+uv run --no-sync --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
 
 # Rust notebook-companion smoke
 cargo run -p openquant --example research_notebook_smoke
 
 # Python pipeline micro-benchmark (for speed demos)
-uv run --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
+uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
 
 # Python data-processing benchmark (per-function throughput/latency + JSON output)
-uv run --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
+uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
 ```
 
 ## Crate Layout
@@ -113,7 +113,7 @@ The documentation at https://open-quant.github.io/openquant/ is built from `docs
 
 ```bash
 cd docs-site
-bun install
+bun install --frozen-lockfile
 bun run dev
 ```
 

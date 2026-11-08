@@ -2,7 +2,7 @@
 title: "codependence"
 description: "Measures of dependence that are true metrics or that see non-linear relationships: correlation distances, distance correlation, mutual information and variation of information."
 status: authored
-last_authored: '2026-11-06'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -53,17 +53,33 @@ With $\rho$ the Pearson correlation of the two series:
 | `absolute_angular_distance` | $\sqrt{\tfrac12(1-\lvert\rho\rvert)}$ | identical |
 | `squared_angular_distance` | $\sqrt{\tfrac12(1-\rho^{2})}$ | identical |
 
-All three are proper metrics on $[0,1]$. Which one is right depends on the portfolio. For a
+All three return values in $[0,1]$, but they do not distinguish every pair of raw series:
+positive affine transformations have zero angular distance, and the absolute and squared
+versions also identify opposite signs. Their metric interpretation concerns those
+representations, not equality of the original observations. Which one is right depends on the portfolio. For a
 long-only book, an asset with $\rho=-1$ is the best diversifier available and belongs far
 away: use the first. For a long-short book the same asset is a perfect substitute with the
 sign flipped, and belongs in the same cluster: use the second or third. The squared version
 spreads out high correlations and compresses low ones.
 
+For example, zero distance need not mean equal raw values:
+
+```python
+from openquant import codependence as cd
+
+assert cd.angular_distance([0, 1, 2, 3], [10, 12, 14, 16]) == 0.0
+assert cd.variation_of_information_score(
+    [0, 0.1, 0.8, 1], [0, 0.2, 0.7, 1], 2, True
+) == 0.0  # different values, identical two-bin assignments
+```
+
 ## Dependence without linearity
 
 **Distance correlation** (Székely et al., 2007) compares the matrix of pairwise distances
-within $x$ to the one within $y$, after double-centring each. It lies in $[0,1]$ and is zero
-*only* when the series are independent, which is not true of Pearson correlation.
+within $x$ to the one within $y$, after double-centring each. It lies in $[0,1]$. The
+[population measure is zero exactly under independence](https://doi.org/10.1214/009053607000000505);
+this function returns a finite-sample estimate, not an independence test or a p-value.
+Independent draws generally have a positive sample value, as the example below shows.
 
 **Mutual information** is the reduction in uncertainty about one variable from knowing the
 other, $I[X;Y]=H[X]+H[Y]-H[X,Y]$, with the entropies estimated from histograms.
@@ -72,8 +88,14 @@ $\min(H[X],H[Y])$, giving a number in $[0,1]$.
 
 **Variation of information** (Meilă, 2007) is the corresponding distance,
 $VI[X;Y]=H[X]+H[Y]-2\,I[X;Y]$: the uncertainty left in each variable once the other is
-known. It is a true metric. Normalised, it is divided by the joint entropy $H[X,Y]$ and lies
-in $[0,1]$, with 0 meaning each variable determines the other.
+known. Its metric interpretation concerns discrete partitions. Here the inputs are binned:
+a zero result means the observed bin assignments determine each other, not that the raw
+series are identical or that population dependence has been established. Normalised, it is
+divided by the joint entropy $H[X,Y]$ and lies in $[0,1]$.
+
+With `normalize=False`, both mutual information and variation of information are in
+**nats**: the implementation uses natural logarithms. Divide by `math.log(2)` to
+convert to bits. The normalized scores are dimensionless.
 
 Both estimates depend on the bin count. `get_optimal_number_of_bins(n_obs, corr)` implements
 the Hacine-Gharbi et al. (2012) rules, which minimise the bias of the histogram estimator:
@@ -84,7 +106,8 @@ B \;=\; \operatorname{round}\!\left[\frac{1}{\sqrt2}\sqrt{1+\sqrt{1+\frac{24\,N}
 $$
 
 Passing `n_bins = None` to the information functions applies this with the sample
-correlation.
+correlation, except that correlations within `1e-4` of either +1 or −1 use the
+univariate rule to avoid the singular denominator.
 
 ```python
 import math
@@ -165,6 +188,10 @@ assert!(matches!(angular_distance(&x, &[1.0]), Err(CodependenceError::InputLengt
 ```
 
 ## What to watch for
+
+- **Align observations before calling.** Inputs are paired by position, with no timestamp
+  alignment or missing-value filtering. Join on the intended observation times and remove
+  missing pairs together; dropping missing values separately changes the pairs.
 
 - **Correlation boundaries are rounded safely.** Finite correlations are clamped to
   `[-1, 1]` before the angular-distance transforms, so rounding just beyond perfect

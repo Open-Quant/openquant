@@ -2,7 +2,7 @@
 title: Prerequisites
 description: Toolchain OpenQuant requires, how to install it on each platform, and why each version floor exists.
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -56,10 +56,13 @@ as its linker. Without it every Rust build fails at the link step with
 
 ### Windows
 
-Use WSL2 and follow the Debian/Ubuntu instructions. The nightly workflow
-runs the core crate's tests on `windows-latest` and `macos-latest`, but
-the Python extension is built and tested on `ubuntu-latest` only, so a
-native Windows build of the bindings is unverified by this project.
+For the shell-based contributor commands on this site, use WSL2 and follow
+the Debian/Ubuntu instructions. The nightly workflow runs core Rust tests
+on Windows and macOS. The release workflow also defines native Windows and
+macOS Python wheel builds and smoke tests, including on
+packaging pull requests. A passing run is needed to establish a particular wheel's result.
+That wheel smoke coverage is narrower than the full Python suite, which the
+main CI matrix runs on Ubuntu.
 
 ### Verify
 
@@ -72,18 +75,21 @@ rustc --version && cargo --version && uv --version && git --version
 | Tool | Floor | Where it is declared | Why |
 |---|---|---|---|
 | Rust | the pinned toolchain | `rust-toolchain.toml` (`channel = "1.98.1"`) | rustup reads `rust-toolchain.toml` in the repository root, so local builds and every CI job use the same compiler and the same clippy lints. No `rust-version` (MSRV) key is declared in any `Cargo.toml`; the pinned version is the only one CI proves. |
-| Python | 3.11 minimum, **3.13 recommended** | `requires-python = ">=3.11"` in `pyproject.toml` | 3.11 is the floor the package metadata enforces at install time. The `python` jobs in `.github/workflows/ci.yml` build and test the extension on both 3.11 and 3.13 on every PR; 3.13 is what the `justfile` develops on. 3.12 is not tested. |
-| `uv` | any recent release | not pinned | Every `just py-*` recipe shells out to `uv`, and CI installs it via `astral-sh/setup-uv@v7`. It is the project's only supported way to create the Python environment. |
-| Node | 22.12 | not pinned (CI builds the site with Bun via `oven-sh/setup-bun@v2`) | Docs site only. Astro 7 requires Node 22.12 or later; Bun works too. |
+| Python | 3.11 minimum, **3.13 recommended** | `requires-python = ">=3.11"` in `pyproject.toml` | The main CI Python suite runs on 3.11 and 3.13; 3.13 is the `justfile` development default. The release workflow additionally smoke-tests wheels on 3.12. |
+| `uv` | any recent release | not pinned | The documented Python environment recipes use `uv`; CI installs it via `astral-sh/setup-uv@v7`. |
+| Node | 22.12 | Astro's package engine requirement; no repository Node version pin | Docs site only. Node executes Astro; Bun is used as the package manager and script runner in CI. |
 | Bun | latest | `oven-sh/setup-bun@v2` in `docs-pages.yml` | Docs site only, and **optional** — see below. |
 
-:::note[Which Python versions have evidence behind them]
+:::note[Which Python versions the workflows target]
 - `pyproject.toml` — `requires-python = ">=3.11"`
 - `.github/workflows/ci.yml`, `python` job — a matrix of `3.11` and `3.13`
 - `justfile`, recipe `py-setup` — `uv venv --python 3.13 .venv`
 
-Both ends of the supported range are built and tested on every PR. 3.12
-sits between them and is expected to work, but nothing runs it.
+The full Python suite covers 3.11 and 3.13 in main CI. The release workflow's
+wheel smoke loop covers 3.11, 3.12 and 3.13 on its platform matrix; it runs
+for releases, manual dispatches and pull requests matching its packaging
+path filter. These are configured checks, not a claim that every Python
+version allowed by the open-ended package metadata has been tested.
 :::
 
 :::note[Bun is not required]
@@ -94,12 +100,13 @@ manager and script runner. npm works:
 
 ```bash
 cd docs-site
-npm install
-npx astro build
+npm ci
+npm run build
 ```
 
-That is the path used to verify every docs command on this site. If you do
-want Bun, install it with `curl -fsSL https://bun.sh/install | bash`.
+This builds the site only. It does not run the full `check:docs` gate, whose
+script currently invokes Bun for its component commands. To use that aggregate
+gate as written, install Bun with `curl -fsSL https://bun.sh/install | bash`.
 :::
 
 ## Rust dependencies that move together

@@ -135,3 +135,10 @@ jobs:
         run: uv run --no-sync python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out "$RUNNER_TEMP/openquant-artifacts"
       - name: Rust notebook-companion smoke
         run: cargo run -p openquant --example research_notebook_smoke
+      # Both existing Python matrix versions exercise the optional research
+      # layer after the normal locked-environment tests and runtime smokes.
+      - name: Offline research tests (pinned numerical runtime)
+        run: |
+          uv pip install --python .venv/bin/python -r experiments/requirements-offline-research.txt
+          uv run --no-sync python -c "import numpy, scipy; print('NumPy', numpy.__version__, 'SciPy', scipy.__version__)"
+          uv run --no-sync pytest -q python/tests/test_*_lab.py python/tests/test_replay_offline_report.py

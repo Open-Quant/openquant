@@ -2,7 +2,7 @@
 title: "ensemble_methods"
 description: "Diagnostics for bagged ensembles: how much variance averaging removes, given how correlated the estimators are."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -53,8 +53,9 @@ $$
 \;=\; \bar\sigma^2\Bigl(\bar\rho + \frac{1-\bar\rho}{N}\Bigr)
 $$
 
-The second term is what more estimators buy, and it goes to zero. The first term is a floor
-that no number of estimators moves. With independent estimators variance falls as $1/N$; at
+For a fixed nonnegative average correlation, the second term goes to zero as more
+estimators are added, and the first term is the limiting floor. Adding estimators can also
+change the average correlation, so this limit holds only while that assumption holds. With independent estimators variance falls as $1/N$; at
 $\bar\rho=0.9$, a thousand estimators remove at most a tenth of it.
 
 <figure>
@@ -115,7 +116,23 @@ Twenty-five independent models cut error variance to 4% of a single model's. Twe
 models correlated at 0.9 cut it to 92%. Note what the correlation was measured on: the models'
 *errors*. `average_pairwise_prediction_correlation` takes whatever rows it is given, and on
 raw predictions of a common target it mostly measures that they all track the target. Pass
-residuals, or predictions on a de-meaned target, to get the $\bar\rho$ the formula means.
+residuals (prediction minus the matching observed target) to assess error variance.
+Subtracting a constant mean from each forecast does not remove the shared target: Pearson
+correlation is unchanged by such centering. Use predictions made out of sample on the same
+observations, with rows aligned across models.
+
+A small decomposition distinguishes individual models from their average:
+
+```python
+from openquant import ensemble
+
+truth = [1.0, 2.0]
+rows = [[1.0, 1.0], [3.0, 3.0]]
+bias_sq, variance, noise, mse = ensemble.bias_variance_noise(truth, rows)
+bagged = ensemble.aggregate_regression_mean(rows)
+assert (bias_sq, variance, noise, mse) == (0.5, 1.0, None, 1.5)
+assert sum((p - y)**2 for p, y in zip(bagged, truth)) / len(truth) == 0.5
+```
 
 ## The other functions
 
@@ -171,9 +188,20 @@ assert!((decision.expected_bagging_variance - 0.328).abs() < 1e-12);
   `noise` is `None` and `bias_sq` means "bias plus noise". Pass `y_expected` = E[y|x] (known in
   a simulation, as in §6.2) and bias² is measured against it, `noise` = mean((y_true −
   y_expected)²), and bias² + variance + noise = MSE in expectation (not exactly in one sample).
-- **The formula assumes equal variances and one average correlation.** A few strong models
-  among many weak ones, or clusters of near-identical models, break it; the realised column
-  in the example is the honest check.
+- **The formula assumes equal variances.** Correlations may differ across pairs: their
+  arithmetic average still gives the identity when variances are equal, even with clusters
+  of similar models. Unequal variances require the covariances themselves; compute
+  `sum(covariance_matrix) / N**2`. The realised column in the example checks the approximation.
+- **Not every accepted correlation is feasible for a given ensemble size.** For `N > 1`,
+  an average correlation of equal-variance estimators must satisfy `rho >= -1/(N-1)`, since
+  the variance of their sum cannot be negative. The function checks only `[-1,1]`, so an
+  impossible combination can return a negative variance. A fixed negative correlation
+  cannot be extrapolated to arbitrarily many estimators.
+- **Constant prediction rows contribute zero correlation.** Pearson correlation is
+  undefined for a constant row; the helper substitutes zero for each affected pair. That
+  convention is not evidence of independent errors. Inspect row variances first.
+- **The returned MSE averages individual-model errors.** It is not the MSE of the
+  ensemble-mean forecast. Without `y_expected`, the latter equals the returned `bias_sq`.
 - **From Python, vote and label outputs are lists of 0/1 ints.**
   `bias_variance_noise` returns a plain tuple `(bias_sq, variance, noise, mse)` with `noise`
   `None` unless `y_expected` is passed, and

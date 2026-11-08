@@ -2,7 +2,7 @@
 title: "hrp"
 description: "Hierarchical Risk Parity: portfolio weights from a clustering of the correlation matrix, with no matrix inversion."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -165,6 +165,38 @@ distance matrices are public fields. `HierarchicalRiskParity::new()` clusters on
 distance; `HierarchicalRiskParity::with_distance(HrpDistance::Correlation)` (Python:
 `allocate_hrp(..., distance="correlation")`) picks the other.
 
+## Input shapes and Python errors
+
+For `N = len(asset_names)`, price and return matrices have observations in rows and
+`N` asset columns; covariance is `N × N`. Names label positions: the allocator does
+not join or reorder inputs by name. Keep covariance axes and history columns in the
+same asset order. In Python, `(weights, ordered_indices)` contains weights in the
+**original `asset_names` order**; the second list is the leaf permutation for display.
+Use `zip(asset_names, weights)`, not `zip(reordered_names, weights)`.
+
+Python converts every supplied matrix before Rust selects which input to use.
+Omit unused optional matrices or pass `None`, not `[]`: even an unused empty or
+ragged price matrix raises `ValueError` when a valid covariance was supplied.
+The shared conversion helper calls these errors `"prices matrix ..."` even when
+the malformed argument was returns or covariance. Rust callers already supply
+rectangular `DMatrix` values; core shape errors are `HrpError::DimensionMismatch`
+(mapped to `ValueError` in Python).
+
+```python
+from openquant import hrp
+
+names = ["a", "b"]
+covariance = [[0.04, 0.0], [0.0, 0.09]]
+weights, order = hrp.allocate_hrp(names, covariance_matrix=covariance)
+assert abs(dict(zip(names, weights))["a"] - 9 / 13) < 1e-12
+try:
+    hrp.allocate_hrp(names, asset_prices=[], covariance_matrix=covariance)
+except ValueError as error:
+    assert "at least one row" in str(error)
+else:
+    raise AssertionError("Python validates the supplied empty matrix before precedence")
+```
+
 ## Which distance is clustered
 
 AFML's Snippet 16.4 calls `sch.linkage(dist, 'single')` with the *square* matrix $d$. scipy reads
@@ -205,8 +237,9 @@ steadier from one window to the next. Pass
 - **The default tree changed in #167.** Weights from earlier versions were built on pairwise
   distances; pass `distance="correlation"` (`HrpDistance::Correlation`) to get them back.
 - **`use_shrinkage` is a fixed 10% shrink of the off-diagonal terms**, not a Ledoit–Wolf or
-  OAS estimator. For a real shrinkage estimate, compute the covariance yourself and pass it
-  in.
+  OAS estimator. It applies only when HRP estimates covariance from prices or returns;
+  a supplied `covariance_matrix` is used unchanged even when the flag is true. For a different
+  shrinkage estimate, compute and shrink the covariance yourself before passing it in.
 - **Returns are simple returns** and the covariance is the sample covariance, unannualised.
   HRP weights do not depend on the scale, so annualisation is immaterial here.
 - **`resample_by` keeps every 5th (`"W"`) or 21st (`"M"`) row.** It is positional, not

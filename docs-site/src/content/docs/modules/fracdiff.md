@@ -2,7 +2,7 @@
 title: "fracdiff"
 description: "Fractional differentiation: make a price series stationary while keeping as much of its memory as possible."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -27,13 +27,13 @@ sidebar:
   badge: Module
 ---
 
-Supervised learning wants stationary features: a model cannot map a price of 4,000 to an
-outcome if it was trained when prices were near 1,000. The usual fix is to take returns, and
-returns are stationary because they forget everything — each one is the difference between
-two adjacent prices and carries no trace of the level or the path. AFML §5.2 calls this the
-stationarity-versus-memory dilemma, and points out that the choice is not binary. Returns are
-the series differenced $d=1$ times. Differencing it $d=0.4$ times is also defined, is often
-already stationary, and keeps most of the level's information.
+A price-level feature can change its relationship with an outcome as the price level
+moves. Differencing is one way to reduce this dependence, but neither prices nor returns
+are guaranteed stationary. A first difference of log prices is a log return; a first
+difference of raw prices is an absolute price change. AFML §5.2 describes the trade-off
+between stationarity and retaining information about past levels. Fractional differencing
+lets you explore intermediate orders, commonly $0 \le d \le 1$, and test the resulting
+features on the training sample.
 
 ## The weights
 
@@ -48,9 +48,9 @@ w_0 = 1,
 w_k \;=\; -\,w_{k-1}\,\frac{d-k+1}{k}
 $$
 
-so the differenced value is $\tilde x_t=\sum_k w_k\,x_{t-k}$. For integer $d$ the weights hit
+so the differenced value is $\tilde x_t=\sum_k w_k\,x_{t-k}$. For non-negative integer $d$ the weights hit
 zero after $d$ lags: $d=1$ gives $\{1,-1,0,0,\dots\}$, the ordinary first difference. For
-fractional $d$ they never reach zero but decay like $k^{-(1+d)}$, which is where the memory
+$0<d<1$ they never reach zero in exact arithmetic but decay like $k^{-(1+d)}$, which is where the memory
 comes from — every past value still contributes, a little.
 
 <figure>
@@ -69,15 +69,17 @@ An infinite sum has to be cut somewhere, and the two functions cut it differentl
 
 **`frac_diff(series, d, thresh)` — expanding window** (Snippet 5.2). Every output uses all the
 history available at that point, so early outputs are built from fewer weights than late
-ones. The first outputs, where the weights that *would* have applied to missing history add
-up to more than `thresh` of the total, are returned as `NaN`. The drawback is structural:
+ones. To determine the leading `NaN` count, the implementation generates `len(series)`
+weights in oldest-first order, forms their normalized cumulative absolute sum, and counts
+entries strictly greater than `thresh`. That count also depends on the supplied batch
+length. The drawback of the expanding window is structural:
 because the number of terms grows with $t$, the output picks up a drift that comes from the
 window and not from the data (§5.5.1).
 
 **`frac_diff_ffd(series, d, thresh)` — fixed-width window** (Snippet 5.3). Weights are
 generated until one falls below `thresh` in absolute value, and that fixed set is applied at
-every point. Every output is the same function of the same number of lags, so there is no
-window-induced drift. This is the one to use for features. The first `width − 1` outputs are
+every eligible point within that call. Every such output uses the same number of lags,
+avoiding the expanding window's changing filter. This is the one to use for features. The first `width − 1` outputs are
 `NaN`.
 
 `thresh` means different things in the two functions: a share of cumulative weight in the
@@ -89,7 +91,7 @@ AFML's procedure (§5.6) is to sweep $d$ from 0 to 1, run an ADF test on each ou
 the **smallest** $d$ that rejects a unit root. This crate has no ADF test, so the example
 reports two plain statistics instead: the correlation between the differenced series and the
 original log price (memory kept) and the differenced series' lag-1 autocorrelation (a value
-near 1 is what a unit root looks like).
+near 1 can indicate persistence, but is not a unit-root test).
 
 ```python
 import math
@@ -128,17 +130,19 @@ for d in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0):
 1.0        2             0.055            0.008
 ```
 
-The last row is returns: no autocorrelation and almost no relationship to the price level.
-The rows between are the point of the chapter. At $d=0.4$ the series still correlates 0.70
-with the level while its autocorrelation has dropped well away from 1. Whether 0.4 is
-*enough* is what the ADF test decides. In theory a pure random walk differenced $d$ times is
-stationary only for $d>0.5$, so this synthetic series would not pass at 0.4; real prices are
-not pure random walks, and AFML reports most liquid futures passing at $d<0.6$ (§5.6). Run
-the sweep with `statsmodels.tsa.stattools.adfuller` on your own data, per instrument; $d$
-does not transfer between them.
+The last row is log returns, with near-zero sample autocorrelation in this simulation.
+At $d=0.4$ the output still correlates 0.70 with the level while lag-1 autocorrelation has
+fallen to 0.859. Neither statistic establishes stationarity. An ADF rejection is evidence
+against its unit-root null under the selected test specification, not a guarantee of future
+stationarity. Run `statsmodels.tsa.stattools.adfuller` on training data and record its lag,
+trend and significance choices; do not infer a finite-sample test outcome from $d$ alone.
 
-The `window` column is the cost. At `thresh = 1e-4`, $d=0.2$ needs 497 bars of history before
-it produces its first value. A lower $d$ keeps more memory *because* it uses a longer window.
+The finite-width implementation also differs from the theoretical infinite fractional
+filter: truncating the weights generally leaves a nonzero weight sum, so a random-walk
+component can remain. Test the actual feature and window you plan to use.
+
+The `window` column is the cost. At `thresh = 1e-4`, $d=0.2$ needs 497 observations for its
+first value. Window length is not universally decreasing in $d$: $d=0$ uses just one weight.
 
 ## From Rust
 
@@ -176,15 +180,40 @@ assert_eq!(get_weights_ffd(0.5, 0.0, 1), vec![1.0]);
 assert_eq!(get_weights_ffd(0.5, 0.0, 4).len(), 4);
 ```
 
+The missing-value and batch-cap behavior is visible on small inputs:
+
+```python
+import math
+from openquant import fracdiff
+
+series = [1.0, float("nan"), 3.0, 4.0, 5.0]
+expanding = fracdiff.frac_diff(series, 1.0, 1.0)
+fixed = fracdiff.frac_diff_ffd(series, 1.0, 1e-4)
+assert all(math.isnan(x) for x in expanding[1:])
+assert fixed[3:] == [1.0, 1.0]
+
+short = fracdiff.frac_diff_ffd([1.0, 2.0], 0.5, 1e-4)
+longer = fracdiff.frac_diff_ffd([1.0, 2.0, 3.0], 0.5, 1e-4)
+assert short[1] == 1.5 and math.isnan(longer[1])  # width changed from 2 to 3
+```
+
 ## What to watch for
 
 - **Difference the log price, or the price — not returns.** The input is a level. Feeding
   returns differences them a second time.
-- **Nothing is validated.** These functions return `Vec<f64>`, not `Result`. A negative `d`
-  is accepted and *integrates* the series instead of differencing it; its weights decay so
-  slowly that the window runs to the cap and only the last output is a number. A `thresh` of
-  zero does the same. A `NaN` in the input poisons every output whose window covers it;
-  AFML's snippet skips such points, and this port does not. Clean the series first.
+- **Numeric inputs are not validated.** Rust returns `Vec<f64>`, not `Result`; Python
+  delegates the arithmetic after argument conversion. A negative `d` integrates rather
+  than differences, and weights need not decay. A nonpositive or `NaN` FFD threshold never
+  satisfies the stopping comparison and runs to the cap, including zero integer-order
+  weights. Use finite parameters and validate the chosen window.
+- **Missing values are not skipped.** A `NaN` poisons every dot product whose window
+  contains it, even when its weight is zero (`0 * NaN` remains `NaN`). Thus an expanding
+  window can remain missing forever; FFD recovers only after the missing value leaves the
+  window. Clean or explicitly model gaps before differencing.
+- **The cap depends on batch length.** Appending data can change the FFD width when the
+  previous call hit its series-length cap, changing earlier warm-up/output availability.
+  Do not equate separate chunk calls with one continuous transform. Fix and record the
+  intended weights and supply their required history before evaluating held-out rows.
 - **The window is look-back only, but `d` is not.** Each output uses values at or before its
   own bar. A $d$ chosen by an ADF sweep over the full history, though, has seen the test
   period. Choose $d$ on the training span.

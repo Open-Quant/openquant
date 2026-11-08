@@ -8,6 +8,7 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import reference from '../../../data/pythonApiReference.json';
 import { renderDocstring, summary } from '../../../lib/docstring';
 import { PY_REF_BANNER } from '../../../lib/pythonReference';
+import { moduleDocs } from '../../../data/moduleDocs';
 
 export function getStaticPaths() {
   return reference.modules.map((mod) => ({ params: { slug: mod.slug }, props: { mod } }));
@@ -26,6 +27,11 @@ type Module = {
 
 const { mod } = Astro.props as { mod: Module };
 const moduleSummary = summary(mod.doc);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const publicImport = mod.import.replace('openquant._core.', 'openquant.');
+const publicPrefix = publicImport.replace(/^openquant\./, '') + '.';
+const guides = moduleDocs.filter((guide) => guide.pythonApis?.some((api) => api.startsWith(publicPrefix)));
+const wrapper = mod.import !== publicImport ? reference.modules.find((entry) => entry.import === publicImport) : undefined;
 const headings = [
   ...(mod.classes.length ? [{ depth: 2, slug: 'classes', text: 'Classes' }] : []),
   ...mod.classes.map((c) => ({ depth: 3, slug: c.name, text: c.name })),
@@ -48,7 +54,12 @@ const kindNote =
   headings={headings}
 >
   <p class="oq-api-kind">{kindNote} <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/python/`}>All Python modules</a>.</p>
-  {mod.doc && <div class="oq-doc" set:html={renderDocstring(mod.doc)} />}
+  <nav class="oq-api-context" aria-label="Related documentation">
+    {wrapper && <p>Start with the supported <a href={`${base}/api/python/${wrapper.slug}/`}>{publicImport} wrapper</a>.</p>}
+    {guides.length > 0 && <p>Examples and interpretation: {guides.map((guide, index) => <>{index > 0 && ' · '}<a href={`${base}/modules/${guide.slug}/`}>{guide.module}</a></>)}.</p>}
+    <p><a href={`${base}/module-reference/api-task-guide/`}>Find an API by task</a></p>
+  </nav>
+  {mod.doc && <div class="oq-doc" set:html={renderDocstring(mod.doc, 2)} />}
 
   {mod.classes.length > 0 && <h2 id="classes">Classes</h2>}
   {
@@ -57,11 +68,15 @@ const kindNote =
         <h3 id={c.name}><code>{c.name}</code></h3>
         <pre class="oq-signature"><code>{`class ${c.name}${c.signature}`}</code></pre>
         <div class="oq-doc" set:html={renderDocstring(c.doc)} />
+        {c.methods.length > 0 && <nav class="oq-member-index" aria-label={`${c.name} members`}>
+          <p>Jump to a member:</p>
+          <ul>{c.methods.map((m) => <li><a href={`#${c.name}.${m.name}`}><code>{m.name}</code></a></li>)}</ul>
+        </nav>}
         {c.methods.map((m) => (
           <div class="oq-api-method">
             <h4 id={`${c.name}.${m.name}`}><code>{`${c.name}.${m.name}`}</code></h4>
             <pre class="oq-signature"><code>{`${m.name}${m.signature}`}</code></pre>
-            {m.doc && <div class="oq-doc" set:html={renderDocstring(m.doc)} />}
+            {m.doc && <div class="oq-doc" set:html={renderDocstring(m.doc, 5)} />}
           </div>
         ))}
       </section>

@@ -70,8 +70,10 @@ def distance_correlation(x: Sequence[float], y: Sequence[float]) -> float:
     """Distance correlation of two series (Székely et al., 2007).
 
     Double-centres the matrices of pairwise absolute differences within each series and
-    returns `dCov(x, y) / sqrt(dVar(x) * dVar(y))`, in `[0, 1]`, which is zero only when the
-    series are independent (unlike Pearson correlation). Memory is `O(n^2)` (about 16 MB at
+    returns the sample estimate `dCov(x, y) / sqrt(dVar(x) * dVar(y))`, in `[0, 1]`.
+    The population quantity is zero exactly under independence; independent samples generally
+    have a positive estimate. This function does not return a test or p-value.
+    Memory is `O(n^2)` (about 16 MB at
     1,000 observations).
 
     Parameters

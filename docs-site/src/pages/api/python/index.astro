@@ -16,7 +16,7 @@ const count = (m: (typeof reference.modules)[number]) =>
   frontmatter={{
     title: 'Python API reference',
     description:
-      'Every public function in the openquant Python package, with its signature and docstring, generated from the built extension.',
+      'Public Python API signatures and docstrings, generated from the built extension, shipped stubs and Python sources.',
     status: 'generated',
     banner: { content: PY_REF_BANNER },
   }}
@@ -27,19 +27,28 @@ const count = (m: (typeof reference.modules)[number]) =>
 >
   <p>
     Import the package as <code>openquant</code>. Modules marked <em>compiled</em> are Rust
-    bindings; <code>help()</code> on any of their functions prints the same signature and text as
-    below, and type checkers read the shipped <code>.pyi</code> stubs. For the Rust crate itself
+    bindings. Their descriptions come from runtime docstrings, as shown by <code>help()</code>;
+    their signatures and type annotations come from the shipped <code>.pyi</code> stubs.
+    Pure-Python entries use source signatures and docstrings. For the Rust crate itself
     see the <a href={`${base}/api/rust/openquant/`}>rustdoc reference</a>.
   </p>
 
+  <p>
+    Start with <a href={`${base}/module-reference/api-task-guide/`}>Find an API by task</a>
+    to choose between Python wrappers, native bindings and Rust-only operations.
+    Use the tables below when you already know the namespace.
+  </p>
+
   <h2 id="modules">Modules</h2>
+  <div class="oq-table-scroll" tabindex="0" role="region" aria-label="Python modules table, scroll horizontally if needed">
   <table>
-    <thead><tr><th>Module</th><th>Kind</th><th>Items</th><th>Summary</th></tr></thead>
+    <caption>Supported public Python modules</caption>
+    <thead><tr><th scope="col">Module</th><th scope="col">Kind</th><th scope="col">Items</th><th scope="col">Summary</th></tr></thead>
     <tbody>
       {
         publicModules.map((m) => (
           <tr>
-            <td><a href={`${base}/api/python/${m.slug}/`}><code>{m.import}</code></a></td>
+            <th scope="row"><a href={`${base}/api/python/${m.slug}/`}><code>{m.import}</code></a></th>
             <td>{m.kind}</td>
             <td>{count(m)}</td>
             <td set:html={inline(summary(m.doc))} />
@@ -48,6 +57,7 @@ const count = (m: (typeof reference.modules)[number]) =>
       }
     </tbody>
   </table>
+  </div>
 
   <h2 id="compiled-internals">Compiled modules behind the wrappers</h2>
   <p>

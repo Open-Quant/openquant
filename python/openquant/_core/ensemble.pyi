@@ -121,8 +121,9 @@ def bagging_ensemble_variance(
 ) -> float:
     """Variance of the average of N estimators, `sigma2 * (rho + (1 - rho) / N)` (AFML 6.3.1).
 
-    As N grows the result falls to the floor `sigma2 * rho`, which no number of estimators
-    moves: redundant, correlated estimators limit what bagging can achieve.
+    For fixed nonnegative rho, the limit as N grows is `sigma2 * rho`. For N > 1,
+    a feasible average correlation must be at least `-1/(N-1)`; this bound is not
+    checked, so an impossible combination can return a negative value.
 
     Parameters
     ----------

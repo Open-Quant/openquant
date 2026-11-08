@@ -18,26 +18,28 @@ sidebar:
   order: 1
 ---
 
-The AFML pipeline is five stages, and the interesting part is how they
-constrain each other: how you sample events decides what a label can
-mean, and how labels overlap in time decides whether your validation is
-honest. This page is one program that threads all five, and its actual
-output.
+This synthetic program connects event sampling, labeling, position sizing, purged splits
+and risk APIs. It demonstrates their data contracts; it does not fit a predictive model,
+calibrate probabilities or produce an out-of-sample backtest. The portfolio allocation is
+a separate in-sample calculation, not the portfolio used to earn the event outcomes.
 
-Save it as `crates/openquant/examples/afml_workflow.rs` and run:
+Save the complete program as `crates/openquant/examples/afml_workflow.rs` and run from
+the repository root:
 
 ```bash
 cargo run -p openquant --example afml_workflow
 ```
 
-The output below comes from a verified local run of this program. Add `--release` for
-an optimized build; the first build of either profile compiles `polars` and `nalgebra`
-and takes a while. Small floating-point differences can occur across platforms.
+That example file is not preinstalled. Add `--release` for an optimized build. The first
+build compiles the crate and its dependencies. The output below was checked by compiling
+and executing this full program against the current Rust crate; it uses no random draws,
+but floating-point details can vary between platforms.
 
 ## The program
 
 ```rust
-//! End-to-end AFML workflow: sampling -> labeling -> sizing -> purged CV -> risk.
+//! Synthetic API demonstration: sampling -> labeling -> sizing -> splits -> diagnostics.
+use std::collections::BTreeMap;
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use nalgebra::DMatrix;
 use openquant::backtest_statistics::sharpe_ratio;
@@ -53,8 +55,8 @@ use openquant::risk_metrics::RiskMetrics;
 const N_BARS: usize = 480;
 const N_ASSETS: usize = 4;
 
-/// Deterministic synthetic minute bars, with no RNG.
-/// Floating-point results can still vary slightly across platforms.
+/// Synthetic minute bars without random draws. Floating-point results can vary
+/// slightly with platform/compiler math implementations.
 fn synthetic_series() -> (Vec<NaiveDateTime>, Vec<f64>) {
     let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(9, 30, 0).unwrap();
     let mut ts = Vec::with_capacity(N_BARS);
@@ -72,9 +74,9 @@ fn main() {
     let bars: Vec<(NaiveDateTime, f64)> = ts.iter().copied().zip(close.iter().copied()).collect();
 
     // ---- Stage 1: event sampling -------------------------------------------
-    // Sample on cumulative 0.1% moves instead of on the clock, so every event
-    // carries comparable information (AFML ch. 2/3).
-    let event_idx = cusum_filter_indices(&close, Threshold::Scalar(0.001)).expect("CUSUM sampling");
+    // Sample after a CUSUM accumulator crosses 0.001 log-return units.
+    // This does not establish equal information content across events.
+    let event_idx = cusum_filter_indices(&close, Threshold::Scalar(0.001)).expect("CUSUM");
     let t_events: Vec<NaiveDateTime> = event_idx.iter().map(|&i| ts[i]).collect();
     println!("stage 1  {:>4} bars -> {:>3} CUSUM events", N_BARS, t_events.len());
 
@@ -95,13 +97,16 @@ fn main() {
         .collect();
 
     let vbars = add_vertical_barrier(&t_events, &bars, 0, 0, 45, 0);
+    // A missing vertical barrier means no time cap, not an earlier end-of-sample cap.
+    // Keep only events for which the full 45-minute horizon is available.
+    let eligible: Vec<NaiveDateTime> = vbars.iter().map(|(start, _)| *start).collect();
     let cfg = TripleBarrierConfig {
         pt: 1.0,                              // profit-take barrier = 1.0 x target vol
         sl: 1.0,                              // stop-loss barrier  = 1.0 x target vol
-        min_ret: 0.0002,                      // skip events too small to trade
+        min_ret: 0.0002,                      // require target > this value; not a cost test
         vertical_barrier_times: Some(&vbars), // 45-minute holding-period cap
     };
-    let events = triple_barrier_events(&bars, &t_events, &target, cfg, None);
+    let events = triple_barrier_events(&bars, &eligible, &target, cfg, None);
     let labeled = triple_barrier_labels(&events, &bars);
     let wins = labeled.iter().filter(|l| l.label > 0).count();
     println!(
@@ -111,10 +116,9 @@ fn main() {
         100.0 * wins as f64 / labeled.len().max(1) as f64
     );
 
-    // A real model goes here. We stand in a calibrated-probability vector so the
-    // sizing stage has something to consume; `get_signal` maps p -> [-1, 1] via
-    // a z-test against 1/num_classes, and `discrete_signal` quantises to
-    // tradable steps to suppress churn.
+    // Artificial probability-shaped inputs: no model is fitted or calibrated.
+    // They exist only to demonstrate the normal-CDF sizing map and quantization.
+    // A research evaluation would generate predictions from each training fold.
     let probs: Vec<f64> = (0..labeled.len())
         .map(|i| 0.5 + 0.18 * ((i as f64) / 7.0).sin())
         .collect();
@@ -133,13 +137,19 @@ fn main() {
     );
 
     // ---- Stage 4: purged, embargoed cross-validation ------------------------
-    // Labels overlap in time, so a plain K-fold leaks: a training label whose
-    // barrier closes inside the test window has already seen the test outcome.
-    // PurgedKFold drops those, then embargoes a fraction after each test fold.
-    let info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = events
+    // Construct split intervals in exactly the same row order as the labels/sizes.
+    // Labeling can omit unresolved events; do not assume raw event rows still align.
+    // This demo inspects splits only: it does not fit or score a model on them.
+    let event_ends: BTreeMap<NaiveDateTime, NaiveDateTime> = events
         .iter()
-        .map(|(t0, ev)| (*t0, ev.t1.unwrap_or(*t0)))
+        .filter_map(|(start, event)| event.t1.map(|end| (*start, end)))
         .collect();
+    let info_sets: Vec<(NaiveDateTime, NaiveDateTime)> = labeled
+        .iter()
+        .map(|label| (label.timestamp, event_ends[&label.timestamp]))
+        .collect();
+    assert_eq!(info_sets.len(), sized.len());
+    assert!(info_sets.windows(2).all(|w| w[0].0 < w[1].0));
     let cv = PurgedKFold::new(5, info_sets.clone(), 0.01).expect("purged kfold");
     let splits = cv.split_with_diagnostics(info_sets.len()).expect("split");
     let first = &splits[0];
@@ -152,14 +162,14 @@ fn main() {
         first.diagnostics.embargo_indices.len()
     );
 
-    // ---- Stage 5: strategy risk and portfolio allocation --------------------
-    let strat_returns: Vec<f64> =
+    // ---- Stage 5: descriptive event outcomes and a separate allocation -------
+    let event_outcomes: Vec<f64> =
         labeled.iter().zip(sized.iter()).map(|(l, s)| l.ret * s).collect();
-    let sr = sharpe_ratio(&strat_returns, 252.0 * 390.0, 0.0);
+    let sr = sharpe_ratio(&event_outcomes, 1.0, 0.0);
     let rm = RiskMetrics;
-    let var = rm.calculate_value_at_risk(&strat_returns, 0.05).expect("var");
-    let es = rm.calculate_expected_shortfall(&strat_returns, 0.05).expect("es");
-    println!("stage 5  sharpe {:+.3}   VaR(5%) {:+.5}   ES(5%) {:+.5}", sr, var, es);
+    let var = rm.calculate_value_at_risk(&event_outcomes, 0.05).expect("var");
+    let es = rm.calculate_expected_shortfall(&event_outcomes, 0.05).expect("es");
+    println!("stage 5  per-event mean/std {:+.3}   VaR(5%) {:+.5}   ES(5%) {:+.5}", sr, var, es);
 
     let mut px = Vec::with_capacity(N_BARS * N_ASSETS);
     for i in 0..N_BARS {
@@ -172,7 +182,7 @@ fn main() {
     let prices = DMatrix::from_row_slice(N_BARS, N_ASSETS, &px);
     let alloc = allocate_max_sharpe(&prices, 0.0, None, None).expect("max sharpe");
     println!(
-        "stage 5  weights {:?}  portfolio sharpe {:.3}",
+        "stage 5  weights {:?}  allocation SR(252 rows/year) {:.3}",
         alloc.weights.iter().map(|w| (w * 1000.0).round() / 1000.0).collect::<Vec<_>>(),
         alloc.portfolio_sharpe
     );
@@ -183,132 +193,102 @@ fn main() {
 
 ```text
 stage 1   480 bars -> 147 CUSUM events
-stage 2  106 labeled events,  57 positive (54%)
+stage 2   97 labeled events,  50 positive (52%)
 stage 3  sizes in [-0.25, 0.25], 3 distinct steps
-stage 4  5 folds, embargo 1%: train 84 -> 82 rows (0 purged, 2 embargoed)
-stage 5  sharpe +47.975   VaR(5%) -0.00015   ES(5%) -0.00016
-stage 5  weights [0.21, 0.451, -0.0, 0.339]  portfolio sharpe 1.744
+stage 4  5 folds, embargo 1%: train 77 -> 76 rows (0 purged, 1 embargoed)
+stage 5  per-event mean/std +0.088   VaR(5%) -0.00015   ES(5%) -0.00016
+stage 5  weights [0.21, 0.451, -0.0, 0.339]  allocation SR(252 rows/year) 1.744
 ```
 
-:::caution[These are synthetic diagnostics]
-The prices are deterministic and the probabilities are hand-crafted. The reported Sharpe
-ratios are in-sample illustrations without trading costs, not evidence of investable
-performance. The strategy figure applies `sqrt(252 × 390)` to overlapping event returns;
-those returns are not equally spaced minute observations, so the factor does not make
-this a valid annual Sharpe estimate. The allocator uses a different convention, described
-in stage 5 below.
+## What the output means
 
-The structural counts are reproducible: 480 bars give 147 events, 106 of which clear
-`min_ret` and receive labels. The first fold has 22 test rows and 84 candidate training
-rows. Its diagnostics report zero purged rows and two embargoed rows, leaving 82 for
-training. The example does not demonstrate overlap removal in that first fold.
-:::
+The stage 5 event statistic uses `sharpe_ratio(..., 1.0, 0.0)`: mean divided by sample
+standard deviation, with no annualization or risk-free adjustment. Each observation is
+one label's return multiplied by its artificial size. These returns have different holding
+times and can overlap. They are not one-minute account returns, so multiplying their ratio
+by `sqrt(252 * 390)` would give the wrong clock. There is no account-level capital allocation,
+concurrency aggregation, turnover or transaction-cost model here.
 
-## What each stage is doing, and why
+The separate allocator estimates moments from the entire synthetic price panel and uses
+its built-in convention of 252 rows per year. Its printed Sharpe retains that convention
+even though these rows are minute bars. It is an in-sample objective, not comparable to the
+unannualized event statistic or an out-of-sample performance estimate.
 
-### Stage 1 — sample on information, not on the clock
+## Stage 1 — sample events
 
-`cusum_filter_indices` accumulates signed returns and fires when the
-running sum breaches a threshold, resetting on each event. Time bars
-give you many uninformative observations in quiet periods and too few in
-active ones; CUSUM events arrive at a rate set by the market. Everything
-downstream inherits this: a label is a statement about *an event*, so
-sampling badly is not something later stages can repair.
+CUSUM accumulates log returns separately in positive and negative accumulators. It fires
+when either strictly crosses its threshold and resets only that side. A threshold of
+`0.001` is in log-return units; it is not a guarantee that each event contains equal
+information. A dynamic threshold must be aligned with the price rows and computed from
+information available by that bar.
 
-`Threshold::Scalar(0.001)` is a flat 0.1%. `Threshold::Dynamic(Vec<f64>)`
-takes a per-bar threshold if you want to scale it by a volatility
-estimate, which is usually the better choice on real data.
+## Stage 2 — label with volatility-scaled barriers
 
-### Stage 2 — label with barriers scaled to volatility
+The example uses the population deviation of up to 20 trailing simple returns, floored
+at `1e-4`, as its target. Targets must be strictly above `min_ret=0.0002` to survive.
+This is a target-size filter, not evidence that a trade clears costs.
 
-`triple_barrier_events` places three barriers around each event: a
-profit-take at `pt × target`, a stop-loss at `sl × target`, and a
-vertical (time) barrier. `target` is per-event, so a 1.0 multiplier means
-"one unit of that event's own volatility" rather than a fixed number of
-ticks — the same configuration stays meaningful across regimes.
+Profit-taking and stop-loss widths are each one target unit. The target is a per-bar
+volatility proxy, not a fitted forecast of the return over 45 minutes. The program first
+keeps events with an available full 45-minute vertical barrier; otherwise
+`add_vertical_barrier` omits the pair and the event API would have no time cap for that
+start. `triple_barrier_labels` can omit unresolved or unaligned events, so later stages
+join interval endpoints by each retained label's timestamp.
 
-The three knobs and what they cost you:
+Without a side, labels are the sign of the realized return (`-1`, `0`, `1`); zero means
+exactly zero return, not necessarily a vertical-barrier exit. With a supplied side,
+labels become `0` or `1` according to whether the side-adjusted return is positive.
 
-| Field | In the program | What moving it does |
-|---|---|---|
-| `pt` / `sl` | `1.0` / `1.0` | Symmetric barriers. Asymmetry here is a directional prior; make it deliberately, not by accident. |
-| `min_ret` | `0.0002` | Events whose target is below this are dropped as untradeable. Raising it discards more events; each one you keep must clear costs. |
-| `vertical_barrier_times` | 45 minutes | The holding-period cap. This is what bounds label overlap, and therefore how much stage 4 has to purge. |
+## Stage 3 — demonstrate sizing
 
-`triple_barrier_labels` then returns `{-1, 0, 1}` labels. Pass
-`side_prediction` to `triple_barrier_events` instead and the regime
-becomes `{0, 1}` — meta-labeling, where the label answers "should I take
-the bet my primary model proposed?" rather than "which way does it go?".
+The sinusoidal values between 0.32 and 0.68 are probability-shaped placeholders, not
+calibrated predictions. `get_signal` transforms them through its normal-CDF sizing
+formula relative to `1 / num_classes`; `discrete_signal(..., 0.25)` rounds to size steps.
+Quantization can reduce position changes, but this program neither estimates calibration
+nor measures trading costs. The placeholder rows follow the retained labels only to
+illustrate the API alignment.
 
-### Stage 3 — turn probabilities into positions
+## Stage 4 — inspect purged splits
 
-`get_signal` maps a calibrated probability to a size in `[-1, 1]` by a
-z-test against `1/num_classes`, so a probability barely above chance
-produces a size near zero rather than a full-size bet.
-`discrete_signal(&raw, 0.25)` then quantises to steps of 0.25. That is
-not cosmetic: without it, a signal that drifts by 0.01 produces a trade,
-and turnover — not gross return — is what a mid-frequency strategy
-usually dies of.
+`PurgedKFold::new(5, info_sets, 0.01)` receives a `(start, end)` interval for every row,
+in increasing start-time order. The intervals, labels and sizes here have the same row
+identity. In research, features, predictions and sample weights must use that same order.
+A shared timestamp is not permission to use future observations in a feature.
 
-### Stage 4 — purge and embargo, or your validation lies
+Purging removes training labels that overlap the test interval; the embargo then excludes up to
+`ceil(0.01 * n)` available sample positions after the test labels resolve. The program
+prints the diagnostic exclusion lists separately. Those lists can overlap, so their
+lengths should not be added to infer the number of removed rows. This first fold has
+zero purged rows and one embargoed row; it does not demonstrate overlap removal.
+Equal training counts in two split schemes do not by themselves prove either leakage
+or independence.
 
-This is the stage the rest of the library exists to make possible.
+The code constructs splits and prints their sizes only. It never trains or evaluates a
+model within them. A real evaluation must fit preprocessing and the model on each training
+fold and use only held-out predictions, while accounting for feature lookbacks as well as
+label intervals. Purging and embargo do not certify the entire workflow as leakage-free.
 
-Triple-barrier labels **can overlap in time**: a label starting at 10:00 with
-a 45-minute vertical barrier can still be open at 10:30 if neither price barrier has
-closed it. In that case a 10:00 training label includes information from a 10:30 test
-event. The vertical barrier is a cap; it does not mean every label lasts 45 minutes.
+## Stage 5 — keep the return clocks explicit
 
-`PurgedKFold::new(n_splits, samples_info_sets, pct_embargo)` takes the
-`(start, end)` interval of every label — that is what `samples_info_sets`
-is — and drops from each training fold every label whose interval
-overlaps the test fold. It then embargoes a further `pct_embargo`
-fraction of samples after the test window, because serial correlation
-leaks across an exact boundary even without overlap.
+`RiskMetrics` receives the same per-event outcomes. VaR is their lower-tail quantile;
+ES here averages observations strictly below that quantile and preserves the return sign.
+They are descriptive event-tail estimates, not daily account risk. Ties can change the
+included tail fraction, and an empty strict tail returns `NaN`.
 
-:::caution
-`PurgedKFold::new` takes **three** arguments, and the middle one is the
-interval list, not a number. The `PurgedKFold::new(5, 0.01)` form omits that list
-and does not compile. `pct_embargo` is the third argument; `0.01` means 1% of
-the sample count.
-:::
+For an account-level backtest, first build a time-indexed position and return path with
+explicit capital and costs. Annualize according to that path's observation interval;
+`backtest_statistics::sharpe_ratio` takes a **per-observation** risk-free rate, whereas
+`allocate_max_sharpe` takes an annual rate under its own 252-row convention. Zero is used
+for both in this example. Check variance and finite outputs before interpreting ratios.
 
-The first test fold contains 22 of the 106 observations, so its unfiltered training
-count is `106 - 22 = 84`, not `106 - floor(106 / 5)`. The program reads the actual
-split indices and reports `train 84 -> 82 rows (0 purged, 2 embargoed)`. Purging and
-embargo are different reasons for exclusion; their diagnostic lists can overlap in
-general, so do not add the list lengths to infer the number of removed rows. Inspect
-the actual information intervals and diagnostics across folds rather than assuming
-that a vertical-barrier cap guarantees overlap removal in every fold.
-
-### Stage 5 — separate strategy risk from portfolio risk
-
-`sharpe_ratio(&returns, entries_per_year, risk_free_rate)` annualises by
-`sqrt(entries_per_year)`. The program passes `252.0 * 390.0` as an illustrative display
-factor, but its strategy returns are irregular, overlapping labeled-event returns.
-Minute input prices do not justify minute annualization for that derived stream.
-A performance study needs an equally spaced portfolio P&L series and an annualization
-factor appropriate to its sampling convention.
-
-The allocator uses its default `252` price-row convention. With minute prices, its
-reported `portfolio_sharpe` is therefore per 252 rows, not an annual estimate. The two
-printed Sharpe figures use different scaling conventions and should not be compared.
-
-`RiskMetrics` covers the loss tail — `calculate_value_at_risk`,
-`calculate_expected_shortfall`, `calculate_conditional_drawdown_risk` —
-and answers "how bad is a bad day for this return stream".
-`allocate_max_sharpe` answers a different question: how to weight several
-assets. Do not read one as the other. A well-diversified allocation with
-a broken strategy is still broken.
-
-A Sharpe from a single backtest is also not evidence on its own. When you
-report one, report how many configurations you tried to get it —
-`backtest_statistics::deflated_sharpe_ratio` and
-`probabilistic_sharpe_ratio` exist for that, and
-`minimum_track_record_length` tells you how much data the claim needs.
+Report selection history and appropriate uncertainty alongside any later performance
+estimate. PSR, deflated Sharpe and minimum-track-record helpers depend on their own
+sampling and moment assumptions; they do not turn this synthetic API demonstration into
+research evidence.
 
 ## Where to go next
 
-- [Python Core Workflow](/workflows/python-core-workflow/) — the same ground in Python
+- [Python Core Workflow](/workflows/python-core-workflow/) — wrapper conventions and research steps
+- [Cross-validation](/modules/cross-validation/) — purging, embargo and ordering requirements
+- [Risk metrics](/modules/risk-metrics/) — tail estimator conventions
 - [Modules by AFML chapter](/module-reference/by-afml-chapter/) — the module behind each stage
-- [Module Reference Index](/modules/) — every module, by subject and by language surface

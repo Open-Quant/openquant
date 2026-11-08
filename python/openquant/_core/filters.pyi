@@ -17,8 +17,9 @@ def cusum_filter_indices(close: Sequence[float], threshold: Any) -> list[int]:
     For each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are
     updated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when
     `S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the
-    accumulator that fired is reset to zero. The decision at bar `t` uses only data up to
-    `t`. Unlike AFML's snippet, which differences whatever series it is given, this always
+    accumulator that fired is reset to zero. The decision uses prices up to bar `t`; the
+    caller must also construct dynamic thresholds from information available by `t`.
+    Unlike AFML's snippet, which differences whatever series it is given, this always
     takes log returns of prices.
 
     Parameters
@@ -59,8 +60,9 @@ def cusum_filter_timestamps(
     For each bar `t >= 1`, with `r_t = ln(close[t] / close[t-1])`, the accumulators are
     updated as `S+ = max(0, S+ + r_t)` and `S- = min(0, S- + r_t)`. Bar `t` is an event when
     `S- < -h` (checked first) or `S+ > h`, where `h` is the threshold for bar `t`; only the
-    accumulator that fired is reset to zero. The decision at bar `t` uses only data up to
-    `t`. Unlike AFML's snippet, which differences whatever series it is given, this always
+    accumulator that fired is reset to zero. The decision uses prices up to bar `t`; the
+    caller must also construct dynamic thresholds from information available by `t`.
+    Unlike AFML's snippet, which differences whatever series it is given, this always
     takes log returns of prices.
 
     Parameters

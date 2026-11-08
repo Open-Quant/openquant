@@ -1,6 +1,10 @@
 # Benchmark Snapshot
 
-Date: generated from latest criterion run
+Historical committed snapshot from `benchmarks/latest_benchmarks.json` (collection date
+2026-02-07, recorded commit `8135e47`). These numbers were not rerun for the documentation
+update. Machine identity is unrecorded; collection metadata does not independently verify
+measurement provenance. See the [performance guide](https://open-quant.github.io/openquant/project/performance/)
+for fixture scope and same-runner CI comparisons.
 
 | Benchmark | Mean (ms) |
 | --- | ---: |

@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import { remarkBaseUrl } from './scripts/remark-base-url.mjs';
 import { remarkApiReference } from './scripts/remark-api-reference.mjs';
 import { monographDark, monographLight } from './src/styles/code-themes.mjs';
+import { codeScrollLabels } from './scripts/expressive-code-accessibility.mjs';
 
 export default defineConfig({
   site: 'https://open-quant.github.io',
@@ -59,6 +60,7 @@ export default defineConfig({
         },
       ],
       expressiveCode: {
+        plugins: [codeScrollLabels()],
         themes: [monographDark, monographLight],
         styleOverrides: {
           borderRadius: '3px',
@@ -244,6 +246,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
+            { slug: 'module-reference/api-task-guide' },
             { slug: 'module-reference/by-afml-chapter' },
             { slug: 'examples/catalog' },
             // Generated: from the built extension (scripts/generate_python_api_reference.py)

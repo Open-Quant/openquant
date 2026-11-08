@@ -8,10 +8,11 @@ const docsRoot = path.resolve(process.cwd(), 'src/content/docs');
  * The status taxonomy. The ordering is deliberate: each value claims strictly
  * more human attention than the one before it.
  *
- *   generated — machine-emitted from src/data/moduleDocs.ts. Nobody has read it.
+ *   generated — machine-emitted from its declared source. Claims no human review.
  *   draft     — hand-written, known to be incomplete. Claims nothing.
- *   authored  — hand-written and complete, its examples executed by the docs gates, but
- *               not yet read by a human. Pages written by an AI assistant stop here:
+ *   authored  — written against the code, but not yet read by a human. Example gates
+ *               cover only their declared scopes; this status is not a test receipt.
+ *               Pages written by an AI assistant stop here:
  *               only a person can raise one to 'reviewed'.
  *   reviewed  — a human read the page and it stands on its own.
  *   validated — reviewed AND checked against the code it describes.

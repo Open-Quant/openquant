@@ -26,14 +26,18 @@ You need:
 ```bash
 git clone https://github.com/Open-Quant/openquant.git && cd openquant
 
-# Python environment and the openquant extension (just py-setup && just py-develop)
+# Install locked dependencies, then explicitly build the extension once
 uv venv --python 3.13 .venv
-uv sync --group dev
-uv run --python .venv/bin/python maturin develop --manifest-path crates/pyopenquant/Cargo.toml
-uv run --python .venv/bin/python python -c "import openquant; print('ok')"
+uv sync --locked --group dev --no-install-project
+uv run --no-sync --python .venv/bin/python maturin develop --release --manifest-path crates/pyopenquant/Cargo.toml
+uv run --no-sync --python .venv/bin/python python -c "import openquant; print('ok')"
 ```
 
-`maturin develop` builds `crates/pyopenquant` and installs it into `.venv`. Re-run it
+This recipe builds a release extension into `.venv`. The `just py-setup` recipe
+also installs the project during sync; `just py-develop` then builds a debug extension,
+and `just py-develop-release` builds a release extension. After a successful explicit
+build, `--no-sync` keeps subsequent commands from invoking another project build.
+Re-run the explicit build
 after any change to Rust code that the bindings call, or the Python tests run against the
 old build. `just py-develop-release` builds it optimised, which the notebooks and heavy
 calls such as `structural_breaks.get_sadf` need to finish in reasonable time.
@@ -68,8 +72,8 @@ cargo bench -p openquant --no-run                                       # just b
 After `maturin develop`:
 
 ```bash
-uv run --python .venv/bin/python pytest python/tests -q                 # just py-test
-uv run --python .venv/bin/python python -m mypy.stubtest openquant._core   # just py-stubtest
+uv run --no-sync --python .venv/bin/python pytest python/tests -q                 # just py-test
+uv run --no-sync --python .venv/bin/python python -m mypy.stubtest openquant._core   # just py-stubtest
 ```
 
 `py-stubtest` checks the `.pyi` stubs in `python/openquant/_core/` against the built
@@ -79,9 +83,9 @@ Lint, formatting and type checks do not need the extension (the compiled module 
 by its stubs):
 
 ```bash
-uv run --python .venv/bin/python ruff check python/                     # just py-lint
-uv run --python .venv/bin/python ruff format --check python/            #   (all three)
-uv run --python .venv/bin/python mypy                                   #
+uv run --no-sync --python .venv/bin/python ruff check python/                     # just py-lint
+uv run --no-sync --python .venv/bin/python ruff format --check python/            #   (all three)
+uv run --no-sync --python .venv/bin/python mypy                                   #
 ```
 
 `ruff format python/` fixes formatting. The ruff and mypy versions are pinned in the `dev`
@@ -111,8 +115,9 @@ The API reference generator imports the built extension, so run `just py-develop
 ## Benchmarks
 
 Criterion benchmarks live in `crates/openquant/benches/`. If you change a hot path, run
-them and check the result against the committed baseline; CI does the same on pull
-requests that touch `crates/openquant/`.
+them and compare measurements made with matching hardware and configuration. The local
+commands below use the committed baseline; CI instead measures the merge base and head
+on the same runner for matching paths, including changes under `crates/openquant/`.
 
 ```bash
 cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline   # just bench-all
@@ -120,9 +125,12 @@ python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out 
 python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json   # just bench-check
 ```
 
-A regression over 35% fails unless `benchmarks/threshold_overrides.json` allows it. Do not
+The computed mean slowdown over 35% fails unless `benchmarks/threshold_overrides.json` allows it. Do not
 update `benchmarks/baseline_benchmarks.json` in the same pull request as a slowdown
 without saying why in the description.
+
+See the [performance methodology](https://open-quant.github.io/openquant/project/performance/)
+for collection freshness, missing-result coverage and the limitations of timing thresholds.
 
 ## Documentation
 
@@ -137,15 +145,27 @@ bun run check:docs     # every docs gate, in the order CI runs them
 ```
 
 `check:docs` runs, in order: `build`, `stage:rustdoc` (rustdoc into the built site, so
-`check:links` can check links to it), `test:agent-index` (generated discovery index),
+`check:links` can check links to it), `test:design`, `test:accessibility`,
+`test:agent-index` (generated discovery index),
 `test:links` (navigation checker regression tests),
 `check:links` (built paths, fragment anchors and redirects), `check:api-drift`,
 `check:content-schema`, `check:contrast`, `check:coverage`, `check:generated-pages`,
-`check:examples` (Rust blocks on module pages are compiled with `cargo check`),
-`check:python-examples` (every Python block is executed) and `check:python-reference`.
+`check:examples` (Rust blocks on module pages and the complete Rust workflow are
+compiled with `cargo check`),
+`check:python-examples` (executes runnable Python blocks and syntax-checks declared
+skips) and `check:python-reference`.
 The last two need the extension built into `.venv` (see Setup); `check:python-examples`
-also accepts an interpreter named by `DOC_PYTHON` that can `import openquant`. A block
+tries `DOC_PYTHON` first, then local `.venv` interpreters and `python3`, choosing
+the first that can `import openquant`. A block
 that cannot run must opt out visibly with ` ```python doc-check=skip `.
+
+If a code-rendering plugin or Starlight integration change appears only on newly
+edited pages after a build, the installed Astro version may be reusing rendered
+Markdown from its content store. Stop the local dev server, remove only
+`docs-site/node_modules/.astro/data-store.json`, and rerun `bun run check:docs`
+from `docs-site/`. This generated cache is safe to recreate; no dependency reinstall
+is needed. Check the rebuilt HTML, since unchanged Markdown can otherwise retain
+old plugin output.
 
 Some pages are generated from other files in the repository, and their gates fail when a
 source changes without regenerating them. Both scripts are standard-library Python:
@@ -199,8 +219,8 @@ versions on stderr. `just notebooks-lint` checks this, and CI runs it in `python
 ## Research smoke checks
 
 ```bash
-uv run --python .venv/bin/python python notebooks/python/scripts/smoke_all.py        # just notebook-smoke
-uv run --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts   # just exp-run
+uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/smoke_all.py        # just notebook-smoke
+uv run --no-sync --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts   # just exp-run
 cargo run -p openquant --example research_notebook_smoke
 ```
 
@@ -286,7 +306,7 @@ Before pushing, the quickest local equivalent is:
 
 ```bash
 just lint test-fast py-lint
-uv run --python .venv/bin/python python scripts/generate_python_stubs.py --check
+uv run --no-sync --python .venv/bin/python python scripts/generate_python_stubs.py --check
 just py-develop py-test py-stubtest
 (cd docs-site && bun run check:docs)     # if you touched docs, bindings or public APIs
 just notebooks-run && just notebooks-verify   # if you touched notebooks, python/ or crates/

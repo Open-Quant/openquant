@@ -2,7 +2,7 @@
 title: Governance
 description: The rules OpenQuant holds its research, documentation, benchmarks and releases to, and where to report a problem.
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -32,44 +32,66 @@ good it looks. The library and the runbooks apply these controls:
   `openquant.evaluation.TrialRegistry` before selecting one, and report the deflated Sharpe ratio
   computed from the registry's trial count next to any probabilistic Sharpe ratio. The registry
   is a JSON file, so the count survives restarts and is shared between sessions that use the same
-  path. [Runbook 12](/runbooks/cpcv-deflated-sharpe/) shows what goes wrong without it.
+  path. It counts distinct explicit configuration keys, replacing a repeated key; it cannot
+  infer omitted dataset or protocol choices. Concurrent writers can lose updates. Inspect the
+  [trial identity contract](/workflows/research-notebook-contract/#trial-identity-is-part-of-the-method)
+  before adapting a runbook. [Runbook 12](/runbooks/cpcv-deflated-sharpe/) illustrates selection bias.
 - **Costs and assumptions are stated.** A runbook reports results net of an explicit cost per
   unit of turnover and names its universe and data source.
 - **Controls with a known answer.** A runbook tests its method on data where the right answer is
-  known: a no-signal control, where it must find nothing, and, where possible, a planted signal of
-  known strength. The committed data is SYNTHETIC; nothing on this site describes a real market.
+  known: a no-signal control, with a predeclared false-positive criterion, and, where possible,
+  a planted signal of known strength. A finite random control can show an apparent effect;
+  inspect the uncertainty and declared criterion rather than requiring every estimate to be zero. The committed data is SYNTHETIC; nothing on this site describes a real market.
 - **Pre-registration.** A runbook writes its hypotheses and pass/fail rules before the full run
   and ends with a promotion decision. The [research gallery](/runbooks/) lists every decision.
 
-Enforcement is partial: `mda_importance` refuses unpurged CV and the runbooks follow the rules
-above, but nothing stops a user's own code from calling a split without purging.
+Enforcement is partial: `mda_importance` requires label spans unless the caller explicitly
+opts out. Notebook lint checks structure, not whether hypotheses preceded analysis, every
+trial was registered, or a method is free of leakage. The library cannot detect future
+information already embedded in features or supplied probabilities. Review these research
+claims separately from successful execution.
 
 ## Reproducibility
 
-- **Notebooks are committed with their outputs.** `.github/workflows/notebooks.yml` executes every
-  `notebooks/python/NN_*.ipynb` on pull requests that touch notebooks, Python or the crates, and
-  nightly, and fails if the committed outputs or the exported figures differ from a fresh run by
-  more than float noise (compared to 4 significant digits). See
+- **Notebooks are committed with their outputs.** The configured notebook workflow executes
+  numbered notebooks on matching pull-request/main-push paths, nightly and manual dispatch,
+  then compares sources, text outputs and exported SVGs. Text floats are rounded to four
+  significant digits; stderr, raster-image bytes, execution counts, IDs and metadata are
+  ignored. A partial `--only` check omits exported-figure comparison. See
   [Notebook Research Workflow](/workflows/notebook-research-workflow/).
-- **Runbooks end with a reproducibility cell** that prints the package, numpy and polars versions,
-  the hash of every dataset the run used, the seed and the git commit; most also print a hash of
-  the run's configuration and its trial counts.
-- **Datasets are identified by content.** `openquant.data.dataset_hash` hashes a frame's contents,
-  and `openquant.data.record_dataset_hash` writes that hash and the data's provenance into a run
-  manifest. `openquant.data.fetch` reads the committed SYNTHETIC sample by default, so every run
-  in CI is offline and deterministic (see `DATA_SOURCES.md`).
-- **Figures are deterministic.** `nbfigures.figure` writes SVGs without dates or random ids, so an
-  unchanged figure is byte-identical after a re-run.
+- **Runbooks end with a reproducibility cell.** The footer records the supplied data hash,
+  seed and optional configuration/trial fields. Its caller decides which inputs are covered.
+  With `OPENQUANT_NOTEBOOK_PINNED=1`, actual commit and version strings are replaced by a
+  stable reference to the containing commit and lockfiles. This marker does not verify the
+  working tree, installed dependencies or loaded extension. Retain actual provenance when
+  collecting an independent result.
+- **Datasets have content identifiers.** `dataset_hash` canonicalizes a frame's contents;
+  row and column ordering are deliberately normalized. A hash does not preserve the data or
+  establish the order used in a calculation. `record_dataset_hash` updates the provided
+  manifest dictionary in memory; the caller must serialize it. `fetch` defaults to the
+  committed synthetic sample, avoiding a market-data network request under the documented
+  defaults. Custom sources and inherited environment overrides need their own provenance.
+- **Figure exports remove avoidable variability.** `nbfigures.figure` uses a fixed SVG hash
+  salt and omits date/creator metadata. Byte stability still depends on the drawing code,
+  data, Matplotlib and fonts. The comparator normalizes some SVG details; passing it does
+  not prove visual equality. Inspect both themes when changing a figure.
 
 ## Documentation status
 
 Every page on this site declares a `status`, shown as the pill at the top of the page:
 `generated` (emitted by a script from a source file, not read by anyone), `draft` (known to be
-incomplete), `authored` (complete, examples executed, not yet read by a human), `reviewed` (read by
+incomplete), `authored` (written against the code, not yet read by a human), `reviewed` (read by
 a human) and `validated` (also checked against the code). `check:content-schema` fails if a status
-is missing or if the date behind it is older than the page's last change, and the Rust and Python
-examples on every page are compiled or executed in CI. Pages written by an AI assistant stop at
-`authored`. The [coverage dashboard](/coverage/) counts pages by status.
+is missing or if the date behind it is older than the page's last change.
+
+The example gates have narrower scopes than the status labels. `check:examples` compiles Rust
+fences under `modules/` and the complete Rust core workflow without executing them;
+other Rust fences are outside its scope.
+`check:python-examples` scans Markdown and MDX pages throughout the content tree and runs each
+eligible Python fence independently. Fences marked `doc-check=skip` receive syntax checks only,
+and are listed in the gate output. Passing these checks does not verify every prose claim or
+the statistical validity of an example. Pages written by an AI assistant stop at `authored`.
+The [coverage dashboard](/coverage/) counts pages by status, not by test coverage.
 
 ## Benchmarks
 
@@ -94,7 +116,9 @@ crates.io or PyPI. Until a release, only `main` is supported.
   aarch64), macOS (x86_64, arm64) and Windows plus an sdist, each installed into a clean
   environment on Python 3.11 to 3.13 and run through the Quickstart. Only when all of that passes
   does it publish to PyPI and crates.io and create a GitHub Release with the version's changelog
-  section as its notes. Run from the Actions tab, the workflow is a dry run that publishes nothing.
+  section as its notes. A manual Actions dispatch defaults to `dry_run=true`, which publishes
+  nothing. Setting `dry_run=false` on a selected `v*` tag enables publication; the workflow
+  rejects that publishing mode on a branch. Inspect the input and selected ref before dispatching.
 - **Changes are recorded** in `CHANGELOG.md`, rendered as the [Changelog](/project/changelog/)
   page. A change of behaviour ships with the update to the docs page of every module it touches.
   Pull request titles use conventional-commit prefixes (`feat`, `fix`, `docs`, ...), which is

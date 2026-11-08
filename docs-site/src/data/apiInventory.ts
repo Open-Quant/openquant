@@ -11,6 +11,9 @@ export const apiInventory = {
       "to_polars_signal_frame",
       "to_polars_weights_frame"
     ],
+    "availability": [
+      "select_available_training"
+    ],
     "backtesting_engine": [
       "assemble_cpcv_paths",
       "cpcv_path_count",
@@ -57,6 +60,9 @@ export const apiInventory = {
       "return_moments",
       "strategy_failure_probability"
     ],
+    "feature_assembly": [
+      "assemble_features"
+    ],
     "feature_diagnostics": [
       "feature_screen_report",
       "mda_importance",
@@ -83,6 +89,11 @@ export const apiInventory = {
       "run_mid_frequency_pipeline",
       "run_mid_frequency_pipeline_frames",
       "summarize_pipeline"
+    ],
+    "provenance": [
+      "make_revision",
+      "rejoin_selected",
+      "select_revisions"
     ],
     "research": [
       "make_synthetic_futures_dataset",

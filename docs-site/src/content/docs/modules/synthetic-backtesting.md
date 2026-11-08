@@ -2,7 +2,7 @@
 title: "synthetic_backtesting"
 description: "Choose profit-taking and stop-loss levels on simulated paths of a fitted mean-reverting process, instead of on the one historical path."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -42,10 +42,10 @@ sidebar:
 Where to take profit and where to stop out are usually chosen by trying many pairs of levels
 on history and keeping the best. With two free parameters and one price path, that is about
 the easiest way there is to overfit a backtest (AFML §13.3). Chapter 13's alternative is to
-stop optimising on history at all. Estimate the *process* the price follows, which takes two
-or three parameters and is hard to overfit; simulate many paths from it; and choose the exit
-rule on those. The rule is then tuned to the character of the series, not to the accidents of
-one sample. The Python module is `openquant.synthetic_bt`.
+fit a low-dimensional model of the price process, simulate many paths from it, and choose
+the exit rule on those. This separates rule selection from replaying one historical path,
+but does not remove estimation error or model misspecification. The selected rule is
+conditional on the fitted model and the finite simulation sample. The Python module is `openquant.synthetic_bt`.
 
 ## The procedure
 
@@ -57,32 +57,36 @@ P_t \;=\; (1-\varphi)\,\mathrm{E}[P] + \varphi\,P_{t-1} + \sigma\,\varepsilon_t,
 \qquad \varepsilon_t\sim N(0,1)
 $$
 
-$\varphi$ sets the speed of mean reversion, with half-life $-\ln 2/\ln\varphi$: 6.6 steps at
-$\varphi=0.9$, 138 at $0.995$. $\varphi=1$ is a random walk, which does not revert.
+For $0<\varphi<1$, the reversion half-life is $-\ln 2/\ln\varphi$: 6.6 steps at
+$\varphi=0.9$, 138 at $0.995$. Negative stationary coefficients produce alternating
+deviations, so this formula does not apply directly. At $\varphi=1$, the regression
+is a random walk with drift given by its intercept; it has no finite equilibrium.
 `OuProcessParams` carries `phi`, `equilibrium`, `sigma`, the regression's `r_squared`, and
 `stationary`, true when $\lvert\varphi\rvert<1$.
 
 **2. Simulate.** `generate_ou_paths(params, initial_price, n_paths, horizon, seed)` draws the
 paths. `initial_price` is where the trade is entered, and its distance from `equilibrium` is
-the forecast: the whole expected profit of a long position comes from
-$\mathrm{E}[P]-P_0$.
+the mean-reversion forecast when the fitted process is stationary. The expected change
+at step $h$ is $(\mathrm{E}[P]-P_0)(1-\varphi^h)$ when the equilibrium equals
+`intercept / (1 − phi)`; the near-unit fallback described below does not satisfy that
+identity. A barrier exit changes the payoff distribution.
 
 **3. Evaluate.** `evaluate_rule_on_paths` enters **long at the first price of every path**
 and exits at the first step where the profit reaches `profit_taking` or the loss reaches
-`stop_loss`, or at `max_holding_steps`. It returns the mean, deviation and Sharpe ratio of the
+`stop_loss`, or at `max_holding_steps` (the final available step for a shorter path). It returns the mean, deviation and Sharpe ratio of the
 exit PnL across paths, the win rate and the average holding time.
 
 **4. Search.** `search_optimal_trading_rule` evaluates every pair on a grid — on the same
 paths, so rules are compared on identical draws — and returns the surface sorted by Sharpe
 ratio. `run_synthetic_otr_workflow` does all four steps.
 
-## A rule exists only if the process reverts
+## Inspect the simulated rule surface
 
-AFML's central experimental result (§13.6) is negative. When the process mean-reverts, the
-Sharpe surface has a clear ridge and an optimal rule can be read from it. As $\varphi$
-approaches 1 the surface flattens, and at a random walk there is no optimum to find: whatever
-pair a historical grid search returns is noise. `detect_no_stable_optimum` looks for that
-condition and reports it in `diagnostics`.
+The experiments in AFML §13.6 motivate comparing the shape of the Sharpe surface across
+processes. In the example below, the mean-reverting fit produces a pronounced peak while
+the near-random-walk fit gives a flatter surface. `detect_no_stable_optimum` combines
+coefficient and surface thresholds to flag weak or flat results in `diagnostics`. It is a
+heuristic, not a proof that a profitable rule exists or that none can exist.
 
 ```python
 import random
@@ -126,17 +130,37 @@ position has about three points of expected reversion in its favour and the surf
 where to collect it. In the second, 1,500 observations of a near random walk put the
 "equilibrium" at 95.9 — *below* the entry, though the data were generated around 100 — and
 no rule does better than a Sharpe ratio of 0.06. The search still names a best rule. The
-diagnostic is what tells you to ignore it.
+diagnostic flags this weak surface for further scrutiny.
 
 <figure>
 <img class="dark:sl-hidden" src="/figures/ch13-otr-surface-light.svg" alt="Two five-by-five grids of Sharpe ratios over profit-taking width and stop-loss width. For the mean-reverting process the values rise toward wide stops and a profit target of 2 to 4, peaking at 5.0. For the near random walk every cell is between minus 0.1 and 0.1." />
 <img class="light:sl-hidden" src="/figures/ch13-otr-surface-dark.svg" alt="Two five-by-five grids of Sharpe ratios over profit-taking width and stop-loss width. For the mean-reverting process the values rise toward wide stops and a profit target of 2 to 4, peaking at 5.0. For the near random walk every cell is between minus 0.1 and 0.1." />
-<figcaption>Same grid, same shading scale. With mean reversion the stop should be wide — a tight stop sells the very dips the process will reverse. Without it there is nothing to choose between.</figcaption>
+<figcaption>Same grid, same shading scale. Wider stops perform better in this fitted mean-reverting example; the near-random-walk example has a much flatter surface.</figcaption>
 </figure>
 
-The shape on the left is the book's: for a mean-reverting process with a favourable forecast,
-profit-taking belongs near the expected reversion and stop-losses hurt, because a stop-out
-realises a loss the process would have recovered.
+These results depend on the fitted forecast, noise, horizon and candidate grid. Mean
+reversion does not guarantee recovery before the holding limit, and a wider stop permits
+larger losses. Compare surfaces across independently simulated paths and plausible fits.
+
+## Barrier crossings are observed prices
+
+The evaluator exits at the sampled price that crosses a threshold, without interpolation
+or a fill-price model. With two-point paths and barriers of 2, the following exits earn +5
+and −10. A stop-loss threshold is therefore not a maximum loss.
+
+```python
+from openquant import synthetic_bt as sb
+
+crossings = sb.evaluate_rule_on_paths(
+    [[100.0, 105.0], [100.0, 90.0]], 2.0, 2.0, 1, 1.0)
+assert crossings["mean_return"] == -2.5
+assert crossings["win_rate"] == 0.5
+constant_profit = sb.evaluate_rule_on_paths(
+    [[100.0, 105.0], [100.0, 105.0]], 2.0, 2.0, 1, 1.0)
+assert constant_profit["mean_return"] == 5.0
+assert constant_profit["std_return"] == 0.0
+assert constant_profit["sharpe"] == 0.0
+```
 
 ## From Rust
 
@@ -180,26 +204,31 @@ reference, so when building `OuProcessParams` by hand keep them consistent:
   `sigma`.
 - **Long only.** Every path is a long entry at `initial_price`. For a short, negate the
   series and the entry.
-- **A high Sharpe ratio here can mean a capped payoff, not a good trade.** The best rule in
-  the example wins 100% of the time because nearly every path reaches +2 before the horizon,
-  so the PnL is almost the constant 2 and its deviation is tiny. That Sharpe ratio of 4.95
-  measures how reliably the *simulated* process reverts. Its risk is the risk that the real
-  one does not, which is nowhere in the number.
+- **High simulated Sharpe can reflect concentrated exit PnL.** The best rule in the example
+  has a rounded win rate of 100% and relatively little dispersion in its exit PnL. Barrier
+  crossings can overshoot, so the profit target does not cap the payoff. The reported Sharpe
+  does not include uncertainty about whether the real process follows the fitted model.
+  If exit PnL has exactly zero dispersion, the implementation returns Sharpe **0**, including
+  when all paths earn the same positive profit.
 - **`annualization_factor` multiplies by its square root and ignores holding time.** A rule
   that exits in 3 steps and one that holds for 59 are scaled alike. Use 1.0 and read the
   Sharpe ratio as per trade, alongside `avg_holding_steps`.
 - **The stability thresholds are heuristics.** `StabilityCriteria::default()` is
-  $\varphi\ge0.97$, margin 0.20, surface deviation 0.10, best Sharpe 0.30, and
+  $\lvert\varphi\rvert\ge0.97$, margin 0.20, surface deviation 0.10, best Sharpe 0.30, and
   `run_synthetic_otr_workflow` uses the same four when its threshold arguments are left as
   `None`. They are this library's numbers, not AFML's — the book shows the flattening but
   sets no thresholds. Look at the surface.
 - **The model is the assumption.** Everything downstream is conditional on the price being
-  a stationary AR(1) with constant parameters. `r_squared` is always high for a persistent
-  series and says nothing about that; `stationary` is true for any $\varphi<1$, including
-  0.999. Fit on several windows and check that $\varphi$ and the equilibrium hold still.
+  fitted AR(1) with constant parameters. A high `r_squared` does not establish stationarity;
+  `stationary` records $\lvert\varphi\rvert<1$, including 0.999. The path generator does not
+  enforce that condition or use the flag to reject a manually supplied nonstationary model.
+  When $\lvert1-\varphi\rvert\le10^{-12}$, calibration stores the response sample mean as
+  `equilibrium`; that fallback is not a long-run equilibrium. Fit on several windows and
+  check coefficient and equilibrium stability.
 - **The forecast is an input.** `initial_price` relative to `equilibrium` decides the
-  expected profit. Entering at the equilibrium gives a surface with no edge in it however
-  strongly the process reverts.
+  expected change of a stationary process at a fixed horizon. Entering at equilibrium
+  removes that directional forecast; it does not make every finite simulated rule score
+  exactly zero.
 
 ## Related modules
 

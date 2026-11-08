@@ -2,7 +2,7 @@
 title: "Runbook: fracdiff features against returns in a classifier"
 description: "Do fractionally differentiated features beat plain returns and integer differences as inputs of a purged-CV classifier, net of costs and deflated by every feature set tried? Runbook 09's open question, on SYNTHETIC paths with a planted signal of known strength and no-signal controls."
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -42,8 +42,8 @@ asked whether FFD features beat plain returns in a purged-CV classifier, net of 
 walks no feature can predict anything, so runbook 09 left that open. This runbook plants a signal
 that only memory can find: the log price is a random walk plus a hidden AR(1) mispricing
 ($\phi = 0.97$, half-life about 23 bars), so the expected five-bar return is
-$(\phi^5 - 1)\,m_t$. A classifier on the hidden $m_t$ (the oracle, not tradable) bounds what any
-feature set can reach.
+$(\phi^5 - 1)\,m_t$. A classifier on the hidden $m_t$ (the oracle, not tradable) supplies a
+benchmark. Its fitted predictions are not a proven upper bound on finite-sample AUC or net Sharpe.
 
 The generator's strength was calibrated on the oracle only, and every setting tried is disclosed
 in the notebook. No candidate feature set had been run when the hypotheses were written.
@@ -169,12 +169,18 @@ OPENQUANT_RUNBOOK_SYMBOLS=ES,NQ,CL \
 OPENQUANT_RUNBOOK_RANGE=2010-01-01:2024-12-31 \
 OPENQUANT_RUNBOOK_REGISTRY=$HOME/.openquant/trials-fracdiff-classifier.json \
 OPENQUANT_FIGURE_DIR=/tmp/fracdiff-classifier-figures \
-  uv run --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
+  uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
     notebooks/python/14_fracdiff_features_classifier.ipynb --out /tmp/14_on_my_data.ipynb
 ```
 
-`OPENQUANT_RUNBOOK_REGISTRY` keeps the control's trial registry between sessions, so every feature
-set you try on your data counts toward its deflated Sharpe ratio. `OPENQUANT_RUNBOOK_REPS` sets
+`OPENQUANT_RUNBOOK_REGISTRY` persists the control registry, but the current key contains
+only the control label (`control-user data` for any custom source), feature-set name and
+cost. It omits the dataset hash, date range and other model settings. Reusing a registry
+path after changing those inputs can therefore overwrite earlier trials instead of counting
+them. Before adapting a persistent study, extend the recorded configuration with full data
+and protocol identity and preserve the earlier inventory; see the
+[trial-identity contract](/workflows/research-notebook-contract/#trial-identity-is-part-of-the-method).
+`OPENQUANT_RUNBOOK_REPS` sets
 the number of Monte Carlo paths per strength (default 30). On your data, read the control table
 next to the zero-signal Monte Carlo: purged k-fold favours level-like features even when there is
 nothing to find.

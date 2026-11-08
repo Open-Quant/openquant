@@ -30,11 +30,15 @@ file disagree).
 
 ### Added
 
+- Research: add point-in-time availability, exact revision association and complete-feature assembly APIs, examples and guides. ([#270](https://github.com/Open-Quant/openquant/pull/270))
+- Research: add 20 qualified offline studies, reproducible report replay, lossless storage and numerical-runtime diagnostics; synthetic results do not establish investment performance. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - Example: a runnable synthetic-data research journey through dollar bars, events, labels and forward-only classification evaluation. ([#260](https://github.com/Open-Quant/openquant/pull/260))
 - Research: an experimental synthetic selection-validation lab with PSR/DSR and trial-registry adapters; no real-market or trading-performance claim. ([#249](https://github.com/Open-Quant/openquant/pull/249))
 
 ### Changed
 
+- Docs: expand end-to-end workflows and task-based API navigation, and improve narrow-screen layout, tables and keyboard-accessible code examples. ([#270](https://github.com/Open-Quant/openquant/pull/270))
+- CI: exercise pinned scientific research tests while retaining optional SciPy dependencies and unchanged production defaults. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - `data`: skip the unused duplicate-count query when `clean_ohlcv` does not return a quality report. ([#255](https://github.com/Open-Quant/openquant/pull/255))
 - `structural_breaks`: release the Python GIL during the three owned Rust numerical kernels, without changing public signatures. ([#252](https://github.com/Open-Quant/openquant/pull/252))
 - Docs: refine the pinwheel logo, colors and text hierarchy, and add a labeled four-stage research map. ([#250](https://github.com/Open-Quant/openquant/pull/250))

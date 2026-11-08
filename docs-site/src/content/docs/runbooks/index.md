@@ -3,7 +3,7 @@ title: "Research gallery"
 description: "Every research runbook in notebooks/python: its pre-registered hypothesis, figures, result and promotion decision, taken from the executed notebooks."
 status: generated
 generated_from: "notebooks/python/*.ipynb"
-last_generated: '2026-09-30'
+last_generated: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -129,6 +129,12 @@ and 83% of individual runs. The paired log-ratio $t$-statistics (12.2 and 40.6) 
 sign; the effect sizes are what deserve reading. Equal weight, which estimates nothing, has more than
 twice HRP's variance, because it always holds a full tenth of every shocked asset.
 
+**Interpretation of H2.** The historical acceptance rule $t > -1.645$ only means that the
+experiment did not detect significantly worse performance. It does not establish equivalence or
+non-inferiority; those claims need a pre-specified margin and an interval test. Here the actual
+statistic is strongly positive ($t = 40.6$), supporting lower variance in this simulation.
+The historical hypotheses and computed results above are unchanged.
+
 ### Promotion decision
 
 **Replicated on synthetic data; not promoted as a market claim.**
@@ -204,8 +210,9 @@ $\kappa = 0$.
 Not promoted:
 - **Any strategy.** The pre-registered strategy's DSR on the headline path is 0.924, below 0.95.
   Everything here is synthetic.
-- **"Meta-labeling improves F1."** It cannot when the primary model takes every bet and is
-  already right more often than not.
+- **"Meta-labeling improves F1" as a result of this study.** The tested filter loses too
+  much recall for its precision gain. Other filters can improve F1, including at base rates
+  above 0.5; the counterexample in Analysis demonstrates that distinction.
 - **Binary filtering at 0.5 as the sizing rule.** Probability sizing did better, post hoc. It
   should be the pre-registered rule next time, with its own trial count.
 - **Sequential-bootstrap bagging over the logistic model.** It did better on the one headline
@@ -258,7 +265,8 @@ configuration it picks has a true Sharpe ratio of −0.09. Its PSR(0) clears 0.9
 (60 of 200) against a nominal 5%. DSR, deflated by the registry's 74 trials, clears 0.95 in none
 of them. The deflation figure shows the mechanism on dataset 0: as configurations are added, the
 best-so-far's PSR(0) climbs from 0.43 to 0.85 while its DSR stays between 0.5 and 0.6, because
-SR0, the best that luck alone would reach, rises with the maximum. Dataset 0 happens not to cross
+SR0, an estimate of the expected maximum Sharpe among null trials, also rises in this
+example. It is not an upper bound on an individual null result. Dataset 0 happens not to cross
 0.95 naively (PSR 0.85); its MinTRL at SR* = 0 is 24.7 years, against the 10 in the sample. The
 Monte Carlo, not dataset 0, is the evidence.
 
@@ -495,7 +503,7 @@ Inverse-variance, minimum-volatility and maximum-Sharpe allocations (AFML Ch. 16
 
 [notebook `05_risk_overlays_and_reality_check.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/05_risk_overlays_and_reality_check.ipynb)
 
-The flywheel's cost-adjusted promotion gates (realised Sharpe, net Sharpe and leakage guards), on the **synthetic**
+The flywheel's cost-adjusted promotion gates (realised Sharpe, net Sharpe and ordering checks), on the **synthetic**
 futures dataset (seed 13). The equity curve and drawdown come from `openquant.viz.prepare_drawdown_payload`.
 
 <img class="dark:sl-hidden" src="/figures/notebooks/nb05-equity-drawdown-light.svg" alt="Equity curve of the synthetic flywheel backtest with its drawdown from the running peak below." />
@@ -505,7 +513,7 @@ futures dataset (seed 13). The equity curve and drawdown come from `openquant.vi
 
 [notebook `07_feature_engineering_discovery_loop.ipynb`](https://github.com/Open-Quant/openquant/blob/main/notebooks/python/07_feature_engineering_discovery_loop.ipynb)
 
-Build candidate features, screen them for basic quality/correlation constraints, and run a quick flywheel check
+Build candidate features, screen them for basic quality/correlation constraints, and make a separate flywheel API call
 on the **synthetic** futures dataset (seed 19).
 
 <img class="dark:sl-hidden" src="/figures/notebooks/nb07-feature-correlation-light.svg" alt="Correlation heatmap of the five candidate features." />

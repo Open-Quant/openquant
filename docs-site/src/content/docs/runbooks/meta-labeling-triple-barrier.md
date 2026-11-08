@@ -2,7 +2,7 @@
 title: "Runbook: triple-barrier labeling and meta-labeling"
 description: "Does a meta-labeling model improve the precision, F1 and deflated Sharpe ratio of a primary model with a known, weak edge? CUSUM events, triple-barrier meta-labels, purged k-fold and a trial registry, on SYNTHETIC paths with a planted signal and a no-signal control."
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
 afml_chapter:
@@ -35,9 +35,10 @@ Module background: [`labeling`](/modules/labeling/), [`sample_weights`](/modules
 
 ## Why a planted signal
 
-The `SYN_*` sample is made of random walks, so no primary model has an edge on it. On that sample,
-"does meta-labeling help?" can only be answered "no", and a "yes" would mean a bug. So the main
-study simulates paths where the answer is known in advance:
+The `SYN_*` sample is made of random walks, so the primary model has no expected predictive
+edge. An apparent improvement on one finite sample can still arise by chance; repeated null
+paths help distinguish that variation from a systematic defect or bias. The main study also
+simulates paths with a known signal:
 
 - **Two hidden regimes**, each lasting 100 days on average.
 - **Trend regime.** Returns continue the last 20 days' move: $\kappa = 0.25$ times the day's
@@ -46,7 +47,8 @@ study simulates paths where the answer is known in advance:
 - **Imperfect proxy.** Volatility carries AR(1) noise, so it only partly reveals the regime.
 
 A 10/40-day moving-average crossover makes money in trend, loses it in chop, and has a small edge
-overall. An *oracle* filter that knows the regime shows the most any filter could add. Two
+overall. An *oracle* filter that knows the regime supplies a non-tradable benchmark. It is not
+a proven upper bound on every possible filter or on finite-sample returns. Two
 controls, where the right answer is "no improvement":
 
 - the same generator with $\kappa = 0$;
@@ -70,7 +72,7 @@ Each is tested one-sided at 5%, paired over 30 simulated paths at $\kappa = 0.25
 | H1 | Meta's precision is higher than primary's | **supported**: 0.543 → 0.565, $t$ = 4.2 (walk-forward: +0.018, $t$ = 4.3) |
 | H2 | Meta's F1 is higher than primary's (AFML §3.6) | **rejected**: 0.704 → 0.621, $t$ = −11 |
 | H3 | Meta's net Sharpe ratio is higher than primary's | **supported**: 0.18 → 0.32 annualised, $t$ = 2.7 |
-| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.924 (0.862 with the 2 post hoc bagging trials) |
+| H4 | On the headline path, meta's DSR over all 10 registered trials is at least 0.95 | **rejected**: DSR 0.924 (0.802 with the 2 post hoc bagging trials) |
 
 ## Method
 
@@ -122,7 +124,7 @@ counts. The Monte Carlo paths describe the method and are not trials.
 <figure>
 <img class="dark:sl-hidden" src="/figures/notebooks/nb11-headline-equity-light.svg" alt="Cumulative net log return on the planted-signal path for the primary crossover, the crossover filtered by the meta-model, and the oracle filter that knows the regime." />
 <img class="light:sl-hidden" src="/figures/notebooks/nb11-headline-equity-dark.svg" alt="Cumulative net log return on the planted-signal path for the primary crossover, the crossover filtered by the meta-model, and the oracle filter that knows the regime." />
-<figcaption>Headline path, net of costs. The oracle is the ceiling a perfect regime filter would reach.</figcaption>
+<figcaption>Headline path, net of costs. The oracle uses the hidden regime; it is a benchmark, not a proven performance ceiling.</figcaption>
 </figure>
 
 **Monte Carlo, 30 paths per strength** (difference from primary, annualised Sharpe ratio):
@@ -154,14 +156,14 @@ share of stumps voting 1. DSRs are over all 12 registered trials.
 
 | Data | Meta-model | Rule | Bets | Precision | Net Sharpe (ann.) | DSR |
 |---|---|---|---:|---:|---:|---:|
-| Headline path | logistic | binary@0.5 | 508 | 0.614 | 0.78 | 0.862 |
-| Headline path | logistic | sized | 508 | 0.614 | 1.28 | 1.000 |
-| Headline path | bagging | binary@0.5 | 334 | 0.680 | 1.14 | 0.996 |
-| Headline path | bagging | sized | 279 | 0.710 | 1.44 | 1.000 |
+| Headline path | logistic | binary@0.5 | 508 | 0.614 | 0.78 | 0.802 |
+| Headline path | logistic | sized | 508 | 0.614 | 1.28 | 0.999 |
+| Headline path | bagging | binary@0.5 | 314 | 0.694 | 1.35 | 1.000 |
+| Headline path | bagging | sized | 307 | 0.691 | 1.56 | 1.000 |
 | `SYN_*` control | logistic | binary@0.5 | 37 | 0.297 | −1.50 | 0.001 |
-| `SYN_*` control | bagging | binary@0.5 | 180 | 0.456 | −0.76 | 0.028 |
+| `SYN_*` control | bagging | binary@0.5 | 134 | 0.448 | −0.88 | 0.018 |
 
-On the headline path the two models' probabilities correlate at 0.83 and agree on 74% of take/skip
+On the headline path the two models' probabilities correlate at 0.83 and agree on 71% of take/skip
 decisions; bagging is more selective and more precise. On the control it keeps more of the losing
 bets but finds nothing. This is one path: bagging is not in the Monte Carlo, because the sequential
 draw rescans the indicator matrix for every sampled event.
@@ -172,11 +174,13 @@ draw rescans the indicator matrix for every sampled event.
   oracle's precision gain and a sixth of its Sharpe gain. At $\kappa = 0.12$ the oracle still
   gains on every path, but meta gains nothing: with about 550 training events it needs a large
   conditional edge.
-- **F1 is the wrong yardstick here.** The primary model takes every bet, so its recall is 1 and
+- **Higher net Sharpe did not imply higher F1.** The primary model takes every bet, so its recall is 1 and
   its F1 is $2b/(1+b)$ at base rate $b$. A filter that gives up 30% of recall for 2 points of
-  precision lowers F1 even while it raises the Sharpe ratio.
+  precision lowers F1 even while it raises the Sharpe ratio. That trade-off is specific to
+  this filter, not an impossibility theorem: of 100 bets with 60 winners, taking all bets
+  gives F1 = 0.75; retaining all 60 winners and only 10 losers gives F1 = 120/130 ≈ 0.923.
 - **One path is not enough.** On the headline path, 19 years of a 0.78 Sharpe ratio still has a
-  DSR of 0.924 once 10 tried configurations are counted, and 0.862 once the 2 post hoc bagging
+  DSR of 0.924 once 10 tried configurations are counted, and 0.802 once the 2 post hoc bagging
   trials are counted too.
 - **Precision comparisons are biased against meta when there is nothing to find.** On the
   zero-signal generator, meta's precision is *lower* than primary's ($t$ = −3.7). This is not a
@@ -189,7 +193,7 @@ draw rescans the indicator matrix for every sampled event.
   (+0.36, $t$ = 6.1). It also lost more under the null. It was not pre-registered, so it is the
   candidate for the next study.
 - **Post hoc: bagging looked better on one path.** Sequential-bootstrap bagging raised precision to
-  0.680 and the net Sharpe ratio to 1.14 (1.44 sized, the best of all 12 trials) on the headline
+  0.694 and the net Sharpe ratio to 1.35 (1.56 sized, the best of all 12 trials) on the headline
   path, and found nothing on the control. One path and two configurations picked after the fact
   make it a candidate for a pre-registered comparison across paths, not a finding. No
   pre-registered outcome changes.
@@ -239,10 +243,13 @@ OPENQUANT_RUNBOOK_SYMBOLS=ES,NQ,CL \
 OPENQUANT_RUNBOOK_RANGE=2010-01-01:2024-12-31 \
 OPENQUANT_RUNBOOK_REGISTRY=$HOME/.openquant/trials-meta-labeling.json \
 OPENQUANT_FIGURE_DIR=/tmp/meta-labeling-figures \
-  uv run --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
+  uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/execute_notebook_cells.py \
     notebooks/python/11_meta_labeling_triple_barrier.ipynb --out /tmp/11_on_my_data.ipynb
 ```
 
-`OPENQUANT_RUNBOOK_REGISTRY` keeps the trial registry between sessions, so every configuration you
-try on your data counts toward the deflated Sharpe ratio. For a vendor API, set `SOURCE` in the
-notebook's parameters cell to an `openquant.data.CallableSource`.
+`OPENQUANT_RUNBOOK_REGISTRY` persists the control registry. Its key includes a shortened
+dataset hash and the grid configuration, but not every global setting (for example, the
+logistic penalty). Repeating a key replaces its recorded returns rather than adding a trial.
+When extending the experiment, include the changed settings and full data/protocol identity
+in the recorded configuration; see the [trial-identity contract](/workflows/research-notebook-contract/#trial-identity-is-part-of-the-method).
+For a vendor API, set `SOURCE` in the parameters cell to an `openquant.data.CallableSource`.

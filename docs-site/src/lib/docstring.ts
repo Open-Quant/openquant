@@ -36,7 +36,7 @@ function renderProse(lines: string[]): string {
       i++;
       while (i < lines.length && !lines[i].trim().startsWith('```')) body.push(lines[i++]);
       i++;
-      out.push(`<pre><code>${escapeHtml(body.join('\n'))}</code></pre>`);
+      out.push(`<pre tabindex="0" role="group" aria-label="Code example"><code>${escapeHtml(body.join('\n'))}</code></pre>`);
       continue;
     }
     if (line.trim().startsWith('>>>') || indentOf(line) >= 4) {
@@ -44,7 +44,7 @@ function renderProse(lines: string[]): string {
       while (i < lines.length && lines[i].trim() && (lines[i].trim().startsWith('>>>') || indentOf(lines[i]) >= 4 || lines[i].trim().startsWith('...'))) {
         body.push(lines[i++]);
       }
-      out.push(`<pre><code>${escapeHtml(body.join('\n'))}</code></pre>`);
+      out.push(`<pre tabindex="0" role="group" aria-label="Code example"><code>${escapeHtml(body.join('\n'))}</code></pre>`);
       continue;
     }
     if (/^\s*[-*] /.test(line)) {
@@ -104,7 +104,7 @@ const ENTRY_SECTIONS = new Set([
   'Other Parameters',
 ]);
 
-export function renderDocstring(doc: string): string {
+export function renderDocstring(doc: string, sectionDepth: 2 | 4 | 5 = 4): string {
   if (!doc.trim()) return '<p class="oq-doc-missing">No docstring yet.</p>';
   const lines = doc.replace(/\r\n/g, '\n').split('\n');
   const parts: string[] = [];
@@ -116,7 +116,7 @@ export function renderDocstring(doc: string): string {
       const body = ENTRY_SECTIONS.has(current.title)
         ? renderEntries(current.body)
         : renderProse(dedent(current.body));
-      parts.push(`<h4 class="oq-doc-section">${escapeHtml(current.title)}</h4>${body}`);
+      parts.push(`<h${sectionDepth} class="oq-doc-section">${escapeHtml(current.title)}</h${sectionDepth}>${body}`);
     }
   };
   for (let i = 0; i < lines.length; i++) {

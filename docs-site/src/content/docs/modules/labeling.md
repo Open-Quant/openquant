@@ -2,7 +2,7 @@
 title: "labeling"
 description: "Triple-barrier labels and meta-labels: what happened after each event, measured in units of that moment's volatility."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -168,6 +168,30 @@ be tuned for recall, because the secondary one is there to restore precision.
 
 `meta_labels` is `triple_barrier_labels` restricted to events that carry a side.
 
+### Preserve the primary side's provenance
+
+The labeling functions consume supplied sides; they do not fit the primary model or
+check how its predictions were obtained. A fixed rule using only information available
+at the event, such as the rule above, has no fitted primary state. A learned classifier
+does: generate out-of-sample sides for the secondary model's training rows, fitting
+the primary model and its preprocessing only on the corresponding training partitions.
+Do not use its predictions on rows it was trained on as evidence of primary accuracy.
+
+When evaluating the two-stage procedure, keep the outer test or final holdout unseen by
+**both** models and by their parameter choices. Generate the secondary training sides
+within the outer training partition. A globally precomputed out-of-fold side vector is
+not sufficient if a primary fit used labels from the eventual outer test partition.
+Use [purging and embargo](/modules/cross-validation/) for overlapping label spans, and
+chronological training when the question is what could have been predicted live.
+The [model-selection walkthrough](/workflows/model-selection-holdout/) illustrates the
+training/holdout boundary for one model; it does not implement this two-stage procedure.
+
+Keep each side aligned with its event and recompute the corresponding events and labels
+when the side policy changes. The side changes the signed path used to detect barriers;
+with asymmetric profit/stop multiples it can also change the end time used for purging
+and weighting. A secondary model's purged split cannot repair leakage already present
+in its supplied sides, features or targets.
+
 ## Choosing the parameters
 
 - **Target.** [`get_daily_vol`](/modules/util-volatility/) is Snippet 3.1: an exponentially
@@ -184,7 +208,9 @@ be tuned for recall, because the secondary one is there to restore precision.
   barrier at all, rather than a shortened one. From Python the offset is
   `num_days`, `num_hours`, `num_minutes` and `num_seconds`, each defaulting to 0 and summed;
   leaving all four at 0 is a `ValueError`, since a zero offset puts the barrier on the event
-  itself.
+  itself. Supply non-negative components with a strictly positive total horizon; the current
+  binding checks only the all-zero argument case, not whether mixed-sign components cancel.
+  Construct custom vertical barriers from actual bar timestamps after each event.
 - **Rare classes.** `drop_labels(bins, min_pct)` removes the rarest class while it holds no
   more than `min_pct` of the observations and at least three classes remain (Snippet 3.8).
 
@@ -221,7 +247,13 @@ assert_eq!((label, side), (1, None));
   [`sample-weights`](/modules/sample-weights/), and split with
   [`cross-validation`](/modules/cross-validation/), passing each event's $(t_0, t_1)$.
 - **Timestamps must match exactly.** Events, targets and sides are joined to `close` by
-  timestamp. An event whose timestamp is not a bar in `close` is skipped without an error.
+  timestamp. An event whose timestamp is not a bar in `close` is skipped without an error;
+  a missing target, or a missing side when sides are supplied, also drops the event.
+  A custom vertical end that is not a bar timestamp can remain in the event output but is
+  skipped by `get_bins` when no earlier horizontal touch supplies a valid end. Prefer
+  `add_vertical_barrier` to map a horizon to an available bar. Keep closes sorted, unique
+  and positive, with finite targets and sides of exactly `-1` or `+1`; these numerical and
+  ordering preconditions are caller responsibilities, not comprehensive binding validation.
 - **Timestamps from Python are strings.** They cross the binding as
   `"%Y-%m-%d %H:%M:%S"` with an optional fractional second (up to nanoseconds). Output
   times are written as `str(datetime)` writes them: no fraction on a whole second, otherwise

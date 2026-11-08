@@ -157,21 +157,52 @@ assert!(matches!(
 ));
 ```
 
+## Equal-return inputs preserve the forecasts
+
+Exactly equal forecasts produce one efficient point: the constrained minimum-variance
+portfolio, calculated by the existing QP solver with `lambda = 0`. The expected-return
+vector is not perturbed, and nearly equal forecasts retain their original ordering.
+Earlier versions added `1e-5` to the last asset when forecasts were nearly equal;
+that artificial tie-break is no longer used.
+
+```python
+from openquant import cla
+
+cov = [[0.04, 0.0], [0.0, 0.09]]
+forward = cla.allocate_cla(expected_returns=[0.0, 0.0], covariance_matrix=cov,
+                           solution="max_sharpe")["weights"][0]
+reverse = cla.allocate_cla(expected_returns=[0.0, 0.0],
+                           covariance_matrix=[[0.09, 0.0], [0.0, 0.04]],
+                           solution="max_sharpe")["weights"][0]
+assert all(abs(a - b) < 1e-9 for a, b in zip(forward, reversed(reverse)))
+assert abs(forward[0] - 9 / 13) < 1e-9
+frontier = cla.allocate_cla(expected_returns=[0.0, 0.0], covariance_matrix=cov,
+                            solution="efficient_frontier")
+assert all(value == 0.0 for value in frontier["efficient_frontier_means"])
+```
+
+Zero expected returns do not create evidence of profitable allocation. The returned
+point minimises variance subject to the bounds; use `"min_volatility"` when that is
+the intended objective. Numerical tolerances and estimation uncertainty still apply.
+
 ## What to watch for
 
 - **From prices, CLA uses simple returns**, as do
   [`portfolio_optimization`](/modules/portfolio-optimization/), [`hrp`](/modules/hrp/) and
   [`hcaa`](/modules/hcaa/). Its expected returns are annualised and its covariance is left
-  per period, which moves no turning point. From the same prices, or the same $\mu$ and
-  $\Sigma$, the two methods can be compared directly, as in the positive-forecast example
-  above. Until [#110](https://github.com/Open-Quant/openquant/issues/110) was fixed,
+  per period, which moves no turning point. With matching effective bounds and inputs, a
+  zero risk-free rate and a common supported positive-return problem, CLA and
+  `portfolio_optimization` solve the same maximum-Sharpe objective; until
+  [#110](https://github.com/Open-Quant/openquant/issues/110) was fixed,
   `portfolio_optimization` took log returns and the two differed.
 - **`"max_sharpe"` searches the efficient frontier with a zero risk-free rate.** It maximises $\mu^\top w/\sigma$, the tangency
   portfolio for a rate of zero, which for low-yielding safe assets lands near the
   minimum-variance end, as in the figure. For a non-zero rate, subtract it from the expected
   returns before calling, or use `portfolio_optimization`. With negative expected returns,
   a dominated portfolio outside this frontier can have a higher Sharpe ratio; this is
-  not a global Sharpe search over such portfolios.
+  not a global Sharpe search over such portfolios. With expected returns `[-0.01, -0.02]`,
+  covariance `[[0.04, 0], [0, 0.09]]` and default bounds, CLA returns weights `[1, 0]`,
+  while `portfolio_optimization` rejects the absence of an asset above its risk-free rate.
 - **Equal forecasts remain unchanged.** Exactly equal forecasts have a single efficient
   point: the constrained minimum-variance portfolio, computed by the existing QP solver
   with `lambda = 0`. Nearly equal forecasts retain their ordering. Earlier versions added

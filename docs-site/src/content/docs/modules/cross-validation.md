@@ -2,7 +2,7 @@
 title: "cross_validation"
 description: "Purged k-fold cross-validation with an embargo, for labels that overlap in time."
 status: authored
-last_authored: '2026-09-30'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -140,8 +140,9 @@ whether or not they were also purged. The window starts after the purge, so in a
 no sample is both; in CPCV a window can reach into another test block's purged zone, and those
 samples are listed in both. `test_ranges` gives the test set as ranges.
 Training is every sample in none of the three. `overlap_count_after_purge` counts training
-labels that still intersect a test label. It is always 0, and is there so a pipeline can
-assert it.
+labels that still intersect a test label. It should be 0 for correctly ordered, valid input;
+assert it rather than assuming it. The sorting example below demonstrates a nonzero result
+when the input-order precondition is violated.
 
 `cpcv_splits(n_samples, k)` is combinatorial purged CV (AFML §12.4). It returns one
 `CpcvSplit` for each of the $\binom{N}{k}$ ways to test $k$ of the $N$ folds at once, in
@@ -272,12 +273,14 @@ against a null run through the same splits, not on pooled AUC.
 ## Scoring
 
 `ml_cross_val_score(classifier, x, y, sample_weight, splits, scoring)` fits on each training
-set and scores each test set. It takes any `SimpleClassifier` — a two-method trait, `fit`
-and `predict_proba` — and one of three `Scoring` rules:
+set and scores each test set. `SimpleClassifier` requires `fit` and `predict_proba` and
+provides an overridable `predict` method. Accuracy and F1 use `predict`; its default
+thresholds `predict_proba` at 0.5, but a custom decision rule is honored. Log loss always
+uses `predict_proba`. The three `Scoring` rules are:
 
 | `Scoring` | Value per fold |
 | --- | --- |
-| `Accuracy` | share of test samples where `proba ≥ 0.5` matches the label |
+| `Accuracy` | share of test samples where the hard prediction matches the label |
 | `NegLogLoss` | $\frac1n\sum_i\bigl[y_i\ln p_i+(1-y_i)\ln(1-p_i)\bigr]$, with $p_i$ clipped to $[10^{-15},\,1-10^{-15}]$; higher is better |
 | `F1` | harmonic mean of precision and recall for the positive class; 0 when there are no positive predictions |
 
@@ -321,7 +324,11 @@ assert!(scores.iter().all(|s| (s + entropy).abs() < 0.002));
 `openquant.cross_validation` returns indices and fits nothing, so any model can use them.
 `t0` and `t1` are required: `t0[i]` is when label $i$ starts and `t1[i]` when it resolves.
 They can be numpy `datetime64` arrays, pandas or polars datetime columns, `datetime` objects,
-ISO strings, or plain integers such as bar positions. The splitting is the Rust code above.
+ISO strings, or plain integers such as bar positions. Both columns must use the same
+kind and units, contain one endpoint per sample, and satisfy `t1 >= t0`. Label spans are
+closed intervals: a training label ending exactly when a test label starts overlaps it.
+Diagnostic `test_ranges`, in contrast, are half-open **row-index** intervals `[start, stop)`,
+not time spans. The splitting is the Rust code above.
 
 | Function | Returns |
 | --- | --- |
@@ -333,7 +340,7 @@ ISO strings, or plain integers such as bar positions. The splitting is the Rust 
 | `walk_forward_split_with_diagnostics(...)` | the same as dicts, with `test_fold_id` and `purged_indices` |
 | `null_score_distribution(evaluate, splits, make_null, n_null, seed)` | `n_null` scores of `evaluate(make_null(rng), splits)`: the pipeline on no-signal data, through the same splits |
 | `bootstrap_returns(returns, demean=True)` | a `make_null` that draws the (demeaned) returns i.i.d. with replacement: a driftless random walk |
-| `null_p_value(observed, null)` | $(k + 1)/(n + 1)$, $k$ of the $n$ null scores at least `observed` |
+| `null_p_value(observed, null)` | $(k + 1)/(n + 1)$, $k$ of the $n$ **finite** null scores at least `observed` |
 | `naive_kfold_splits(n_samples, n_splits)` | the unpurged baseline |
 | `count_train_test_overlaps(t0, t1, train, test)` | the number of leaking training samples |
 
@@ -416,6 +423,53 @@ scikit-learn then passes `sample_weight` to `fit` but not to the scorer (the bug
 fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
 `purged_search` weights the score as well.
 
+## What the null helper preserves
+
+`bootstrap_returns` draws rows independently with replacement. For a two-dimensional array,
+it keeps each row's cross-section together, but destroys time ordering, serial dependence
+and volatility clustering. Its default demeaning subtracts each column's sample mean before
+drawing; an individual draw need not have exactly zero sample mean. This is an IID null
+for the documented memory-feature experiment, not a dependence-preserving uncertainty
+estimate for arbitrary returns. Supply a `make_null` matched to the experiment when those
+dependencies matter.
+
+`null_score_distribution` preserves non-finite scores in its output, while `null_p_value`
+drops both NaNs and infinities before counting. Check and report failed null runs: losing
+scores changes the denominator and the minimum attainable p-value. No finite scores is an
+error; the helper does not explain why simulations failed.
+
+```python
+from openquant import cross_validation as cv
+
+# Only one finite null score remains, so the corrected p-value floor is 1 / 2.
+assert cv.null_p_value(1.0, [0.0, float("nan"), float("inf"), float("-inf")]) == 0.5
+```
+
+## Sort the complete sample table first
+
+Ordering is a precondition, not a validation performed by the splitter. The following
+small example shows an unsorted fold whose reported residual overlap is nonzero, then
+repairs the input order. The same permutation must be applied to every sample-aligned array.
+
+```python
+import numpy as np
+from openquant import cross_validation as cv
+
+t0 = np.array([10, 0, 5, 20])
+t1 = np.array([10, 10, 5, 20])
+unsorted_fold = cv.split_with_diagnostics(t0, t1, n_splits=2)[0]
+assert unsorted_fold["overlap_count_after_purge"] == 1
+
+order = np.argsort(t0, kind="stable")
+sorted_t0, sorted_t1 = t0[order], t1[order]
+# Also use X[order], y[order] and weights[order] for model fitting.
+folds = cv.split_with_diagnostics(sorted_t0, sorted_t1, n_splits=2)
+assert all(fold["overlap_count_after_purge"] == 0 for fold in folds)
+# To refer back to original rows, map a sorted index through `order`.
+original_test_rows = order[folds[0]["test_indices"]]
+assert original_test_rows.tolist() == [1, 2]
+```
+
 ## What to watch for
 
 - **Sample weights are used to fit, not to score.** Snippet 7.4 exists because scikit-learn's
@@ -425,11 +479,14 @@ fixes); [`hyperparameter-tuning`](/modules/hyperparameter-tuning/#from-python)'s
   compute the weighted score yourself from `splits`.
 - **`ml_cross_val_score` checks shapes, not content.** It returns an error if `y` or
   `sample_weight` is not one entry per row of `x`, if an index in `splits` is beyond `x`, or
-  if `predict_proba` returns the wrong number of values. An empty test set scores
+  if `predict` (accuracy/F1) or `predict_proba` (log loss) returns the wrong number of values. An empty test set scores
   `NaN` under every rule, F1 included, so filter it out before averaging. Build `splits` with `PurgedKFold` and pass the same `x` and `y` it was sized for.
 - **`samples_info_sets` must be in time order, one per row of `x`.** Folds are blocks of
   consecutive indices; the purge compares timestamps but the embargo counts positions.
-  Unsorted input purges correctly and embargoes nonsense.
+  The library does not check this ordering. Unsorted input can leave actual train/test
+  label overlaps after purging, as well as applying the embargo to the wrong samples.
+  Sort by label start and apply the same permutation to features, labels and weights before
+  splitting; returned indices then refer to that sorted row order.
 - **Purging can empty a training set.** With long labels and many folds, the purged zone can
   swallow a small dataset. Check `train.len()` per fold; a fold trained on a handful of
   samples produces a score, not a meaningful one.

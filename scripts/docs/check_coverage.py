@@ -1,27 +1,18 @@
 #!/usr/bin/env python3
-"""Recompute the coverage dashboard's numbers, and fail when the page drifts.
+"""Recompute documentation presence/status counts and fail when their tables drift.
 
-`docs-site/src/content/docs/coverage.md` opens by promising that every number on
-it ships with the command that produced it. Until now the numbers were
-hand-transcribed from commands someone ran once, which is the failure mode the
-page itself warns about: by the time this script was written the page's status
-tally was two pages out of date and its module-depth split was wrong by a
-factor of three, because `moduleDocs.ts` was rewritten after the page was last
-touched.
+The dashboard counts discovered modules, declared page statuses and selected
+headings. It does not execute examples, assess citations or verify review claims.
 
-So this is the command. It derives the three tables from the tree, and:
+  --check (CI)  compares the marked table regions with the current tree; date-only
+                drift in the informational measurement stamp is ignored.
+  --write       rewrites owned regions and the measured-on date when coverage and
+                marker checks pass; it does not update authorship/review stamps.
 
-  --check (CI)  compares them against the marked regions of the page and exits
-                non-zero on any drift.
-  --write       rewrites those regions and re-stamps the measured-on date.
-
-Regions are delimited in the markdown by `<!-- coverage:begin:NAME -->` /
-`<!-- coverage:end:NAME -->`. Everything outside them is prose that a human
-owns; this script never touches it.
-
-Undocumented public modules are a hard failure unless `coverage_allowlist.toml`
-carries a reason and an unexpired date for them — that file is the only place a
-known gap is allowed to live, and it expires so gaps cannot be parked forever.
+Regions are delimited by ``<!-- coverage:begin:NAME -->`` and matching end
+markers. Surrounding prose is maintained separately and is not rewritten.
+Undocumented public modules fail unless ``coverage_allowlist.toml`` records a
+reason and an unexpired date; stale or invalid allowlist entries also fail.
 """
 
 from __future__ import annotations
@@ -43,9 +34,9 @@ ALLOWLIST = ROOT / "docs-site" / "coverage_allowlist.toml"
 # Same taxonomy, same order, as docs-site/scripts/check-content-schema.mjs.
 STATUS_ORDER = ("generated", "draft", "authored", "reviewed", "validated")
 STATUS_MEANS = {
-    "generated": "Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it.",
+    "generated": "Emitted by a script from its declared source; no human review claimed.",
     "draft": "Hand-written, known incomplete. Claims nothing.",
-    "authored": "Hand-written and complete, with relevant example checks passing. No human has read it.",
+    "authored": "Written against the code; does not establish executed examples or human review.",
     "reviewed": "A human read the page end to end.",
     "validated": "Reviewed *and* checked against the code.",
 }
@@ -128,10 +119,10 @@ def documented_modules(
 
 
 def module_depth() -> tuple[int, int, int]:
-    """(generated pages with the full template, with the base template only, hand-written pages).
+    """Counts: generated with both selected headings, other generated, non-generated.
 
-    A hand-written page has no template, so sorting it by which template headings it happens
-    to contain would miscount it as a thin generated page.
+    Non-generated status is a classification, not evidence of authorship quality,
+    citations or executed examples. Generated pages are grouped by FULL_SECTIONS only.
     """
     full = base = handwritten = 0
     for page in sorted(MODULE_PAGES.glob("*.md")):
@@ -236,10 +227,10 @@ def render_module_depth(full: int, base: int, handwritten: int) -> str:
             "| | Count |",
             "|---|---|",
             f"| Modules with a documentation page | {full + base + handwritten} |",
-            f"| …written by hand, with a citation and executed examples | {handwritten} |",
-            f"| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** "
-            f"on top of the base sections) | {full} |",
-            f"| …generated, carrying the base template only | {base} |",
+            f"| …not marked generated (status classification only) | {handwritten} |",
+            f"| …generated, containing both **Key Parameters** and **Common Pitfalls**"
+            f" headings | {full} |",
+            f"| …generated, missing at least one of those two headings | {base} |",
         ]
     )
 
@@ -320,7 +311,8 @@ def main() -> int:
     )
     print(
         f"module pages: {full + base + handwritten} "
-        f"({handwritten} hand-written, {full} full template, {base} base template)"
+        f"({handwritten} non-generated, {full} generated with both selected headings, "
+        f"{base} other generated)"
     )
     print(f"undocumented public modules: {len(rows) or 'none'}")
 

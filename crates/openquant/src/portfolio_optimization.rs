@@ -222,7 +222,8 @@ impl Default for AllocationOptions<'_> {
 /// `sqrt(w' Sigma w)` with `Sigma` the annualised covariance, and `portfolio_sharpe` is
 /// `(portfolio_return - risk_free_rate) / portfolio_risk`, so `risk_free_rate` is an annual rate.
 /// From `allocate_from_inputs` the units are the caller's. `portfolio_sharpe` is computed for
-/// every solution, and is 0 only when the risk is 0.
+/// every solution. It is forced to 0 when risk is 0; with positive risk it is also 0 when
+/// expected excess return is 0.
 #[derive(Debug, Clone)]
 pub struct MeanVariance {
     /// Portfolio weights, one per asset in column order, summing to 1.

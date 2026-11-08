@@ -223,6 +223,14 @@ jobs:
       - name: Rust notebook-companion smoke
         if: matrix.python-version == '3.13'
         run: cargo run -p openquant --example research_notebook_smoke
+      # Keep the normal locked-environment checks above. The optional numerical
+      # layer runs afterward, so missing SciPy cannot silently remove PR coverage.
+      - name: Offline research tests (pinned numerical runtime)
+        if: matrix.python-version == '3.13'
+        run: |
+          uv pip install --python .venv/bin/python -r experiments/requirements-offline-research.txt
+          uv run --no-sync python -c "import numpy, scipy; print('NumPy', numpy.__version__, 'SciPy', scipy.__version__)"
+          uv run --no-sync pytest -q python/tests/test_*_lab.py python/tests/test_replay_offline_report.py
 
   python-lint:
     runs-on: ubuntu-latest

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "observation": "U.S. unemployment rate, January 1990",
+  "unit": "percent",
+  "records": [
+    {"fixture_id": "documented-release-1990-02-02", "release_date": "1990-02-02", "value": "5.3"},
+    {"fixture_id": "documented-revision-1996-03-08", "release_date": "1996-03-08", "value": "5.4"}
+  ],
+  "source": "https://fred.stlouisfed.org/docs/api/fred/alfred.html",
+  "verified_on": "2026-11-07",
+  "limitations": [
+    "Two documented points only; these are not assumed to be consecutive revisions.",
+    "Intermediate history and the complete historical as-of series are unknown.",
+    "Release dates do not establish intraday clocks or FRED/ALFRED website availability.",
+    "Fixture identifiers are local descriptive IDs, not claimed official provider revision IDs."
+  ],
+  "context_sources": [
+    "https://alfred.stlouisfed.org/help",
+    "https://fred.stlouisfed.org/docs/api/fred/releases_dates.html"
+  ]
+}

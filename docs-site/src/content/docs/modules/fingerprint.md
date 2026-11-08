@@ -2,7 +2,7 @@
 title: "fingerprint"
 description: "Decompose what a fitted model has learned into linear, non-linear and pairwise-interaction effects per feature."
 status: authored
-last_authored: '2026-09-20'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -25,9 +25,10 @@ sidebar:
 
 [Feature importance](/modules/feature-importance/) says *how much* a model relies on a
 feature. It does not say *how*. A feature the model uses as a straight line and one it uses
-as a U-shape can have the same importance and call for very different amounts of trust: the
-line probably reflects something about the market, the U may reflect six observations in the
-tails. The model fingerprint of Li, Turkington and Yazdani (2020) separates the two, and adds
+as a U-shape can have the same importance while expressing different relationships. Either
+shape can reflect useful structure or an artefact of the fitted model and data; neither
+alone establishes an economic explanation. The model fingerprint of Li, Turkington and
+Yazdani (2020) separates the two, and adds
 a third part for pairs of features that only matter together. It is not from AFML; the
 implementation is a port of mlfinlab's.
 
@@ -65,7 +66,10 @@ $$
 $$
 
 All three are in the units of the prediction, so they can be compared with each other.
-`Effect::raw` holds them; `Effect::norm` rescales each family to sum to 1.
+`Effect::raw` holds them; `Effect::norm` rescales each nonzero family to sum to 1.
+An all-zero family stays zero. Normalised effects compare features within a family, not
+linear against non-linear families; use raw effects for the latter. These absolute summaries
+are not an additive decomposition of prediction variance or an out-of-sample performance score.
 
 ## On a model whose answer is known
 
@@ -102,19 +106,20 @@ let pairwise = pairwise.expect("pairs were requested");
 // x0 carries the linear effect: mean |2v| over [-1, 1] is about 1.
 assert!((linear.raw[&0] - 1.058).abs() < 1e-3);
 assert!(linear.norm[&0] > 0.98);
-// x1 is the only non-linear feature; its linear effect is nil because x1^2 is symmetric.
+// x1 is the only non-linear feature; its linear effect is small on this nearly symmetric sample.
 assert!(non_linear.norm[&1] > 0.999);
 assert!(linear.raw[&1] < 0.01);
-// x2 does nothing alone and everything with x0. Keys are the pair, formatted "(k, l)".
+// x2 has near-zero individual effects and interacts with x0. Pair keys use "(k, l)".
 assert!(linear.raw[&2] < 0.02 && non_linear.raw[&2] < 1e-12);
 assert!((pairwise.raw["(0, 2)"] - 0.281).abs() < 1e-3);
 assert!(pairwise.raw["(0, 1)"] < 1e-12);
 ```
 
-The third result is the one importance methods miss. $x_2$ has no linear effect and no
-non-linear effect, and an SFI run on it would score a coin flip. It matters only through
-$x_0$, and the pairwise effect of 0.28 — the same size as $x_1$'s non-linear effect — is
-where that shows up.
+The pairwise result reveals the interaction that the single-feature partial-dependence
+curves nearly miss in this sample. The small empirical means leave small linear effects,
+so $x_2$'s individual effect is near zero rather than exactly zero. This does not imply that
+all importance methods miss it: permutation importance can expose a model's use of the
+interaction. The pairwise effect of 0.28 is in the same prediction units as $x_1$'s non-linear effect.
 
 ## What to watch for
 
@@ -127,9 +132,17 @@ where that shows up.
   predictions over the data; each pair costs `num_values²` more. With `num_values = 50`
   (mlfinlab's default) that is 2,500 passes per pair. Pass the pairs you have a reason to
   suspect, not all of them.
-- **The grid runs from the minimum to the maximum.** The first and last points are the most
-  extreme observations, so one outlier stretches the grid and the fitted line. Winsorise the
-  features first.
+- **The grid uses linearly interpolated sample quantiles, including both endpoints.** It
+  is not an equally spaced value grid. Every grid point receives equal weight, including
+  repeated quantile values and the extreme endpoints. Outliers can therefore change the
+  fitted line and effect sizes; choose a representative reference dataset in the same
+  feature representation the fitted model expects.
+- **Validate the predictor and requested pairs yourself.** Return exactly one finite
+  prediction per row (probabilities in $[0,1]$ for classification), and use distinct feature
+  indices within bounds. The implementation does not validate these contracts: invalid
+  indices can panic, while a prediction-count mismatch can distort averages. Single-feature
+  curves divide by the returned prediction count; pairwise curves divide by the input row count.
+  Supply finite feature values and deterministic predictions so repeated evaluations are comparable.
 - **The linear effect depends on the feature's range, by design.** A feature with a small
   slope and a wide range can have a larger linear effect than one with a steep slope and a
   narrow range. That is the right answer to "how much does it move predictions", and the

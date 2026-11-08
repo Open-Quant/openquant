@@ -2,7 +2,7 @@
 title: "strategy_risk"
 description: "How precise and how frequent a strategy's bets must be to reach a target Sharpe ratio, and the probability that it falls short."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -70,14 +70,16 @@ a quadratic, and the function returns the smallest root in $[0,1]$ that reaches 
 Precision is not known; it is estimated from a finite record. §15.4 turns that into a
 probability. From the record of bet outcomes, take $\pi_+$ and $\pi_-$ as the mean win and
 mean loss and $n$ as bets per year, and solve for $p^*$, the precision below which the target
-Sharpe ratio is missed. Then bootstrap: draw $n\times$ `investor_horizon_years` outcomes with
-replacement, record the share of winners, repeat. The share of bootstrap precisions at or
+Sharpe ratio is missed. Then bootstrap: draw
+`max(1, floor(n * investor_horizon_years))` outcomes with replacement, record the share of
+winners, and repeat. The share of bootstrap precisions at or
 below $p^*$ is the probability of failure.
 `estimate_strategy_failure_probability` returns that figure
 (`empirical_failure_probability`), the same read from a Gaussian kernel density fitted to the
-bootstrap sample (`kde_failure_probability`), and the inputs it derived. AFML's guidance is
-that a strategy with a failure probability above 5% is too risky to run, however good its
-backtest.
+bootstrap sample (`kde_failure_probability`), and the inputs it derived. These are estimates
+under the fitted independent-bet model, not calibrated probabilities for an arbitrary future
+strategy. The library does not apply a funding threshold or account for uncertainty in the
+estimated mean payouts, future bet frequency or a changing data-generating process.
 
 ```python
 import random
@@ -123,10 +125,11 @@ times in four; one that bets ten times a day needs 52%. The right-hand column is
 about stops wider than targets: losing twice what you win moves the break-even precision from
 0.50 to 0.67, and even 2,600 bets a year only bring the requirement down to 0.685.
 
-The last two lines are the uncomfortable part. The record clears the threshold — 72.1%
-against 69.5% — and the strategy still has a one-in-ten chance of missing a Sharpe ratio of 1
-over the next two years, from sampling variation alone. By the 5% rule it should not be
-funded.
+The last two lines show the distinction between an observed record and the fitted model's
+sampling variation. The record clears the threshold — 72.1% against 69.5% — while about one
+in ten bootstrap samples misses it under the fixed-payout, independent-bet assumptions.
+That is a conditional plug-in estimate, not proof of a one-in-ten real-world failure rate
+or a funding decision. The kernel-density result additionally depends on its bandwidth.
 
 ## From Rust
 
@@ -157,16 +160,21 @@ assert!(matches!(implied_frequency_symmetric(0.45, 2.0), Err(StrategyRiskError::
 
 ## What to watch for
 
-- **Bets are assumed independent and identically distributed.** Overlapping or clustered bets
-  are neither, so the effective $n$ is smaller than the count and every Sharpe ratio here is
-  overstated. Use the number of independent bets —
-  [average uniqueness](/modules/sampling/#concurrency-and-uniqueness) times the count is a
-  reasonable proxy — not the number of trades.
+- **Bets are assumed independent and identically distributed.** The bootstrap draws individual
+  outcomes with replacement; it does not preserve their time ordering or serial dependence.
+  Dependence can change the variance of aggregate outcomes in either direction. The estimator
+  always uses `len(bet_outcomes) / years_elapsed` as its annual frequency and applies no
+  effective-sample-size correction. [Average uniqueness](/modules/sampling/#concurrency-and-uniqueness)
+  describes overlap, not the return autocovariances needed to calibrate such a correction.
+  Assess dependent bets with a dependence-aware model rather than changing the elapsed-time
+  input to manufacture a smaller count.
 - **Two payouts stand in for a distribution.** $\pi_+$ and $\pi_-$ are the *mean* win and
   loss, which is exact for a fixed profit target and stop and rough for anything else. One
   large loss moves $\pi_-$, and with it $p^*$, a long way.
-- **A zero outcome counts as a loss.** Outcomes `<= 0` go into $\pi_-$ and are not winners in
-  the bootstrap. A record with many scratched trades looks worse than it is.
+- **A zero outcome counts as a non-win.** Outcomes `<= 0` go into $\pi_-$ and are not winners in
+  the bootstrap. Adding scratches lowers the observed win fraction but also changes the mean
+  non-win payout and frequency; the effect on the failure estimate is not determined by the
+  win fraction alone.
 - **The record must contain at least one win and one loss**, otherwise
   `estimate_strategy_failure_probability` returns `InvalidInput` rather than guessing. A win
   is an outcome `> 0` and a loss one `<= 0`, so there $\pi_- \le 0 < \pi_+$ by construction

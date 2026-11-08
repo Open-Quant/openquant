@@ -10,23 +10,24 @@ sidebar:
   order: 90
 ---
 
-Every number on this page comes with the command that produced it. Run the
-command; if the answer differs, the page is out of date and the command is
-right. A coverage page maintained any other way tells you what someone
-hoped was true on the day they wrote it.
+The tables below are generated from source-file discovery, frontmatter and selected
+headings. They measure documentation presence and declared status, not correctness
+or executed-example coverage.
 
-That used to be an aspiration. The three tables below are now generated:
+Run both commands from the repository root:
 
 ```bash
-# verify — this is the step CI runs
-cd docs-site && bun run check:coverage
-# regenerate after a real change (path relative to the repo root)
+python3 scripts/docs/check_coverage.py --check
+# After an intentional documentation change:
 python3 scripts/docs/check_coverage.py --write
 ```
 
-The gate recomputes each table from the tree and fails if this page disagrees
-with it, so the numbers cannot quietly rot again. Everything outside the
-generated regions is prose a human owns.
+From `docs-site/`, `bun run check:coverage` runs the same check. The generator owns
+only the marked regions; edit the surrounding prose directly. A stale-table error
+means the recorded tables differ from the current tree, not that the new content
+has passed review. `--write` refreshes the informational measurement date inside
+the page; `--check` ignores date-only drift. It does not update `last_authored` or
+provide a new review stamp.
 
 <!-- coverage:begin:measured -->
 Numbers below were regenerated on **2026-11-07**.
@@ -34,19 +35,19 @@ Numbers below were regenerated on **2026-11-07**.
 
 ## Documentation status
 
-`status` is enforced by a second gate, `check:content-schema`, which also
-refuses a review stamp that predates the page's last content change — so the
-tally below cannot be bulk-applied.
+`check:content-schema` validates allowed status values and date freshness. It
+cannot establish that the claimed review happened; the tally counts declarations,
+not independently verified review evidence.
 
 <!-- coverage:begin:status-tally -->
 | `status` | Pages | Means |
 |---|---|---|
-| `generated` | 4 | Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it. |
+| `generated` | 4 | Emitted by a script from its declared source; no human review claimed. |
 | `draft` | 0 | Hand-written, known incomplete. Claims nothing. |
-| `authored` | 63 | Hand-written and complete, with relevant example checks passing. No human has read it. |
+| `authored` | 71 | Written against the code; does not establish executed examples or human review. |
 | `reviewed` | 1 | A human read the page end to end. |
 | `validated` | 0 | Reviewed *and* checked against the code. |
-| **Total** | **68** | |
+| **Total** | **76** | |
 <!-- coverage:end:status-tally -->
 
 The headline number is the last row of that table: **no page on this site
@@ -56,22 +57,20 @@ literal in the page generator rather than a record of anyone's review.
 
 ## Module documentation depth
 
-Module pages began as output of `src/data/moduleDocs.ts` and are being replaced, one AFML
-chapter at a time, by pages written by hand: each cites its source, has only the sections it
-needs, and runs its examples. For a module with Python bindings that is a Python block whose
-printed output the docs checks compare with the page; for a Rust-only module it is a Rust
-snippet that also runs as a test under `crates/openquant/tests/docs_*`. The first
-row below counts those. All 42 module pages are now authored Markdown; `moduleDocs.ts`
-contains only navigation metadata. Authored status records executed examples and sourced
-content, not human review or validation.
+Module pages began as output of `src/data/moduleDocs.ts`; that file now supplies
+navigation metadata. The table classifies pages carrying `module:` frontmatter:
+a status other than `generated` counts in the second row. For generated pages,
+the checker looks for the `Key Parameters` and `Common Pitfalls` headings to
+separate the two template categories. It does not inspect citations, run examples,
+or verify that every base-template section is present.
 
 <!-- coverage:begin:module-depth -->
 | | Count |
 |---|---|
-| Modules with a documentation page | 42 |
-| …written by hand, with a citation and executed examples | 42 |
-| …generated, carrying the full template (**Key Parameters** and **Common Pitfalls** on top of the base sections) | 0 |
-| …generated, carrying the base template only | 0 |
+| Modules with a documentation page | 45 |
+| …not marked generated (status classification only) | 45 |
+| …generated, containing both **Key Parameters** and **Common Pitfalls** headings | 0 |
+| …generated, missing at least one of those two headings | 0 |
 <!-- coverage:end:module-depth -->
 
 Future module changes belong in the page itself. Update the navigation metadata only
@@ -81,7 +80,9 @@ when the module's name, summary, subject or API surface changes.
 
 The gate derives this from `pub mod` in `crates/openquant/src/lib.rs` and the
 modules in `python/openquant/`, against the `module:` frontmatter of the pages
-under `src/content/docs/modules/`. A gap fails the gate unless
+under `src/content/docs/modules/`, including explicit `python_module:` wrapper
+claims. This is module-level coverage, not a per-function or recursively discovered
+Rust-item audit. A gap fails the gate unless
 `docs-site/coverage_allowlist.toml` carries a reason and an unexpired date for
 it.
 
@@ -114,10 +115,12 @@ Honestly: most of what you would want.
   (`scripts/generate_api_inventory.py --check`) tracks the *inventory* of
   public symbols, not whether both surfaces are documented equivalently.
 
-The example gates provide additional checks with explicit limits. `check:examples`
-compiles the Rust fences on module pages and the complete Rust core workflow against
-the real crate; it does not execute those programs or check their printed output.
-`check:python-examples` executes runnable Python fences against the built extension
-and compares documented output when present. Explicitly skipped Python fences are
-syntax-checked and listed in the run log. Both gates run in the `docs-checks` CI job
-alongside this page's gate.
+Example checks are separate from these coverage counts:
+`check:examples` compiles the module-guide Rust snippets and the complete Rust core
+workflow against the real crate; it does not execute them or check their printed output.
+`check:python-examples` executes runnable Markdown/MDX Python fences and syntax-checks
+explicitly skipped fragments. Confirm the interpreter and import paths: when a local
+extension is absent, the checker can fall back to an installed package. Neither
+example gate executes notebook cells or code embedded in API docstrings. Consult the gate output for the current
+counts and exclusions. Both checks run in the `docs-checks` CI job alongside this
+page's gate.
