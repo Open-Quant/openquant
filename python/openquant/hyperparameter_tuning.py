@@ -19,6 +19,7 @@ test fold's weights, and evaluates candidates from :func:`expand_param_grid` or
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from math import isfinite
 from typing import Any
 
 import numpy as np
@@ -74,6 +75,9 @@ def classification_score(
 ) -> float:
     """Score probabilities of ``y == 1`` against 0/1 labels, weighting samples.
 
+    Labels must be exactly zero or one; signed zero is accepted. Near-binary
+    floating-point labels are rejected, including on zero-weight rows.
+
     ``scoring`` is ``"neg_log_loss"`` (higher is better), ``"accuracy"`` or
     ``"balanced_accuracy"`` (mean recall over the classes present).
     """
@@ -115,7 +119,9 @@ def purged_search(
     weights and scores the test fold with :func:`classification_score` and the test weights,
     as the Rust ``grid_search`` does. Returns ``best_params``, ``best_score`` and ``trials``
     (``params``, ``fold_scores``, ``mean_score`` per candidate). On a tie the later candidate
-    wins, as in Rust.
+    wins, as in Rust. Labels must be exact binary values and weights must be finite
+    and non-negative; invalid training data is rejected before building an estimator.
+    Non-finite fold scores or means raise ``ValueError`` rather than selecting a winner.
     """
     x = np.asarray(X, dtype=np.float64)
     if x.ndim != 2:
@@ -126,6 +132,19 @@ def purged_search(
     w = None if sample_weight is None else np.asarray(sample_weight, dtype=np.float64)
     if w is not None and w.shape != (len(x),):
         raise ValueError(f"sample_weight must have {len(x)} values, got shape {w.shape}")
+    if not np.all(np.isfinite(yv)):
+        raise ValueError("y must contain only finite binary labels in {0,1}")
+    if np.any((yv != 0.0) & (yv != 1.0)):
+        raise ValueError("y must contain only binary labels in {0,1}")
+    if w is not None:
+        if not np.all(np.isfinite(w)):
+            raise ValueError("sample_weight must contain only finite values")
+        if np.any(w < 0.0):
+            raise ValueError("sample_weight cannot contain negative values")
+        with np.errstate(over="ignore"):
+            weight_sum = w.sum()
+        if not np.isfinite(weight_sum):
+            raise ValueError("sum of sample_weight must be finite")
     if not param_sets:
         raise ValueError("param_sets cannot be empty")
 
@@ -147,14 +166,20 @@ def purged_search(
             else:
                 model.fit(x[train], yv[train], sample_weight=w[train])
             proba = _positive_proba(model, x[test])
-            fold_scores.append(
-                classification_score(yv[test], proba, None if w is None else w[test], scoring)
+            fold_score = classification_score(
+                yv[test], proba, None if w is None else w[test], scoring
             )
+            if not isfinite(fold_score):
+                raise ValueError("fold scores must be finite")
+            fold_scores.append(fold_score)
+        mean_score = sum(fold_scores) / len(fold_scores)
+        if not isfinite(mean_score):
+            raise ValueError("mean score must be finite")
         trials.append(
             {
                 "params": params,
                 "fold_scores": fold_scores,
-                "mean_score": sum(fold_scores) / len(fold_scores),
+                "mean_score": mean_score,
             }
         )
 

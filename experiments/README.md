@@ -2,6 +2,31 @@
 
 This directory provides config-driven, reproducible research runs for OpenQuant.
 
+## Run an offline synthetic lab
+
+The [configured offline lab runner](OFFLINE_LAB_RUNNER.md) provides one JSON
+configuration interface for 24 allowlisted research labs. It is separate from the
+pipeline runner below and adds no production API. Inspect the available labs and
+their dependencies, review an explicit configuration, then choose a new output:
+
+```bash
+python -m experiments.run_offline_lab list
+python -m experiments.run_offline_lab defaults --lab point_in_time
+python -m experiments.run_offline_lab run \
+  --lab point_in_time \
+  --config experiments/configs/offline-smoke/point_in_time.json \
+  --out /tmp/point-in-time-new-report.json
+python -m experiments.replay_offline_report /tmp/point-in-time-new-report.json \
+  --lab point_in_time
+```
+
+Run from the repository root in a fresh process with the selected lab's numerical
+dependencies. The runner refuses existing outputs and verifies source/runtime
+identity; the separate replay compares scientific results. Neither check establishes
+authenticity, statistical validity, or real-market profitability. The small smoke
+configs test the interface, not a study's conclusions. Review workload sizes: the
+runner is not a sandbox or a CPU/memory budget.
+
 ## Run
 
 ```bash
@@ -98,6 +123,27 @@ changes, drift-aware traded fractions and a declared toy cost model.
 All six methods are fixed before simulation. The lab reports independent-path and
 paired Monte Carlo precision, unavailable paths, input hashes and native/source
 provenance. It selects no winner and provides no investment guarantee.
+
+## Trading costs, turnover and scale
+
+Three optional NumPy-only labs separate accounting and economic assumptions:
+
+- [Self-financing rebalancing](SELF_FINANCING_LAB.md) solves post-fee target
+  holdings and compares fixed rebalancing policies with a declared toy debit.
+  Fees use full-L1 traded notional; cash, entry costs and holdings drift are explicit.
+- [Signal persistence and turnover](SIGNAL_TURNOVER_LAB.md) holds one-step forecast
+  quality fixed while varying persistence and prespecified adjustment speeds.
+  It reports additive unit-notional PnL under separate proportional and quadratic
+  costs, not compounded wealth or an optimal trading rule.
+- [Capacity scaling](CAPACITY_SCALING_LAB.md) separates a fixed schedule's
+  model-implied zero-net scale from its trade-participation cap. Dollar-volume
+  units and cost coefficients are supplied assumptions, not calibrated estimates.
+
+All three are registered with the configured runner and exact report replayer.
+Their small interface fixtures are in `configs/offline-smoke/`, named
+`self_financing.json`, `signal_turnover.json` and `capacity_scaling.json`.
+These are synthetic research controls, not production allocation or execution APIs,
+real-market capacity estimates, or recommendations to trade.
 
 ## Reusing validation feedback
 

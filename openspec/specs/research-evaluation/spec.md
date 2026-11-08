@@ -43,14 +43,26 @@ trial's per-period Sharpe ratio (N its length, σ_SR its population standard dev
 ### Requirement: Minimum track record length
 `minimum_track_record_length(returns, benchmark_sr=0.0, alpha=0.05)` SHALL return
 1 + (1 − γ3·SR + (γ4 − 1)/4·SR²)·(Z⁻¹(1 − α) / (SR − SR*))² (Bailey and López de Prado 2012),
-and SHALL return infinity when SR is at or below SR*.
+and SHALL return infinity when SR is at or below SR* for valid alpha. The high-level helper
+SHALL require finite `0 < alpha < 0.5`, representing a target confidence strictly above
+50%, and SHALL raise `ValueError` outside that domain before returning a benchmark-based
+infinity sentinel. This domain restriction SHALL apply to both ordinary and precise
+uncertainty-recovery calculations. The lower-level native algebraic API is unchanged.
 
 #### Scenario: MinTRL for the fixture
 - **WHEN** MinTRL is computed for the fixture at (SR* 0, α 0.05), (SR* 0.05, α 0.05) and (SR* 0, α 0.10)
 - **THEN** it returns 193.0008, 547.8914 and 117.5522 observations, to 1e-9 relative
 
+#### Scenario: Unsupported confidence target
+- **WHEN** MinTRL is called with alpha 0.5, 0.9, either endpoint 0 or 1, or a nonfinite alpha
+- **THEN** it raises `ValueError`, including when the benchmark is at or above the observed Sharpe ratio
+
+#### Scenario: Small positive significance level
+- **WHEN** MinTRL is called with a positive alpha below machine epsilon and a supported returns series
+- **THEN** it preserves that tail instead of rounding `1 - alpha` to one
+
 #### Scenario: Underperforming track record
-- **WHEN** the benchmark is at or above the observed Sharpe ratio
+- **WHEN** the benchmark is at or above the observed Sharpe ratio and alpha is in (0, 0.5)
 - **THEN** MinTRL is `math.inf`
 
 ### Requirement: Persistent trial registry

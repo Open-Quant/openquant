@@ -2,7 +2,7 @@
 title: "hyperparameter_tuning"
 description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -180,7 +180,9 @@ matter by order of magnitude: the difference between 0.01 and 0.1 is as large as
 and 100. A uniform draw over $[0.01, 100]$ puts 90% of its samples above 10 and almost none
 where the lower decades are. `LogUniform` draws $\ln x$ uniformly (§9.3.1), so every decade
 gets equal attention; `sample_log_uniform(low, high, rng)` is the same draw on its own. Both
-bounds must be positive.
+bounds must be finite and positive, with `low < high`. If their logarithms round to the
+same floating-point value, the sampler returns `low`; otherwise it clamps exponentiation
+round-trip error to the representable values in `[low, high)`.
 
 Random search is also usually the better use of a fixed budget when only some parameters
 matter, because a grid spends most of its trials varying the ones that do not (Bergstra and
@@ -194,6 +196,8 @@ bound. The parts that need no model are, and the fit loop runs in Python:
 - `expand_param_grid(grid)` and `sample_param_sets(space, n_iter, seed)` return the candidates
   the Rust searches evaluate, in the same order. `space` values are `("choice", [values])`,
   `("uniform", low, high)`, `("log_uniform", low, high)` or `("int", low, high)`.
+  Uniform bounds and their width `high - low` must be finite, with `low < high`; unsupported
+  overflowing widths raise an error rather than panicking.
 - `classification_score(y_true, probabilities, sample_weight=None, scoring="neg_log_loss")`
   is the weighted score above; `scoring` may also be `"accuracy"` or `"balanced_accuracy"`.
 - `purged_search(make_estimator, param_sets, X, y, t0, t1, *, n_splits, pct_embargo, scoring,
@@ -268,9 +272,8 @@ holdout never enters selection or fitting.
   Build and fit the winner yourself, on the training span.
 - **Ties go to the last trial**, as the accuracy search shows. Order the grid so that the
   simplest or most conservative configuration comes last if you want ties broken that way.
-  This applies to finite scores. Rust treats an incomparable `NaN` mean as equal during
-  selection; Python ignores a later `NaN`, but an initial `NaN` remains the winner. Check
-  that every fold score and trial mean is finite before accepting the result.
+  Nonfinite fold scores or trial means are errors, so `NaN` and infinity cannot win
+  by depending on candidate order.
 - **Every trial is a trial.** The best of 200 configurations looks good partly because it is
   the best of 200. `trials.len()` is the number to carry into a
   [deflated Sharpe ratio](/modules/backtest-statistics/) or any other multiple-testing
@@ -283,10 +286,11 @@ holdout never enters selection or fitting.
   [`cross-validation`](/modules/cross-validation/#where-the-embargo-starts).
 - **Validate labels and weights before searching.** Supply finite, exact 0/1 labels and
   finite nonnegative weights with positive totals in each scored fold. Probability values
-  outside $[0,1]$ or nonfinite probabilities are rejected, as are negative weights. However,
-  current label checks admit `NaN`, and weight checks admit `NaN` and positive infinity.
-  Even finite weights can overflow their sum; rescale large weights and check the returned
-  scores. An empty purged fold is an error.
+  outside $[0,1]$ or nonfinite probabilities are rejected. Searches reject nonfinite labels,
+  nonfinite or negative weights, and overflowing weight totals before building an estimator.
+  Negative log-loss scoring rejects an overflowing weighted loss; every scoring rule rejects
+  a nonfinite result rather than returning it. Rescale very large weights before searching if their total or weighted
+  loss cannot be represented as a finite float. An empty purged fold is an error.
 - **Keep rows aligned and ordered by event start.** Apply the same stable sort to features,
   labels, weights, `t0` and `t1` before searching; the splitter does not validate ordering.
   See [cross-validation](/modules/cross-validation/) for a sorting example.
@@ -298,3 +302,7 @@ holdout never enters selection or fitting.
 - [`bet-sizing`](/modules/bet-sizing/) — why calibrated probabilities are worth tuning for.
 - [`backtest-statistics`](/modules/backtest-statistics/) — deflating results by the number
   of trials.
+
+### Exact binary label compatibility
+
+Tuning requires exact `0.0` or `1.0` labels (including signed zero). Earlier versions tolerated values within `1e-12` but passed them unchanged to estimators and interpreted them inconsistently across scoring methods. Such values now raise an error before fitting or scoring, even on zero-weight rows. Encode labels explicitly before tuning; the library does not round or silently relabel training data.

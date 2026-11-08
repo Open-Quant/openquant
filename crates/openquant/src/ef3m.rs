@@ -1,10 +1,13 @@
-//! EF3M: fit a mixture of two Gaussians by matching its raw moments exactly.
+//! EF3M: fit a mixture of two Gaussians using randomized raw-moment matching.
 //!
 //! The mixture `p_1 N(mu_1, sigma_1^2) + (1 - p_1) N(mu_2, sigma_2^2)` has five parameters,
-//! so its first five raw moments pin it down. EF3M, the *Exact Fit of the first 3 Moments*
+//! and matching five raw moments supplies equations, not a uniqueness or recovery guarantee.
+//! EF3M, the *Exact Fit of the first 3 Moments*
 //! (López de Prado and Foreman, 2014, *Quantitative Finance* 14(5), 913–930), solves the
 //! moment equations iteratively from a grid of starting values of `mu_2`, each with a random
-//! starting `p_1`, and keeps the iterate with the smallest squared moment error. AFML uses
+//! starting `p_1`, and keeps the iterate with the smallest squared moment error. The result
+//! can have nonzero residual error; `epsilon` is not an error bound on moments or parameters.
+//! AFML uses
 //! the fitted mixture in §10.2 (strategy-independent bet sizing, see
 //! [`crate::bet_sizing::bet_size_reserve`]) and §15.4.1 (the average loss and gain of a
 //! strategy, see [`crate::strategy_risk`]).
@@ -18,7 +21,7 @@
 //! Conventions: `moments` are **raw** moments `E[x^k]` for `k = 1..=5`, in that order.
 //! Parameter vectors are ordered `[mu_1, mu_2, sigma_1, sigma_2, p_1]` (sigmas are standard
 //! deviations), the order [`crate::bet_sizing`] expects. `variant` 1 fits four moments and
-//! variant 2 five; variant 2 is more accurate and runs about the mean (see
+//! variant 2 five; variant 2 runs about the mean (see
 //! [`M2N::single_fit_loop`]). Fits are random and unseeded (the starting `p_1` comes from
 //! the thread-local RNG); use several runs and [`most_likely_parameters`], and check that
 //! the runs agree on which component is which, since the labels can come back swapped. The
@@ -150,7 +153,7 @@ impl M2N {
     }
 
     /// Creates a fitter with the defaults `epsilon = 1e-5`, `factor = 5`, `n_runs = 1`,
-    /// `variant = 2` (five moments, the more accurate variant) and `max_iter = 100_000`.
+    /// `variant = 2` (five moments) and `max_iter = 100_000`.
     pub fn with_defaults(moments: Vec<f64>) -> Self {
         Self::new(moments, 1e-5, 5.0, 1, 2, 100_000, -1)
     }

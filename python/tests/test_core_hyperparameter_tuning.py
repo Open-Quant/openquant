@@ -178,3 +178,51 @@ def test_invalid_input_raises_value_error():
         ht.purged_search(
             ThresholdClassifier, [{}], np.zeros((12, 1)), np.zeros(12), t0, t1, n_splits=2
         )
+
+
+@pytest.mark.parametrize("scoring", ["accuracy", "balanced_accuracy", "neg_log_loss"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf")])
+def test_scoring_rejects_nonfinite_labels_and_weights(scoring, bad):
+    with pytest.raises(ValueError):
+        ht.classification_score([0.0, bad], [0.25, 0.75], scoring=scoring)
+    with pytest.raises(ValueError):
+        ht.classification_score([0.0, 1.0], [0.25, 0.75], [1.0, bad], scoring)
+
+
+@pytest.mark.parametrize("scoring", ["accuracy", "balanced_accuracy", "neg_log_loss"])
+def test_scoring_rejects_overflowing_weight_total(scoring):
+    with pytest.raises(ValueError, match="finite"):
+        ht.classification_score([0.0, 1.0], [0.25, 0.75], [1e308, 1e308], scoring)
+
+
+def test_scoring_rejects_overflowing_log_loss_but_preserves_accuracy():
+    # The weight total is finite; the confident wrong prediction overflows w * loss.
+    with pytest.raises(ValueError, match="finite"):
+        ht.classification_score([1.0], [0.0], [1e308], "neg_log_loss")
+    assert ht.classification_score([1.0], [0.0], [1e308], "accuracy") == 0.0
+    assert ht.classification_score([1.0], [0.0], [1e308], "balanced_accuracy") == 0.0
+
+
+@pytest.mark.parametrize("low, high", [(float("nan"), 1.0), (1.0, float("inf"))])
+def test_log_uniform_nonfinite_bounds_raise_value_error(low, high):
+    with pytest.raises(ValueError):
+        ht.sample_param_sets({"a": ("log_uniform", low, high)}, 1, 0)
+
+
+@pytest.mark.parametrize("low", [1e-300, 1e300])
+def test_log_uniform_adjacent_bounds_do_not_panic(low):
+    high = np.nextafter(low, np.inf).item()
+    draws = ht.sample_param_sets({"a": ("log_uniform", low, high)}, 10, 42)
+    assert all(draw["a"] == low for draw in draws)
+
+
+@pytest.mark.parametrize("low", [1e-300, 1e300])
+def test_log_uniform_narrow_extreme_interval_preserves_bounds(low):
+    high = low * (1 + 1e-12)
+    draws = ht.sample_param_sets({"a": ("log_uniform", low, high)}, 1000, 42)
+    assert all(low <= draw["a"] < high for draw in draws)
+
+
+def test_uniform_overflowing_finite_width_raises_value_error():
+    with pytest.raises(ValueError, match="uniform bounds"):
+        ht.sample_param_sets({"a": ("uniform", -1e308, 1e308)}, 1, 42)

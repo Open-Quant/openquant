@@ -1,8 +1,8 @@
 ---
 title: "ef3m"
-description: "EF3M: fit a mixture of two Gaussians by matching its first four or five moments exactly, from many random starts, and take the mode of the fits."
+description: "EF3M: fit a two-Gaussian mixture with randomized moment matching; inspect residual error and distinguish individual fits from parameter-wise modes."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -47,10 +47,12 @@ average gain when estimating the probability that a strategy fails.
 
 ## How the fit works
 
-A two-component mixture has five parameters, so five moments pin it down. Each raw moment
+A two-component mixture has five parameters. Matching five moments supplies equations for
+those parameters, not a guarantee of a unique solution or recovery of the generating mixture.
+Even swapping the component labels leaves the distribution unchanged. Each raw moment
 $m_k=\mathrm E[x^k]$ of the mixture is a polynomial in them; for example
 $m_1 = p_1\mu_1+(1-p_1)\mu_2$ and $m_2 = p_1(\sigma_1^2+\mu_1^2)+(1-p_1)(\sigma_2^2+\mu_2^2)$.
-The equations have no closed-form solution, so EF3M iterates. Given a guess for $\mu_2$ and
+This implementation solves the moment equations iteratively. Given a guess for $\mu_2$ and
 $p_1$, it solves in turn:
 
 1. $\mu_1$ from $m_1$;
@@ -62,12 +64,22 @@ It repeats until $p_1$ stops moving by more than `epsilon`, keeping whichever it
 reproduces the five moments with the smallest squared error. A step whose variance comes out
 negative, or whose $p_1$ leaves $[0,1]$, ends that attempt.
 
+`epsilon` controls the change in $p_1$ and the start-grid spacing, **not** an upper bound
+on moment residuals or parameter error. A returned row represents an admissible iterate
+selected by the search objective, not a promise of exact matching. Inspect its `error` (the sum of
+squared residuals across all five raw moments), and compare implied moments separately
+when their scales differ. For variant 2 with a nonzero mean, the search minimizes error
+on centred moments, then recomputes the returned row's error on the original raw moments;
+these are different objectives. Smaller `epsilon` increases work but does not guarantee recovery.
+
 `fit_m2n` runs that iteration from a grid of starting values
 $\mu_2 = m_1 + i\,\varepsilon\,\cdot\,\texttt{factor}\cdot\sigma$ for $i=1,\dots,1/\varepsilon$,
 each with a random starting $p_1$, and returns the best fit found. The random start means two
 calls give slightly different answers. The paper's remedy is to repeat the whole search
 (`n_runs`) and take, for each parameter separately, the peak of a kernel density over the
-runs: `most_likely_parameters`.
+runs: `most_likely_parameters`. A search can return no row if no admissible iterate improves
+on its initial error, so `n_runs` is the number of searches, not a guaranteed row count.
+Check for an empty result before summarising it.
 
 ## Recovering a known mixture
 
@@ -89,10 +101,26 @@ print("variance:", round(ef3m.centered_moment(moments, 2), 3))
 
 # 25 independent fits of the five-moment variant, summarised by the mode of each parameter.
 rows = ef3m.fit_m2n(moments, epsilon=1e-4, variant=2, n_runs=25)
+if not rows:
+    raise RuntimeError("No admissible fit found; inspect the input moments and search settings.")
 fit = ef3m.most_likely_parameters(rows, 10_000)
 print("fits:", len(rows))
 for name in ("mu_1", "sigma_1", "mu_2", "sigma_2", "p_1"):
     print(f"  {name:8s} {fit[name]:5.1f}")
+
+# Independently recompute each row's raw-moment error (not the error of the modes).
+def gaussian_moments(mu, sigma):
+    raw = [1.0, mu]
+    for k in range(2, 6):
+        raw.append(mu * raw[-1] + (k - 1) * sigma**2 * raw[-2])
+    return raw[1:]
+
+for mu1, mu2, sigma1, sigma2, p1, error in rows:
+    left, right = gaussian_moments(mu1, sigma1), gaussian_moments(mu2, sigma2)
+    implied = [p1 * a + (1 - p1) * b for a, b in zip(left, right)]
+    residual = sum((target - actual)**2 for target, actual in zip(moments, implied))
+    assert abs(residual - error) < 1e-8
+print("row residuals verified")
 
 # The simple alternative in AFML 15.4.1: the average loss and the average win.
 losses = [x for x in outcomes if x <= 0]
@@ -110,12 +138,15 @@ fits: 25
   mu_2       2.0
   sigma_2    0.5
   p_1        0.7
+row residuals verified
 average loss -1.28  average win 1.6
 share of wins 0.41
 ```
 
-The fit recovers the mixture that generated the data. The last two lines show why that
-matters. Splitting the outcomes at zero gives an average win of 1.6 and a 41% hit rate, because
+This example run approximates the generating mixture at the displayed precision; the
+randomized fit is not a recovery guarantee. The last two lines show why the distinction
+between populations and a sign split matters. Splitting the outcomes at zero gives an
+average win of 1.6 and a 41% hit rate, because
 the right tail of the loss component falls above zero and is counted as winning. The mixture
 separates the two populations: wins average 2.0 and are 30% of bets. Fed into
 [`strategy_risk`](/modules/strategy-risk/), the two descriptions imply quite different
@@ -138,7 +169,8 @@ On the exact moments of the mixture above, 100 runs of each variant gave:
 | 2 | 1e-4 | 0.3 ms | 100% | 0.0001 |
 | 2 | 1e-5 (default) | 3.2 ms | 100% | < 1e-6 |
 
-Variant 2 is more accurate at every setting and no slower. At coarse `epsilon`, two-thirds of
+In this synthetic experiment, variant 2 was more accurate at every setting and no slower.
+At coarse `epsilon`, two-thirds of
 variant 1's runs ended on a degenerate fit with $p_1\approx1$: one Gaussian for everything
 and a second, arbitrarily wide one with no weight. Variant 1's error is measured on all five
 moments, including the fifth it does not fit, which accounts for part of its higher error but
@@ -167,12 +199,15 @@ assert!(round_trip.iter().zip(&moments).all(|(a, b)| (a - b).abs() < 1e-9));
 // 25 runs of the five-moment fit (variant 2), then the mode of each parameter.
 let m2n = M2N::new(moments.clone(), 1e-4, 5.0, 25, 2, 100_000, 1);
 let rows = m2n.mp_fit()?;
-assert_eq!(rows.len(), 25);
-let fit = most_likely_parameters(&rows, None, 10_000);
-for (name, want) in
-    [("mu_1", -1.0), ("mu_2", 2.0), ("sigma_1", 1.0), ("sigma_2", 0.5), ("p_1", 0.7)]
-{
-    assert!((fit[name] - want).abs() < 0.02, "{name} = {}", fit[name]);
+assert!(rows.len() <= 25);
+if !rows.is_empty() {
+    let fit = most_likely_parameters(&rows, None, 10_000);
+    // These are parameter-wise density modes, not one joint fit. Inspect them rather
+    // than asserting recovery of the generating parameters from a randomized search.
+    for name in ["mu_1", "mu_2", "sigma_1", "sigma_2", "p_1"] {
+        assert!(fit[name].is_finite());
+        println!("{name}: {}", fit[name]);
+    }
 }
 
 // Each row's error is the squared moment error of that row's own parameters.
@@ -193,7 +228,7 @@ In Rust, `M2N::single_fit_loop` is one run and `mp_fit` is `n_runs` of them; Pyt
 
 - **Results are random and there is no seed.** The starting $p_1$ of every attempt comes from
   the thread's random number generator. Use `n_runs` and `most_likely_parameters`, and round to
-  the precision you actually need; the example is stable to one decimal with 25 runs.
+  the precision you actually need; the displayed example output is one run, not a bound on variation.
 - **Variant 2 fits about the mean.** Its fourth-moment step determines only $\mu_2^2$ and
   takes the positive root, so on raw moments it could not return a negative $\mu_2$.
   `single_fit_loop`, `mp_fit` and `fit_m2n` therefore run variant 2 on the moments of

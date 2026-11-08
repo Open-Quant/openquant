@@ -2,7 +2,7 @@
 title: "evaluation"
 description: "Python research evaluation: probabilistic and deflated Sharpe ratios and minimum track record from a returns series, a trial registry that persists across runs, meta-labeling overlay metrics and the probability of strategy failure."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -67,8 +67,13 @@ with $Z$ the standard normal CDF. Unlike the Rust function, `minimum_track_recor
 returns `math.inf` when $\widehat{SR} \le SR^*$: no track record of that quality is long
 enough under this approximation. As with the lower-level functions, these summaries do
 not correct for serial dependence or turn PSR into a posterior probability of skill.
-Use a conventional `0 < alpha < 0.5` for confidence above 50%; the accepted `(0, 1)` range
-is broader than that usual interpretation.
+The Python helper requires `0 < alpha < 0.5`, so its target confidence is strictly above
+50%. The squared quantile loses its sign: accepting `alpha = 0.9` would report the same
+length as `alpha = 0.1`, despite the opposite requested confidence targets. The 50%
+boundary is excluded as an explicit API choice. This is an analytic length, not an integer
+recommendation or a guarantee that additional data retain the estimated moments.
+The lower-level native API keeps its algebraic endpoint behavior; its wider accepted range
+does not extend this high-level confidence contract.
 
 
 ### When the uncertainty nearly cancels
@@ -284,7 +289,7 @@ uncertainty, dependence between bets nor out-of-sample model degradation is incl
 
 Returns must hold at least three finite values and must not be constant, except in
 `TrialRegistry.record`, which records constant returns as Sharpe 0 (above). `n_trials` must
-be an integer of at least 2, `alpha` must lie in $(0, 1)$, and a registry must hold two
+be an integer of at least 2, `alpha` must lie in $(0, 0.5)$, and a registry must hold two
 trials before it can deflate. Ordinary validation failures raise `ValueError` or `TypeError`.
 Finite inputs alone do not guarantee finite intermediate moments: extremely large values
 can overflow, and tiny differences can underflow. Use sensible return units and inspect

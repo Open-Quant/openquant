@@ -85,7 +85,7 @@ def test_mintrl_uses_unrounded_sharpe_to_compare_benchmark(direction):
         assert math.isfinite(expected)
 
 
-@pytest.mark.parametrize("alpha", [math.ulp(0.0), 1e-20, 0.05, 0.9])
+@pytest.mark.parametrize("alpha", [math.ulp(0.0), 1e-20, 0.05, 0.49])
 def test_mintrl_exceptional_quantile_avoids_one_minus_alpha_rounding(alpha):
     values = [-x for x in FIXTURE]
     benchmark = ev.return_moments(values).sharpe

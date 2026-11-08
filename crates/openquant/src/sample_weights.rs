@@ -124,6 +124,28 @@ fn get_av_uniqueness_from_triple_barrier(
     t_w
 }
 
+// Preserve the ordinary ratio path, but avoid its range loss for finite positive prices.
+// Exceptional ratios are far from one, so subtracting logs does not introduce close-value
+// cancellation. Keep the historical behavior for nonpositive/nonfinite endpoints.
+#[cold]
+#[inline(never)]
+fn exceptional_log_price_return(previous: f64, current: f64, ratio: f64) -> f64 {
+    if previous.is_finite() && previous > 0.0 && current.is_finite() && current > 0.0 {
+        current.ln() - previous.ln()
+    } else {
+        ratio.ln()
+    }
+}
+
+fn log_price_return(previous: f64, current: f64) -> f64 {
+    let ratio = current / previous;
+    if ratio.is_normal() {
+        ratio.ln()
+    } else {
+        exceptional_log_price_return(previous, current, ratio)
+    }
+}
+
 /// Sample weights by return attribution (AFML §4.6, Snippet 4.10).
 ///
 /// For each event `i`, `w_i = |sum_{t in [start_i, end_i]} r_t / c_t|`, where `r_t` is the log
@@ -134,7 +156,9 @@ fn get_av_uniqueness_from_triple_barrier(
 ///
 /// `triple_barrier_events` are `(start, end, label)` with the label ignored; `close` is
 /// `(timestamp, price)` in ascending time order with strictly positive prices (a non-positive
-/// price yields a non-finite log return and non-finite weights). Returns
+/// price yields a non-finite log return and non-finite weights). For finite positive prices,
+/// zero, subnormal or infinite intermediate ratios use a difference of logarithms instead
+/// of taking the logarithm of the rounded ratio. Ordinary ratios retain their arithmetic. Returns
 /// `(event start, weight)` per event, in input order. An empty `triple_barrier_events` returns
 /// an empty vector.
 ///
@@ -180,7 +204,7 @@ pub fn get_weights_by_return(
     // ret / concurrency over [t_in, t_out]. That includes the return arriving at t_in, so the
     // returns are taken from the full series, not restarted inside each window.
     let log_returns: Vec<(NaiveDateTime, f64)> =
-        close.windows(2).map(|w| (w[1].0, (w[1].1 / w[0].1).ln())).collect();
+        close.windows(2).map(|w| (w[1].0, log_price_return(w[0].1, w[1].1))).collect();
 
     let mut weights: Vec<(NaiveDateTime, f64)> = Vec::new();
     for (t_in, t_out, _) in triple_barrier_events {

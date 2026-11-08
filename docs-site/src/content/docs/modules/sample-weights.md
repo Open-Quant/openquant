@@ -2,7 +2,7 @@
 title: "sample_weights"
 description: "Training weights for overlapping labels: return attribution and time decay."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -217,3 +217,7 @@ Both return `(event start, weight)` pairs in the order the events were given.
   probabilities, which depend on the indicator matrix. If every sampled row has zero
   supplied weight, that bag falls back to equal weights; zero sample weight is therefore
   not a guarantee that a row can never affect a fitted estimator.
+
+### Extreme positive price ratios
+
+Return attribution preserves the usual log-ratio arithmetic for normal ratios. When strictly positive finite prices produce a zero, subnormal or infinite intermediate ratio, it uses the difference of their logarithms instead. This prevents ratio range loss from contaminating otherwise representable log returns. It does not validate or reinterpret nonpositive/nonfinite prices, or promise exact cancellation of arbitrary return paths.

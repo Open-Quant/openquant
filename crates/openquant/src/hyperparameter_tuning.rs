@@ -79,6 +79,9 @@ pub enum TuningError {
     /// A log-uniform bound is not strictly positive.
     #[error("log-uniform bounds must be strictly positive")]
     NonPositiveLogUniformBounds,
+    /// A log-uniform bound is not finite.
+    #[error("log-uniform bounds must be finite")]
+    NonFiniteLogUniformBounds,
     /// A log-uniform `low` is not below `high`.
     #[error("log-uniform low must be < high")]
     InvalidLogUniformOrder,
@@ -94,6 +97,9 @@ pub enum TuningError {
     /// A sample weight is negative.
     #[error("sample_weight cannot contain negative values")]
     NegativeSampleWeight,
+    /// A sample weight is not finite.
+    #[error("sample_weight must contain only finite values")]
+    NonFiniteSampleWeight,
     /// A probability is not finite or outside `[0, 1]`.
     #[error("probabilities must be finite and in [0,1]")]
     InvalidProbabilities,
@@ -103,6 +109,12 @@ pub enum TuningError {
     /// The sample weights sum to zero.
     #[error("sum of sample_weight must be > 0")]
     ZeroSampleWeightSum,
+    /// Finite sample weights overflowed their sum.
+    #[error("sum of sample_weight must be finite")]
+    NonFiniteSampleWeightSum,
+    /// The selected score overflowed during weighted aggregation.
+    #[error("classification score must be finite")]
+    NonFiniteScore,
     /// Balanced accuracy found no weighted sample of either class.
     #[error("balanced accuracy requires at least one labeled sample")]
     NoLabeledSamples,
@@ -117,8 +129,8 @@ pub enum TuningError {
     /// A [`RandomParamDistribution::Choice`] has no values.
     #[error("choice distribution cannot be empty")]
     EmptyChoice,
-    /// A [`RandomParamDistribution::Uniform`] has non-finite bounds or `low >= high`.
-    #[error("uniform bounds must be finite and satisfy low < high")]
+    /// A [`RandomParamDistribution::Uniform`] has non-finite bounds or width, or `low >= high`.
+    #[error("uniform bounds must be finite and satisfy low < high with finite high - low")]
     InvalidUniformBounds,
     /// A [`RandomParamDistribution::IntRangeInclusive`] has `low > high`.
     #[error("IntRangeInclusive requires low <= high")]
@@ -184,14 +196,14 @@ pub type ParamSet = BTreeMap<String, HyperParamValue>;
 pub enum RandomParamDistribution {
     /// Uniform choice among the listed values.
     Choice(Vec<HyperParamValue>),
-    /// Uniform float in `[low, high)`; bounds finite with `low < high`.
+    /// Uniform float in `[low, high)`; bounds and `high - low` finite with `low < high`.
     Uniform {
         /// Lower bound (inclusive).
         low: f64,
         /// Upper bound (exclusive).
         high: f64,
     },
-    /// Float whose logarithm is uniform in `[ln low, ln high)` (§9.3.1); `0 < low < high`.
+    /// Float whose logarithm is uniform in `[ln low, ln high)` (§9.3.1); finite `0 < low < high`.
     LogUniform {
         /// Lower bound (inclusive), positive.
         low: f64,
@@ -244,9 +256,12 @@ pub struct SearchResult {
 
 /// Draws `x` with `ln x` uniform on `[ln low, ln high)` (AFML §9.3.1), so every order of
 /// magnitude between the bounds is equally likely.
+/// If the bounds' logarithms round to the same value, returns `low`. Exponentiation is
+/// clamped to the representable values in `[low, high)` to contain round-trip error.
 ///
 /// # Errors
 ///
+/// - [`TuningError::NonFiniteLogUniformBounds`] if either bound is not finite.
 /// - [`TuningError::NonPositiveLogUniformBounds`] if either bound is not positive.
 /// - [`TuningError::InvalidLogUniformOrder`] if `low >= high`.
 pub fn sample_log_uniform<R: Rng + ?Sized>(
@@ -254,6 +269,9 @@ pub fn sample_log_uniform<R: Rng + ?Sized>(
     high: f64,
     rng: &mut R,
 ) -> Result<f64, TuningError> {
+    if !low.is_finite() || !high.is_finite() {
+        return Err(TuningError::NonFiniteLogUniformBounds);
+    }
     if low <= 0.0 || high <= 0.0 {
         return Err(TuningError::NonPositiveLogUniformBounds);
     }
@@ -262,27 +280,34 @@ pub fn sample_log_uniform<R: Rng + ?Sized>(
     }
     let log_low = low.ln();
     let log_high = high.ln();
+    if log_low == log_high {
+        return Ok(low);
+    }
     let draw = rng.random_range(log_low..log_high);
-    Ok(draw.exp())
+    Ok(draw.exp().clamp(low, high.next_down()))
 }
 
 /// Scores binary predictions, optionally sample-weighted (AFML Snippet 9.1's weighted
 /// scoring).
 ///
 /// `y_true` holds 0/1 labels, `probabilities` the predicted probability of class 1, and
-/// `sample_weight` a non-negative weight per sample (samples with weight zero are skipped).
+/// `sample_weight` a finite, non-negative weight per sample (samples with weight zero are skipped).
 /// Predictions for accuracy use a 0.5 threshold (`p >= 0.5` is class 1); log loss clips
-/// probabilities to `[1e-15, 1 - 1e-15]`.
+/// probabilities to `[1e-15, 1 - 1e-15]`. Weights are not rescaled: overflowing weight sums
+/// or selected score aggregates are errors.
 ///
 /// # Errors
 ///
 /// - [`TuningError::Empty`] if `y_true` is empty.
 /// - [`TuningError::ProbabilitiesLabelsLengthMismatch`] if `probabilities` differs in length.
 /// - [`TuningError::LengthMismatch`] if `sample_weight` differs in length.
+/// - [`TuningError::NonFiniteSampleWeight`] if a weight is not finite.
 /// - [`TuningError::NegativeSampleWeight`] if a weight is negative.
 /// - [`TuningError::InvalidProbabilities`] if a probability is not finite or outside `[0, 1]`.
 /// - [`TuningError::NonBinaryLabels`] if a label is not 0 or 1.
 /// - [`TuningError::ZeroSampleWeightSum`] if the weights sum to zero.
+/// - [`TuningError::NonFiniteSampleWeightSum`] if the sum of finite weights overflows.
+/// - [`TuningError::NonFiniteScore`] if the selected weighted score overflows.
 /// - [`TuningError::NoLabeledSamples`] for balanced accuracy with no weighted sample.
 ///
 /// ```
@@ -314,6 +339,9 @@ pub fn classification_score(
         if sw.len() != y_true.len() {
             return Err(TuningError::LengthMismatch("sample_weight"));
         }
+        if sw.iter().any(|w| !w.is_finite()) {
+            return Err(TuningError::NonFiniteSampleWeight);
+        }
         if sw.iter().any(|w| *w < 0.0) {
             return Err(TuningError::NegativeSampleWeight);
         }
@@ -321,7 +349,7 @@ pub fn classification_score(
     if probabilities.iter().any(|p| !p.is_finite() || *p < 0.0 || *p > 1.0) {
         return Err(TuningError::InvalidProbabilities);
     }
-    if y_true.iter().any(|y| (*y - 0.0).abs() > 1e-12 && (*y - 1.0).abs() > 1e-12) {
+    if y_true.iter().any(|y| *y != 0.0 && *y != 1.0) {
         return Err(TuningError::NonBinaryLabels);
     }
 
@@ -364,6 +392,9 @@ pub fn classification_score(
         }
     }
 
+    if !sum_w.is_finite() {
+        return Err(TuningError::NonFiniteSampleWeightSum);
+    }
     if sum_w <= 0.0 {
         return Err(TuningError::ZeroSampleWeightSum);
     }
@@ -371,9 +402,9 @@ pub fn classification_score(
     let accuracy = weighted_correct / sum_w;
     let neg_log_loss = -(weighted_loss / sum_w);
 
-    match scoring {
-        SearchScoring::Accuracy => Ok(accuracy),
-        SearchScoring::NegLogLoss => Ok(neg_log_loss),
+    let score = match scoring {
+        SearchScoring::Accuracy => accuracy,
+        SearchScoring::NegLogLoss => neg_log_loss,
         SearchScoring::BalancedAccuracy => {
             // Handle single-class folds by averaging recall over classes present in the fold.
             let mut recalls = Vec::new();
@@ -386,9 +417,13 @@ pub fn classification_score(
             if recalls.is_empty() {
                 return Err(TuningError::NoLabeledSamples);
             }
-            Ok(recalls.iter().sum::<f64>() / recalls.len() as f64)
+            recalls.iter().sum::<f64>() / recalls.len() as f64
         }
+    };
+    if !score.is_finite() {
+        return Err(TuningError::NonFiniteScore);
     }
+    Ok(score)
 }
 
 /// Expands a grid into every combination of its values (the Cartesian product), iterating
@@ -444,7 +479,7 @@ pub struct SearchData<'a> {
     pub x: &'a [Vec<f64>],
     /// Binary labels (`0.0` or `1.0`).
     pub y: &'a [f64],
-    /// Optional non-negative sample weights, used both to fit and to score.
+    /// Optional finite, non-negative sample weights, used both to fit and to score.
     pub sample_weight: Option<&'a [f64]>,
     /// Each label's `(start, end)` span, used to purge and embargo the folds.
     pub samples_info_sets: &'a [(NaiveDateTime, NaiveDateTime)],
@@ -455,7 +490,9 @@ pub struct SearchData<'a> {
 ///
 /// `build_classifier` creates a fresh model from a [`ParamSet`] for every trial and fold.
 /// `n_splits` is the number of folds and `pct_embargo` the embargo as a fraction of the
-/// sample count. Returns every trial and the best by mean fold score.
+/// sample count. Returns every trial and the best by mean fold score. Invalid labels,
+/// non-finite or negative weights, and an overflowing total weight are rejected before
+/// building a classifier.
 ///
 /// # Errors
 ///
@@ -464,8 +501,10 @@ pub struct SearchData<'a> {
 /// - [`TuningError::XyLengthMismatch`] or [`TuningError::SamplesInfoSetsLengthMismatch`] if
 ///   the data slices disagree in length.
 /// - [`TuningError::Invalid`] if `n_splits < 2`.
-/// - [`TuningError::LengthMismatch`] or [`TuningError::NegativeSampleWeight`] for bad sample
-///   weights.
+/// - [`TuningError::NonBinaryLabels`] for invalid labels.
+/// - [`TuningError::LengthMismatch`], [`TuningError::NegativeSampleWeight`],
+///   [`TuningError::NonFiniteSampleWeight`] or [`TuningError::NonFiniteSampleWeightSum`]
+///   for bad sample weights.
 /// - [`TuningError::CrossValidation`] if [`PurgedKFold`] rejects the setup (e.g. more splits
 ///   than samples).
 /// - [`TuningError::EmptyFold`] if purging empties a train or test fold.
@@ -499,14 +538,17 @@ where
 /// - [`TuningError::Empty`] if `param_space` is empty.
 /// - [`TuningError::Invalid`] if `n_iter` is zero.
 /// - [`TuningError::EmptyChoice`], [`TuningError::InvalidUniformBounds`],
-///   [`TuningError::NonPositiveLogUniformBounds`], [`TuningError::InvalidLogUniformOrder`] or
-///   [`TuningError::InvalidIntRange`] for an invalid distribution.
+///   [`TuningError::NonPositiveLogUniformBounds`], [`TuningError::NonFiniteLogUniformBounds`],
+///   [`TuningError::InvalidLogUniformOrder`] or [`TuningError::InvalidIntRange`] for an invalid
+///   distribution.
 /// - [`TuningError::Empty`] if `x` or `y` is empty.
 /// - [`TuningError::XyLengthMismatch`] or [`TuningError::SamplesInfoSetsLengthMismatch`] if
 ///   the data slices disagree in length.
 /// - [`TuningError::Invalid`] if `n_splits < 2`.
-/// - [`TuningError::LengthMismatch`] or [`TuningError::NegativeSampleWeight`] for bad sample
-///   weights.
+/// - [`TuningError::NonBinaryLabels`] for invalid labels.
+/// - [`TuningError::LengthMismatch`], [`TuningError::NegativeSampleWeight`],
+///   [`TuningError::NonFiniteSampleWeight`] or [`TuningError::NonFiniteSampleWeightSum`]
+///   for bad sample weights.
 /// - [`TuningError::CrossValidation`] if [`PurgedKFold`] rejects the setup (e.g. more splits
 ///   than samples).
 /// - [`TuningError::EmptyFold`] if purging empties a train or test fold.
@@ -580,7 +622,7 @@ fn sample_distribution<R: Rng + ?Sized>(
             Ok(values[idx].clone())
         }
         RandomParamDistribution::Uniform { low, high } => {
-            if !low.is_finite() || !high.is_finite() || low >= high {
+            if !low.is_finite() || !high.is_finite() || low >= high || !(*high - *low).is_finite() {
                 return Err(TuningError::InvalidUniformBounds);
             }
             Ok(HyperParamValue::Float(rng.random_range(*low..*high)))
@@ -658,9 +700,18 @@ fn validate_search_data(data: &SearchData<'_>, n_splits: usize) -> Result<(), Tu
         if sw.len() != data.y.len() {
             return Err(TuningError::LengthMismatch("sample_weight"));
         }
+        if sw.iter().any(|w| !w.is_finite()) {
+            return Err(TuningError::NonFiniteSampleWeight);
+        }
         if sw.iter().any(|w| *w < 0.0) {
             return Err(TuningError::NegativeSampleWeight);
         }
+        if !sw.iter().sum::<f64>().is_finite() {
+            return Err(TuningError::NonFiniteSampleWeightSum);
+        }
+    }
+    if data.y.iter().any(|y| *y != 0.0 && *y != 1.0) {
+        return Err(TuningError::NonBinaryLabels);
     }
     Ok(())
 }

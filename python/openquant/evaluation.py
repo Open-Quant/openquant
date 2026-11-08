@@ -99,8 +99,8 @@ def _finite(value: float, name: str) -> float:
 
 def _check_alpha(alpha: float) -> float:
     alpha = float(alpha)
-    if not 0.0 < alpha < 1.0:
-        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    if not 0.0 < alpha < 0.5:
+        raise ValueError(f"alpha must be in (0, 0.5), got {alpha}")
     return alpha
 
 
@@ -235,7 +235,13 @@ def minimum_track_record_length(
 ) -> float:
     """MinTRL: observations needed for PSR(`benchmark_sr`) to reach 1 - `alpha`.
 
-    MinTRL = 1 + (1 - γ3·SR + (γ4 - 1)/4·SR²)·(Z(1 - α) / (SR - SR*))².
+    MinTRL = 1 + (1 - γ3·SR + (γ4 - 1)/4·SR²)·(Z⁻¹(1 - α) / (SR - SR*))².
+
+    Requires `0 < alpha < 0.5`, a target confidence strictly above 50%. Squaring
+    the normal quantile otherwise loses its tail. This analytic length is not an
+    integer recommendation, a finite-sample calibration guarantee, or a correction
+    for serial dependence. The lower-level native function retains its algebraic
+    endpoint contract; this high-level helper deliberately rejects those endpoints.
 
     Returns `math.inf` when the observed Sharpe ratio is at or below the benchmark: no
     track record of this quality is long enough. For severely cancelled uncertainty,

@@ -3,7 +3,7 @@ title: "Module Reference Index"
 description: "Full OpenQuant module documentation index with AFML-aligned summaries."
 status: generated
 generated_from: src/data/moduleDocs.ts
-last_generated: '2026-11-07'
+last_generated: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -47,7 +47,7 @@ For the AFML chapter each module implements, see
 ### Portfolio Construction and Risk
 
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
-- [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
+- [`cla`](/modules/cla/) — The Critical Line Algorithm: a numerically bounded efficient-frontier walk, with a minimum-variance solution for equal forecasts.
 - [`hcaa`](/modules/hcaa/) — Hierarchical allocation down the cluster tree, cut at a chosen number of clusters, with a choice of risk measure.
 - [`hrp`](/modules/hrp/) — Hierarchical Risk Parity: weights from a clustering of the correlation matrix, with no inversion.
 - [`onc`](/modules/onc/) — Optimal Number of Clusters: k-means over a correlation matrix, with the count chosen by silhouette quality.
@@ -72,7 +72,7 @@ For the AFML chapter each module implements, see
 
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
-- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
+- [`ef3m`](/modules/ef3m/) — EF3M: randomized moment fitting for a two-Gaussian mixture, with residual error to inspect.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`feature_diagnostics`](/modules/feature-diagnostics/) — Python importance reports on purged folds, with a substitution-effect report and a feature screen.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
@@ -96,7 +96,7 @@ For the AFML chapter each module implements, see
 - [`backtest_statistics`](/modules/backtest-statistics/) — Probabilistic and deflated Sharpe ratios, minimum track record, drawdown and concentration.
 - [`backtesting_engine`](/modules/backtesting-engine/) — Walk-forward, purged CV and combinatorial purged CV splits, with CPCV's out-of-sample paths.
 - [`bet_sizing`](/modules/bet-sizing/) — From a probability or a price forecast to a position size, averaged over live bets and discretised.
-- [`cla`](/modules/cla/) — The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points.
+- [`cla`](/modules/cla/) — The Critical Line Algorithm: a numerically bounded efficient-frontier walk, with a minimum-variance solution for equal forecasts.
 - [`codependence`](/modules/codependence/) — Correlation distances, distance correlation, mutual information and variation of information.
 - [`combinatorial_optimization`](/modules/combinatorial-optimization/) — Exhaustive search over small integer problems and single-instrument trading paths, as an exact baseline.
 - [`cross_validation`](/modules/cross-validation/) — Purged k-fold cross-validation with an embargo, for overlapping labels.
@@ -104,7 +104,7 @@ For the AFML chapter each module implements, see
 - [`data_processing`](/modules/data-processing/) — Rust OHLCV deduplication, gap diagnostics and regular-grid alignment through row, column and DataFrame interfaces.
 - [`data_structures`](/modules/data-structures/) — Time, tick, volume, dollar, run and imbalance bars built from a stream of trades.
 - [`dynamic_allocation`](/modules/dynamic-allocation/) — AFML Chapter 21's multi-asset allocation trajectories, enumerated exactly with square-root trading costs and a bounded search.
-- [`ef3m`](/modules/ef3m/) — EF3M: a mixture of two Gaussians fitted by matching its first four or five moments exactly.
+- [`ef3m`](/modules/ef3m/) — EF3M: randomized moment fitting for a two-Gaussian mixture, with residual error to inspect.
 - [`ensemble_methods`](/modules/ensemble-methods/) — Diagnostics for bagged ensembles: variance reduction given estimator correlation.
 - [`etf_trick`](/modules/etf-trick/) — A rebalanced futures basket, or one rolled contract, as a single continuous value series.
 - [`feature_importance`](/modules/feature-importance/) — MDI, MDA and SFI feature importance, and a PCA cross-check, on purged folds.
