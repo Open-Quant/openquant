@@ -2,7 +2,7 @@
 title: "evaluation"
 description: "Python research evaluation: probabilistic and deflated Sharpe ratios and minimum track record from a returns series, a trial registry that persists across runs, meta-labeling overlay metrics and the probability of strategy failure."
 status: authored
-last_authored: '2026-09-26'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -32,11 +32,12 @@ sidebar:
 
 The question at the end of a backtest is not "what was the Sharpe ratio" but "is this Sharpe
 ratio evidence of anything". `openquant.evaluation` answers it from the returns series you
-already have. It is a thin Python layer: the statistics are the Rust implementations in
+already have. It builds on the Rust implementations in
 [`backtest_statistics`](/modules/backtest-statistics/) and
 [`strategy_risk`](/modules/strategy-risk/), which take pre-computed moments; this module
-computes the moments, validates the input, and adds the one thing those functions cannot
-know — how many configurations you tried before this one.
+computes the moments, validates the input, and records how many configurations you tried
+before this one. It also retains the original returns for numerical recovery when rounded
+moments cannot reliably represent the uncertainty.
 
 ## From a returns series
 
@@ -65,6 +66,35 @@ $$
 with $Z$ the standard normal CDF. Unlike the Rust function, `minimum_track_record_length`
 returns `math.inf` when $\widehat{SR} \le SR^*$: no track record of that quality is long
 enough.
+
+
+### When the uncertainty nearly cancels
+
+The three terms inside the PSR square root can nearly cancel. Distinct return series can
+then have identical rounded Sharpe, skewness and kurtosis but different PSR values. Keep
+the original returns if you need to evaluate this case: the native moment-only API cannot
+recover information already lost in those rounded fields.
+
+The Python PSR, DSR and MinTRL wrappers detect severe cancellation and recover the
+calculation from exact float-input ratios, with 80-digit square roots and divisions. This
+exceptional path costs more than the ordinary native calculation. Its trigger is a
+numerical diagnostic, not a universal accuracy bound or a guarantee that the statistical
+assumptions hold. MinTRL also compares the benchmark against the recovered Sharpe, which
+can distinguish values that appear equal in `ReturnMoments`.
+
+```python
+from openquant import evaluation
+
+returns = [x / 256 for x in [-1.3962847939999437] + [-0.39628479399994365] * 4]
+benchmark = evaluation.return_moments(returns).sharpe
+psr = evaluation.probabilistic_sharpe_ratio(returns, benchmark)
+assert abs(psr - 0.2616864352192936) < 1e-12
+```
+
+The benchmark above is the rounded reported Sharpe. It is not exactly the Sharpe of the
+input floats, so the recovered probability need not be 0.5. This is a numerical regression
+example with five observations, not evidence that such a short series is a sound research
+basis.
 
 ## Deflating by the trials you actually ran
 

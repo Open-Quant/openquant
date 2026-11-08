@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import html
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tomllib
-from typing import Sequence
+from collections.abc import Sequence
+from pathlib import Path, PureWindowsPath
 
 import polars as pl
 
@@ -16,12 +16,34 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "python") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "python"))
 
-import openquant
+import openquant  # noqa: E402
 
 
 def _read_config(path: Path) -> dict:
     with path.open("rb") as f:
         return tomllib.load(f)
+
+
+def _artifact_name(value: object) -> str:
+    """Keep a configured display name inside one artifact path component."""
+    name = str(value)
+    if (
+        not name.strip()
+        or name in {".", ".."}
+        or "\0" in name
+        or Path(name).name != name
+        or PureWindowsPath(name).name != name
+        or PureWindowsPath(name).drive
+    ):
+        raise ValueError("run name must be a non-empty single path component")
+    return name
+
+
+def _require_new_output(path: Path) -> None:
+    # exists() alone misses a dangling symlink. mkdir(exist_ok=False) below
+    # remains the final exclusive check if another run races this preflight.
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(f"output already exists: {path}; choose a fresh --out directory")
 
 
 def _git_sha(repo_root: Path) -> str:
@@ -45,7 +67,7 @@ def _dataset_frame(dataset) -> pl.DataFrame:
     return pl.DataFrame(columns)
 
 
-def _dataset_from_cfg(cfg: dict) -> tuple[object, dict]:
+def _dataset_from_cfg(cfg: dict) -> tuple[openquant.research.ResearchDataset, dict]:
     meta = cfg.get("meta", {})
     data_cfg = cfg.get("data", {})
     seed = int(meta.get("seed", 7))
@@ -174,7 +196,7 @@ def _write_run_artifacts(
     dataset_meta: dict,
     out: dict,
 ) -> None:
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=False)
     summary_df: pl.DataFrame = out["summary"]
     summary_df.write_parquet(run_dir / "metrics.parquet")
     out["frames"]["events"].write_parquet(run_dir / "events.parquet")
@@ -223,14 +245,14 @@ def _write_run_artifacts(
 def run(config_path: Path, out_root: Path) -> Path:
     cfg = _read_config(config_path)
     meta = cfg.get("meta", {})
-    dataset, dataset_meta = _dataset_from_cfg(cfg)
-    merged_cfg = _merged_run_cfg(cfg)
-
-    out = openquant.research.run_flywheel_iteration(dataset, config=merged_cfg)
-
-    run_name = str(meta.get("name", config_path.stem))
+    run_name = _artifact_name(meta.get("name", config_path.stem))
     digest = openquant.research.research_run_manifest(cfg)["config_digest"]
     run_dir = out_root / f"{run_name}-{digest}"
+    _require_new_output(run_dir)
+
+    dataset, dataset_meta = _dataset_from_cfg(cfg)
+    merged_cfg = _merged_run_cfg(cfg)
+    out = openquant.research.run_flywheel_iteration(dataset, config=merged_cfg)
     _write_run_artifacts(
         run_dir,
         run_name=run_name,
@@ -251,36 +273,44 @@ def run_grid(config_path: Path, grid_config_path: Path, out_root: Path) -> Path:
     if not runs:
         raise ValueError("grid config must define at least one [[runs]] entry")
 
-    dataset, dataset_meta = _dataset_from_cfg(base_cfg)
+    run_set_name = _artifact_name(base_cfg.get("meta", {}).get("name", config_path.stem))
     base_run_cfg = _merged_run_cfg(base_cfg)
     run_cfgs: list[dict] = []
     run_names: list[str] = []
 
     for idx, run_item in enumerate(runs):
         item = dict(run_item)
-        run_name = str(item.pop("name", f"run_{idx:02d}"))
+        run_name = _artifact_name(item.pop("name", f"run_{idx:02d}"))
         cfg = dict(base_run_cfg)
         cfg.update(item)
         run_cfgs.append(cfg)
         run_names.append(run_name)
 
-    grid_out = openquant.research.run_flywheel_grid(dataset, run_cfgs, run_names=run_names)
     digest = openquant.research.research_run_manifest(
         {"base_config": base_cfg, "grid_config": grid_cfg}
     )["config_digest"]
-    run_set_name = str(base_cfg.get("meta", {}).get("name", config_path.stem))
     run_dir = out_root / f"{run_set_name}-grid-{digest}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    _require_new_output(run_dir)
+    per_dirs = [
+        run_dir / f"{name}-{openquant.research.research_run_manifest(cfg)['config_digest']}"
+        for name, cfg in zip(run_names, run_cfgs, strict=True)
+    ]
+    if len(set(per_dirs)) != len(per_dirs):
+        raise ValueError(
+            "grid entries produce duplicate artifact directories; use distinct run names"
+        )
+
+    dataset, dataset_meta = _dataset_from_cfg(base_cfg)
+    grid_out = openquant.research.run_flywheel_grid(dataset, run_cfgs, run_names=run_names)
+    run_dir.mkdir(parents=True, exist_ok=False)
 
     leaderboard: pl.DataFrame = grid_out["leaderboard"]
     leaderboard.write_parquet(run_dir / "leaderboard.parquet")
 
-    for run in grid_out["runs"]:
+    for run, per_dir in zip(grid_out["runs"], per_dirs, strict=True):
         per_run_name = str(run["run_name"])
         per_run_cfg = dict(run["config"])
         per_run_out = run["output"]
-        per_digest = openquant.research.research_run_manifest(per_run_cfg)["config_digest"]
-        per_dir = run_dir / f"{per_run_name}-{per_digest}"
         _write_run_artifacts(
             per_dir,
             run_name=per_run_name,
@@ -315,7 +345,9 @@ def main() -> None:
         default=None,
         help="Optional TOML file with [[runs]] parameter overrides for multi-run sweeps",
     )
-    parser.add_argument("--out", type=Path, default=Path("experiments/artifacts"), help="Artifacts root")
+    parser.add_argument(
+        "--out", type=Path, default=Path("experiments/artifacts"), help="Artifacts root"
+    )
     args = parser.parse_args()
     if args.grid_config is not None:
         run_grid(args.config, args.grid_config, args.out)

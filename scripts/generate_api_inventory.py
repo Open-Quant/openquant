@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -28,7 +29,6 @@ RUSTDOC_KIND = {"const": "constant"}
 # `impl Foo`, `impl<T> Foo<T>`; not `impl Trait for Foo` (those methods are not `pub fn`).
 RUST_IMPL_RE = re.compile(r"^impl(?:<[^>]*>)?\s+([A-Za-z0-9_]+)(?:<[^>]*>)?\s*\{?\s*$")
 RUST_METHOD_RE = re.compile(r"^\s+pub\s+(?:const\s+)?(?:async\s+)?fn\s+([a-zA-Z0-9_]+)")
-PY_FN_RE = re.compile(r"^def\s+([a-zA-Z0-9_]+)\s*\(")
 
 
 def rust_module_key(crate: str, src_root: Path, path: Path) -> str:
@@ -159,20 +159,23 @@ def check_binding_docstrings() -> list[str]:
 
 
 def scan_python() -> dict[str, list[str]]:
+    """Statically declared public module-level functions, without importing modules.
+
+    Classes and their methods are recorded separately by
+    ``generate_python_api_reference.py``; nested definitions are not module exports.
+    """
     out: dict[str, list[str]] = {}
     for path in sorted(PY_SRC.glob("*.py")):
         if path.name == "__init__.py":
             continue
         module = path.stem
-        fns: list[str] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            m = PY_FN_RE.match(line.strip())
-            if not m:
-                continue
-            name = m.group(1)
-            if name.startswith("_"):
-                continue
-            fns.append(name)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        fns = [
+            node.name
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            and not node.name.startswith("_")
+        ]
         if fns:
             out[module] = sorted(set(fns))
     return out

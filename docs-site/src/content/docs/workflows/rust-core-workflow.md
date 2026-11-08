@@ -1,8 +1,8 @@
 ---
 title: Rust Core Workflow
 description: One runnable Rust program from event sampling to portfolio risk, with its output.
-status: reviewed
-last_validated: '2026-08-30'
+status: authored
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,9 +30,9 @@ Save it as `crates/openquant/examples/afml_workflow.rs` and run:
 cargo run -p openquant --example afml_workflow
 ```
 
-That is the command used to produce the output below. Add `--release` if
-you want it fast; the first build of either profile compiles `polars` and
-`nalgebra` and takes a while.
+The output below comes from a verified local run of this program. Add `--release` for
+an optimized build; the first build of either profile compiles `polars` and `nalgebra`
+and takes a while. Small floating-point differences can occur across platforms.
 
 ## The program
 
@@ -53,8 +53,8 @@ use openquant::risk_metrics::RiskMetrics;
 const N_BARS: usize = 480;
 const N_ASSETS: usize = 4;
 
-/// Deterministic synthetic minute bars. No RNG, so the printed numbers below
-/// are reproducible on any machine.
+/// Deterministic synthetic minute bars, with no RNG.
+/// Floating-point results can still vary slightly across platforms.
 fn synthetic_series() -> (Vec<NaiveDateTime>, Vec<f64>) {
     let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap().and_hms_opt(9, 30, 0).unwrap();
     let mut ts = Vec::with_capacity(N_BARS);
@@ -74,7 +74,7 @@ fn main() {
     // ---- Stage 1: event sampling -------------------------------------------
     // Sample on cumulative 0.1% moves instead of on the clock, so every event
     // carries comparable information (AFML ch. 2/3).
-    let event_idx = cusum_filter_indices(&close, Threshold::Scalar(0.001));
+    let event_idx = cusum_filter_indices(&close, Threshold::Scalar(0.001)).expect("CUSUM sampling");
     let t_events: Vec<NaiveDateTime> = event_idx.iter().map(|&i| ts[i]).collect();
     println!("stage 1  {:>4} bars -> {:>3} CUSUM events", N_BARS, t_events.len());
 
@@ -141,13 +141,15 @@ fn main() {
         .map(|(t0, ev)| (*t0, ev.t1.unwrap_or(*t0)))
         .collect();
     let cv = PurgedKFold::new(5, info_sets.clone(), 0.01).expect("purged kfold");
-    let splits = cv.split(info_sets.len()).expect("split");
-    let naive_train = info_sets.len() - info_sets.len() / 5;
+    let splits = cv.split_with_diagnostics(info_sets.len()).expect("split");
+    let first = &splits[0];
+    let naive_train = info_sets.len() - first.test_indices.len();
     println!(
-        "stage 4  5 folds, embargo 1%: train {} -> {} rows ({} purged by overlap)",
+        "stage 4  5 folds, embargo 1%: train {} -> {} rows ({} purged, {} embargoed)",
         naive_train,
-        splits[0].0.len(),
-        naive_train - splits[0].0.len()
+        first.train_indices.len(),
+        first.diagnostics.purged_indices.len(),
+        first.diagnostics.embargo_indices.len()
     );
 
     // ---- Stage 5: strategy risk and portfolio allocation --------------------
@@ -183,26 +185,23 @@ fn main() {
 stage 1   480 bars -> 147 CUSUM events
 stage 2  106 labeled events,  57 positive (54%)
 stage 3  sizes in [-0.25, 0.25], 3 distinct steps
-stage 4  5 folds, embargo 1%: train 85 -> 82 rows (3 purged by overlap)
+stage 4  5 folds, embargo 1%: train 84 -> 82 rows (0 purged, 2 embargoed)
 stage 5  sharpe +47.975   VaR(5%) -0.00015   ES(5%) -0.00016
-stage 5  weights [0.262, 0.415, 0.0, 0.324]  portfolio sharpe 27.548
+stage 5  weights [0.21, 0.451, -0.0, 0.339]  portfolio sharpe 1.744
 ```
 
-:::caution[Those Sharpe numbers are nonsense, and that is the point]
-`sharpe +47.975` is not a result. The synthetic series is a sum of two
-sine waves with no noise term, so it is very nearly deterministic, and
-the program annualises by `sqrt(252 × 390)` ≈ 313. A near-riskless series
-divided by a near-zero standard deviation and multiplied by 313 produces
-exactly this.
+:::caution[These are synthetic diagnostics]
+The prices are deterministic and the probabilities are hand-crafted. The reported Sharpe
+ratios are in-sample illustrations without trading costs, not evidence of investable
+performance. The strategy figure applies `sqrt(252 × 390)` to overlapping event returns;
+those returns are not equally spaced minute observations, so the factor does not make
+this a valid annual Sharpe estimate. The allocator uses a different convention, described
+in stage 5 below.
 
-The numbers to actually read on this run are the structural ones — 480
-bars gave 147 events, 106 of which cleared `min_ret` and got labels, and
-purging removed 3 of 85 training rows. Those describe the pipeline. The
-Sharpe describes the toy.
-
-If a real dataset ever hands you a number like this, the first thing to
-check is your `entries_per_year`, and the second is whether your returns
-series has any variance in it.
+The structural counts are reproducible: 480 bars give 147 events, 106 of which clear
+`min_ret` and receive labels. The first fold has 22 test rows and 84 candidate training
+rows. Its diagnostics report zero purged rows and two embargoed rows, leaving 82 for
+training. The example does not demonstrate overlap removal in that first fold.
 :::
 
 ## What each stage is doing, and why
@@ -255,10 +254,10 @@ usually dies of.
 
 This is the stage the rest of the library exists to make possible.
 
-Triple-barrier labels **overlap in time**: a label starting at 10:00 with
-a 45-minute vertical barrier is still open at 10:30. Under plain K-fold,
-that 10:00 training label has already observed the outcome of a 10:30
-test event. The model does not need to generalise; it can recall.
+Triple-barrier labels **can overlap in time**: a label starting at 10:00 with
+a 45-minute vertical barrier can still be open at 10:30 if neither price barrier has
+closed it. In that case a 10:00 training label includes information from a 10:30 test
+event. The vertical barrier is a cap; it does not mean every label lasts 45 minutes.
 
 `PurgedKFold::new(n_splits, samples_info_sets, pct_embargo)` takes the
 `(start, end)` interval of every label — that is what `samples_info_sets`
@@ -269,23 +268,31 @@ leaks across an exact boundary even without overlap.
 
 :::caution
 `PurgedKFold::new` takes **three** arguments, and the middle one is the
-interval list, not a number. The `PurgedKFold::new(5, 0.01)` form that
-appears on some module pages does not compile. `pct_embargo` is the
-third argument; `0.01` means 1% of the sample count.
+interval list, not a number. The `PurgedKFold::new(5, 0.01)` form omits that list
+and does not compile. `pct_embargo` is the third argument; `0.01` means 1% of
+the sample count.
 :::
 
-The stage 4 line is the point: `train 85 -> 82 rows (3 purged by
-overlap)`. The purge removes real training rows. If your purged and
-unpurged fold sizes come out identical, your labels do not overlap — and
-with a vertical barrier set, that is worth checking rather than
-celebrating.
+The first test fold contains 22 of the 106 observations, so its unfiltered training
+count is `106 - 22 = 84`, not `106 - floor(106 / 5)`. The program reads the actual
+split indices and reports `train 84 -> 82 rows (0 purged, 2 embargoed)`. Purging and
+embargo are different reasons for exclusion; their diagnostic lists can overlap in
+general, so do not add the list lengths to infer the number of removed rows. Inspect
+the actual information intervals and diagnostics across folds rather than assuming
+that a vertical-barrier cap guarantees overlap removal in every fold.
 
 ### Stage 5 — separate strategy risk from portfolio risk
 
 `sharpe_ratio(&returns, entries_per_year, risk_free_rate)` annualises by
-`sqrt(entries_per_year)`. The program passes `252.0 * 390.0` because the
-synthetic series is minute bars; passing the wrong figure here is the
-easiest way to report a Sharpe that is off by an order of magnitude.
+`sqrt(entries_per_year)`. The program passes `252.0 * 390.0` as an illustrative display
+factor, but its strategy returns are irregular, overlapping labeled-event returns.
+Minute input prices do not justify minute annualization for that derived stream.
+A performance study needs an equally spaced portfolio P&L series and an annualization
+factor appropriate to its sampling convention.
+
+The allocator uses its default `252` price-row convention. With minute prices, its
+reported `portfolio_sharpe` is therefore per 252 rows, not an annual estimate. The two
+printed Sharpe figures use different scaling conventions and should not be compared.
 
 `RiskMetrics` covers the loss tail — `calculate_value_at_risk`,
 `calculate_expected_shortfall`, `calculate_conditional_drawdown_risk` —

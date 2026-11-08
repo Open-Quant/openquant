@@ -42,8 +42,8 @@ def to_polars_signal_frame(
     Returns
     -------
     polars.DataFrame
-        Columns `ts` (Datetime) and `signal`, then `side` if given and `symbol` if given,
-        in input order.
+        Columns `ts` (Datetime) and `signal` (Float64), then `side` (Float64) if given
+        and `symbol` (String) if given, in input order. Empty inputs retain this schema.
 
     Raises
     ------
@@ -57,7 +57,12 @@ def to_polars_signal_frame(
         data["side"] = list(side)
     if symbol is not None:
         data["symbol"] = [symbol] * len(timestamps)
-    return pl.DataFrame(data).with_columns(_parse_ts(pl.col("ts")))
+    schema = {"ts": pl.String, "signal": pl.Float64}
+    if side is not None:
+        schema["side"] = pl.Float64
+    if symbol is not None:
+        schema["symbol"] = pl.String
+    return pl.DataFrame(data, schema_overrides=schema).with_columns(_parse_ts(pl.col("ts")))
 
 
 def to_polars_event_frame(
@@ -105,7 +110,9 @@ def to_polars_event_frame(
     if labels is not None:
         _validate_equal_length("starts", starts, "labels", labels)
         data["label"] = list(labels)
-    return pl.DataFrame(data).with_columns(
+    return pl.DataFrame(
+        data, schema_overrides={"start_ts": pl.String, "end_ts": pl.String}
+    ).with_columns(
         _parse_ts(pl.col("start_ts")),
         _parse_ts(pl.col("end_ts")),
     )
@@ -128,7 +135,8 @@ def to_polars_indicator_matrix(
     bar_index : Sequence[int] or None, default None
         Index for each row; defaults to `0..len(ind_mat) - 1`.
     label_names : Sequence[str] or None, default None
-        Column names for the labels; defaults to `label_0`, `label_1`, ...
+        Unique column names for the labels, excluding `bar_index`; defaults to
+        `label_0`, `label_1`, ...
 
     Returns
     -------
@@ -140,9 +148,9 @@ def to_polars_indicator_matrix(
     ------
     ValueError
         If `ind_mat` is not rectangular, or `label_names` or `bar_index` has the wrong
-        length.
+        length, or label names collide with each other or `bar_index`.
     """
-    if not ind_mat:
+    if len(ind_mat) == 0:
         return pl.DataFrame({"bar_index": []})
     width = len(ind_mat[0])
     if any(len(row) != width for row in ind_mat):
@@ -151,6 +159,8 @@ def to_polars_indicator_matrix(
         label_names = [f"label_{i}" for i in range(width)]
     if len(label_names) != width:
         raise ValueError(f"label_names length mismatch: expected {width}, got {len(label_names)}")
+    if len(set(label_names)) != width or "bar_index" in label_names:
+        raise ValueError("label_names must be unique and must not contain 'bar_index'")
     if bar_index is None:
         bar_index = list(range(len(ind_mat)))
     _validate_equal_length("bar_index", bar_index, "ind_mat_rows", ind_mat)
@@ -192,7 +202,7 @@ def to_polars_weights_frame(
     data: dict[str, Any] = {"asset": list(asset_names), "weight": list(weights)}
     if as_of is not None:
         data["as_of"] = [as_of] * len(asset_names)
-    df = pl.DataFrame(data)
+    df = pl.DataFrame(data, schema_overrides={"as_of": pl.String} if as_of is not None else None)
     if as_of is not None:
         df = df.with_columns(_parse_ts(pl.col("as_of")))
     return df
@@ -281,7 +291,9 @@ def to_polars_backtest_frame(
     if positions is not None:
         _validate_equal_length("timestamps", timestamps, "positions", positions)
         data["position"] = list(positions)
-    return pl.DataFrame(data).with_columns(_parse_ts(pl.col("ts")))
+    return pl.DataFrame(data, schema_overrides={"ts": pl.String}).with_columns(
+        _parse_ts(pl.col("ts"))
+    )
 
 
 @dataclass
@@ -303,7 +315,8 @@ class SignalStreamBuffer:
         """Append one batch of signal rows.
 
         The batch is converted with `to_polars_signal_frame` immediately, so length errors
-        surface here. Use the same optional columns (`side`, `symbol`) in every batch: `frame`
+        surface here. Signals and sides use Float64 even for integer, null-only or empty
+        batches. Use the same optional columns (`side`, `symbol`) in every batch: `frame`
         concatenates batches vertically and fails if their columns differ.
 
         Parameters
@@ -335,7 +348,7 @@ class SignalStreamBuffer:
             and `signal`.
         """
         if not self._frames:
-            return pl.DataFrame({"ts": [], "signal": []})
+            return pl.DataFrame(schema={"ts": pl.Datetime("us"), "signal": pl.Float64})
         return pl.concat(self._frames, how="vertical")
 
     def clear(self) -> None:

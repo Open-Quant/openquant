@@ -302,11 +302,35 @@ pub fn probabilistic_sharpe_ratio(
     skewness: f64,
     kurtosis: f64,
 ) -> f64 {
-    let z = ((observed_sr - benchmark_sr) * (number_of_returns as f64 - 1.0).sqrt())
-        / (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr)
-            .sqrt();
+    let variance =
+        1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr;
+    let difference = observed_sr - benchmark_sr;
+    let mut z = (difference * (number_of_returns as f64 - 1.0).sqrt()) / variance.sqrt();
+    // A finite Sharpe ratio can overflow its squared variance term. Evaluate
+    // numerator and denominator in the same units before taking their ratio.
+    if observed_sr.is_finite()
+        && benchmark_sr.is_finite()
+        && skewness.is_finite()
+        && kurtosis.is_finite()
+        && (!variance.is_finite() || !difference.is_finite())
+    {
+        let (difference, variance) =
+            scaled_sharpe_variance(observed_sr, benchmark_sr, skewness, kurtosis);
+        z = (difference / variance.sqrt()) * (number_of_returns as f64 - 1.0).sqrt();
+    }
     let norm = Normal::new(0.0, 1.0).unwrap();
     norm.cdf(z)
+}
+
+// Return (SR - benchmark)/scale and Var(SR)/scale² without forming SR².
+fn scaled_sharpe_variance(observed: f64, benchmark: f64, skew: f64, kurtosis: f64) -> (f64, f64) {
+    let scale = observed.abs().max(benchmark.abs()).max(1.0);
+    let inverse = 1.0 / scale;
+    let sr = observed / scale;
+    let difference = observed - benchmark;
+    let difference =
+        if difference.is_finite() { difference / scale } else { sr - benchmark / scale };
+    (difference, inverse * inverse - skew * sr * inverse + ((kurtosis - 1.0) / 4.0) * sr * sr)
 }
 
 /// Deflated Sharpe ratio: the PSR measured against the Sharpe ratio expected from the best of
@@ -354,14 +378,16 @@ pub fn deflated_sharpe_ratio(
             });
         }
         let norm = Normal::new(0.0, 1.0).unwrap();
-        sd * ((1.0 - EULER_GAMMA) * norm.inverse_cdf(1.0 - 1.0 / n)
-            + EULER_GAMMA * norm.inverse_cdf(1.0 - 1.0 / n * (-1.0f64).exp()))
+        // Normal symmetry avoids rounding a tiny upper-tail probability to one.
+        sd * ((1.0 - EULER_GAMMA) * -norm.inverse_cdf(1.0 / n)
+            + EULER_GAMMA * -norm.inverse_cdf(1.0 / n * (-1.0f64).exp()))
     } else {
-        let sd = stats::std_dev(sr_estimates, 0).unwrap_or(f64::NAN);
+        let sd = trial_sharpe_std(sr_estimates);
         let n = sr_estimates.len() as f64;
         let norm = Normal::new(0.0, 1.0).unwrap();
-        sd * ((1.0 - EULER_GAMMA) * norm.inverse_cdf(1.0 - 1.0 / n)
-            + EULER_GAMMA * norm.inverse_cdf(1.0 - 1.0 / n * (-1.0f64).exp()))
+        // Normal symmetry avoids rounding a tiny upper-tail probability to one.
+        sd * ((1.0 - EULER_GAMMA) * -norm.inverse_cdf(1.0 / n)
+            + EULER_GAMMA * -norm.inverse_cdf(1.0 / n * (-1.0f64).exp()))
     };
 
     if benchmark_out {
@@ -369,6 +395,33 @@ pub fn deflated_sharpe_ratio(
     }
 
     Ok(probabilistic_sharpe_ratio(observed_sr, benchmark_sr, number_of_returns, skewness, kurtosis))
+}
+
+// Keep ordinary two-pass rounding. Recover only overflowing dispersion or a
+// squared-deviation scale small enough to lose information to underflow.
+fn trial_sharpe_std(values: &[f64]) -> f64 {
+    let ordinary = stats::std_dev(values, 0).unwrap_or(f64::NAN);
+    if ordinary.is_finite() && ordinary >= f64::MIN_POSITIVE.sqrt() {
+        return ordinary;
+    }
+    if values.iter().any(|value| !value.is_finite()) {
+        return ordinary;
+    }
+    let minimum = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let maximum = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    if minimum == maximum {
+        return 0.0;
+    }
+    // The exponent field gives a finite power of two no larger than the
+    // largest magnitude; MIN_POSITIVE also scales subnormal samples exactly.
+    let largest = minimum.abs().max(maximum.abs());
+    let scale = f64::from_bits(largest.to_bits() & (0x7ff_u64 << 52)).max(f64::MIN_POSITIVE);
+    let anchor = minimum / scale;
+    let offsets: Vec<f64> = values.iter().map(|value| value / scale - anchor).collect();
+    let center = offsets.iter().sum::<f64>() / values.len() as f64;
+    let variance =
+        offsets.iter().map(|value| (value - center).powi(2)).sum::<f64>() / values.len() as f64;
+    variance.sqrt() * scale
 }
 
 /// Minimum number of observations for the PSR against `benchmark_sr` to reach `1 - alpha`
@@ -397,8 +450,21 @@ pub fn minimum_track_record_length(
         });
     }
     let norm = Normal::new(0.0, 1.0).unwrap();
-    let z = norm.inverse_cdf(1.0 - alpha);
-    Ok(1.0
-        + (1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr)
-            * (z / (observed_sr - benchmark_sr)).powi(2))
+    // Normal symmetry preserves a positive tail smaller than binary64 can
+    // distinguish from one. The formula squares z, so its sign is immaterial.
+    let z = -norm.inverse_cdf(alpha);
+    let variance =
+        1.0 - skewness * observed_sr + (kurtosis - 1.0) / 4.0 * observed_sr * observed_sr;
+    let difference = observed_sr - benchmark_sr;
+    if observed_sr.is_finite()
+        && benchmark_sr.is_finite()
+        && skewness.is_finite()
+        && kurtosis.is_finite()
+        && (!variance.is_finite() || !difference.is_finite())
+    {
+        let (difference, variance) =
+            scaled_sharpe_variance(observed_sr, benchmark_sr, skewness, kurtosis);
+        return Ok(1.0 + (variance.sqrt() / difference * z).powi(2));
+    }
+    Ok(1.0 + variance * (z / difference).powi(2))
 }

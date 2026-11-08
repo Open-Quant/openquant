@@ -3,7 +3,9 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
-from math import ceil, exp, isfinite, log, log1p, sqrt
+from fractions import Fraction
+from math import ceil, exp, isfinite, lcm, log, log1p, sqrt
+from sys import float_info
 from typing import Any
 
 import numpy as np
@@ -54,7 +56,23 @@ def _sample_weight(weights: Sequence[float] | None, n_rows: int) -> list[float] 
     out = [float(v) for v in weights]
     if len(out) != n_rows:
         raise ValueError(f"sample_weight/X length mismatch: {len(out)} vs {n_rows}")
+    if any(not isfinite(w) or w < 0.0 for w in out):
+        raise ValueError("sample_weight must contain finite nonnegative values")
+    if not any(w > 0.0 for w in out):
+        raise ValueError("sample_weight must contain a positive value")
     return out
+
+
+def _check_fold_weight_mass(
+    weights: Sequence[float] | None,
+    splits: Sequence[tuple[list[int], list[int]]],
+) -> None:
+    if weights is None:
+        return
+    for fold, (train, test) in enumerate(splits):
+        for role, indices in (("train", train), ("test", test)):
+            if not any(weights[i] > 0.0 for i in indices):
+                raise ValueError(f"sample_weight fold {fold} {role} must contain a positive value")
 
 
 def _build_intervals(
@@ -196,6 +214,188 @@ def _penalized_log_loss(
     return loss + 0.5 * ridge * _dot(beta, beta)
 
 
+def _fraction_logistic(z: Fraction) -> tuple[Fraction, Fraction]:
+    """Probability and softplus tail without subtracting a rounded probability from one."""
+    try:
+        magnitude = float(abs(z))
+    except OverflowError:
+        magnitude = float("inf")
+    tail_exp = exp(-magnitude)
+    if tail_exp < float_info.min and abs(z) <= 4096:
+        # Eight normal-range factors retain tails below binary64's subnormal
+        # floor, with bounded integer sizes (the smallest factor is exp(-512)).
+        q = Fraction(exp(-magnitude / 8)) ** 8
+        # 0 <= q - log1p(q) <= q²/2: relative error about 1e-308 or less,
+        # far below the error from the binary64 exponential factors.
+        tail = q
+    else:
+        q = Fraction(tail_exp)
+        tail = Fraction(log1p(tail_exp))
+    prob = 1 / (1 + q) if z >= 0 else q / (1 + q)
+    return prob, tail
+
+
+def _fraction_logistic_loss(
+    design: list[list[Fraction]],
+    y: list[Fraction],
+    weights: list[Fraction],
+    beta: list[Fraction],
+    ridge: Fraction,
+) -> Fraction:
+    loss = ridge * sum((b * b for b in beta), Fraction()) / 2
+    for row, yy, w in zip(design, y, weights):
+        if not w:
+            continue
+        z = sum((v * b for v, b in zip(row, beta)), Fraction())
+        _, tail = _fraction_logistic(z)
+        loss += w * ((z if z > 0 else Fraction()) - yy * z + tail)
+    return loss
+
+
+def _solve_fraction_system(a: list[list[Fraction]], b: list[Fraction]) -> list[float]:
+    """Solve exactly with integer Bareiss elimination, retaining arbitrarily small ridge."""
+    # Clearing each row's denominators preserves its equation. Bareiss divisions
+    # are exact, avoiding repeated Fraction reduction of large intermediate terms.
+    aug = []
+    for row, rhs in zip(a, b):
+        values = [*row, rhs]
+        denominator = lcm(*(v.denominator for v in values))
+        aug.append([v.numerator * (denominator // v.denominator) for v in values])
+    n = len(b)
+    previous = 1
+    for col in range(n - 1):
+        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        if not aug[pivot][col]:
+            raise ValueError("Singular linear system")
+        aug[col], aug[pivot] = aug[pivot], aug[col]
+        current = aug[col][col]
+        for r in range(col + 1, n):
+            factor = aug[r][col]
+            for j in range(col + 1, n + 1):
+                aug[r][j] = (current * aug[r][j] - factor * aug[col][j]) // previous
+            aug[r][col] = 0
+        previous = current
+    if n and not aug[-1][-2]:
+        raise ValueError("Singular linear system")
+    # The final pivot is the integer system determinant (up to row-swap sign).
+    # Cramer's rule ensures determinant*x is integral, so back substitution also
+    # uses exact integer division. Only final coefficients are rounded to float.
+    determinant = aug[-1][-2] if n else 1
+    numerators = [0] * n
+    for r in range(n - 1, -1, -1):
+        top = determinant * aug[r][n] - sum(aug[r][j] * numerators[j] for j in range(r + 1, n))
+        numerators[r] = top // aug[r][r]
+    return [float(Fraction(v, determinant)) for v in numerators]
+
+
+def _recover_weighted_logistic(
+    design: list[list[float]],
+    y: Sequence[float],
+    weights: list[float],
+    ridge: float,
+    max_iter: int,
+    tol: float,
+) -> _LinearModel | None:
+    """Rare finite-input, binary-label recovery preserving the weighted objective and ridge.
+
+    Rational accumulation/elimination prevents overflow and keeps ridge terms on
+    rank-deficient designs. Exponential/logarithmic evaluations and returned
+    coefficients remain binary64; this is not a general arbitrary-precision fit.
+    The original iteration cap remains, so separable extreme-weight problems
+    need not reach their ridge optimum within that budget. Exponential tails
+    below the normal range use eight-way splitting only for |logit| <= 4096;
+    larger logits retain the zero-tail limit. A retry starts from zero with
+    the same iteration cap.
+    """
+    if not (
+        isfinite(ridge)
+        and ridge > 0
+        and all(isfinite(v) for row in design for v in row)
+        and all(v in (0.0, 1.0) for v in y)
+        and all(isfinite(w) and w >= 0 for w in weights)
+        and any(w > 0 for w in weights)
+    ):
+        return None
+    rows = [[Fraction(v) for v in row] for row in design]
+    labels = [Fraction(v) for v in y]
+    sw = [Fraction(w) for w in weights]
+    penalty = Fraction(ridge)
+    dim = len(rows[0])
+    beta = [0.0] * dim
+    objective = _fraction_logistic_loss(rows, labels, sw, [Fraction()] * dim, penalty)
+    for _ in range(max_iter):
+        bq = [Fraction(b) for b in beta]
+        gradient = [penalty * b for b in bq]
+        hessian = [[penalty if i == j else Fraction() for j in range(dim)] for i in range(dim)]
+        for row, yy, w in zip(rows, labels, sw):
+            if not w:
+                continue
+            z = sum((v * b for v, b in zip(row, bq)), Fraction())
+            prob, _ = _fraction_logistic(z)
+            resid = w * (prob - yy)
+            curv = w * prob * (1 - prob)
+            for i in range(dim):
+                gradient[i] += resid * row[i]
+                for j in range(i, dim):
+                    hessian[i][j] += curv * row[i] * row[j]
+        for i in range(dim):
+            for j in range(i):
+                hessian[i][j] = hessian[j][i]
+        step = _solve_fraction_system(hessian, gradient)
+        scale = 1.0
+        while True:
+            candidate = [b - scale * s for b, s in zip(beta, step)]
+            cand_obj = _fraction_logistic_loss(
+                rows, labels, sw, [Fraction(b) for b in candidate], penalty
+            )
+            if cand_obj <= objective or scale < 1e-10:
+                break
+            scale *= 0.5
+        if cand_obj > objective:
+            break
+        coefficient_small = max(abs(scale * s) for s in step) < tol * (
+            1 + max(abs(b) for b in beta)
+        )
+        # A tiny coefficient step can still move logits by order one when
+        # features are huge. Also retain the coefficient criterion for ridge
+        # movement in a likelihood nullspace.
+        change = [Fraction(c) - b for c, b in zip(candidate, bq)]
+        # Scale each observation by its own logit. A negligible-weight outlier
+        # with an enormous logit must not hide progress on the other rows.
+        logits_small = all(
+            abs(sum((v * d for v, d in zip(row, change)), Fraction()))
+            < Fraction(tol) * (1 + abs(sum((v * b for v, b in zip(row, bq)), Fraction())))
+            for row, w in zip(rows, sw)
+            if w
+        )
+        converged = coefficient_small and logits_small
+        beta, objective = candidate, cand_obj
+        if converged:
+            break
+    return _LinearModel(coeffs=beta[1:], intercept=beta[0])
+
+
+def _material_loss_cancellation(
+    design: list[list[float]],
+    y: Sequence[float],
+    weights: list[float],
+    beta: list[float],
+    objective: float,
+) -> bool:
+    # Called only for weights large relative to the penalty. Tiny harmless tail
+    # roundoff must not change the ordinary fitting path.
+    for row, yy, w in zip(design, y, weights):
+        if yy != 1.0 or w == 0:
+            continue
+        z = _dot(row, beta)
+        if z > 0 and isfinite(z):
+            tail = log1p(exp(-z))
+            lost = abs(((z + tail) - z) - tail)
+            if w * lost > _EPS * abs(objective):
+                return True
+    return False
+
+
 def _fit_linear_probability_model(
     x: Sequence[Sequence[float]],
     y: Sequence[float],
@@ -214,7 +414,12 @@ def _fit_linear_probability_model(
     ``ridge`` is an L2 penalty on all coefficients, intercept included. It keeps the
     Newton system non-singular and the coefficients finite when a fold is perfectly
     separable. Each Newton step is halved until the penalised log loss decreases, so the
-    iteration cannot diverge.
+    iteration cannot diverge for finite arithmetic. Nonfinite arithmetic or a
+    singular floating-point solve on finite inputs with binary labels and positive ridge retries
+    using rational accumulation/elimination. Weights above max(1, ridge)/1e-12
+    also check for material loss-tail cancellation before accepting a step.
+    Recovery retains the iteration cap and requires small coefficient and logit
+    changes; its exponential/logarithmic evaluations still use binary64.
     """
     n = len(x)
     p = len(x[0])
@@ -224,6 +429,11 @@ def _fit_linear_probability_model(
     design = [[1.0] + list(row) for row in x]
     beta = [0.0] * dim
     objective = _penalized_log_loss(design, y, sw, beta, ridge)
+    extreme_weights = max(sw) > max(1.0, ridge) / _EPS
+    if not isfinite(objective):
+        recovered = _recover_weighted_logistic(design, y, sw, ridge, max_iter, tol)
+        if recovered is not None:
+            return recovered
 
     for _ in range(max_iter):
         hessian = [[0.0 for _ in range(dim)] for _ in range(dim)]
@@ -242,11 +452,29 @@ def _fit_linear_probability_model(
             for j in range(i):
                 hessian[i][j] = hessian[j][i]
 
-        step = _solve_linear_system(hessian, gradient)
+        if any(not isfinite(v) for row in hessian for v in row) or any(
+            not isfinite(v) for v in gradient
+        ):
+            recovered = _recover_weighted_logistic(design, y, sw, ridge, max_iter, tol)
+            if recovered is not None:
+                return recovered
+        try:
+            step = _solve_linear_system(hessian, gradient)
+        except ValueError:
+            recovered = _recover_weighted_logistic(design, y, sw, ridge, max_iter, tol)
+            if recovered is not None:
+                return recovered
+            raise
         scale = 1.0
         while True:
             candidate = [b - scale * s for b, s in zip(beta, step)]
             cand_obj = _penalized_log_loss(design, y, sw, candidate, ridge)
+            if not isfinite(cand_obj) or (
+                extreme_weights and _material_loss_cancellation(design, y, sw, candidate, cand_obj)
+            ):
+                recovered = _recover_weighted_logistic(design, y, sw, ridge, max_iter, tol)
+                if recovered is not None:
+                    return recovered
             if cand_obj <= objective or scale < 1e-10:
                 break
             scale *= 0.5
@@ -261,7 +489,45 @@ def _fit_linear_probability_model(
 
 
 def _predict_proba(model: _LinearModel, x: Sequence[Sequence[float]]) -> list[float]:
-    return [_sigmoid(model.intercept + _dot(row, model.coeffs)) for row in x]
+    """Recover nonfinite or cancellation-sensitive evaluation of the stored model.
+
+    Estimated roundoff above 1e-10 * max(1, abs(logit)) selects exceptional
+    finite dot products. This is a diagnostic policy, not a universal bound
+    on prediction error.
+    """
+    unit_error = (len(model.coeffs) + 2) * (float_info.epsilon / 2)
+    gamma = unit_error / (1 - unit_error)
+    probabilities = []
+    for row in x:
+        products = [v * b for v, b in zip(row, model.coeffs)]
+        logit = model.intercept + sum(products)
+        magnitude = abs(model.intercept) + sum(map(abs, products))
+        recover = not isfinite(logit) or gamma * magnitude > 1e-10 * max(1.0, abs(logit))
+        if (
+            recover
+            and isfinite(model.intercept)
+            and all(isfinite(v) for v in model.coeffs)
+            and all(isfinite(v) for v in row)
+        ):
+            # Recover both product and summation error. This evaluates the
+            # stored coefficients, not an unrepresentable ideal optimum.
+            exact = Fraction(model.intercept) + sum(
+                (Fraction(v) * Fraction(b) for v, b in zip(row, model.coeffs)), Fraction()
+            )
+            try:
+                logit = float(exact)
+            except OverflowError:
+                logit = float("inf") if exact > 0 else -float("inf")
+        probabilities.append(_sigmoid(logit))
+    return probabilities
+
+
+def _exact_weighted_mean(values: Sequence[float], weights: Sequence[float]) -> float:
+    # Exceptional scoring only: preserve the supplied finite weights and the
+    # binary64 values being averaged, without rounding intermediate products.
+    exact_weights = [Fraction(w) for w in weights]
+    numerator = sum((w * Fraction(v) for w, v in zip(exact_weights, values)), Fraction())
+    return float(numerator / sum(exact_weights))
 
 
 def _score(
@@ -270,22 +536,41 @@ def _score(
     scoring: str,
     sample_weight: Sequence[float] | None,
 ) -> float:
+    """Score with lazy exact weighted sums for exceptional finite weight arithmetic.
+
+    Ordinary floating-point evaluation is retained. Overflowed sums, log-loss
+    weight totals below 1e-150, and subnormal F1 precision-recall products use
+    rational arithmetic. Log loss averages the same rounded per-row logarithms;
+    this is not an exact logarithm implementation. Model fitting is unaffected.
+    """
     weights = [1.0] * len(y_true) if sample_weight is None else [float(v) for v in sample_weight]
+    # Validate without summing: finite positive weights can have an infinite sum.
+    _sample_weight(weights, len(y_true))
     den = sum(weights)
-    if den <= 0:
-        return 0.0
 
     if scoring == "neg_log_loss":
         loss = 0.0
         for y, p, w in zip(y_true, prob, weights):
             p_clip = min(max(p, 1e-15), 1.0 - 1e-15)
             loss += w * (-(y * log(p_clip) + (1.0 - y) * log(1.0 - p_clip)))
+        if not isfinite(loss) or not isfinite(den) or den < 1e-150:
+            losses = []
+            for y, p in zip(y_true, prob):
+                p_clip = min(max(p, 1e-15), 1.0 - 1e-15)
+                losses.append(-(y * log(p_clip) + (1.0 - y) * log(1.0 - p_clip)))
+            # Nonfinite row losses remain outside weight-arithmetic recovery.
+            if all(isfinite(v) for v in losses):
+                return -_exact_weighted_mean(losses, weights)
         return -(loss / den)
 
     pred = [1.0 if p >= 0.5 else 0.0 for p in prob]
 
     if scoring == "accuracy":
         correct = sum(w for y, p, w in zip(y_true, pred, weights) if abs(y - p) < 1e-12)
+        if not isfinite(den):
+            return _exact_weighted_mean(
+                [float(abs(y - p) < 1e-12) for y, p in zip(y_true, pred)], weights
+            )
         return correct / den
 
     if scoring == "f1":
@@ -294,7 +579,23 @@ def _score(
         fn = sum(w for y, p, w in zip(y_true, pred, weights) if y > 0.5 and p <= 0.5)
         precision = tp / (tp + fp) if tp + fp > 0 else 0.0
         recall = tp / (tp + fn) if tp + fn > 0 else 0.0
-        return 2.0 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
+        numerator = 2.0 * precision * recall
+        if not isfinite(tp + fp + fn) or (tp > 0.0 and numerator < float.fromhex("0x1p-1022")):
+            # True negatives do not contribute to F1, even when their weights
+            # dwarf the relevant positive counts. Avoid precision*recall underflow.
+            exact_tp = Fraction()
+            exact_fp = Fraction()
+            exact_fn = Fraction()
+            for y, p, w in zip(y_true, pred, weights):
+                if y > 0.5 and p > 0.5:
+                    exact_tp += Fraction(w)
+                elif y <= 0.5 and p > 0.5:
+                    exact_fp += Fraction(w)
+                elif y > 0.5 and p <= 0.5:
+                    exact_fn += Fraction(w)
+            total = 2 * exact_tp + exact_fp + exact_fn
+            return float(2 * exact_tp / total) if total else 0.0
+        return numerator / (precision + recall) if precision + recall > 0 else 0.0
 
     raise ValueError("scoring must be one of: neg_log_loss, accuracy, f1")
 
@@ -353,7 +654,9 @@ def mdi_importance(
     feature_names : Sequence[str] or None, default None
         Feature names; defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
-        Optional weight per sample, used in fitting and scoring.
+        Optional finite nonnegative weight per sample, with at least one positive value.
+        Each bootstrap training draw must contain positive weight; a draw with only
+        zero-weight rows raises ValueError. Zero-weight rows are otherwise allowed.
     n_estimators : int, default 32
         Number of bootstrap resamples; at least 2.
     seed : int, default 42
@@ -389,6 +692,8 @@ def mdi_importance(
         xb = [x[i] for i in idx]
         yb = [yv[i] for i in idx]
         wb = [weights[i] for i in idx] if weights is not None else None
+        if wb is not None and not any(w > 0.0 for w in wb):
+            raise ValueError("sample_weight bootstrap training draw must contain a positive value")
 
         model = _fit_linear_probability_model(xb, yb, wb)
         raw = [abs(v) for v in model.coeffs]
@@ -483,7 +788,9 @@ def mda_importance(
     feature_names : Sequence[str] or None, default None
         Feature names; defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
-        Optional weight per sample, used in fitting and scoring.
+        Optional finite nonnegative weight per sample, with at least one positive value.
+        Cross-validation requires positive weight in each training and test fold.
+        Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
         Row index at which each sample's label is resolved (must be `>=` the sample's own
         index; values past the last row are clipped). Required unless `allow_unpurged`.
@@ -527,6 +834,7 @@ def mda_importance(
     weights = _sample_weight(sample_weight, len(x))
     intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
+    _check_fold_weight_mass(weights, splits)
 
     per_feature: list[list[float]] = [[] for _ in names]
     fold_scores: list[float] = []
@@ -611,7 +919,9 @@ def sfi_importance(
     feature_names : Sequence[str] or None, default None
         Feature names; defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
-        Optional weight per sample, used in fitting and scoring.
+        Optional finite nonnegative weight per sample, with at least one positive value.
+        Cross-validation requires positive weight in each training and test fold.
+        Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
         Row index at which each sample's label is resolved (must be `>=` the sample's own
         index; values past the last row are clipped). Required unless `allow_unpurged`.
@@ -652,6 +962,7 @@ def sfi_importance(
     weights = _sample_weight(sample_weight, len(x))
     intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
+    _check_fold_weight_mass(weights, splits)
 
     per_feature: list[list[float]] = [[] for _ in names]
 
@@ -851,7 +1162,9 @@ def substitution_effect_report(
     feature_names : Sequence[str] or None, default None
         Feature names; defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
-        Optional weight per sample, used in fitting and scoring.
+        Optional finite nonnegative weight per sample, with at least one positive value.
+        Cross-validation requires positive weight in each training and test fold.
+        Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
         Row index at which each sample's label is resolved (must be `>=` the sample's own
         index; values past the last row are clipped). Required unless `allow_unpurged`.
@@ -900,6 +1213,7 @@ def substitution_effect_report(
     weights = _sample_weight(sample_weight, len(x))
     intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
     splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
+    _check_fold_weight_mass(weights, splits)
 
     mda = mda_importance(
         x,

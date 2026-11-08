@@ -2,7 +2,7 @@
 title: "adapters"
 description: "Polars DataFrame adapters for signals, events, weights, backtest curves, and streaming buffers."
 status: authored
-last_authored: '2026-10-10'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -45,7 +45,8 @@ are the contract for these Python-only helpers.
 Frontier point IDs default to `p0`, `p1`, …; indicator row indices default to
 0, 1, … and labels to `label_0`, `label_1`, …. The matrix is row-major (bars ×
 labels), and entries are cast to integers. An empty matrix returns only an empty
-`bar_index` column. Optional sequences must also match their corresponding rows.
+`bar_index` column. Custom labels must be unique and cannot use the reserved name
+`bar_index`. Optional sequences must also match their corresponding rows.
 
 ## Convert and buffer signals
 
@@ -79,10 +80,12 @@ after clear: 0
 ```
 
 `SignalStreamBuffer.append` constructs each batch immediately, so a length mismatch
-fails at append time. `frame()` vertically concatenates every stored batch in append
-order: use consistent optional columns and compatible dtypes across batches. It
+fails at append time. Signals and sides are stored as `Float64`, including integer,
+null-only and empty batches; symbols use `String`. `frame()` vertically concatenates
+every stored batch in append order: use consistent optional columns across batches. It
 has no time window, eviction, deduplication or persistence; call `clear()` to release
-stored batches. An empty buffer returns an empty `ts`, `signal` frame.
+stored batches. An empty buffer returns an empty `ts`, `signal` frame with `Datetime(us)`
+and `Float64` columns. Empty timestamped adapter inputs also preserve datetime columns.
 
 ## Parsing and error handling
 

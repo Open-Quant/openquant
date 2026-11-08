@@ -26,7 +26,11 @@ import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from decimal import Context, Decimal, localcontext
+from fractions import Fraction
 from pathlib import Path
+from statistics import NormalDist
+from statistics import mean as _exact_mean
 from typing import Any
 
 from . import _core
@@ -105,25 +109,57 @@ def return_moments(returns: Iterable[float]) -> ReturnMoments:
 
     `std` is the sample standard deviation (n - 1); skewness and kurtosis are the
     population ratios m3/m2^1.5 and m4/m2^2, as in Bailey and López de Prado.
+    Ratios are computed before rounding the dimensional mean and standard
+    deviation; these may underflow to zero for subnormal data even when the
+    ratios remain defined. A standard deviation beyond float range is infinity.
     """
-    r = _as_returns(returns)
+    return _return_moments(_as_returns(returns))
+
+
+def _return_moments(r: list[float]) -> ReturnMoments:
+    """Moment calculation for an already validated, materialized return series."""
     n = len(r)
     # Compared by value: a rounded mean (Python < 3.12 sums without compensation) leaves
     # identical values with a tiny non-zero variance and an absurd Sharpe ratio.
-    if min(r) == max(r):
+    smallest, largest = min(r), max(r)
+    if smallest == largest:
         raise _ConstantReturns("returns are constant; the Sharpe ratio is undefined")
-    mean = sum(r) / n
-    dev = [x - mean for x in r]
-    m2 = sum(d * d for d in dev) / n
-    if m2 <= 0.0:
-        raise _ConstantReturns("returns are constant; the Sharpe ratio is undefined")
-    m3 = sum(d**3 for d in dev) / n
-    m4 = sum(d**4 for d in dev) / n
+    # Translate before centering: subtracting a rounded mean from adjacent floats
+    # can erase one side of the distribution. Power-of-two scaling keeps these
+    # differences exact while preventing overflow in the subtraction and powers.
+    exponent = math.frexp(max(abs(smallest), abs(largest)))[1]
+    anchor = math.ldexp(smallest, -exponent)
+    offsets = [math.ldexp(x, -exponent) - anchor for x in r]
+    center = math.fsum(offsets) / n
+    dev = [x - center for x in offsets]
+    m2 = math.fsum(x * x for x in dev) / n
+    m3 = math.fsum(x**3 for x in dev) / n
+    m4 = math.fsum(x**4 for x in dev) / n
+    scaled_std = math.sqrt(m2 * n / (n - 1))
+    # Sum first to retain small cancelling residuals and subnormal means. Only
+    # use the standard library's exact-ratio mean only when summation overflows.
+    try:
+        mean = math.fsum(r) / n
+    except OverflowError:
+        mean = _exact_mean(r)
+    try:
+        std = math.ldexp(scaled_std, exponent)
+    except OverflowError:
+        std = math.inf
+    # Dimensional division preserves tiny cancelling residuals lost by scaling
+    # all inputs. Use the scaled ratio when either dimensional moment rounds
+    # subnormal or outside the float range, where division would lose accuracy.
+    smallest_normal = float.fromhex("0x1.0p-1022")
+    if abs(mean) >= smallest_normal and smallest_normal <= std < math.inf:
+        sharpe = mean / std
+    else:
+        scaled_sum = math.fsum(math.ldexp(x, -exponent) for x in r)
+        sharpe = (scaled_sum / scaled_std) / n
     return ReturnMoments(
         n_obs=n,
         mean=mean,
-        std=math.sqrt(m2 * n / (n - 1)),
-        sharpe=_bs.sharpe_ratio(r, 1.0, 0.0),
+        std=std,
+        sharpe=sharpe,
         skewness=m3 / m2**1.5,
         kurtosis=m4 / m2**2,
     )
@@ -133,9 +169,18 @@ def probabilistic_sharpe_ratio(returns: Iterable[float], benchmark_sr: float = 0
     """PSR: the probability that the true per-period Sharpe ratio exceeds `benchmark_sr`.
 
     PSR(SR*) = Z[(SR - SR*)·sqrt(T - 1) / sqrt(1 - γ3·SR + (γ4 - 1)/4·SR²)].
+    Severely cancelled uncertainty is recovered from the original float inputs
+    with exact rational arithmetic and 80-digit square roots. This exceptional
+    path is slower and can differ from passing rounded moments to the native API.
     """
-    m = return_moments(returns)
+    r = _as_returns(returns)
+    m = _return_moments(r)
     benchmark_sr = _finite(benchmark_sr, "benchmark_sr")
+    if _needs_precise_sharpe_variance(m):
+        with localcontext(Context(prec=80)):
+            difference, variance = _precise_sharpe_difference_and_variance(r, benchmark_sr)
+            z = difference * Decimal(m.n_obs - 1).sqrt() / variance.sqrt()
+            return math.erfc(-float(z) / math.sqrt(2.0)) / 2.0
     return _bs.probabilistic_sharpe_ratio(m.sharpe, benchmark_sr, m.n_obs, m.skewness, m.kurtosis)
 
 
@@ -183,14 +228,92 @@ def minimum_track_record_length(
     MinTRL = 1 + (1 - γ3·SR + (γ4 - 1)/4·SR²)·(Z(1 - α) / (SR - SR*))².
 
     Returns `math.inf` when the observed Sharpe ratio is at or below the benchmark: no
-    track record of this quality is long enough.
+    track record of this quality is long enough. For severely cancelled uncertainty,
+    the comparison and calculation use the original float inputs rather than the
+    rounded `ReturnMoments` fields, as in `probabilistic_sharpe_ratio`.
     """
-    m = return_moments(returns)
+    r = _as_returns(returns)
+    m = _return_moments(r)
     benchmark_sr = _finite(benchmark_sr, "benchmark_sr")
     alpha = _check_alpha(alpha)
+    if _needs_precise_sharpe_variance(m):
+        with localcontext(Context(prec=80)):
+            difference, variance = _precise_sharpe_difference_and_variance(r, benchmark_sr)
+            if difference <= 0:
+                return math.inf
+            # Symmetry avoids rounding 1 - alpha to 1 for very small alpha.
+            quantile = Decimal.from_float(NormalDist().inv_cdf(alpha))
+            return float(1 + variance * (quantile / difference) ** 2)
     if m.sharpe <= benchmark_sr:
         return math.inf
     return _bs.minimum_track_record_length(m.sharpe, benchmark_sr, m.skewness, m.kurtosis, alpha)
+
+
+def _needs_precise_sharpe_variance(m: ReturnMoments) -> bool:
+    skew_term = m.skewness * m.sharpe
+    kurtosis_term = (m.kurtosis - 1.0) / 4.0 * m.sharpe * m.sharpe
+    variance = 1.0 - skew_term + kurtosis_term
+    # Keep kurtosis and its subtracted 1 separate: a rounded kurtosis near 1
+    # can hide substantial uncertainty after multiplication by a large SR².
+    scale = 1.0 + abs(skew_term) + (abs(m.kurtosis) + 1.0) / 4.0 * m.sharpe * m.sharpe
+    # A cancellation diagnostic, not a universal error bound: recover when the
+    # subtraction threatens roughly half of binary64's significant digits.
+    return not math.isfinite(variance) or variance <= math.sqrt(math.ulp(1.0)) * scale
+
+
+def _precise_sharpe_difference_and_variance(
+    returns: list[float], benchmark: float
+) -> tuple[Decimal, Decimal]:
+    """Recover uncertainty from exact float inputs when rounded moments cancel.
+
+    The caller sets a Decimal precision of 80. Exact rational numerators avoid
+    both problematic subtractions before the remaining square roots/divisions.
+    This information is unavailable to the native moment-only API.
+    """
+    # Float denominators are powers of two. Align them once, then accumulate
+    # exact centered integer powers instead of reducing a Fraction for every
+    # observation and power. The common scale cancels from all ratios below.
+    ratios = [x.as_integer_ratio() for x in returns]
+    denominator_bits = max(denominator.bit_length() for _, denominator in ratios)
+    values = [
+        numerator << (denominator_bits - denominator.bit_length())
+        for numerator, denominator in ratios
+    ]
+    n = len(values)
+    total = sum(values)
+    sum2 = sum3 = sum4 = 0
+    for value in values:
+        centered = n * value - total
+        squared = centered * centered
+        sum2 += squared
+        sum3 += squared * centered
+        sum4 += squared * squared
+    c = Fraction(n - 1, n)
+    sr_squared = Fraction(total * total * (n - 1), sum2)
+    squared_sum2 = sum2 * sum2
+    a = 1 + Fraction(n * sum4 - squared_sum2, 4 * squared_sum2) * sr_squared
+    b = Fraction(n * total * sum3, squared_sum2)
+    benchmark_ratio = Fraction(benchmark)
+
+    def _decimal(value: Fraction) -> Decimal:
+        return Decimal(value.numerator) / Decimal(value.denominator)
+
+    sr = _decimal(sr_squared).sqrt()
+    if total < 0:
+        sr = -sr
+    if total * benchmark_ratio > 0:
+        difference = _decimal(sr_squared - benchmark_ratio**2) / (sr + _decimal(benchmark_ratio))
+    else:
+        difference = sr - _decimal(benchmark_ratio)
+    if b > 0:
+        # Variance = A - B sqrt(c). Its rationalized numerator is exact.
+        # Pearson's inequality makes it nonnegative; equality is impossible for
+        # nonconstant rational inputs because (n-1)/n is not a rational square.
+        discriminant = a * a - b * b * c
+        variance = _decimal(discriminant) / (_decimal(a) + _decimal(b) * _decimal(c).sqrt())
+    else:
+        variance = _decimal(a) - _decimal(b) * _decimal(c).sqrt()
+    return difference, variance
 
 
 def _n_trials(n_trials: int) -> int:
@@ -216,8 +339,13 @@ def _as_trial_sharpes(values: Sequence[float]) -> list[float]:
 
 
 def _population_std(values: Sequence[float]) -> float:
-    mean = sum(values) / len(values)
-    return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
+    exponent = math.frexp(max(abs(x) for x in values))[1]
+    scaled = [math.ldexp(x, -exponent) for x in values]
+    anchor = min(scaled)
+    offsets = [x - anchor for x in scaled]
+    center = math.fsum(offsets) / len(values)
+    variance = math.fsum((x - center) ** 2 for x in offsets) / len(values)
+    return math.ldexp(math.sqrt(variance), exponent)
 
 
 # --- meta-labeling -----------------------------------------------------------------------

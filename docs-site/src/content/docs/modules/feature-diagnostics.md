@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-11-06'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -33,9 +33,8 @@ and how each can mislead; this page covers what the Python functions do with the
 
 The importance estimators and substitution report use the same model: a logistic
 regression of the 0/1 label on the features, fitted by Newton's method (iteratively
-reweighted least squares) with a tiny L2
-penalty of 0.001 that keeps the coefficients finite when a fold is perfectly separable.
-`sample_weight` weights each row's log-likelihood. It has no dependencies, and it is the
+reweighted least squares) with an L2 penalty of 0.001 on every coefficient, including
+the intercept. `sample_weight` weights each row's log-likelihood. The fixed model is the
 first thing to know about any number this module reports.
 
 Importance is always importance *to a model*. A feature that matters through a threshold, an
@@ -64,6 +63,54 @@ counted the right embargo from the last test row instead, so those rows could re
 training. Correcting this can change feature scores, and long label horizons or large
 embargoes can now produce the existing empty-training-fold `ValueError`. Zero embargo
 and point labels (`event_end_indices[i] == i`) keep their previous splits.
+
+## Weights and numerical limits
+
+Weights must be finite and nonnegative, with at least one positive value overall.
+Individual zero weights are allowed, but every training and test fold must retain positive
+weight. Each bootstrap draw in `mdi_importance` must also retain positive weight; a draw
+containing only zero-weight rows raises `ValueError` rather than being silently redrawn.
+
+Exceptional weighted score arithmetic uses exact rational sums when floating-point
+aggregates overflow, tiny log-loss totals underflow, or the F1 precision-recall product
+becomes subnormal. Log loss still averages the same clipped, rounded per-row logarithms;
+this does not make the logarithm itself exact.
+
+For finite features and binary labels, fitting can retry with rational accumulation and
+linear-system elimination after nonfinite arithmetic or a singular floating-point solve.
+Very large weights also trigger checks for material loss-tail cancellation. Recovery
+preserves the supplied weights and the original ridge penalty: normalising the weights
+would change their strength relative to that fixed penalty and therefore change the fit.
+
+This is not an arbitrary-precision logistic regression. Exponential and logarithmic
+calculations still use binary64. For absolute logits up to 4096, subnormal or zero
+exponential tails are recovered from eight normal-range factors; larger logits
+retain the zero-tail limit. Recovery restarts from zero with the same 50-iteration budget;
+extreme separable problems can reach that limit before reaching the ridge optimum.
+Its stopping check requires small coefficient changes and small logit changes for each
+observation, so one enormous logit cannot hide changes in the other rows.
+
+Prediction retries a nonfinite dot product, or a finite one whose estimated roundoff
+exceeds `1e-10 * max(1, abs(logit))`, with exact rational arithmetic when the input
+features and stored coefficients, including the intercept, are finite. The estimate uses
+the absolute product magnitudes to detect potentially material cancellation; it is a
+diagnostic policy, not a universal prediction-error bound. Recovery then rounds the logit
+and applies the floating-point sigmoid. This evaluates the stored model; it does not
+recover precision already lost in its coefficients. Severely ill-conditioned features can
+therefore still lose prediction accuracy. Finite inputs alone do not guarantee convergence
+or accurate coefficients.
+
+Recovery can be expensive even on small data. Development probes measured an exceptional
+80-row, 8-feature fit at about 1.6 seconds after the exact solver speedup, and recovered
+scoring on 4,096 rows at up to 26 milliseconds (roughly 5–20 times the ordinary score
+path). Recovery-heavy prediction on 4,096 rows took about 27–28 milliseconds. Relative to
+the preceding nonfinite-only prediction check, the cancellation diagnostic increased
+ordinary prediction time to about 1.25–1.46 times the baseline across 16–512 features.
+Complete ordinary MDA and SFI reports, where fitting dominates, measured about 0.96–1.09
+times the baseline across the tested workloads, including 32 features; ratios below one
+are measurement noise, not claimed speedups. These are measurements on a shared machine,
+not performance bounds. Importance reports repeat fits across folds, features and bootstrap
+draws, so exceptional fitting costs can compound.
 
 ## Three rankings of the same features
 
@@ -167,8 +214,9 @@ one. The report is only as sensitive as the fixed model lets it be.
   example it rejects `a` and keeps `a_copy`, the noisier one, because noise adds variance.
   The screen never looks at `y`, so it cannot know better. Use it to find the pairs; choose
   which member to keep yourself.
-- **It is pure Python and quadratic in places.** Fine for a few thousand rows and a few dozen
-  features in a notebook. For more, use the Rust module.
+- **It is pure Python and quadratic in places.** Ordinary fits suit small notebook
+  experiments; exceptional recovery can be much slower, as described above. For larger
+  experiments, consider the Rust module with your own model.
 - **`event_end_indices` are row positions, not timestamps**, and must be at or after each
   row's own index. Values past the last row are clipped.
 

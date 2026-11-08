@@ -45,7 +45,7 @@ STATUS_ORDER = ("generated", "draft", "authored", "reviewed", "validated")
 STATUS_MEANS = {
     "generated": "Emitted by a script from its source (`moduleDocs.ts`, the notebooks, `benchmarks/`, `CHANGELOG.md`). Nobody has read it.",
     "draft": "Hand-written, known incomplete. Claims nothing.",
-    "authored": "Hand-written and complete, examples executed by the docs gates. No human has read it.",
+    "authored": "Hand-written and complete, with relevant example checks passing. No human has read it.",
     "reviewed": "A human read the page end to end.",
     "validated": "Reviewed *and* checked against the code.",
 }
@@ -292,9 +292,13 @@ def main() -> int:
             continue
         if match.group(2) != want:
             drifted.append(name)
+
         # `--check` must not rewrite the file; building the new text is cheap
         # and lets one code path serve both modes.
-        page = pattern.sub(lambda m, w=want: m.group(1) + w + m.group(3), page, count=1)
+        def replace_region(match: re.Match[str], replacement: str = want) -> str:
+            return match.group(1) + replacement + match.group(3)
+
+        page = pattern.sub(replace_region, page, count=1)
 
     # The measured-on date moves every day, so on --check it is informational:
     # a gate that fails because a week went by teaches people to disable it.

@@ -21,7 +21,17 @@ uv run --python .venv/bin/python python experiments/run_pipeline.py \
 
 ## Artifacts
 
-Each run writes a deterministic folder:
+Each run writes a deterministic folder. Existing run folders are never overwritten;
+use a fresh `--out` directory to repeat a run. An incomplete run folder is also retained
+for inspection rather than replaced on a later attempt.
+
+`meta.name` and grid entry names must be non-empty single path components (no directory
+separators, absolute paths, or `.`/`..`). Grid entries that would share the same name and
+configuration-derived directory are rejected before the dataset or pipeline runs. The
+same label with different configurations is supported, as are unnamed entries with their
+default numbered names.
+
+Each folder contains:
 
 - `run_manifest.json` (config hash, git sha, versions, seed, `dataset_hash`: the content hash of the data the run used, see `openquant.data.dataset_hash`)
 - `metrics.parquet` (summary table)

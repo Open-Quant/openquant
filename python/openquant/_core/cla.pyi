@@ -21,16 +21,18 @@ def allocate_cla(
     """Critical Line Algorithm portfolios (Markowitz; Bailey and López de Prado, 2013; AFML
     chapter 16).
 
-    Computes every turning point of the efficient frontier exactly under one box bound for
+    Computes every turning point of the efficient frontier under one box bound for
     all assets and the budget constraint (weights sum to 1), walking from the maximum-return
     portfolio down to the minimum-variance portfolio, then returns the requested `solution`.
     Supply either `asset_prices` (expected returns and covariance are estimated from their
     simple returns, annualised with `252 / step` periods per year) or both
     `expected_returns` and `covariance_matrix` (used as given, not annualised). The 252
     assumes daily rows; for intraday rows the figures are per 252 rows, but the weights do
-    not depend on that constant. If every
-    expected return is identical, `1e-5` is added to the last one so the walk has a starting
-    asset.
+    not depend on that constant. Expected returns are preserved. Exactly equal forecasts
+    produce one minimum-variance frontier portfolio via a constrained QP solver, with
+    `lambda = 0`; nearly equal forecasts retain their original ordering.
+    `max_sharpe` searches only the efficient frontier. With negative expected returns,
+    a dominated portfolio outside that frontier can have a higher Sharpe ratio.
 
     Parameters
     ----------
@@ -51,7 +53,7 @@ def allocate_cla(
         (`step = 21`); anything else, or None, keeps every row (`step = 1`).
     solution : str | None, default None
         `"cla_turning_points"` (the default when None), `"min_volatility"`, `"max_sharpe"`
-        (maximises `mu'w / sigma`, i.e. a zero risk-free rate) or `"efficient_frontier"`
+        (maximises `mu'w / sigma` along the efficient frontier) or `"efficient_frontier"`
         (about 100 points along the frontier).
     calculate_expected_returns : str, default "mean"
         How expected returns are estimated from prices: `"mean"` (mean periodic return) or
@@ -65,7 +67,7 @@ def allocate_cla(
         order (every turning point, maximum return first, for `"cla_turning_points"`; one
         portfolio for `"min_volatility"` and `"max_sharpe"`; the frontier points for
         `"efficient_frontier"`). `lambdas`: the risk-aversion parameter at each turning point,
-        infinite first and falling to 0. `efficient_frontier_means` and
+        infinite first and falling to 0 (only 0 for exactly equal forecasts). `efficient_frontier_means` and
         `efficient_frontier_sigma`: the expected return and volatility of each frontier point
         (empty unless `solution="efficient_frontier"`).
 

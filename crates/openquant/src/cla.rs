@@ -2,7 +2,7 @@
 //! mean-variance benchmark of AFML chapter 16.
 //!
 //! [`CLA::allocate`] computes every turning point of the efficient frontier under box bounds
-//! and the budget constraint (weights sum to 1), exactly, walking from the maximum-return
+//! and the budget constraint (weights sum to 1), walking from the maximum-return
 //! portfolio (`lambda = inf`) down to the minimum-variance portfolio (`lambda = 0`). Between
 //! two consecutive turning points every efficient portfolio is a convex combination of
 //! them. From the turning points it can also return the minimum-variance portfolio, the
@@ -51,6 +51,7 @@
 //! # }
 //! ```
 
+use crate::util::qp::{solve_qp, QpError};
 use crate::util::resample::{freq_step, resample_prices};
 use chrono::NaiveDate;
 use nalgebra::{DMatrix, DVector};
@@ -82,7 +83,7 @@ pub enum ClaError {
     #[error("covariance of the free assets is singular")]
     SingularCovariance,
     /// The walk along the critical line did not reach `lambda = 0` within its step limit
-    /// (`4 n^2 + 100` steps).
+    /// (`4 n^2 + 100` steps), or the equal-return constrained solver did not converge.
     #[error("the critical line did not terminate")]
     NoTermination,
     /// Every turning point was removed as numerically invalid, so there is no portfolio to
@@ -228,7 +229,7 @@ pub struct CLA {
     pub weights: Vec<Vec<f64>>,
     /// Risk-aversion parameter at each turning point, falling to 0 at minimum variance. The
     /// first entry is infinite (the starting portfolio, which the first proper turning point
-    /// repeats).
+    /// repeats); exactly equal forecasts have just one entry, 0.
     pub lambdas: Vec<f64>,
     /// Budget-constraint multiplier at each turning point.
     pub gammas: Vec<f64>,
@@ -281,12 +282,15 @@ impl CLA {
     /// covariance are estimated) or both `expected_asset_returns` (an `n x 1` or `1 x n`
     /// matrix) and `covariance_matrix` (`n x n`). `resample_by` only applies to prices.
     /// `solution` is one of `"cla_turning_points"` (default), `"min_volatility"`,
-    /// `"max_sharpe"` (maximises `mu'w / sigma`, i.e. a zero risk-free rate) or
+    /// `"max_sharpe"` (maximises `mu'w / sigma` along the efficient frontier) or
     /// `"efficient_frontier"`. [`CLA::lambdas`], [`CLA::gammas`] and [`CLA::free_weights`]
     /// always describe the turning points.
     ///
-    /// If every expected return is identical, `1e-5` is added to the last one so the walk has
-    /// a starting asset.
+    /// Expected returns are preserved. If they are exactly equal, the efficient frontier
+    /// consists of one minimum-variance portfolio, found by the constrained QP solver
+    /// (`lambda = 0`). Nearly equal forecasts retain their original ordering.
+    /// `max_sharpe` searches only the efficient frontier: with negative expected returns,
+    /// a dominated portfolio outside that frontier can have a higher Sharpe ratio.
     ///
     /// # Errors
     ///
@@ -364,8 +368,17 @@ impl CLA {
         check_bounds_feasible(&bounds)?;
 
         let mean: Vec<f64> = self.expected_returns.column(0).iter().copied().collect();
-        let points =
-            critical_line(&mean, &self.cov_matrix, &self.lower_bounds, &self.upper_bounds)?;
+        let points = if mean.iter().all(|value| *value == mean[0]) {
+            // Every feasible portfolio has the same return: only minimum variance
+            // is nondominated. Solve that constrained problem without inventing alpha.
+            vec![constant_return_frontier(
+                &self.cov_matrix,
+                &self.lower_bounds,
+                &self.upper_bounds,
+            )?]
+        } else {
+            critical_line(&mean, &self.cov_matrix, &self.lower_bounds, &self.upper_bounds)?
+        };
         self.weights = points.iter().map(|p| p.weights.clone()).collect();
         self.lambdas = points.iter().map(|p| p.lambda).collect();
         self.gammas = points.iter().map(|p| p.gamma).collect();
@@ -595,7 +608,7 @@ fn normalize_expected_returns(exp: &DMatrix<f64>) -> Result<DMatrix<f64>, ClaErr
     if n == 0 {
         return Err(ClaError::NoData);
     }
-    let mut out = if exp.ncols() == 1 {
+    let out = if exp.ncols() == 1 {
         exp.clone_owned()
     } else if exp.nrows() == 1 {
         let row: Vec<f64> = exp.row(0).iter().copied().collect();
@@ -603,11 +616,6 @@ fn normalize_expected_returns(exp: &DMatrix<f64>) -> Result<DMatrix<f64>, ClaErr
     } else {
         return Err(ClaError::DimensionMismatch);
     };
-    let mean = out.iter().sum::<f64>() / n as f64;
-    if out.iter().all(|v| (*v - mean).abs() < 1e-12) {
-        let last = out.nrows() - 1;
-        out[(last, 0)] += 1e-5;
-    }
     Ok(out)
 }
 
@@ -732,6 +740,38 @@ fn compute_w(b: &Blocks, lambda: f64, mean_f: &DVector<f64>) -> (DVector<f64>, f
     };
     let w = -w1 + (&b.covar_f_inv * &ones) * gamma + (&b.covar_f_inv * mean_f) * lambda;
     (w, gamma)
+}
+
+/// The single efficient point when all expected returns are exactly equal.
+fn constant_return_frontier(
+    cov: &DMatrix<f64>,
+    lower: &[f64],
+    upper: &[f64],
+) -> Result<TurningPoint, ClaError> {
+    let n = lower.len();
+    let mut a = DMatrix::zeros(n + 1, n);
+    let mut lo = vec![1.0];
+    let mut hi = vec![1.0];
+    for i in 0..n {
+        a[(0, i)] = 1.0;
+        a[(i + 1, i)] = 1.0;
+        lo.push(lower[i]);
+        hi.push(upper[i]);
+    }
+    let weights = if n == 1 {
+        vec![1.0]
+    } else {
+        solve_qp(cov, &a, &lo, &hi).map_err(|err| match err {
+            QpError::Malformed => ClaError::SingularCovariance,
+            QpError::NotConverged => ClaError::NoTermination,
+        })?
+    };
+    let free: Vec<usize> =
+        (0..n).filter(|&i| weights[i] > lower[i] + 1e-8 && weights[i] < upper[i] - 1e-8).collect();
+    // At lambda=0, Cw = gamma on free assets. If none are free the budget
+    // multiplier is not uniquely determined; zero is a bookkeeping convention.
+    let gamma = free.first().map_or(0.0, |&i| (0..n).map(|j| cov[(i, j)] * weights[j]).sum());
+    Ok(TurningPoint { weights, lambda: 0.0, gamma, free })
 }
 
 /// The Critical Line Algorithm: every turning point of the efficient frontier under box bounds

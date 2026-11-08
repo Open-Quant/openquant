@@ -42,6 +42,7 @@ file disagree).
 
 ### Fixed
 
+- Numerics and research workflows: recover selected overflow, underflow and cancellation cases; preserve CLA forecasts, validate diagnostic weights, stabilize adapter schemas, and protect experiment outputs and notebook trial identities. Exceptional recovery has documented accuracy and performance limits. ([#269](https://github.com/Open-Quant/openquant/pull/269))
 - `util.stats`: preserve exact finite constant means and zero variance, so constant-return Sharpe ratios use signed infinity for nonzero excess returns and NaN at the risk-free rate; identical trial Sharpes have a zero deflation benchmark. ([#267](https://github.com/Open-Quant/openquant/pull/267))
 - Docs: check the EF3M search contract without promising fixed parameter accuracy from random starts. ([#266](https://github.com/Open-Quant/openquant/pull/266))
 - `codependence`: avoid NaN angular distances from finite correlation roundoff and consistently reject finite constant series when correlation is required. ([#264](https://github.com/Open-Quant/openquant/pull/264))
