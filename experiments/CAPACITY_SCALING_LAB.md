@@ -16,7 +16,7 @@ still has explicit binary64 representation limits. This is numerical arithmetic,
 not certified interval arithmetic or a real-market capacity estimator.
 
 **Files:** `experiments/capacity_scaling_lab.py`, this document, and
-`python/tests/test_capacity_scaling_lab.py`. Parent handles replay registration.
+`python/tests/test_capacity_scaling_lab.py`. Replay is registered in `replay_offline_report.py`.
 No production optimizer changes, docs-site edits, tuning, installs, native builds,
 remote writes, trading, or spending.
 
@@ -144,9 +144,8 @@ An initial full repository run completed with 2,131 passed, 37 subtests passed,
 - `test_notebook_runner.py::test_rich_outputs_are_kept_and_metadata_is_normalised`
 
 All three failed while starting a Jupyter kernel in this restricted environment,
-matching the parent's already reproduced baseline failures. This full run began
-before the last eleven focused regressions were added; the combined parent review
-owns the final full-suite result. No dependency installations or native builds
+matching previously reproduced baseline failures. This full run began
+before the last eleven focused regressions were added; the combined integration run records the final full-suite result. No dependency installations or native builds
 were attempted.
 
 ## Frozen-grid observations
@@ -191,7 +190,7 @@ The output path must be new. Existing files and symlinks are refused, and
 exclusive creation protects against overwrites after the preliminary check.
 All report JSON forbids NaN and Infinity. API callers can replay with
 `run_lab(**report['config'])`; performance metadata is not scientific identity.
-Source SHA-256 and NumPy version are recorded for the parent's standard offline
+Source SHA-256 and NumPy version are recorded for the standard offline
 report replayer. Replay integration itself is maintained separately.
 
 
