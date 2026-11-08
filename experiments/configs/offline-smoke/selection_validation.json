@@ -1,0 +1,11 @@
+{
+  "families": [
+    "iid_null"
+  ],
+  "gap": 0,
+  "holdout_size": 4,
+  "n_candidates": 2,
+  "repetitions": 2,
+  "seed": 7,
+  "train_size": 4
+}

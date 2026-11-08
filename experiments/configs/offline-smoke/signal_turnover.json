@@ -1,0 +1,22 @@
+{
+  "betas": [
+    0
+  ],
+  "cost_models": [
+    "proportional"
+  ],
+  "cost_rates": [
+    0.0001
+  ],
+  "etas": [
+    0.1
+  ],
+  "horizon": 4,
+  "k": 1,
+  "repetitions": 2,
+  "rhos": [
+    0
+  ],
+  "seed": 2026110823,
+  "sigma": 0.02
+}

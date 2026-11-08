@@ -1,0 +1,11 @@
+{
+  "draws": 2,
+  "families": [
+    "iid_null"
+  ],
+  "n_candidates": 2,
+  "repetitions": 2,
+  "sample_size": 4,
+  "seed": 7,
+  "total_failure": 0.05
+}

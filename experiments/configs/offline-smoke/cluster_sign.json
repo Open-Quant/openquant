@@ -1,0 +1,12 @@
+{
+  "alpha": 0.05,
+  "block_size": 2,
+  "drift": 0.0,
+  "families": [
+    "independent_blocks"
+  ],
+  "n_blocks": 2,
+  "phi": 0.6,
+  "repetitions": 2,
+  "seed": 113
+}

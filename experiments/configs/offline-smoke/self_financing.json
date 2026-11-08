@@ -1,0 +1,8 @@
+{
+  "fee_rates": [
+    0.001
+  ],
+  "horizon": 4,
+  "repetitions": 1,
+  "seed": 20261108
+}

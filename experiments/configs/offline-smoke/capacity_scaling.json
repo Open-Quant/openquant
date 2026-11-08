@@ -1,0 +1,31 @@
+{
+  "dollar_volume": [
+    1000000.0,
+    4000000.0
+  ],
+  "gross_returns": [
+    0
+  ],
+  "impact_coefficients": [
+    0.1
+  ],
+  "participation": 0.01,
+  "scales": [
+    1000
+  ],
+  "spread": [
+    0.0001,
+    0.0001
+  ],
+  "trade_fractions": [
+    0.1,
+    -0.1
+  ],
+  "volatility": [
+    0.02,
+    0.02
+  ],
+  "volume_scales": [
+    1
+  ]
+}

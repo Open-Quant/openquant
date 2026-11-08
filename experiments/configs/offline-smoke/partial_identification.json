@@ -1,0 +1,8 @@
+{
+  "alpha": 0.05,
+  "repetitions": 2,
+  "sample_sizes": [
+    4
+  ],
+  "seed": 113
+}

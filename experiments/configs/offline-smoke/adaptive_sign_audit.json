@@ -1,0 +1,11 @@
+{
+  "alpha": 0.05,
+  "families": [
+    "iid_null"
+  ],
+  "n_candidates": 2,
+  "repetitions": 2,
+  "rounds": 1,
+  "sample_size": 4,
+  "seed": 71
+}
