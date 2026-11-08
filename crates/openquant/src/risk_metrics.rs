@@ -44,6 +44,7 @@
 //! # }
 //! ```
 
+use crate::util::exact_product::recover_overflowed_mean;
 use crate::util::stats::{self, QuantileMethod};
 use nalgebra::DMatrix;
 
@@ -160,7 +161,8 @@ impl RiskMetrics {
     /// Units and `confidence_level` follow [`Self::calculate_value_at_risk`] (lower-tail
     /// probability; the result is a signed return). If no return lies strictly below the VaR —
     /// for example constant returns or `confidence_level == 0` — the result is `Ok(NaN)`, not
-    /// an error.
+    /// an error. If summation overflows despite finite tail values, their exact mean is
+    /// recovered with one final binary64 rounding. Ordinary sum/division is unchanged.
     ///
     /// # Errors
     ///
@@ -187,7 +189,7 @@ impl RiskMetrics {
         if tail.is_empty() {
             return Ok(f64::NAN);
         }
-        Ok(tail.iter().sum::<f64>() / tail.len() as f64)
+        Ok(recover_overflowed_mean(&tail, tail.iter().sum::<f64>() / tail.len() as f64))
     }
 
     /// [`Self::calculate_expected_shortfall`] on the **first column** of `returns`; other
@@ -218,6 +220,8 @@ impl RiskMetrics {
     /// [`Self::calculate_expected_shortfall`], which take the lower-tail probability (0.05).
     ///
     /// On finite input the result is never `NaN`; a `NaN` in `cumulative` can make it `NaN`.
+    /// Overflow of a sum of finite tail drawdowns is recovered with one final binary64
+    /// rounding. Overflow in an individual drawdown subtraction is not recovered.
     ///
     /// # Errors
     ///
@@ -256,7 +260,7 @@ impl RiskMetrics {
             // only reachable when q is NaN (NaN in the input)
             return Ok(f64::NAN);
         }
-        Ok(tail.iter().sum::<f64>() / tail.len() as f64)
+        Ok(recover_overflowed_mean(&tail, tail.iter().sum::<f64>() / tail.len() as f64))
     }
 
     /// [`Self::calculate_conditional_drawdown_risk`] on the first column of `cumulative`.

@@ -2,7 +2,7 @@
 title: "risk_metrics"
 description: "Historical value at risk, expected shortfall, conditional drawdown at risk and portfolio variance."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -215,3 +215,7 @@ assert_eq!(
   track record.
 - [`strategy-risk`](/modules/strategy-risk/) — the risk that the strategy itself stops
   working, which none of these measure.
+
+### Finite tail-mean overflow
+
+Expected shortfall keeps its strict-below-VaR tail, and CDaR keeps its inclusive tail. If summing finite tail values overflows, the mean is recovered using exact binary64 integer accumulation and one final nearest-even rounding. Ordinary sum/division, empty-tail NaN and nonfinite tail values retain their existing behavior. This does not recover overflow in an individual drawdown subtraction or change the shared statistics estimators.

@@ -1,4 +1,4 @@
-//! Exact finite binary64 product sums for exceptional origin regressions.
+//! Exact finite binary64 sums/products for exceptional numerical recovery.
 //! Ordinary numerical paths do not use this integer arithmetic.
 use std::cmp::Ordering;
 #[derive(Clone, Debug, Default)]
@@ -463,5 +463,81 @@ mod tests {
         assert_eq!(scaled_return(-1.0, 1.0, 1.0), None);
         assert_eq!(scaled_return(1.0, 0.0, 1.0), None);
         assert_eq!(scaled_return(1.0, 1.0, f64::NAN), None);
+    }
+}
+
+/// Recover an infinite ordinary mean only when every observation is finite.
+/// Existing finite, NaN, empty and nonfinite-input results pass through unchanged.
+/// The signed sum is exact in units of 2^-1074; division by the exact integer count
+/// uses the existing nearest/ties-to-even rational conversion. This is a cold path,
+/// not a change to the ordinary shared statistics estimator.
+pub(crate) fn recover_overflowed_mean(values: &[f64], ordinary_mean: f64) -> f64 {
+    if !ordinary_mean.is_infinite() || values.is_empty() || values.iter().any(|v| !v.is_finite()) {
+        return ordinary_mean;
+    }
+    let mut positive = Big::default();
+    let mut negative = Big::default();
+    for &value in values {
+        let (mantissa, exponent) = integer_parts(value);
+        let total = if value.is_sign_negative() { &mut negative } else { &mut positive };
+        total.add_product(mantissa as u128, (exponent + 1074) as usize);
+    }
+    let sign = positive.compare(&negative);
+    let numerator = match sign {
+        Ordering::Greater => {
+            positive.subtract(&negative);
+            positive
+        }
+        Ordering::Less => {
+            negative.subtract(&positive);
+            negative
+        }
+        Ordering::Equal => return 0.0,
+    };
+    // numerator is in minimum-subnormal units, so divide by count * 2^1074.
+    let mut denominator = Big::default();
+    denominator.add_product(values.len() as u128, 1074);
+    let result = rounded_ratio(&numerator, &denominator);
+    if sign == Ordering::Less {
+        -result
+    } else {
+        result
+    }
+}
+
+#[cfg(test)]
+mod mean_recovery_tests {
+    use super::recover_overflowed_mean;
+
+    #[test]
+    fn overflow_recovery_retains_tiny_cancellation_residuals() {
+        let m = f64::MAX;
+        let values = [m, m, -m, -m, 1e-308];
+        assert_eq!(recover_overflowed_mean(&values, f64::INFINITY), 1e-308 / 5.0);
+        assert_eq!(recover_overflowed_mean(&[m, m, -m, -m], f64::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn subnormal_means_round_ties_to_even_and_keep_negative_underflow_sign() {
+        let m = f64::MAX;
+        let u = f64::from_bits(1);
+        for (a, b, expected) in [(u, 2.0 * u, 0.0), (4.0 * u, 5.0 * u, 2.0 * u)] {
+            assert_eq!(
+                recover_overflowed_mean(&[m, m, -m, -m, a, b], f64::INFINITY).to_bits(),
+                expected.to_bits()
+            );
+        }
+        assert_eq!(
+            recover_overflowed_mean(&[m, m, -m, -m, -u], f64::INFINITY).to_bits(),
+            (-0.0_f64).to_bits()
+        );
+    }
+
+    #[test]
+    fn ordinary_and_nonfinite_input_results_are_not_reinterpreted() {
+        assert_eq!(recover_overflowed_mean(&[1.0, 2.0], -0.0).to_bits(), (-0.0_f64).to_bits());
+        assert!(recover_overflowed_mean(&[], f64::NAN).is_nan());
+        assert_eq!(recover_overflowed_mean(&[f64::INFINITY], f64::INFINITY), f64::INFINITY);
+        assert_eq!(recover_overflowed_mean(&[f64::NAN], f64::NEG_INFINITY), f64::NEG_INFINITY);
     }
 }

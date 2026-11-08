@@ -2,7 +2,7 @@
 title: "strategy_risk"
 description: "How precise and how frequent a strategy's bets must be to reach a target Sharpe ratio, and the probability that it falls short."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-08'
 audience:
   - quant-dev
   - platform-engineering
@@ -203,3 +203,7 @@ assert!(matches!(implied_frequency_symmetric(0.45, 2.0), Err(StrategyRiskError::
 - [`bet-sizing`](/modules/bet-sizing/) — where precision turns into position size.
 - [`labeling`](/modules/labeling/) — barrier widths set $\pi_+$ and $\pi_-$.
 - [`risk-metrics`](/modules/risk-metrics/) — risk of the holdings rather than of the process.
+
+### Finite payout-mean overflow
+
+The failure estimator recovers win/loss class means if their ordinary finite-input sums overflow. It uses exact integer accumulation and a single final nearest-even rounding. Ordinary means, constant-input handling, bootstrap draws and payout-domain checks are unchanged; no global statistics or probability formula is replaced.
