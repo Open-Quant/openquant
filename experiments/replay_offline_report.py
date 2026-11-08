@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 LABS = {
+    "capacity_scaling": "capacity_scaling_lab.py",
     "self_financing": "self_financing_lab.py",
     "selection_validation": "validation_lab.py",
     "adaptive_holdout": "adaptive_holdout_lab.py",
@@ -48,6 +49,7 @@ LABS = {
     "covariance_estimation": "covariance_estimation_lab.py",
 }
 DEPENDENCIES = {
+    "capacity_scaling": (),
     "self_financing": (),
     "selection_validation": (),
     "adaptive_holdout": ("validation_lab.py",),
