@@ -113,6 +113,28 @@ def test_trade_based_scalars():
     assert kyle == pytest.approx(9.0 / 1400.0, abs=1e-12)
 
 
+@pytest.mark.parametrize(
+    ("volumes", "returns", "expected"),
+    [
+        ([2.0**600, 2.0**601], [1.0, -2.0], 2.0**-600),
+        ([2.0**-600, 2.0**-599], [1.0, -2.0], 2.0**600),
+        (
+            [4.0208288850127243e-256] * 2,
+            [7.228216483043474e52] * 2,
+            float.fromhex("0x1.fffffffffffffp1023"),
+        ),
+        (
+            [4.0208288850127243e-256] * 2,
+            [math.nextafter(7.228216483043474e52, math.inf)] * 2,
+            math.inf,
+        ),
+    ],
+)
+def test_trade_amihud_extreme_finite_inputs(volumes, returns, expected):
+    # Exercise list conversion and the native extension at both ends of binary64.
+    assert microstructural.get_trades_based_amihud_lambda(returns, volumes) == expected
+
+
 def test_sigma_mapping_rejects_oversized_alphabet():
     with pytest.raises(ValueError, match="exceeds ASCII table"):
         microstructural.sigma_mapping([float(i) for i in range(1000)], 0.001)

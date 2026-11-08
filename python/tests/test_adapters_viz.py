@@ -112,3 +112,108 @@ def test_to_pandas_bridge():
         assert list(pdf.columns) == ["asset", "weight"]
     except RuntimeError as err:
         assert "pandas is not installed" in str(err)
+
+
+@pytest.mark.parametrize("names", [["a", "a"], ["bar_index", "a"]])
+def test_indicator_matrix_rejects_column_name_collisions(names):
+    with pytest.raises(ValueError, match="label_names"):
+        openquant.adapters.to_polars_indicator_matrix(
+            [[1, 0], [0, 1]], bar_index=[10, 11], label_names=names
+        )
+
+
+def test_indicator_matrix_accepts_numpy_rows():
+    import numpy as np
+
+    result = openquant.adapters.to_polars_indicator_matrix(np.array([[1, 0], [0, 1]]))
+    assert result.to_dict(as_series=False) == {
+        "bar_index": [0, 1],
+        "label_0": [1, 0],
+        "label_1": [0, 1],
+    }
+
+
+@pytest.mark.parametrize(
+    "factory, kwargs, timestamp_columns",
+    [
+        ("to_polars_signal_frame", {"timestamps": [], "signal": []}, ["ts"]),
+        (
+            "to_polars_event_frame",
+            {"starts": [], "ends": [], "probs": [], "sides": [], "labels": []},
+            ["start_ts", "end_ts"],
+        ),
+        (
+            "to_polars_weights_frame",
+            {"asset_names": [], "weights": [], "as_of": "2024-01-01"},
+            ["as_of"],
+        ),
+        (
+            "to_polars_backtest_frame",
+            {"timestamps": [], "equity_curve": [], "returns": [], "positions": []},
+            ["ts"],
+        ),
+    ],
+)
+def test_empty_timestamped_adapter_frames(factory, kwargs, timestamp_columns):
+    import polars as pl
+
+    result = getattr(openquant.adapters, factory)(**kwargs)
+    assert result.height == 0
+    for column in timestamp_columns:
+        assert result.schema[column] == pl.Datetime("us")
+
+
+def test_signal_buffer_normalizes_numeric_batch_types_and_empty_batches():
+    import polars as pl
+
+    buffer = openquant.adapters.SignalStreamBuffer()
+    buffer.append([], [], side=[], symbol="CL")
+    buffer.append(["2024-01-01 09:30:00"], [1], side=[-1], symbol="CL")
+    buffer.append(["2024-01-01 09:31:00"], [0.5], side=[1.0], symbol="CL")
+    buffer.append(["2024-01-01 09:32:00"], [None], side=[None], symbol="CL")
+    buffer.append([], [], side=[], symbol="CL")
+    result = buffer.frame()
+    assert result["signal"].to_list() == [1.0, 0.5, None]
+    assert result["side"].to_list() == [-1.0, 1.0, None]
+    assert result["symbol"].to_list() == ["CL"] * 3
+    assert result.schema["signal"] == pl.Float64
+    assert result.schema["side"] == pl.Float64
+
+
+def test_signal_buffer_preserves_optional_column_mismatch_error():
+    import polars as pl
+
+    buffer = openquant.adapters.SignalStreamBuffer()
+    buffer.append(["2024-01-01 09:30:00"], [1.0])
+    buffer.append(["2024-01-01 09:31:00"], [0.5], symbol="CL")
+    with pytest.raises(pl.exceptions.ShapeError):
+        buffer.frame()
+
+
+def test_empty_and_cleared_signal_buffers_have_signal_schema():
+    import polars as pl
+
+    buffer = openquant.adapters.SignalStreamBuffer()
+    expected = {"ts": pl.Datetime("us"), "signal": pl.Float64}
+    assert buffer.frame().schema == expected
+    buffer.append(["2024-01-01 09:30:00"], [1.0], symbol="CL")
+    buffer.clear()
+    assert buffer.frame().schema == expected
+
+
+def test_signal_frame_accepts_mixed_numeric_values_in_one_batch():
+    import polars as pl
+
+    result = openquant.adapters.to_polars_signal_frame(
+        ["2024-01-01 09:30:00", "2024-01-01 09:31:00"], [1, 0.5], side=[1, -0.5]
+    )
+    assert result["signal"].to_list() == [1.0, 0.5]
+    assert result["side"].to_list() == [1.0, -0.5]
+    assert result.schema["signal"] == pl.Float64
+
+
+def test_signal_buffer_accepts_null_only_first_batch():
+    buffer = openquant.adapters.SignalStreamBuffer()
+    buffer.append(["2024-01-01 09:30:00"], [None])
+    buffer.append(["2024-01-01 09:31:00"], [0.5])
+    assert buffer.frame()["signal"].to_list() == [None, 0.5]

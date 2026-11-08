@@ -95,6 +95,9 @@ pub struct LabeledEvent {
 ///
 /// Returns `(event, barrier)` pairs. An event too close to the end of `close` to have such a
 /// bar gets no pair at all (no shortened barrier). `close` must be in increasing time.
+/// Offset components are combined before applying them, including negative components.
+/// A target beyond the date range has no matching bar; a target before the date range
+/// selects the first bar, if any. Large offsets never panic.
 pub fn add_vertical_barrier(
     t_events: &[NaiveDateTime],
     close: &[(NaiveDateTime, f64)],
@@ -103,15 +106,23 @@ pub fn add_vertical_barrier(
     num_minutes: i64,
     num_seconds: i64,
 ) -> Vec<(NaiveDateTime, NaiveDateTime)> {
-    let delta = Duration::days(num_days)
-        + Duration::hours(num_hours)
-        + Duration::minutes(num_minutes)
-        + Duration::seconds(num_seconds);
+    // Every i64 component fits after conversion to seconds in i128, even in
+    // combination. Combining first also preserves large cancelling offsets.
+    let seconds = i128::from(num_days) * 86400
+        + i128::from(num_hours) * 3600
+        + i128::from(num_minutes) * 60
+        + i128::from(num_seconds);
+    let delta = i64::try_from(seconds).ok().and_then(Duration::try_seconds);
 
     let mut out = Vec::new();
     for &start in t_events {
-        let target = start + delta;
-        if let Some(&(ts, _)) = close.iter().find(|(ts, _)| *ts >= target) {
+        let target = delta.and_then(|delta| start.checked_add_signed(delta));
+        let next_bar = match target {
+            Some(target) => close.iter().find(|(ts, _)| *ts >= target),
+            None if seconds < 0 => close.first(),
+            None => None,
+        };
+        if let Some(&(ts, _)) = next_bar {
             out.push((start, ts));
         }
     }
@@ -124,8 +135,17 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
     }
 
     let last_ts = close.last().map(|(ts, _)| *ts).expect("non-empty close");
-    let close_index: HashMap<NaiveDateTime, usize> =
-        close.iter().enumerate().map(|(i, (ts, _))| (*ts, i)).collect();
+    let mut maximum_price = 0.0;
+    let close_index: HashMap<NaiveDateTime, usize> = close
+        .iter()
+        .enumerate()
+        .map(|(i, (ts, price))| {
+            if price.is_finite() && *price > maximum_price {
+                maximum_price = *price;
+            }
+            (*ts, i)
+        })
+        .collect();
 
     for (loc, ev) in events.iter_mut() {
         let Some(&start_idx) = close_index.get(loc) else {
@@ -145,14 +165,67 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
         let side = ev.side.unwrap_or(1.0);
         let pt_level = if ev.pt > 0.0 { ev.pt * ev.trgt } else { f64::INFINITY };
         let sl_level = if ev.sl > 0.0 { -ev.sl * ev.trgt } else { f64::NEG_INFINITY };
+        let recoverable_event = start_price.is_finite()
+            && start_price > 0.0
+            && ev.trgt.is_finite()
+            && ev.trgt > 0.0
+            && side.is_finite()
+            && ev.pt.is_finite()
+            && ev.sl.is_finite();
+        let exceptional_level =
+            (ev.pt > 0.0 && !pt_level.is_finite()) || (ev.sl > 0.0 && !sl_level.is_finite());
 
         let mut first_touch = None;
-        for &(ts, price) in &close[(start_idx + 1)..=end_idx] {
-            let ret = (price / start_price - 1.0) * side;
-            // Snippet 3.2: a barrier is touched when the path goes strictly beyond it.
-            if ret > pt_level || ret < sl_level {
-                first_touch = Some(ts);
-                break;
+        // Positive-start division and subtraction are monotone: all qualified
+        // raw returns lie in [-1, maximum_price/start_price-1]. A finite bound
+        // on the signed magnitude proves no return can need exact recovery.
+        // Negative/nonfinite prices still run through the original comparisons.
+        let legacy_only = !recoverable_event
+            || (!exceptional_level && {
+                let upper_return = maximum_price / start_price - 1.0;
+                upper_return.is_finite() && (upper_return.max(1.0) * side.abs()).is_finite()
+            });
+        if legacy_only {
+            for &(ts, price) in &close[(start_idx + 1)..=end_idx] {
+                let ret = (price / start_price - 1.0) * side;
+                if ret > pt_level || ret < sl_level {
+                    first_touch = Some(ts);
+                    break;
+                }
+            }
+        } else {
+            for &(ts, price) in &close[(start_idx + 1)..=end_idx] {
+                let ret = (price / start_price - 1.0) * side;
+                let mut profit_touched = ret > pt_level;
+                let mut stop_touched = ret < sl_level;
+                if (!ret.is_finite() || exceptional_level) && price.is_finite() && price >= 0.0 {
+                    if ev.pt > 0.0 && (!ret.is_finite() || !pt_level.is_finite()) {
+                        profit_touched = crate::util::exact_product::compare_scaled_return(
+                            price,
+                            start_price,
+                            side,
+                            ev.pt,
+                            ev.trgt,
+                        )
+                        .map_or(profit_touched, |order| order == std::cmp::Ordering::Greater);
+                    }
+                    if !profit_touched && ev.sl > 0.0 && (!ret.is_finite() || !sl_level.is_finite())
+                    {
+                        stop_touched = crate::util::exact_product::compare_scaled_return(
+                            price,
+                            start_price,
+                            side,
+                            -ev.sl,
+                            ev.trgt,
+                        )
+                        .map_or(stop_touched, |order| order == std::cmp::Ordering::Less);
+                    }
+                }
+                // Snippet 3.2: a barrier is touched when the path goes strictly beyond it.
+                if profit_touched || stop_touched {
+                    first_touch = Some(ts);
+                    break;
+                }
             }
         }
 
@@ -177,6 +250,11 @@ fn apply_pt_sl_on_t1(close: &[(NaiveDateTime, f64)], events: &mut [(NaiveDateTim
 /// earlier. With no vertical barrier and no touch, `t1` stays `None`; that includes an event
 /// on the last bar, which has no later bar to touch. Such events are kept here and skipped
 /// by [`triple_barrier_labels`]. Returns `(t0, event)` pairs in `t_events` order.
+/// A `NaN` minimum return admits no events, matching the strict target comparison.
+/// For finite positive starting prices/targets, finite sides and barrier multiples,
+/// and finite nonnegative later prices, nonfinite intermediate returns or active
+/// thresholds use exact product comparisons. Ordinary finite comparisons and
+/// inputs outside this domain retain their existing floating-point behavior.
 pub fn triple_barrier_events(
     close: &[(NaiveDateTime, f64)],
     t_events: &[NaiveDateTime],
@@ -205,7 +283,7 @@ pub fn triple_barrier_events(
             continue;
         };
         // `target[target > min_ret]`, which in pandas also drops a NaN target.
-        if trgt.is_nan() || trgt <= config.min_ret {
+        if trgt.is_nan() || config.min_ret.is_nan() || trgt <= config.min_ret {
             continue;
         }
 
@@ -232,6 +310,12 @@ pub fn triple_barrier_events(
 /// - `{0, 1}` when `side` is present (meta-labeling): 1 if the side-signed return is positive.
 ///
 /// Events with `t1 = None`, or whose `t0` or `t1` is not a bar of `close`, are skipped.
+/// For finite positive starting prices, finite nonnegative end prices and finite
+/// sides, exceptional output ranges and unscaled returns of magnitude at most
+/// `1e-8` use exact scaled-return recovery. This cancellation diagnostic does not
+/// make every ordinary result exact. The label follows the recovered rounded
+/// return's sign, so correcting underflow can also correct the emitted label.
+/// True underflow and signed zero are preserved; invalid inputs keep legacy behavior.
 pub fn triple_barrier_labels(
     events: &[(NaiveDateTime, Event)],
     close: &[(NaiveDateTime, f64)],
@@ -254,6 +338,20 @@ pub fn triple_barrier_labels(
             let mut signed_ret = ret;
             if let Some(side) = ev.side {
                 signed_ret *= side;
+            }
+            let side = ev.side.unwrap_or(1.0);
+            // A small quotient-minus-one loses relative precision; this is a
+            // diagnostic recovery policy, not exact arithmetic for every label.
+            // Keep finite equal-price/zero-side results (including zero signs).
+            let recover = !signed_ret.is_finite()
+                || (p1 != p0
+                    && side != 0.0
+                    && (!signed_ret.is_normal()
+                        || signed_ret.abs() >= f64::MAX / 2.0
+                        || ret.abs() <= 1e-8));
+            if recover {
+                signed_ret =
+                    crate::util::exact_product::scaled_return(p1, p0, side).unwrap_or(signed_ret);
             }
 
             let label = if ev.side.is_some() {

@@ -362,3 +362,97 @@ fn encode_array_keeps_one_letter_per_value_or_errors() {
         Err(MicrostructuralError::InvalidCodebook(_))
     ));
 }
+
+#[test]
+fn encode_array_orders_overflowing_finite_distances() {
+    use openquant::microstructural_features::encode_array;
+    // Both distances overflow, but -1e308 is strictly nearer to the positive query.
+    assert_eq!(encode_array(&[1e308], &[(-1.5e308, 'a'), (-1e308, 'b')]).unwrap(), "b");
+    assert_eq!(encode_array(&[-1e308], &[(1.5e308, 'a'), (1e308, 'b')]).unwrap(), "b");
+    // Reversing the codebook, repeated entries and a finite-distance contender.
+    assert_eq!(encode_array(&[1e308], &[(-1e308, 'a'), (-1.5e308, 'b')]).unwrap(), "a");
+    assert_eq!(encode_array(&[1e308], &[(-1e308, 'a'), (-1e308, 'b')]).unwrap(), "a");
+    assert_eq!(encode_array(&[1e308], &[(-1.5e308, 'a'), (0.0, 'b')]).unwrap(), "b");
+}
+
+#[test]
+fn liquidity_lambdas_keep_extreme_finite_log_returns() {
+    // Independent reference: powers of two give log returns exactly ±2046 ln(2).
+    let tiny = 2.0_f64.powi(-1023);
+    let large = 2.0_f64.powi(1023);
+    let close = [tiny, large, tiny];
+    let expected = 2046.0 * std::f64::consts::LN_2;
+    for values in [
+        get_bar_based_amihud_lambda(&close, &[1.0; 3], 1).unwrap(),
+        get_bar_based_hasbrouck_lambda(&close, &[1.0; 3], 1).unwrap(),
+    ] {
+        assert!(values[0].is_nan());
+        assert_rel("extreme positive log return", values[1], expected, 1e-14);
+        assert_rel("extreme negative log return", values[2], expected, 1e-14);
+    }
+}
+
+#[test]
+fn liquidity_log_recovery_preserves_other_input_behavior() {
+    for close in [
+        [100.0, 110.0],
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [-1.0, 1.0],
+        [1.0, f64::INFINITY],
+        [f64::INFINITY, f64::INFINITY],
+        [1.0, f64::NAN],
+    ] {
+        let expected = if close[0] == 0.0 { f64::NAN } else { (close[1] / close[0]).ln().abs() };
+        for values in [
+            get_bar_based_amihud_lambda(&close, &[1.0; 2], 1).unwrap(),
+            get_bar_based_hasbrouck_lambda(&close, &[1.0; 2], 1).unwrap(),
+        ] {
+            if expected.is_nan() {
+                assert!(values[1].is_nan());
+            } else {
+                assert_eq!(values[1], expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn feature_generator_encodes_extreme_finite_log_returns() {
+    let path = std::env::temp_dir()
+        .join(format!("openquant_ticks_{}_extreme_log_returns.csv", std::process::id()));
+    let tiny = 2.0_f64.powi(-1023);
+    let large = 2.0_f64.powi(1023);
+    let csv = format!(
+        "Date and Time,Price,Volume\n2011/07/31 23:31:10.000,{tiny},1\n2011/07/31 23:31:11.000,{large},1\n"
+    );
+    std::fs::write(&path, csv).unwrap();
+    let mut generator = MicrostructuralFeaturesGenerator::new_from_csv(
+        path.to_str().unwrap(),
+        &[2],
+        None,
+        Some(vec![(0.0, 'a'), (2046.0 * std::f64::consts::LN_2, 'b')]),
+    )
+    .unwrap();
+    let features = generator.get_features_from_csv(path.to_str().unwrap());
+    std::fs::remove_file(path).unwrap();
+    let features = features.unwrap();
+    // Seven liquidity columns, four tick-rule entropy columns, then return entropy.
+    // The return message is 'ab', whose Shannon entropy is exactly one bit.
+    assert_eq!(features.len(), 1);
+    assert_eq!(features[0][11], 1.0);
+}
+
+#[test]
+fn liquidity_lambdas_do_not_log_a_rounded_subnormal_ratio() {
+    // The true quotient is 1.5 * the smallest subnormal. Binary64 division
+    // rounds it to 2 * the smallest subnormal, changing its log by ln(4/3).
+    let close = [2.0_f64.powi(52), 1.5 * f64::MIN_POSITIVE];
+    let expected = 1074.0 * std::f64::consts::LN_2 - 1.5_f64.ln();
+    for values in [
+        get_bar_based_amihud_lambda(&close, &[1.0; 2], 1).unwrap(),
+        get_bar_based_hasbrouck_lambda(&close, &[1.0; 2], 1).unwrap(),
+    ] {
+        assert_rel("subnormal positive ratio", values[1], expected, 1e-14);
+    }
+}

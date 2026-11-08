@@ -684,6 +684,44 @@ fn vals(v: &[f64], idx: &[usize]) -> Vec<f64> {
     idx.iter().map(|i| v[*i]).collect()
 }
 
+// Only exceptional positive scales need recovery. Keep ordinary rounding and
+// the existing handling of negative/nonfinite weights unchanged. F1 excludes
+// true negatives from its scale as well as its counts: their arbitrarily large
+// weights must not erase a small but meaningful true-positive contribution.
+fn normalized_score_weights(
+    weights: Option<&[f64]>,
+    included: impl Fn(usize) -> bool,
+) -> Option<Vec<f64>> {
+    let weights = weights?;
+    let largest_all = weights.iter().copied().fold(0.0_f64, f64::max);
+    if largest_all == 0.0 || (1e-150..=1e150).contains(&largest_all) {
+        return None;
+    }
+    let mut largest = 0.0_f64;
+    for (i, &weight) in weights.iter().enumerate() {
+        if !weight.is_finite() || weight < 0.0 {
+            return None;
+        }
+        if included(i) {
+            largest = largest.max(weight);
+        }
+    }
+    if largest == 0.0 || (1e-150..=1e150).contains(&largest) {
+        return None;
+    }
+    // Keep large normalized weights well above one: scaling them all the way
+    // to one can erase tiny weights whose aggregate score is still representable.
+    // Even usize::MAX such weights (and clipped log losses) sum safely in f64.
+    let scale = if largest > 1e150 { largest / 1e150 } else { largest };
+    Some(
+        weights
+            .iter()
+            .enumerate()
+            .map(|(i, &weight)| if included(i) { weight / scale } else { weight })
+            .collect(),
+    )
+}
+
 fn score_model<C: SimpleClassifier>(
     model: &C,
     x_test: &[Vec<f64>],
@@ -695,14 +733,23 @@ fn score_model<C: SimpleClassifier>(
         Scoring::Accuracy => {
             let pred = model.predict(x_test);
             check_prediction_count(y_test.len(), pred.len())?;
-            let mut num = 0.0;
-            let mut den = 0.0;
-            for i in 0..y_test.len() {
-                let w = sample_weight.map(|sw| sw[i]).unwrap_or(1.0);
-                den += w;
-                if (pred[i] - y_test[i]).abs() < 1e-12 {
-                    num += w;
+            let counts = |weights: Option<&[f64]>| {
+                let mut num = 0.0;
+                let mut den = 0.0;
+                for i in 0..y_test.len() {
+                    let w = weights.map(|sw| sw[i]).unwrap_or(1.0);
+                    den += w;
+                    if (pred[i] - y_test[i]).abs() < 1e-12 {
+                        num += w;
+                    }
                 }
+                (num, den)
+            };
+            let (mut num, mut den) = counts(sample_weight);
+            if (!num.is_finite() || !den.is_finite())
+                && let Some(normalized) = normalized_score_weights(sample_weight, |_| true)
+            {
+                (num, den) = counts(Some(&normalized));
             }
             if den > 0.0 {
                 num / den
@@ -713,14 +760,23 @@ fn score_model<C: SimpleClassifier>(
         Scoring::NegLogLoss => {
             let probs = model.predict_proba(x_test);
             check_prediction_count(y_test.len(), probs.len())?;
-            let mut loss = 0.0;
-            let mut den = 0.0;
-            let eps = 1e-15;
-            for i in 0..y_test.len() {
-                let w = sample_weight.map(|sw| sw[i]).unwrap_or(1.0);
-                let p = probs[i].clamp(eps, 1.0 - eps);
-                loss += w * (-(y_test[i] * p.ln() + (1.0 - y_test[i]) * (1.0 - p).ln()));
-                den += w;
+            let counts = |weights: Option<&[f64]>| {
+                let mut loss = 0.0;
+                let mut den = 0.0;
+                let eps = 1e-15;
+                for i in 0..y_test.len() {
+                    let w = weights.map(|sw| sw[i]).unwrap_or(1.0);
+                    let p = probs[i].clamp(eps, 1.0 - eps);
+                    loss += w * (-(y_test[i] * p.ln() + (1.0 - y_test[i]) * (1.0 - p).ln()));
+                    den += w;
+                }
+                (loss, den)
+            };
+            let (mut loss, mut den) = counts(sample_weight);
+            if (!loss.is_finite() || !den.is_finite() || (den > 0.0 && den < 1e-150))
+                && let Some(normalized) = normalized_score_weights(sample_weight, |_| true)
+            {
+                (loss, den) = counts(Some(&normalized));
             }
             if den > 0.0 {
                 -(loss / den)
@@ -731,25 +787,50 @@ fn score_model<C: SimpleClassifier>(
         Scoring::F1 => {
             let pred = model.predict(x_test);
             check_prediction_count(y_test.len(), pred.len())?;
-            let mut tp = 0.0;
-            let mut fp = 0.0;
-            let mut fnn = 0.0;
-            for i in 0..y_test.len() {
-                let w = sample_weight.map(|sw| sw[i]).unwrap_or(1.0);
-                let p_pos = pred[i] > 0.5;
-                let y_pos = y_test[i] > 0.5;
-                if p_pos && y_pos {
-                    tp += w;
-                } else if p_pos && !y_pos {
-                    fp += w;
-                } else if !p_pos && y_pos {
-                    fnn += w;
+            let counts = |weights: Option<&[f64]>| {
+                let mut tp = 0.0;
+                let mut fp = 0.0;
+                let mut fnn = 0.0;
+                for i in 0..y_test.len() {
+                    let w = weights.map(|sw| sw[i]).unwrap_or(1.0);
+                    let p_pos = pred[i] > 0.5;
+                    let y_pos = y_test[i] > 0.5;
+                    if p_pos && y_pos {
+                        tp += w;
+                    } else if p_pos && !y_pos {
+                        fp += w;
+                    } else if !p_pos && y_pos {
+                        fnn += w;
+                    }
                 }
+                (tp, fp, fnn)
+            };
+            let (mut tp, mut fp, mut fnn) = counts(sample_weight);
+            if !(2.0 * tp + fp + fnn).is_finite()
+                && let Some(normalized) =
+                    normalized_score_weights(sample_weight, |i| pred[i] > 0.5 || y_test[i] > 0.5)
+            {
+                (tp, fp, fnn) = counts(Some(&normalized));
             }
             let precision = if tp + fp > 0.0 { tp / (tp + fp) } else { 0.0 };
             let recall = if tp + fnn > 0.0 { tp / (tp + fnn) } else { 0.0 };
-            if precision + recall > 0.0 {
-                2.0 * precision * recall / (precision + recall)
+            let numerator = 2.0 * precision * recall;
+            if numerator < f64::MIN_POSITIVE
+                && tp > 0.0
+                && fp >= 0.0
+                && fnn >= 0.0
+                && tp.is_finite()
+                && fp.is_finite()
+                && fnn.is_finite()
+                && sample_weight
+                    .is_none_or(|weights| weights.iter().all(|w| w.is_finite() && *w >= 0.0))
+            {
+                // Taking either precision or their product first can underflow
+                // even when the final F1 is representable. Counts are bounded
+                // by the recovery above whenever their denominator overflows.
+                2.0 * tp / (2.0 * tp + fp + fnn)
+            } else if precision + recall > 0.0 {
+                numerator / (precision + recall)
             } else {
                 0.0
             }

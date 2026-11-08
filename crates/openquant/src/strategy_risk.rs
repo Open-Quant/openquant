@@ -154,7 +154,16 @@ pub fn implied_precision_symmetric(
         return Err(StrategyRiskError::InvalidInput("target_sharpe must be finite and > 0"));
     }
 
-    let root = target_sharpe / (target_sharpe * target_sharpe + annual_bet_frequency).sqrt();
+    let squared_target = target_sharpe * target_sharpe;
+    let squared_norm = squared_target + annual_bet_frequency;
+    // Keep the inexpensive ordinary calculation; hypot recovers finite targets
+    // whose square or summed norm overflows or enters the subnormal range.
+    let norm = if squared_target.is_normal() && squared_norm.is_normal() {
+        squared_norm.sqrt()
+    } else {
+        target_sharpe.hypot(annual_bet_frequency.sqrt())
+    };
+    let root = target_sharpe / norm;
     let p = 0.5 * (1.0 + root);
     if !(0.0..=1.0).contains(&p) {
         return Err(StrategyRiskError::NoValidRoot(
@@ -196,7 +205,10 @@ pub fn implied_frequency_symmetric(
             "precision below 0.5 gives a negative Sharpe ratio at every frequency",
         ));
     }
-    let n = target_sharpe * target_sharpe * 4.0 * precision * (1.0 - precision) / (edge * edge);
+    // Form sqrt(n) before squaring. theta² alone can overflow (or lose
+    // subnormal precision) even when the final frequency is representable.
+    let root_n = (target_sharpe / edge) * (2.0 * (precision * (1.0 - precision)).sqrt());
+    let n = root_n * root_n;
     validate_positive("implied_frequency", n)?;
     Ok(n)
 }
@@ -222,6 +234,12 @@ pub fn sharpe_asymmetric(
     let d = payout.pi_plus - payout.pi_minus;
     let mu = d * precision + payout.pi_minus;
     let sigma = d.abs() * (precision * (1.0 - precision)).sqrt();
+    if sigma >= f64::MIN_POSITIVE && sigma.is_finite() && mu.is_finite() {
+        return Ok(mu / sigma * annual_bet_frequency.sqrt());
+    }
+    let (scaled, _) = scale_payout(payout);
+    let mu = payout_mean(precision, scaled);
+    let sigma = (scaled.pi_plus - scaled.pi_minus) * (precision * (1.0 - precision)).sqrt();
     if sigma <= 0.0 || !sigma.is_finite() {
         return Err(StrategyRiskError::InvalidInput("asymmetric payout variance must be positive"));
     }
@@ -251,36 +269,45 @@ pub fn implied_precision_asymmetric(
     let d = payout.pi_plus - payout.pi_minus;
     let n = annual_bet_frequency;
     let theta2 = target_sharpe * target_sharpe;
-
     let a = (n + theta2) * d * d;
     let b = (2.0 * n * payout.pi_minus - theta2 * d) * d;
     let c = n * payout.pi_minus * payout.pi_minus;
     let disc = b * b - 4.0 * a * c;
-    if disc < 0.0 || !disc.is_finite() {
+    if a.is_normal()
+        && a > 0.0
+        && disc.is_normal()
+        && disc > 0.0
+        && (c.is_normal() || payout.pi_minus == 0.0)
+    {
+        let q = -0.5 * (b + disc.sqrt().copysign(b));
+        if let Some(p) =
+            select_precision_root([q / a, c / q], target_sharpe, annual_bet_frequency, payout)
+        {
+            return Ok(p);
+        }
+    }
+
+    // Payout units cancel. Scale the payouts and theta/sqrt(n) before forming
+    // coefficients, and factor the discriminant to avoid fourth powers of payouts.
+    let (scaled, _) = scale_payout(payout);
+    let d = scaled.pi_plus - scaled.pi_minus;
+    let scale = target_sharpe.max(annual_bet_frequency.sqrt());
+    let theta = target_sharpe / scale;
+    let n = (annual_bet_frequency.sqrt() / scale).powi(2);
+    let a = (n + theta * theta) * d * d;
+    let b = (2.0 * n * scaled.pi_minus - theta * theta * d) * d;
+    let inner = (theta * d).powi(2) - 4.0 * n * scaled.pi_minus * scaled.pi_plus;
+    if inner < 0.0 {
         return Err(StrategyRiskError::NoValidRoot(
             "no real implied precision for these parameters",
         ));
     }
-
-    let sqrt_disc = disc.sqrt();
-    let r1 = (-b + sqrt_disc) / (2.0 * a);
-    let r2 = (-b - sqrt_disc) / (2.0 * a);
-
-    let mut candidates = Vec::new();
-    for p in [r1, r2] {
-        if (0.0..=1.0).contains(&p) {
-            let model_sr = sharpe_asymmetric(p, annual_bet_frequency, payout)?;
-            if (model_sr - target_sharpe).abs() < 1e-6 || model_sr >= target_sharpe - 1e-6 {
-                candidates.push(p);
-            }
-        }
-    }
-    candidates.sort_by(|a, b| a.total_cmp(b));
-    candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
-
-    candidates
-        .first()
-        .copied()
+    let sqrt_disc = d * theta * inner.sqrt();
+    // Stable quadratic roots: use the non-cancelling numerator, then the root
+    // product. Reordering c/q avoids underflowing the squared small payout.
+    let q = -0.5 * (b + sqrt_disc.copysign(b));
+    let roots = [q / a, (n * scaled.pi_minus / q) * scaled.pi_minus];
+    select_precision_root(roots, target_sharpe, annual_bet_frequency, payout)
         .ok_or(StrategyRiskError::NoValidRoot("no admissible implied precision root in [0, 1]"))
 }
 
@@ -298,7 +325,7 @@ pub fn implied_precision_asymmetric(
 ///   is not finite and positive, the payouts are invalid, or the implied frequency is not
 ///   positive (precision 0 or 1).
 /// - [`StrategyRiskError::NoValidRoot`] if the mean payoff is negative or within `1e-12` of
-///   zero.
+///   zero. This absolute cutoff is in the original payout units.
 pub fn implied_frequency_asymmetric(
     precision: f64,
     target_sharpe: f64,
@@ -311,7 +338,11 @@ pub fn implied_frequency_asymmetric(
     validate_payout(payout)?;
 
     let d = payout.pi_plus - payout.pi_minus;
-    let mu = d * precision + payout.pi_minus;
+    let mut mu = d * precision + payout.pi_minus;
+    if !mu.is_finite() {
+        let (scaled, scale) = scale_payout(payout);
+        mu = payout_mean(precision, scaled) * scale;
+    }
     if mu.abs() < 1e-12 {
         return Err(StrategyRiskError::NoValidRoot(
             "mean payoff is near zero; implied frequency is not finite",
@@ -322,7 +353,22 @@ pub fn implied_frequency_asymmetric(
             "mean payoff is negative, so the Sharpe ratio is negative at every frequency",
         ));
     }
-    let n = target_sharpe * target_sharpe * d * d * precision * (1.0 - precision) / (mu * mu);
+    let theta2 = target_sharpe * target_sharpe;
+    let numerator = theta2 * d * d * precision * (1.0 - precision);
+    let denominator = mu * mu;
+    let n = numerator / denominator;
+    if theta2.is_normal()
+        && numerator.is_normal()
+        && denominator.is_normal()
+        && n > 0.0
+        && n.is_finite()
+    {
+        return Ok(n);
+    }
+    let (scaled, _) = scale_payout(payout);
+    let scaled_mu = payout_mean(precision, scaled);
+    let scaled_sigma = (scaled.pi_plus - scaled.pi_minus) * (precision * (1.0 - precision)).sqrt();
+    let n = (target_sharpe * (scaled_sigma / scaled_mu)).powi(2);
     validate_positive("implied_frequency", n)?;
     Ok(n)
 }
@@ -443,6 +489,44 @@ pub fn estimate_strategy_failure_probability(
         kde_failure_probability,
         bootstrap_precision_samples: p_samples,
     })
+}
+
+// Exact power-of-two scaling preserves close same-sign payout differences.
+// Subnormal payouts use MIN_POSITIVE so even the smallest input remains nonzero.
+fn scale_payout(payout: AsymmetricPayout) -> (AsymmetricPayout, f64) {
+    let largest = payout.pi_plus.abs().max(payout.pi_minus.abs());
+    let exponent = largest.to_bits() & 0x7ff0_0000_0000_0000;
+    let scale = if exponent == 0 { f64::MIN_POSITIVE } else { f64::from_bits(exponent) };
+    (AsymmetricPayout { pi_plus: payout.pi_plus / scale, pi_minus: payout.pi_minus / scale }, scale)
+}
+
+fn payout_mean(precision: f64, payout: AsymmetricPayout) -> f64 {
+    let win = payout.pi_plus * precision;
+    let loss = payout.pi_minus * (1.0 - precision);
+    let residual =
+        payout.pi_plus.mul_add(precision, -win) + payout.pi_minus.mul_add(1.0 - precision, -loss);
+    (win + loss) + residual
+}
+
+fn select_precision_root(
+    roots: [f64; 2],
+    target: f64,
+    frequency: f64,
+    payout: AsymmetricPayout,
+) -> Option<f64> {
+    let mut selected: Option<f64> = None;
+    for p in roots {
+        if p > 0.0
+            && p < 1.0
+            && let Ok(model_sr) = sharpe_asymmetric(p, frequency, payout)
+            && model_sr.is_finite()
+            && model_sr > 0.0
+            && (model_sr / target - 1.0).abs() <= 1e-6
+        {
+            selected = Some(selected.map_or(p, |previous| previous.min(p)));
+        }
+    }
+    selected
 }
 
 fn validate_payout(payout: AsymmetricPayout) -> Result<(), StrategyRiskError> {

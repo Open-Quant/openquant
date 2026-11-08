@@ -9,6 +9,7 @@
 //! - [`input_error`]: [`InputError`], returned by functions whose only failure mode is a bad
 //!   argument.
 
+pub(crate) mod exact_product;
 pub mod fast_ewma;
 pub mod input_error;
 pub(crate) mod linkage;

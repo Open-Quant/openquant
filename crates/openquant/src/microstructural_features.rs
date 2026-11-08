@@ -476,6 +476,23 @@ pub fn get_bar_based_kyle_lambda(
     Ok(out)
 }
 
+// Preserve ordinary quotient rounding and invalid-input behavior. Only recover
+// positive finite price ratios that overflow or lose precision in the subnormal
+// range (including rounding to zero) before taking the log.
+fn price_log_ratio(current: f64, previous: f64) -> f64 {
+    let ratio = current / previous;
+    if (ratio < f64::MIN_POSITIVE || ratio.is_infinite())
+        && current > 0.0
+        && current.is_finite()
+        && previous > 0.0
+        && previous.is_finite()
+    {
+        current.ln() - previous.ln()
+    } else {
+        ratio.ln()
+    }
+}
+
 /// Bar-based Amihud's lambda: the rolling mean over `window` bars of `|r_t| / DV_t`, with
 /// `r_t` the close-to-close log return and `DV_t` the bar's dollar volume (AFML §19.4.2).
 ///
@@ -508,7 +525,7 @@ pub fn get_bar_based_amihud_lambda(
         if close[i - 1] == 0.0 {
             continue;
         }
-        ret_abs[i] = (close[i] / close[i - 1]).ln().abs();
+        ret_abs[i] = price_log_ratio(close[i], close[i - 1]).abs();
     }
     let mut out = vec![f64::NAN; close.len()];
     for i in 0..close.len() {
@@ -566,7 +583,7 @@ pub fn get_bar_based_hasbrouck_lambda(
         if close[i - 1] == 0.0 {
             continue;
         }
-        log_ret[i] = (close[i] / close[i - 1]).ln();
+        log_ret[i] = price_log_ratio(close[i], close[i - 1]);
     }
     let mut sign = vec![f64::NAN; log_ret.len()];
     for i in 0..log_ret.len() {
@@ -608,6 +625,9 @@ pub fn get_bar_based_hasbrouck_lambda(
 /// is zero. Because a buy prints at the ask, transaction price changes carry half a spread
 /// in the direction of the trade, so the estimate is impact plus bounce; regress mid-price
 /// changes if quotes are available. See the module example.
+/// Finite computed regressors use exact product sums for overflow, underflow and
+/// severe cancellation detected by a `1e-8` relative roundoff diagnostic. Ordinary
+/// computations remain floating point; the diagnostic is not a universal accuracy guarantee.
 ///
 /// # Errors
 ///
@@ -621,15 +641,48 @@ pub fn get_trades_based_kyle_lambda(
     same_length("volume", volume, price_diff.len())?;
     same_length("aggressor_flags", aggressor_flags, price_diff.len())?;
     let signed: Vec<f64> = volume.iter().zip(aggressor_flags.iter()).map(|(v, a)| v * a).collect();
-    let num: f64 = signed.iter().zip(price_diff.iter()).map(|(x, y)| x * y).sum();
-    let den: f64 = signed.iter().map(|x| x * x).sum();
-    Ok(if den == 0.0 { f64::NAN } else { num / den })
+    Ok(signed_impact_slope(price_diff, &signed))
+}
+
+fn signed_impact_slope(response: &[f64], regressor: &[f64]) -> f64 {
+    let (num, den, absolute_products, response_bits) = regressor.iter().zip(response).fold(
+        (-0.0, -0.0, 0.0, 0_u64),
+        |(num, den, absolute, bits), (&x, &y)| {
+            let product = x * y;
+            (num + product, den + x * x, absolute + product.abs(), bits | y.to_bits())
+        },
+    );
+    if num.is_normal() && den.is_normal() && absolute_products.is_finite() {
+        // A conservative roundoff diagnostic for product formation and summing.
+        // This is a cancellation-recovery trigger, not a universal accuracy bound
+        // for every ordinary result. Exact arithmetic is reserved for sensitive sums.
+        let operations = 2.0 * response.len() as f64 * f64::EPSILON;
+        let relative_diagnostic = operations / (1.0 - operations) / 1e-8;
+        if operations < 1.0 && num.abs() > absolute_products * relative_diagnostic {
+            return num / den;
+        }
+    }
+    if num == 0.0 && den > 0.0 && response_bits & 0x7fff_ffff_ffff_ffff == 0 {
+        return num / den;
+    }
+    if regressor.iter().chain(response).all(|value| value.is_finite()) {
+        return crate::util::exact_product::signed_origin_slope(response, regressor);
+    }
+    if den == 0.0 {
+        f64::NAN
+    } else {
+        num / den
+    }
 }
 
 /// Trades-based Amihud's lambda: the regression through the origin of per-trade absolute log
 /// returns on dollar volume, `Σ(DV · |r|) / Σ DV²` (AFML §19.4.2).
 ///
 /// Returns `NaN` if every dollar volume is zero.
+/// With one finite return and one positive finite dollar volume, evaluates the
+/// equivalent `|r| / DV` directly to avoid overflow or underflow in the products.
+/// With finite returns and nonnegative finite volumes, exceptional product sums
+/// are accumulated exactly and their ratio rounded once to binary64.
 ///
 /// ```
 /// use openquant::microstructural_features::get_trades_based_amihud_lambda;
@@ -650,8 +703,33 @@ pub fn get_trades_based_amihud_lambda(
     dollar_volume: &[f64],
 ) -> Result<f64, InputError> {
     same_length("dollar_volume", dollar_volume, log_ret.len())?;
-    let num: f64 = dollar_volume.iter().zip(log_ret.iter()).map(|(x, y)| x * y.abs()).sum();
-    let den: f64 = dollar_volume.iter().map(|x| x * x).sum();
+    if let ([value], [volume]) = (log_ret, dollar_volume)
+        && value.is_finite()
+        && volume.is_finite()
+        && *volume > 0.0
+    {
+        return Ok(value.abs() / volume);
+    }
+    // Preserve the sequential sums (including their -0 identity) while sharing
+    // the volume load and collecting the exact-zero-return flag in the same pass.
+    let (num, den, return_bits) = dollar_volume.iter().zip(log_ret).fold(
+        (-0.0, -0.0, 0_u64),
+        |(num, den, bits), (&volume, &value)| {
+            (num + volume * value.abs(), den + volume * volume, bits | value.to_bits())
+        },
+    );
+    if num.is_normal() && den.is_normal() {
+        return Ok(num / den);
+    }
+    // Ignore the sign bit so both signs of exact zero take this path.
+    if num == 0.0 && den > 0.0 && return_bits & 0x7fff_ffff_ffff_ffff == 0 {
+        return Ok(num / den);
+    }
+    if dollar_volume.iter().all(|value| *value >= 0.0 && value.is_finite())
+        && log_ret.iter().all(|value| value.is_finite())
+    {
+        return Ok(crate::util::exact_product::nonnegative_origin_slope(log_ret, dollar_volume));
+    }
     Ok(if den == 0.0 { f64::NAN } else { num / den })
 }
 
@@ -665,6 +743,9 @@ pub fn get_trades_based_amihud_lambda(
 /// return, so buys and sells cancelled and the estimate was near zero under balanced flow
 /// ([#105](https://github.com/Open-Quant/openquant/issues/105)); results computed before
 /// that fix are not comparable.
+/// Finite computed regressors use the same cancellation/overflow recovery as
+/// [`get_trades_based_kyle_lambda`]. Recovery uses the rounded binary64 regressors
+/// `sqrt(DV) * a`; it does not undo square-root rounding.
 ///
 /// ```
 /// use openquant::microstructural_features::get_trades_based_hasbrouck_lambda;
@@ -691,25 +772,44 @@ pub fn get_trades_based_hasbrouck_lambda(
     same_length("aggressor_flags", aggressor_flags, log_ret.len())?;
     let signed: Vec<f64> =
         dollar_volume.iter().zip(aggressor_flags.iter()).map(|(v, a)| v.sqrt() * a).collect();
-    let num: f64 = signed.iter().zip(log_ret.iter()).map(|(x, y)| x * y).sum();
-    let den: f64 = signed.iter().map(|x| x * x).sum();
-    Ok(if den == 0.0 { f64::NAN } else { num / den })
+    Ok(signed_impact_slope(log_ret, &signed))
 }
 
 // Misc helpers
 /// Volume-weighted average price, `Σ dollar_volume / Σ volume`; `NaN` if the volumes sum to
 /// zero. See the module example.
+/// For finite nonnegative inputs, overflowing sums and ratios near the binary64 range limits
+/// (zero, subnormal, nonfinite, or at least `f64::MAX / 2`) use exact integer sums and one final
+/// binary64 rounding. Ordinary finite sums away from these limits retain their existing
+/// floating-point arithmetic; this is not an exact-summation guarantee for every input.
 ///
 /// # Errors
 ///
 /// [`InputError::LengthMismatch`] if `volume.len() != dollar_volume.len()`.
 pub fn vwap(dollar_volume: &[f64], volume: &[f64]) -> Result<f64, InputError> {
     same_length("volume", volume, dollar_volume.len())?;
-    let sum_v: f64 = volume.iter().sum();
+    let (sum_dollar, sum_v) = dollar_volume
+        .iter()
+        .zip(volume)
+        .fold((-0.0, -0.0), |(dollars, volumes), (&dollar, &volume)| {
+            (dollars + dollar, volumes + volume)
+        });
     if sum_v == 0.0 {
         return Ok(f64::NAN);
     }
-    Ok(dollar_volume.iter().sum::<f64>() / sum_v)
+    let ratio = sum_dollar / sum_v;
+    if sum_dollar == 0.0
+        || (sum_dollar.is_finite()
+            && sum_v.is_finite()
+            && ratio.is_normal()
+            && ratio.abs() < f64::MAX / 2.0)
+    {
+        return Ok(ratio);
+    }
+    if dollar_volume.iter().chain(volume).all(|value| value.is_finite() && *value >= 0.0) {
+        return Ok(crate::util::exact_product::nonnegative_sum_ratio(dollar_volume, volume));
+    }
+    Ok(ratio)
 }
 
 /// Arithmetic mean of `tick_sizes` (in [`MicrostructuralFeaturesGenerator`], the mean trade
@@ -725,7 +825,21 @@ pub fn get_avg_tick_size(tick_sizes: &[f64]) -> f64 {
     if tick_sizes.is_empty() {
         return f64::NAN;
     }
-    tick_sizes.iter().sum::<f64>() / tick_sizes.len() as f64
+    mean_with_overflow_recovery(tick_sizes)
+}
+
+fn mean_with_overflow_recovery(values: &[f64]) -> f64 {
+    let sum = values.iter().sum::<f64>();
+    let count = values.len() as f64;
+    if sum.is_finite() || values.iter().any(|value| !value.is_finite()) {
+        return sum / count;
+    }
+    // A finite sample has a finite mean even when its unscaled sum overflows.
+    // Scale only on that exceptional path, retaining ordinary rounding and the
+    // existing propagation of NaN and infinite inputs.
+    let scale = values.iter().fold(0.0_f64, |largest, value| largest.max(value.abs()));
+    let normalized_mean = values.iter().map(|value| value / scale).sum::<f64>() / count;
+    normalized_mean * scale
 }
 
 /// Volume-synchronised probability of informed trading (Easley, López de Prado and O'Hara,
@@ -757,7 +871,7 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Result<Vec
         if vol == 0.0 || imb_slice.iter().any(|v| v.is_nan()) {
             continue;
         }
-        let mean_imb = imb_slice.iter().sum::<f64>() / window as f64;
+        let mean_imb = mean_with_overflow_recovery(imb_slice);
         out[i] = mean_imb / vol;
     }
     Ok(out)
@@ -987,6 +1101,19 @@ fn find_nearest(enc: &[(f64, char)], value: f64) -> char {
         if d < dist {
             dist = d;
             best = *c;
+        }
+    }
+    if dist.is_infinite() && value.is_finite() && enc[0].0.is_finite() {
+        // Every finite key is on the opposite side of zero from `value`, and
+        // every finite subtraction overflowed. Key order therefore determines
+        // distance order exactly, without rescaling and introducing rounded ties.
+        // Keep this recovery outside the ordinary comparison loop.
+        let mut best_key = enc[0].0;
+        for &(key, letter) in &enc[1..] {
+            if key.is_finite() && if value > 0.0 { key > best_key } else { key < best_key } {
+                best_key = key;
+                best = letter;
+            }
         }
     }
     best
@@ -1348,7 +1475,7 @@ impl MicrostructuralFeaturesGenerator {
 
     fn get_log_ret(&self, price: f64) -> f64 {
         if let Some(prev) = self.prev_price {
-            (price / prev).ln()
+            price_log_ratio(price, prev)
         } else {
             0.0
         }

@@ -1,8 +1,8 @@
 ---
 title: "cla"
-description: "The Critical Line Algorithm: the exact long-only efficient frontier as a sequence of turning points, with no general-purpose optimiser."
+description: "Critical Line Algorithm portfolios: a bounded efficient-frontier walk, with a constrained minimum-variance solution for equal forecasts."
 status: authored
-last_authored: '2026-09-25'
+last_authored: '2026-11-07'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,10 +30,11 @@ sidebar:
 
 A quadratic programming solver answers one question at a time: the best portfolio for *this*
 target return, or *this* risk aversion. Markowitz's Critical Line Algorithm (1956) answers
-all of them at once. It computes the entire efficient frontier of a portfolio with bounded
-weights, exactly, in a finite number of steps, and it was designed for this problem and no
-other. Bailey and López de Prado (2013) published the open implementation this module
-follows, and AFML's Chapter 16 uses CLA as the mean-variance benchmark against which
+all of them at once. For nonconstant forecasts it traces the efficient frontier of a
+portfolio with bounded weights through a finite sequence of turning points. The implementation
+uses floating-point linear algebra and numerical tolerances; exactly equal forecasts instead
+use a constrained minimum-variance QP solution. Bailey and López de Prado (2013) published
+the open implementation this module follows, and AFML's Chapter 16 uses CLA as the mean-variance benchmark against which
 [`hrp`](/modules/hrp/) is judged.
 
 ## The idea
@@ -49,7 +50,7 @@ The frontier is therefore piecewise: between two consecutive turning points ever
 portfolio is a convex combination of them. The algorithm starts at the maximum-return
 portfolio, $\lambda=\infty$, and walks down to the minimum-variance portfolio, $\lambda=0$,
 solving a small linear system at each step. A handful of turning points describes the whole
-frontier exactly.
+frontier in this analytical model.
 
 ## What `allocate` returns
 
@@ -162,20 +163,26 @@ assert!(matches!(
   [`portfolio_optimization`](/modules/portfolio-optimization/), [`hrp`](/modules/hrp/) and
   [`hcaa`](/modules/hcaa/). Its expected returns are annualised and its covariance is left
   per period, which moves no turning point. From the same prices, or the same $\mu$ and
-  $\Sigma$, CLA and `portfolio_optimization` find the same maximum-Sharpe portfolio; until
-  [#110](https://github.com/Open-Quant/openquant/issues/110) was fixed,
+  $\Sigma$, the two methods can be compared directly, as in the positive-forecast example
+  above. Until [#110](https://github.com/Open-Quant/openquant/issues/110) was fixed,
   `portfolio_optimization` took log returns and the two differed.
-- **`"max_sharpe"` has no risk-free rate.** It maximises $\mu^\top w/\sigma$, the tangency
+- **`"max_sharpe"` searches the efficient frontier with a zero risk-free rate.** It maximises $\mu^\top w/\sigma$, the tangency
   portfolio for a rate of zero, which for low-yielding safe assets lands near the
   minimum-variance end, as in the figure. For a non-zero rate, subtract it from the expected
-  returns before calling, or use `portfolio_optimization`.
-- **The first turning point appears twice.** The walk records its starting portfolio and then
+  returns before calling, or use `portfolio_optimization`. With negative expected returns,
+  a dominated portfolio outside this frontier can have a higher Sharpe ratio; this is
+  not a global Sharpe search over such portfolios.
+- **Equal forecasts remain unchanged.** Exactly equal forecasts have a single efficient
+  point: the constrained minimum-variance portfolio, computed by the existing QP solver
+  with `lambda = 0`. Nearly equal forecasts retain their ordering. Earlier versions added
+  `1e-5` to the last forecast, which could change allocations and reported returns.
+- **For a nonconstant forecast vector, the first turning point appears twice.** The walk records its starting portfolio and then
   the first turning point proper, which is the same portfolio with a finite $\lambda$; the
   first `lambda` is infinite. Skip index 0 when plotting against $\lambda$.
 - **Errors name their cause.** Bounds with no feasible portfolio (a bound that is not
   finite, a lower bound above its upper bound, lower bounds summing to more than 1, upper
   bounds to less than 1) return `InfeasibleBounds`; a covariance that cannot be inverted among
-  the free assets returns `SingularCovariance`; a walk that does not reach $\lambda = 0$
+  the free assets in the critical-line walk returns `SingularCovariance`; a walk that does not reach $\lambda = 0$
   returns `NoTermination`; an `AssetPrices` index without one date per row returns
   `InvalidPriceIndex`. Python raises `ValueError` with the same messages. Before
   [#168](https://github.com/Open-Quant/openquant/issues/168) the first was reported as
@@ -183,13 +190,17 @@ assert!(matches!(
   lower bound above its upper bound was not caught at all: every turning point was then
   purged, and `"max_sharpe"` panicked on the empty frontier. `NoTurningPoints` is now
   returned if that ever happens.
-- **It is exact, and it inherits every weakness of its inputs.** CLA removes solver error,
-  not estimation error. The frontier's upper end is always the single asset with the highest
-  expected return, whatever its risk, and small changes in $\mu$ move the turning points a
-  long way; see [Markowitz's curse](/modules/portfolio-optimization/#four-solutions).
-- **The covariance matrix must be positive definite among the free assets.** With more
-  assets than observations it is singular and the linear systems along the line fail. Shrink
-  it first, or use [`hrp`](/modules/hrp/), which does not invert anything.
+- **An analytical frontier still has numerical and estimation limits.** The turning-point
+  walk uses floating-point solves and numerical tolerances; the equal-forecast case uses
+  a QP solver. The upper endpoint maximises expected return within the weight bounds. It
+  concentrates in the highest-return asset only when the bounds permit that portfolio.
+  Small changes in $\mu$ can move the turning points a long way; see
+  [Markowitz's curse](/modules/portfolio-optimization/#four-solutions).
+- **The critical-line walk needs invertible free-asset covariance submatrices.** With
+  more assets than observations, a sample covariance can be singular and the linear systems
+  along the line can fail. The equal-forecast QP path can handle some positive-semidefinite
+  cases; that does not guarantee success for every singular input. Shrink the covariance
+  first, or use [`hrp`](/modules/hrp/), which does not invert it.
 - **`resample_by` is positional** — every 5th or 21st row — and produced scrambled matrices
   before [#93](https://github.com/Open-Quant/openquant/issues/93) was fixed.
 - **Methods beginning with an underscore are public for testing parity with the reference

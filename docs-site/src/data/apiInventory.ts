@@ -3,9 +3,6 @@ export const apiInventory = {
   "generatedAt": "generated-by-scripts/generate_api_inventory.py",
   "python": {
     "adapters": [
-      "append",
-      "clear",
-      "frame",
       "to_pandas",
       "to_polars_backtest_frame",
       "to_polars_event_frame",
@@ -31,7 +28,6 @@ export const apiInventory = {
       "count_train_test_overlaps",
       "cpcv_paths",
       "cpcv_splits",
-      "draw",
       "naive_kfold_splits",
       "null_p_value",
       "null_score_distribution",
@@ -47,11 +43,9 @@ export const apiInventory = {
       "dataset_hash",
       "default_cache_dir",
       "fetch",
-      "fetch_symbol",
       "load_ohlcv",
       "quality_failures",
-      "record_dataset_hash",
-      "symbols"
+      "record_dataset_hash"
     ],
     "evaluation": [
       "config_hash",
@@ -59,15 +53,9 @@ export const apiInventory = {
       "expected_max_sharpe",
       "meta_label_metrics",
       "minimum_track_record_length",
-      "n_trials",
-      "path",
       "probabilistic_sharpe_ratio",
-      "record",
-      "reload",
       "return_moments",
-      "sharpe_std",
-      "strategy_failure_probability",
-      "trials"
+      "strategy_failure_probability"
     ],
     "feature_diagnostics": [
       "feature_screen_report",

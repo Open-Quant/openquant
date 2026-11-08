@@ -136,7 +136,7 @@ fn test_cla_efficient_frontier() {
 }
 
 #[test]
-fn test_expected_returns_equals_means() {
+fn test_equal_expected_returns_are_not_perturbed() {
     let mut prices = load_asset_prices();
     let cols = prices.data.ncols();
     for r in 0..prices.data.nrows() {
@@ -147,7 +147,7 @@ fn test_expected_returns_equals_means() {
     let mut cla = CLA::new(WeightBounds::Tuple(0.0, 1.0), "mean");
     cla._initialise(&prices.data, Some("B"), None, None).unwrap();
     let last = cla.expected_returns[(cla.expected_returns.nrows() - 1, 0)];
-    assert!((last - 1e-5).abs() < 1e-12);
+    assert_eq!(last, 0.0);
 }
 
 #[test]

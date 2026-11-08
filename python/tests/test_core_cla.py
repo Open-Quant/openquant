@@ -86,3 +86,18 @@ def test_cla_errors_name_their_cause():
             expected_returns=[0.05, 0.10],
             covariance_matrix=[[0.04, 0.04], [0.04, 0.04]],
         )
+
+
+@pytest.mark.parametrize("mu", [[1e-8, 1e-8], [1e-8 + 5e-13, 1e-8], [1e-8, 1e-8 + 5e-13]])
+def test_cla_preserves_small_forecasts_for_tangency_and_reporting(mu):
+    cov = [[1.0, 0.0], [0.0, 1.0]]
+    out = cla.allocate_cla(expected_returns=mu, covariance_matrix=cov, solution="max_sharpe")
+    # Identity covariance and positive forecasts give tangency weights proportional to mu.
+    assert out["weights"][0] == pytest.approx([m / sum(mu) for m in mu], abs=1e-7)
+    frontier = cla.allocate_cla(
+        expected_returns=mu, covariance_matrix=cov, solution="efficient_frontier"
+    )
+    for weights, reported in zip(frontier["weights"], frontier["efficient_frontier_means"]):
+        assert reported == pytest.approx(
+            sum(w * m for w, m in zip(weights, mu)), rel=1e-12, abs=1e-20
+        )
