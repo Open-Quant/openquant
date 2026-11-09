@@ -33,6 +33,8 @@ file disagree).
 
 ### Fixed
 
+- `feature_importance::get_orthogonal_features`, `feature_pca_analysis`: a constant column standardises to 0 as documented even when its mean rounds (for example three `0.1`s). It became a constant `-1` column and a spurious principal component with as much variance as a real feature.
+
 - `portfolio_optimization`: a `NaN` portfolio risk now returns the documented `NaNResult` error. The variance was floored with `f64::max(v, 0.0)` before the finiteness check, so a `NaN` covariance reported a risk and Sharpe ratio of 0.
 
 - `hrp`: a `NaN` in the covariance now gives `NaN` weights. The cluster variance was floored with `f64::max(v, 0.0)`, which turns `NaN` into 0, so the cluster with the unknown covariance looked riskless (`[0.5, 0.5, 0.0]` for a `NaN` between the first two of three assets). The bisection split no longer maps a non-finite factor to 0.5; only two zero variances split evenly.

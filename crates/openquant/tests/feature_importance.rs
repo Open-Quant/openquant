@@ -289,3 +289,19 @@ fn bad_splits_weights_predictions_and_columns_are_errors_not_panics() {
     let corr = catch_unwind(|| feature_pca_analysis(&no_cols, &[], 0.95)).expect("must not panic");
     assert_eq!(corr.unwrap_err(), Fi::Empty("feature columns"));
 }
+
+/// A constant column standardises to 0, as documented, so it adds no principal component. Its
+/// mean used to be `sum / n`, which rounds for three `0.1`s, leaving a deviation of about
+/// `1e-17`: the column standardised to a constant `-1` and became a spurious component with as
+/// much variance as the real feature.
+#[test]
+fn constant_column_whose_mean_rounds_adds_no_component() {
+    let rows = vec![vec![0.1, 1.0], vec![0.1, 2.0], vec![0.1, 3.0]];
+    let pcs = get_orthogonal_features(&rows, 0.95).unwrap();
+    assert!(pcs.iter().all(|r| r.len() == 1), "{pcs:?}");
+    // The one component is the standardised second column, up to sign.
+    let expected = [-(1.5f64).sqrt(), 0.0, 1.5f64.sqrt()];
+    for (r, e) in pcs.iter().zip(expected) {
+        assert!((r[0].abs() - e.abs()).abs() < 1e-12, "{pcs:?}");
+    }
+}
