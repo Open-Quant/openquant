@@ -248,17 +248,20 @@ def _build_quality_report(
     }
 
 
+_INTERVAL_UNIT_SECONDS = {"d": 24 * 3600, "h": 3600, "m": 60, "s": 1}
+
+
 def _interval_to_seconds(interval: str) -> int:
+    """Seconds in an interval such as ``"1d"`` or ``"15m"``; shared with `openquant.bars`."""
     s = interval.strip().lower()
-    if s.endswith("d"):
-        return int(s[:-1]) * 24 * 3600
-    if s.endswith("h"):
-        return int(s[:-1]) * 3600
-    if s.endswith("m"):
-        return int(s[:-1]) * 60
-    if s.endswith("s"):
-        return int(s[:-1])
-    raise ValueError(f"unsupported interval format: {interval}")
+    unit = _INTERVAL_UNIT_SECONDS.get(s[-1:])
+    if unit is None:
+        raise ValueError(f"unsupported interval format: {interval}")
+    try:
+        count = int(s[:-1])
+    except ValueError:
+        raise ValueError(f"unsupported interval format: {interval}") from None
+    return count * unit
 
 
 @overload

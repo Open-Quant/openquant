@@ -208,13 +208,10 @@ def run_flywheel_iteration(
     }
     if config:
         cfg.update(config)
-    periods_per_year = cfg["periods_per_year"]
-    if periods_per_year is None:
-        periods_per_year = dataset.periods_per_year
-    if periods_per_year is None:
-        inferred = pipeline.infer_periods_per_year(dataset.timestamps)
-        periods_per_year = pipeline.TRADING_DAYS_PER_YEAR if inferred is None else inferred
-    periods_per_year = float(periods_per_year)
+    configured = cfg["periods_per_year"]
+    periods_per_year = pipeline._resolve_periods_per_year(
+        dataset.timestamps, dataset.periods_per_year if configured is None else configured
+    )
 
     out = pipeline.run_mid_frequency_pipeline_frames(
         timestamps=dataset.timestamps,
