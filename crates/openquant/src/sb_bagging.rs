@@ -572,8 +572,8 @@ impl SequentiallyBootstrappedBaggingClassifier {
 /// Bagging regressor over one-feature weighted least-squares lines, each fitted on a
 /// sequential bootstrap sample of the labels (AFML §4.5).
 ///
-/// A line whose sample has (near-)zero feature variance is flat at the weighted mean of
-/// `y`. [`predict`](Self::predict) returns the mean of the lines.
+/// A line whose sample has a constant feature (every weighted value equal) is flat at the
+/// weighted mean of `y`. Lines do not depend on the units of `x` or `y`. [`predict`](Self::predict) returns the mean of the lines.
 ///
 /// ```
 /// use nalgebra::DMatrix;
@@ -718,7 +718,19 @@ impl SequentiallyBootstrappedBaggingRegressor {
                 cov_xy += w * dx * (y[i] - mean_y);
                 var_x += w * dx * dx;
             }
-            let slope = if var_x <= 1e-12 { 0.0 } else { cov_xy / var_x };
+            // Flat when the weighted feature values are all equal. Test that exactly rather than
+            // with an absolute floor on `var_x`, which would depend on the units of `x`; a
+            // rounded mean of equal values leaves a tiny `var_x` that is not a slope.
+            let mut weighted_x = samples
+                .iter()
+                .zip(&weights)
+                .filter(|(_, w)| **w != 0.0)
+                .map(|(&i, _)| x[(i, feature_idx)]);
+            let constant_x = match weighted_x.next() {
+                Some(first) => weighted_x.all(|v| v.to_bits() == first.to_bits()),
+                None => true,
+            };
+            let slope = if constant_x || var_x == 0.0 { 0.0 } else { cov_xy / var_x };
             let intercept = mean_y - slope * mean_x;
 
             self.estimators.push(RegressorEstimator { feature_idx, slope, intercept });
@@ -754,7 +766,11 @@ impl SequentiallyBootstrappedBaggingRegressor {
         let mean = scored.iter().map(|(_, t)| t).sum::<f64>() / scored.len() as f64;
         let ss_tot = scored.iter().map(|(_, t)| (t - mean) * (t - mean)).sum::<f64>();
         let ss_res = scored.iter().map(|(p, t)| (p - t) * (p - t)).sum::<f64>();
-        Some(if ss_tot <= 1e-12 { 0.0 } else { 1.0 - ss_res / ss_tot })
+        // 0 for constant targets, tested exactly: an absolute floor on `ss_tot` would also
+        // zero the score of small-valued targets.
+        let first = scored[0].1;
+        let constant = scored.iter().all(|(_, t)| t.to_bits() == first.to_bits());
+        Some(if constant || ss_tot == 0.0 { 0.0 } else { 1.0 - ss_res / ss_tot })
     }
 
     /// Predicts one value per row of `x` as the mean of all estimators' lines.
