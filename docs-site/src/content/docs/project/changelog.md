@@ -47,6 +47,8 @@ file disagree).
 
 ### Fixed
 
+- `synthetic_backtesting::calibrate_ou_params`: reject constant lagged prices whose mean rounds (for example three `0.1`s) with `ConstantPrices`; the rounded mean left a tiny variance and the fit returned a meaningless `phi` (`-0.67` for `[0.1, 0.1, 0.1, 0.2]`).
+
 - `util::stats::covariance` (used by `hrp`, `hcaa`, `cla` and `portfolio_optimization`): keep a finite constant column's mean exact, so its variance and covariances are exactly zero. Rounding in `sum / rows` left a variance near `1e-34`, so HRP and HCAA accepted a constant-return asset and gave it practically all the weight instead of rejecting the non-positive variance.
 
 - `hrp`, `hcaa`: split cluster weight by the plain ratio of the two sides' risks; the absolute `f64::EPSILON` added to the denominator made weights depend on the scale of the covariance or returns (`diag(1e-18, 4e-18)` gave about 0.9955/0.0045 instead of 0.8/0.2). Two zero risks now split evenly.

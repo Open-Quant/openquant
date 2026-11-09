@@ -271,8 +271,11 @@ pub fn calibrate_ou_params(prices: &[f64]) -> Result<OuProcessParams, SyntheticB
     let x = &prices[..n];
     let y = &prices[1..];
 
-    let mean_x = x.iter().sum::<f64>() / n as f64;
-    let mean_y = y.iter().sum::<f64>() / n as f64;
+    // `stats::mean` keeps a constant run's mean exact; `sum / n` can round (three 0.1s), which
+    // left a tiny positive variance and let a constant lag through to a meaningless `phi`.
+    // `n >= 2`, so both slices are non-empty.
+    let mean_x = stats::mean(x).unwrap_or(f64::NAN);
+    let mean_y = stats::mean(y).unwrap_or(f64::NAN);
 
     let mut var_x = 0.0;
     let mut cov_xy = 0.0;
