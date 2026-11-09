@@ -389,6 +389,14 @@ BENCH_DESCRIPTIONS = {
         "`bet_sizing::bet_size_reserve` on the same 500 events, reusing already-fitted "
         "mixture parameters"
     ),
+    "sampling_get_av_uniqueness_from_triple_barrier": (
+        "`sampling::get_av_uniqueness_from_triple_barrier`: average uniqueness of 300 labels, "
+        "6 to 22 bars long, over 1,000 bars"
+    ),
+    "sampling_get_ind_mat_average_uniqueness": (
+        "`sampling::get_ind_mat_average_uniqueness` on the indicator matrix of the same 300 "
+        "labels over 1,000 bars"
+    ),
     "synthetic_ticker_ewma_100k": "`util::fast_ewma::ewma`, window 64, on 100,000 prices",
     "synthetic_ticker_risk_metrics_var_es_cdar": (
         "`RiskMetrics` value at risk, expected shortfall and conditional drawdown at risk "

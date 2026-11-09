@@ -23,9 +23,10 @@
 //! - An indicator matrix is `Vec<Vec<u8>>` with **one row per bar and one column per label**,
 //!   holding 0 or 1. Functions that take one reject ragged rows.
 //! - A span that runs past the last bar is truncated silently, not rejected.
-//! - The matrix is dense: bars × labels bytes, and a full sequential bootstrap rescans all of it
-//!   for every draw (order bars × labels² work). Bootstrap within blocks, or draw fewer samples,
-//!   for large label sets.
+//! - The matrix is dense: bars × labels bytes. The sequential bootstrap reads it once, then each
+//!   draw costs order (nonzero cells + labels), so a full bootstrap is order
+//!   labels × (nonzero cells + labels). Long, heavily overlapping spans push that towards
+//!   bars × labels²: bootstrap within blocks, or draw fewer samples, for large label sets.
 //!
 //! The example is AFML §4.5.3's worked case: three labels over six bars.
 //!
@@ -80,13 +81,7 @@ pub fn get_ind_matrix(
     label_endtime: &[(usize, usize)],
     bar_index: &[usize],
 ) -> Result<Vec<Vec<u8>>, InputError> {
-    if let Some((_, e)) = label_endtime.iter().find(|(s, e)| s > e) {
-        return Err(InputError::OutOfRange {
-            name: "label_endtime",
-            value: *e as f64,
-            expected: "an end at or after the label's start",
-        });
-    }
+    validate_spans(label_endtime)?;
     let mut ind = vec![vec![0u8; label_endtime.len()]; bar_index.len()];
     for (col, (start, end)) in label_endtime.iter().enumerate() {
         for (row_idx, bar) in bar_index.iter().enumerate() {
@@ -96,6 +91,18 @@ pub fn get_ind_matrix(
         }
     }
     Ok(ind)
+}
+
+/// Rejects the first span with `start > end`.
+fn validate_spans(label_endtime: &[(usize, usize)]) -> Result<(), InputError> {
+    match label_endtime.iter().find(|(s, e)| s > e) {
+        Some((_, e)) => Err(InputError::OutOfRange {
+            name: "label_endtime",
+            value: *e as f64,
+            expected: "an end at or after the label's start",
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Number of label columns, after checking that every row has that many.
@@ -139,20 +146,25 @@ pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> Result<f64, InputE
     if cols == 0 {
         return Ok(0.0);
     }
-    let mut uniq_sum = 0.0;
-    let mut count = 0;
-    for col in 0..cols {
-        let mut numer = 0.0;
-        let mut denom = 0.0;
-        for row in ind_mat {
-            if row[col] == 1 {
-                let conc = row.iter().map(|v| *v as f64).sum::<f64>();
-                numer += 1.0 / conc;
-                denom += 1.0;
+    // One row-major pass: each row's concurrency is summed once (not once per alive cell),
+    // and each label's sums still accumulate over the rows in order, so the result is
+    // bit-for-bit the column-by-column formula.
+    let mut numer = vec![0.0; cols];
+    let mut denom = vec![0.0; cols];
+    for row in ind_mat {
+        let mut inv_conc = None;
+        for ((&v, n), d) in row.iter().zip(numer.iter_mut()).zip(denom.iter_mut()) {
+            if v == 1 {
+                *n += *inv_conc.get_or_insert_with(|| 1.0 / row_concurrency(row));
+                *d += 1.0;
             }
         }
-        if denom > 0.0 {
-            uniq_sum += numer / denom;
+    }
+    let mut uniq_sum = 0.0;
+    let mut count = 0;
+    for (n, d) in numer.iter().zip(&denom) {
+        if *d > 0.0 {
+            uniq_sum += n / d;
             count += 1;
         }
     }
@@ -178,18 +190,15 @@ pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> Result<f64, InputE
 /// ```
 pub fn get_ind_mat_label_uniqueness(ind_mat: &[Vec<u8>]) -> Result<Vec<Vec<f64>>, InputError> {
     let cols = label_count(ind_mat)?;
-    let mut out = vec![Vec::new(); cols];
-    for col in 0..cols {
-        let mut vals = Vec::new();
-        for row in ind_mat {
-            if row[col] == 1 {
-                let conc = row.iter().map(|v| *v as f64).sum::<f64>();
-                vals.push(1.0 / conc);
-            } else {
-                vals.push(0.0);
+    // Each row's concurrency is summed once, not once per (label, bar) cell.
+    let mut out = vec![vec![0.0; ind_mat.len()]; cols];
+    for (t, row) in ind_mat.iter().enumerate() {
+        let mut inv_conc = None;
+        for (vals, &v) in out.iter_mut().zip(row) {
+            if v == 1 {
+                vals[t] = *inv_conc.get_or_insert_with(|| 1.0 / row_concurrency(row));
             }
         }
-        out[col] = vals;
     }
     Ok(out)
 }
@@ -230,20 +239,16 @@ pub fn bootstrap_loop_run(
             expected: ind_mat.len(),
         });
     }
+    // Row-major, so the matrix is read contiguously; each label's running mean still
+    // advances over the bars in order, giving the same result bit for bit.
     let mut avg_unique = vec![0.0; cols];
-    for i in 0..cols {
-        let mut prev_avg = 0.0;
-        let mut n = 0.0;
-        for (j, row) in ind_mat.iter().enumerate() {
-            let val = row[i] as f64;
-            if val > 0.0 {
-                let new_el = val / (val + prev_concurrency[j]);
-                let avg = (prev_avg * n + new_el) / (n + 1.0);
-                n += 1.0;
-                prev_avg = avg;
+    let mut n = vec![0.0; cols];
+    for (row, &prev) in ind_mat.iter().zip(prev_concurrency) {
+        for ((&cell, avg), cnt) in row.iter().zip(avg_unique.iter_mut()).zip(n.iter_mut()) {
+            if cell > 0 {
+                running_uniqueness_step(avg, cnt, f64::from(cell), prev);
             }
         }
-        avg_unique[i] = prev_avg;
     }
     Ok(avg_unique)
 }
@@ -327,12 +332,17 @@ pub fn seq_bootstrap_with_rng<R: Rng + ?Sized>(
         });
     }
     let mut prev_conc = vec![0.0; ind_mat.len()];
+    // A label spans a few bars, so the matrix is mostly zeros: each draw walks every label's
+    // nonzero cells in bar order instead of every cell. That is `bootstrap_loop_run`'s
+    // arithmetic in the same order, so the weights, and hence the draws, are unchanged.
+    let columns = SparseColumns::new(ind_mat, n_labels);
+    let mut avg_unique = vec![0.0; n_labels];
 
     while phi.len() < target_len {
         let choice = match warm.pop() {
             Some(w) => w,
             None => {
-                let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc)?;
+                columns.average_uniqueness(&prev_conc, &mut avg_unique);
                 let sum: f64 = avg_unique.iter().sum();
                 let prob_iter = avg_unique.iter().map(|p| if sum > 0.0 { *p / sum } else { 1.0 });
                 // Weights are non-negative, finite and not all zero by construction.
@@ -341,11 +351,84 @@ pub fn seq_bootstrap_with_rng<R: Rng + ?Sized>(
             }
         };
         phi.push(choice);
-        for (i, row) in ind_mat.iter().enumerate() {
-            prev_conc[i] += row[choice] as f64;
+        // Adding a zero cell leaves `prev_conc` unchanged, so only the nonzero cells matter.
+        for (&bar, &val) in columns.column(choice) {
+            prev_conc[bar] += val;
         }
     }
     Ok(phi)
+}
+
+/// Concurrency `c_t` of one indicator-matrix row: the sum of its cells.
+fn row_concurrency(row: &[u8]) -> f64 {
+    row.iter().map(|v| *v as f64).sum::<f64>()
+}
+
+/// One step of [`bootstrap_loop_run`]'s running mean of `val / (val + prev)` over a label's
+/// bars.
+#[inline]
+fn running_uniqueness_step(avg: &mut f64, n: &mut f64, val: f64, prev: f64) {
+    let new_el = val / (val + prev);
+    *avg = (*avg * *n + new_el) / (*n + 1.0);
+    *n += 1.0;
+}
+
+/// The nonzero cells of an indicator matrix, label by label (compressed sparse columns),
+/// with bars ascending within each label.
+struct SparseColumns {
+    /// Label `j`'s cells are at `starts[j]..starts[j + 1]` in `bars` and `vals`.
+    starts: Vec<usize>,
+    bars: Vec<usize>,
+    vals: Vec<f64>,
+}
+
+impl SparseColumns {
+    /// `ind_mat` must have rows of length `n_labels`.
+    fn new(ind_mat: &[Vec<u8>], n_labels: usize) -> Self {
+        let mut starts = vec![0usize; n_labels + 1];
+        for row in ind_mat {
+            for (count, &v) in starts[1..].iter_mut().zip(row) {
+                if v > 0 {
+                    *count += 1;
+                }
+            }
+        }
+        for j in 0..n_labels {
+            starts[j + 1] += starts[j];
+        }
+        let nnz = starts[n_labels];
+        let mut bars = vec![0usize; nnz];
+        let mut vals = vec![0.0; nnz];
+        let mut next = starts[..n_labels].to_vec();
+        for (bar, row) in ind_mat.iter().enumerate() {
+            for (pos, &v) in next.iter_mut().zip(row) {
+                if v > 0 {
+                    bars[*pos] = bar;
+                    vals[*pos] = f64::from(v);
+                    *pos += 1;
+                }
+            }
+        }
+        Self { starts, bars, vals }
+    }
+
+    /// Label `j`'s `(bar, value)` cells, bars ascending.
+    fn column(&self, j: usize) -> impl Iterator<Item = (&usize, &f64)> {
+        let range = self.starts[j]..self.starts[j + 1];
+        self.bars[range.clone()].iter().zip(&self.vals[range])
+    }
+
+    /// [`bootstrap_loop_run`] on the matrix these columns came from, written into `out`.
+    fn average_uniqueness(&self, prev_concurrency: &[f64], out: &mut [f64]) {
+        for (j, slot) in out.iter_mut().enumerate() {
+            let mut avg = 0.0;
+            let mut n = 0.0;
+            for (&bar, &val) in self.column(j) {
+                running_uniqueness_step(&mut avg, &mut n, val, prev_concurrency[bar]);
+            }
+            *slot = avg;
+        }
+    }
 }
 
 /// Returns each label's average uniqueness over its lifespan, from its span (AFML
@@ -370,19 +453,24 @@ pub fn get_av_uniqueness_from_triple_barrier(
     samples_info: &[(usize, usize)],
     price_bars_len: usize,
 ) -> Result<Vec<f64>, InputError> {
-    let bars: Vec<usize> = (0..price_bars_len).collect();
-    let ind = get_ind_matrix(samples_info, &bars)?;
-    let uniq = get_ind_mat_label_uniqueness(&ind)?;
-    Ok(uniq
+    validate_spans(samples_info)?;
+    // With no bars the indicator matrix has no rows, hence no label columns either.
+    if price_bars_len == 0 {
+        return Ok(Vec::new());
+    }
+    // Straight from the spans, without the bars × labels indicator matrix and its per-label
+    // uniqueness rows: `c_t` is the same count, and each label sums `1 / c_t` over its bars
+    // in ascending order, as the matrix route did, so the result is identical.
+    let counts = num_concurrent_events(price_bars_len, samples_info, &[]);
+    Ok(samples_info
         .iter()
-        .map(|u| {
-            let sum: f64 = u.iter().filter(|v| **v > 0.0).sum();
-            let cnt = u.iter().filter(|v| **v > 0.0).count() as f64;
-            if cnt > 0.0 {
-                sum / cnt
-            } else {
-                0.0
+        .map(|&(start, end)| {
+            let span = counts.get(start..=end.min(price_bars_len - 1)).unwrap_or(&[]);
+            if span.is_empty() {
+                return 0.0;
             }
+            let sum = span.iter().fold(0.0, |acc, &c| acc + 1.0 / c as f64);
+            sum / span.len() as f64
         })
         .collect())
 }

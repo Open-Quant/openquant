@@ -1,7 +1,11 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use openquant::bet_sizing::{bet_size_reserve, bet_size_reserve_full};
+use openquant::sampling::{
+    get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness, get_ind_matrix,
+};
 use openquant::structural_breaks::{get_sadf, SadfLags};
+use std::hint::black_box;
 
 fn fixture_series(n: usize) -> Vec<f64> {
     (0..n)
@@ -54,6 +58,37 @@ fn bench_bet_sizing_reserve_reuse_fit(c: &mut Criterion) {
     });
 }
 
+/// Overlapping label spans over `n_bars` bars, 6 to 22 bars long.
+fn synthetic_spans(n_bars: usize, n_labels: usize) -> Vec<(usize, usize)> {
+    (0..n_labels)
+        .map(|i| {
+            let start = (i * 3) % (n_bars - 20);
+            (start, (start + 5 + (i % 17)).min(n_bars - 1))
+        })
+        .collect()
+}
+
+fn bench_av_uniqueness_from_triple_barrier(c: &mut Criterion) {
+    let spans = synthetic_spans(1000, 300);
+    c.bench_function("sampling/get_av_uniqueness_from_triple_barrier", |b| {
+        b.iter(|| {
+            let u = get_av_uniqueness_from_triple_barrier(black_box(&spans), 1000).unwrap();
+            black_box(u);
+        });
+    });
+}
+
+fn bench_ind_mat_average_uniqueness(c: &mut Criterion) {
+    let bars: Vec<usize> = (0..1000).collect();
+    let ind = get_ind_matrix(&synthetic_spans(1000, 300), &bars).unwrap();
+    c.bench_function("sampling/get_ind_mat_average_uniqueness", |b| {
+        b.iter(|| {
+            let u = get_ind_mat_average_uniqueness(black_box(&ind)).unwrap();
+            black_box(u);
+        });
+    });
+}
+
 fn synthetic_events(n: usize) -> (Vec<(NaiveDateTime, NaiveDateTime)>, Vec<f64>) {
     let start = NaiveDate::from_ymd_opt(2020, 1, 1)
         .expect("valid date")
@@ -75,6 +110,8 @@ criterion_group!(
     perf_hotspots,
     bench_sadf_sm_power,
     bench_bet_sizing_reserve_fit,
-    bench_bet_sizing_reserve_reuse_fit
+    bench_bet_sizing_reserve_reuse_fit,
+    bench_av_uniqueness_from_triple_barrier,
+    bench_ind_mat_average_uniqueness
 );
 criterion_main!(perf_hotspots);

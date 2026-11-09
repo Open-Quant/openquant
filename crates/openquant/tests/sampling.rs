@@ -1,5 +1,5 @@
 use openquant::sampling::{
-    get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness,
+    bootstrap_loop_run, get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness,
     get_ind_mat_label_uniqueness, get_ind_matrix, num_concurrent_events, seq_bootstrap,
     seq_bootstrap_with_rng,
 };
@@ -210,4 +210,204 @@ fn test_value_error_raise() {
     let bar_index: Vec<usize> = (0..10).collect();
     let res = std::panic::catch_unwind(|| get_ind_matrix(&bad, &bar_index).unwrap());
     assert!(res.is_err());
+}
+
+/// The column-by-column implementations these functions had before they were made row-major
+/// and sparse (kept verbatim), to check that the faster ones agree bit for bit.
+mod before_sparse {
+    use rand::distr::{weighted::WeightedIndex, Distribution};
+    use rand::Rng;
+
+    pub fn get_ind_mat_average_uniqueness(ind_mat: &[Vec<u8>]) -> f64 {
+        let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+        if cols == 0 {
+            return 0.0;
+        }
+        let mut uniq_sum = 0.0;
+        let mut count = 0;
+        for col in 0..cols {
+            let mut numer = 0.0;
+            let mut denom = 0.0;
+            for row in ind_mat {
+                if row[col] == 1 {
+                    let conc = row.iter().map(|v| *v as f64).sum::<f64>();
+                    numer += 1.0 / conc;
+                    denom += 1.0;
+                }
+            }
+            if denom > 0.0 {
+                uniq_sum += numer / denom;
+                count += 1;
+            }
+        }
+        if count > 0 {
+            uniq_sum / count as f64
+        } else {
+            0.0
+        }
+    }
+
+    pub fn get_ind_mat_label_uniqueness(ind_mat: &[Vec<u8>]) -> Vec<Vec<f64>> {
+        let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+        let mut out = vec![Vec::new(); cols];
+        for (col, slot) in out.iter_mut().enumerate() {
+            let mut vals = Vec::new();
+            for row in ind_mat {
+                if row[col] == 1 {
+                    let conc = row.iter().map(|v| *v as f64).sum::<f64>();
+                    vals.push(1.0 / conc);
+                } else {
+                    vals.push(0.0);
+                }
+            }
+            *slot = vals;
+        }
+        out
+    }
+
+    pub fn bootstrap_loop_run(ind_mat: &[Vec<u8>], prev_concurrency: &[f64]) -> Vec<f64> {
+        let cols = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+        let mut avg_unique = vec![0.0; cols];
+        for (i, slot) in avg_unique.iter_mut().enumerate() {
+            let mut prev_avg = 0.0;
+            let mut n = 0.0;
+            for (j, row) in ind_mat.iter().enumerate() {
+                let val = row[i] as f64;
+                if val > 0.0 {
+                    let new_el = val / (val + prev_concurrency[j]);
+                    let avg = (prev_avg * n + new_el) / (n + 1.0);
+                    n += 1.0;
+                    prev_avg = avg;
+                }
+            }
+            *slot = prev_avg;
+        }
+        avg_unique
+    }
+
+    pub fn seq_bootstrap_with_rng<R: Rng + ?Sized>(
+        ind_mat: &[Vec<u8>],
+        sample_length: Option<usize>,
+        warmup_samples: Option<Vec<usize>>,
+        rng: &mut R,
+    ) -> Vec<usize> {
+        let n_labels = ind_mat.first().map(|r| r.len()).unwrap_or(0);
+        let target_len = sample_length.unwrap_or(n_labels);
+        let mut phi: Vec<usize> = Vec::with_capacity(target_len);
+        let mut warm = warmup_samples.unwrap_or_default();
+        let mut prev_conc = vec![0.0; ind_mat.len()];
+        while phi.len() < target_len {
+            let choice = match warm.pop() {
+                Some(w) => w,
+                None => {
+                    let avg_unique = bootstrap_loop_run(ind_mat, &prev_conc);
+                    let sum: f64 = avg_unique.iter().sum();
+                    let prob_iter =
+                        avg_unique.iter().map(|p| if sum > 0.0 { *p / sum } else { 1.0 });
+                    let dist = WeightedIndex::new(prob_iter).expect("valid sampling weights");
+                    dist.sample(rng)
+                }
+            };
+            phi.push(choice);
+            for (i, row) in ind_mat.iter().enumerate() {
+                prev_conc[i] += row[choice] as f64;
+            }
+        }
+        phi
+    }
+
+    pub fn get_av_uniqueness_from_triple_barrier(
+        samples_info: &[(usize, usize)],
+        price_bars_len: usize,
+    ) -> Vec<f64> {
+        let bars: Vec<usize> = (0..price_bars_len).collect();
+        let ind = openquant::sampling::get_ind_matrix(samples_info, &bars).unwrap();
+        get_ind_mat_label_uniqueness(&ind)
+            .iter()
+            .map(|u| {
+                let sum: f64 = u.iter().filter(|v| **v > 0.0).sum();
+                let cnt = u.iter().filter(|v| **v > 0.0).count() as f64;
+                if cnt > 0.0 {
+                    sum / cnt
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    }
+}
+
+fn bits(values: &[f64]) -> Vec<u64> {
+    values.iter().map(|v| v.to_bits()).collect()
+}
+
+/// Random spans over `n_bars` bars, including spans that run past the end, start past the
+/// end, or cover a single bar.
+fn random_spans(rng: &mut StdRng, n_bars: usize, n_labels: usize) -> Vec<(usize, usize)> {
+    (0..n_labels)
+        .map(|_| {
+            let start = rng.random_range(0..n_bars + 3);
+            (start, start + rng.random_range(0..12usize))
+        })
+        .collect()
+}
+
+#[test]
+fn uniqueness_and_bootstrap_match_the_column_by_column_implementation() {
+    let mut rng = StdRng::seed_from_u64(20261108);
+    for case in 0..200 {
+        let n_bars = rng.random_range(0..if case % 10 == 0 { 400 } else { 60usize });
+        let n_labels = rng.random_range(0..25usize);
+        let spans = random_spans(&mut rng, n_bars, n_labels);
+
+        let av = get_av_uniqueness_from_triple_barrier(&spans, n_bars).unwrap();
+        let av_ref = before_sparse::get_av_uniqueness_from_triple_barrier(&spans, n_bars);
+        assert_eq!(bits(&av), bits(&av_ref), "case {case}: get_av_uniqueness_from_triple_barrier");
+
+        let bars: Vec<usize> = (0..n_bars).collect();
+        let mut ind = get_ind_matrix(&spans, &bars).unwrap();
+        // Cells above 1 are outside the 0/1 contract but still accepted; keep them agreeing.
+        if case % 4 == 0 {
+            for row in ind.iter_mut() {
+                for cell in row.iter_mut() {
+                    if *cell == 1 && rng.random_range(0..5u8) == 0 {
+                        *cell = 2;
+                    }
+                }
+            }
+        }
+
+        let avg = get_ind_mat_average_uniqueness(&ind).unwrap();
+        let avg_ref = before_sparse::get_ind_mat_average_uniqueness(&ind);
+        assert_eq!(avg.to_bits(), avg_ref.to_bits(), "case {case}: average uniqueness");
+
+        let lab = get_ind_mat_label_uniqueness(&ind).unwrap();
+        let lab_ref = before_sparse::get_ind_mat_label_uniqueness(&ind);
+        assert_eq!(lab.len(), lab_ref.len(), "case {case}: label uniqueness columns");
+        for (a, b) in lab.iter().zip(&lab_ref) {
+            assert_eq!(bits(a), bits(b), "case {case}: label uniqueness");
+        }
+
+        let prev: Vec<f64> = (0..n_bars).map(|_| rng.random_range(0..4u8) as f64).collect();
+        let run = bootstrap_loop_run(&ind, &prev).unwrap();
+        let run_ref = before_sparse::bootstrap_loop_run(&ind, &prev);
+        assert_eq!(bits(&run), bits(&run_ref), "case {case}: bootstrap_loop_run");
+
+        // With no bars the matrix has no rows, hence no labels to draw.
+        if n_bars > 0 && n_labels > 0 {
+            let len = Some(rng.random_range(1..40usize));
+            let warm = (case % 3 == 0).then(|| vec![n_labels - 1, 0]);
+            let seed = rng.random_range(0..u64::MAX);
+            let drawn =
+                seq_bootstrap_with_rng(&ind, len, warm.clone(), &mut StdRng::seed_from_u64(seed))
+                    .unwrap();
+            let drawn_ref = before_sparse::seq_bootstrap_with_rng(
+                &ind,
+                len,
+                warm,
+                &mut StdRng::seed_from_u64(seed),
+            );
+            assert_eq!(drawn, drawn_ref, "case {case}: seq_bootstrap draws");
+        }
+    }
 }

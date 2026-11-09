@@ -24,6 +24,7 @@ file disagree).
 
 ### Changed
 
+- `sampling`: speed up `seq_bootstrap` about 35× (240 draws, 600 labels over 2,000 bars) by visiting only the nonzero indicator cells on each draw, and compute each bar's concurrency once in the uniqueness functions; results and seeded draws are unchanged bit for bit.
 - Docs: expand end-to-end workflows and task-based API navigation, and improve narrow-screen layout, tables and keyboard-accessible code examples. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - CI: exercise pinned scientific research tests while retaining optional SciPy dependencies and unchanged production defaults. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - `data`: skip the unused duplicate-count query when `clean_ohlcv` does not return a quality report. ([#255](https://github.com/Open-Quant/openquant/pull/255))
