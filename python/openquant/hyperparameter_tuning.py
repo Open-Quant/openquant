@@ -26,6 +26,7 @@ import numpy as np
 
 from . import _core
 from .cross_validation import purged_kfold_splits
+from .feature_importance import _positive_proba, _prepare
 
 _ht = _core.hyperparameter_tuning
 
@@ -89,16 +90,6 @@ def classification_score(
     )
 
 
-def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
-    p = np.asarray(model.predict_proba(x), dtype=np.float64)
-    if p.ndim == 2:
-        classes = list(getattr(model, "classes_", [0, 1]))
-        if 1 not in classes:
-            return np.zeros(len(x))
-        p = p[:, classes.index(1)]
-    return p
-
-
 def purged_search(
     make_estimator: Callable[[dict[str, Any]], Any],
     param_sets: Sequence[Mapping[str, Any]],
@@ -123,15 +114,7 @@ def purged_search(
     and non-negative; invalid training data is rejected before building an estimator.
     Non-finite fold scores or means raise ``ValueError`` rather than selecting a winner.
     """
-    x = np.asarray(X, dtype=np.float64)
-    if x.ndim != 2:
-        raise ValueError(f"X must have shape (n_samples, n_features), got {x.shape}")
-    yv = np.asarray(y, dtype=np.float64)
-    if yv.shape != (len(x),):
-        raise ValueError(f"y must have {len(x)} values, got shape {yv.shape}")
-    w = None if sample_weight is None else np.asarray(sample_weight, dtype=np.float64)
-    if w is not None and w.shape != (len(x),):
-        raise ValueError(f"sample_weight must have {len(x)} values, got shape {w.shape}")
+    x, yv, w = _prepare(X, y, sample_weight)
     if not np.all(np.isfinite(yv)):
         raise ValueError("y must contain only finite binary labels in {0,1}")
     if np.any((yv != 0.0) & (yv != 1.0)):

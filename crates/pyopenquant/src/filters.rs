@@ -176,6 +176,7 @@ fn filters_cusum_filter_timestamps(
 ///     Number of prices in the rolling mean, including the current bar.
 /// std_window : int
 ///     Number of prices in the rolling standard deviation, including the current bar.
+///     0 uses a standard deviation of 0, so a bar fires at or above the rolling mean.
 /// threshold : float
 ///     Number of standard deviations above the rolling mean at which a bar fires.
 ///
@@ -183,7 +184,8 @@ fn filters_cusum_filter_timestamps(
 /// -------
 /// list[int]
 ///     0-based positions into `close` of the event bars, in increasing order; empty if
-///     `close` is empty, both windows are zero, or `close` is shorter than the longer window.
+///     `close` is empty, `mean_window` is zero (the mean of no prices is NaN, so no bar
+///     fires), or `close` is shorter than the longer window.
 #[pyfunction(name = "z_score_filter_indices")]
 fn filters_z_score_filter_indices(
     close: Vec<f64>,

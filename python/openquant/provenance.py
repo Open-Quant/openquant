@@ -141,6 +141,7 @@ class Revision:
 
     @property
     def key(self) -> Key:
+        """The `(row_id, source_id)` identity the revision belongs to."""
         return self.row_id, self.source_id
 
 

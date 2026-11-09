@@ -221,3 +221,65 @@ def test_time_bars_keep_an_incomplete_symbol() -> None:
     assert_frame_equal(
         openquant.bars.build_time_bars(_mixed_symbols_frame(), interval="1m"), expected
     )
+
+
+def _closes_frame(symbols: list[str], closes: list[float]) -> pl.DataFrame:
+    ts = [f"2024-01-0{i + 1}" for i in range(len(closes))]
+    return pl.DataFrame(
+        {
+            "ts": ts,
+            "symbol": symbols,
+            "open": closes,
+            "high": closes,
+            "low": closes,
+            "close": closes,
+            "volume": [1.0] * len(closes),
+        }
+    )
+
+
+def test_bar_diagnostics_hand_computed_alternating_returns() -> None:
+    # Returns 1, -0.5, 1, -0.5: perfectly anti-correlated at lag 1, and so are their squares.
+    out = openquant.bars.bar_diagnostics(_closes_frame(["A"] * 5, [1.0, 2.0, 1.0, 2.0, 1.0]))
+    assert out == {
+        "n_bars": 5.0,
+        "lag1_return_autocorr": pytest.approx(-1.0),
+        "lag1_sq_return_autocorr": pytest.approx(-1.0),
+        "return_std": pytest.approx(0.75**0.5),
+    }
+
+
+def test_bar_diagnostics_returns_stay_within_each_symbol() -> None:
+    # A: 1 -> 2 (return 1); B: 10 -> 20 -> 10 (returns 1, -0.5). A return across the symbol
+    # boundary (2 -> 10) would add a 4 to the pooled list.
+    frame = _closes_frame(["A", "A", "B", "B", "B"], [1.0, 2.0, 10.0, 20.0, 10.0])
+    out = openquant.bars.bar_diagnostics(frame)
+    assert out["n_bars"] == 5.0
+    assert out["return_std"] == pytest.approx(0.75**0.5)  # of [1, 1, -0.5]
+    # The lag-1 pairs (1, 1) and (1, -0.5) have a constant left side: reported as 0.
+    assert out["lag1_return_autocorr"] == 0.0
+
+
+def test_bar_diagnostics_needs_three_returns() -> None:
+    out = openquant.bars.bar_diagnostics(_closes_frame(["A"] * 3, [1.0, 2.0, 3.0]))
+    assert out == {
+        "n_bars": 3.0,
+        "lag1_return_autocorr": 0.0,
+        "lag1_sq_return_autocorr": 0.0,
+        "return_std": 0.0,
+    }
+
+
+def test_time_bar_interval_is_case_insensitive() -> None:
+    assert_frame_equal(
+        openquant.bars.build_time_bars(_base_frame(), interval=" 5M "),
+        openquant.bars.build_time_bars(_base_frame(), interval="5m"),
+    )
+
+
+@pytest.mark.parametrize("interval", ["1w", "xd", "1.5h", "h", ""])
+def test_time_bar_interval_rejects_unsupported_forms(interval: str) -> None:
+    with pytest.raises(ValueError, match="unsupported interval format"):
+        openquant.bars.build_time_bars(_base_frame(), interval=interval)
+    with pytest.raises(ValueError, match="unsupported interval format"):
+        openquant.data.align_calendar(_base_frame(), interval=interval)

@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 from openquant import hyperparameter_tuning as ht
+from openquant.cross_validation import purged_kfold_splits
 
 
 @pytest.mark.parametrize("field", ["labels", "weights"])
@@ -139,4 +140,77 @@ def test_search_rejects_overflowing_weight_total_before_building_estimator():
             n_splits=3,
             pct_embargo=0.0,
             sample_weight=np.full(12, 1e308),
+        )
+
+
+class _TwoColumnModel:
+    """predict_proba with one column per entry of ``classes_``; column of 1.0 is ``x[:, 0]``."""
+
+    def __init__(self, classes):
+        self.classes_ = classes
+
+    def fit(self, X, y, sample_weight=None):
+        return self
+
+    def predict_proba(self, X):
+        p = np.asarray(X, dtype=float)[:, 0]
+        columns = {1.0: p, 0.0: 1.0 - p}
+        return np.column_stack([columns[float(c)] for c in self.classes_])
+
+
+@pytest.mark.parametrize("classes", [[0.0, 1.0], [1.0, 0.0], [0, 1]])
+def test_search_scores_the_class_one_column_whatever_its_position(classes):
+    x = np.linspace(0.05, 0.95, 12).reshape(-1, 1)
+    y = (x[:, 0] > 0.5).astype(float)
+    t0 = np.datetime64("2024-01-01", "ns") + np.arange(12) * np.timedelta64(1, "D")
+    result = ht.purged_search(
+        lambda params: _TwoColumnModel(classes), [{}], x, y, t0, t0, n_splits=3, pct_embargo=0.0
+    )
+    expected = [
+        ht.classification_score(y[test], x[test, 0])
+        for _, test in purged_kfold_splits(t0, t0, 3, 0.0)
+    ]
+    assert result["trials"][0]["fold_scores"] == pytest.approx(expected)
+
+
+def test_search_predicts_zero_when_the_model_never_saw_class_one():
+    # A fold trained on 0 labels only has no class-1 column: its probabilities are all 0.
+    x = np.linspace(0.05, 0.95, 12).reshape(-1, 1)
+    y = np.array([0.0, 1.0] * 6)
+    t0 = np.datetime64("2024-01-01", "ns") + np.arange(12) * np.timedelta64(1, "D")
+    result = ht.purged_search(
+        lambda params: _TwoColumnModel([0.0]),
+        [{}],
+        x,
+        y,
+        t0,
+        t0,
+        n_splits=3,
+        pct_embargo=0.0,
+        scoring="accuracy",
+    )
+    assert result["trials"][0]["fold_scores"] == [0.5, 0.5, 0.5]
+
+
+@pytest.mark.parametrize(
+    "X, y, w, message",
+    [
+        (np.zeros(12), np.zeros(12), None, "X must have shape"),
+        (np.zeros((12, 1)), np.zeros(11), None, "y must have 12 values"),
+        (np.zeros((12, 1)), np.zeros(12), np.ones(11), "sample_weight must have 12 values"),
+    ],
+)
+def test_search_rejects_misshapen_inputs(X, y, w, message):
+    t0 = np.datetime64("2024-01-01", "ns") + np.arange(12) * np.timedelta64(1, "D")
+    with pytest.raises(ValueError, match=message):
+        ht.purged_search(
+            lambda params: pytest.fail("misshapen data reached the estimator factory"),
+            [{}],
+            X,
+            y,
+            t0,
+            t0,
+            n_splits=3,
+            pct_embargo=0.0,
+            sample_weight=w,
         )

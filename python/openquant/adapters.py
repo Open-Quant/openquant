@@ -357,7 +357,10 @@ class SignalStreamBuffer:
 
 
 def to_pandas(df: pl.DataFrame) -> Any:
-    """Optional pandas conversion for downstream tooling."""
+    """Convert a polars frame to pandas for downstream tooling.
+
+    Raises `RuntimeError` when pandas is not installed (it is an optional dependency).
+    """
     try:
         import pandas  # noqa: F401
     except ModuleNotFoundError as exc:

@@ -44,7 +44,7 @@ def dynamic_optimal_portfolio(
     costs: Sequence[Sequence[float]],
     k: int | None = None,
     initial_weights: Sequence[float] | None = None,
-    max_trajectories: int = ...,
+    max_trajectories: int = 1000000,
 ) -> Any:
     """Best weight trajectory by exhaustive integer search (AFML Snippet 21.3, `dynOptPort`).
 

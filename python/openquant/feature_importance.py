@@ -211,10 +211,15 @@ def _fit(estimator: Any, x: np.ndarray, y: np.ndarray, weight: np.ndarray | None
 
 
 def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
+    """The fitted model's probability of class 1 per row of ``x``.
+
+    Shared with :func:`openquant.hyperparameter_tuning.purged_search`.
+    """
     p = np.asarray(model.predict_proba(x), dtype=np.float64)
     if p.ndim == 2:
         classes = list(getattr(model, "classes_", [0, 1]))
-        if 1 not in classes and 1.0 not in classes:
+        # Membership compares by value, so a float class 1.0 matches too.
+        if 1 not in classes:
             # A fold whose training labels are all 0 never predicts class 1.
             return np.zeros(len(x))
         p = p[:, classes.index(1)]
@@ -224,6 +229,10 @@ def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
 def _prepare(
     X: Any, y: Any, sample_weight: Any
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """``X``, ``y`` and ``sample_weight`` as float arrays of matching shapes.
+
+    Shared with :func:`openquant.hyperparameter_tuning.purged_search`.
+    """
     x = np.asarray(X, dtype=np.float64)
     if x.ndim != 2:
         raise ValueError(f"X must have shape (n_samples, n_features), got {x.shape}")

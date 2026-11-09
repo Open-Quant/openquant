@@ -61,8 +61,8 @@ fn sr_implied_precision_symmetric(target_sharpe: f64, annual_bet_frequency: f64)
 /// Bets per year needed for a symmetric-payout strategy to reach a target Sharpe ratio.
 ///
 /// AFML §15.2: `4 theta^2 p (1 - p) / (2p - 1)^2` for precision `p` and target Sharpe
-/// `theta`; the inverse of `sharpe_symmetric`. A precision below 0.5 gives a positive
-/// frequency even though its Sharpe ratio is negative; check `p > 0.5` first.
+/// `theta`; the inverse of `sharpe_symmetric`. A precision below 0.5 is rejected: its
+/// Sharpe ratio is negative at every frequency.
 ///
 /// Parameters
 /// ----------
@@ -79,8 +79,8 @@ fn sr_implied_precision_symmetric(target_sharpe: f64, annual_bet_frequency: f64)
 /// Raises
 /// ------
 /// ValueError
-///     If `precision` is outside `[0, 1]`, within `1e-12` of 0.5, or exactly 0 or 1 (zero
-///     implied frequency), or `target_sharpe` is not finite and positive.
+///     If `precision` is outside `[0, 1]`, below 0.5, within `1e-12` of 0.5, or exactly 0
+///     or 1 (zero implied frequency), or `target_sharpe` is not finite and positive.
 #[pyfunction(name = "implied_frequency_symmetric")]
 fn sr_implied_frequency_symmetric(precision: f64, target_sharpe: f64) -> PyResult<f64> {
     openquant::strategy_risk::implied_frequency_symmetric(precision, target_sharpe)
@@ -173,9 +173,8 @@ fn sr_implied_precision_asymmetric(
 /// Bets per year needed for an asymmetric-payout strategy to reach a target Sharpe ratio.
 ///
 /// AFML §15.3: `theta^2 d^2 p (1 - p) / (d p + pi_minus)^2` with `d = pi_plus - pi_minus`.
-/// A strategy whose mean payoff `d p + pi_minus` is negative gets a positive frequency from
-/// this formula even though its Sharpe ratio is negative; check the sign of the mean payoff
-/// first.
+/// A strategy whose mean payoff `d p + pi_minus` is negative is rejected: its Sharpe ratio
+/// is negative at every frequency.
 ///
 /// Parameters
 /// ----------
@@ -198,7 +197,7 @@ fn sr_implied_precision_asymmetric(
 /// ValueError
 ///     If `precision` is outside `[0, 1]` or exactly 0 or 1 (zero implied frequency),
 ///     `target_sharpe` is not finite and positive, the payouts are not finite with
-///     `pi_plus > pi_minus`, or the mean payoff is within `1e-12` of zero.
+///     `pi_plus > pi_minus`, or the mean payoff is negative or within `1e-12` of zero.
 #[pyfunction(name = "implied_frequency_asymmetric")]
 fn sr_implied_frequency_asymmetric(
     precision: f64,

@@ -12,19 +12,6 @@ from . import _core, data
 _Param = TypeVar("_Param", int, float)
 
 
-def _interval_to_seconds(interval: str) -> int:
-    s = interval.strip().lower()
-    if s.endswith("d"):
-        return int(s[:-1]) * 24 * 3600
-    if s.endswith("h"):
-        return int(s[:-1]) * 3600
-    if s.endswith("m"):
-        return int(s[:-1]) * 60
-    if s.endswith("s"):
-        return int(s[:-1])
-    raise ValueError(f"unsupported interval format: {interval}")
-
-
 def _rows_to_frame(
     symbol: str, rows: list[tuple[str, str, float, float, float, float, float, float, int]]
 ) -> pl.DataFrame:
@@ -142,7 +129,7 @@ def build_time_bars(df: pl.DataFrame, *, interval: str = "1d") -> pl.DataFrame:
         If `interval` does not have a supported form or is not positive, or `df` lacks a
         required column.
     """
-    return _build_by_symbol(df, _core.bars.build_time_bars, _interval_to_seconds(interval))
+    return _build_by_symbol(df, _core.bars.build_time_bars, data._interval_to_seconds(interval))
 
 
 def build_tick_bars(df: pl.DataFrame, *, ticks_per_bar: int = 50) -> pl.DataFrame:

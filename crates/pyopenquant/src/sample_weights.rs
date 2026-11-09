@@ -94,8 +94,8 @@ fn sw_get_weights_by_return(
 /// Raises
 /// ------
 /// ValueError
-///     If a timestamp does not parse, the close timestamps and prices differ in length, or
-///     an event's end precedes its start.
+///     If a timestamp does not parse, the close timestamps and prices differ in length, an
+///     event's end precedes its start, or `decay` is not in `(-1, 1]` (NaN included).
 #[pyfunction(name = "get_weights_by_time_decay")]
 fn sw_get_weights_by_time_decay(
     events: Vec<(String, String, f64)>,

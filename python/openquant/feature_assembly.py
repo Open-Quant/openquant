@@ -69,6 +69,12 @@ class FeatureRow:
 
 @dataclass(frozen=True)
 class MissingFeature:
+    """One declared feature an excluded row lacks.
+
+    `reason` is `"missing_source"` (no bundle for the row and source) or
+    `"missing_field"` (the bundle's payload has no such field).
+    """
+
     name: str
     source_id: str
     payload_field: str
@@ -77,6 +83,8 @@ class MissingFeature:
 
 @dataclass(frozen=True)
 class ExcludedRow:
+    """A requested row left out of the output, with every feature it lacks."""
+
     row_id: str
     decision_ns: int
     missing: tuple[MissingFeature, ...]
@@ -84,6 +92,8 @@ class ExcludedRow:
 
 @dataclass(frozen=True)
 class FeatureCoverage:
+    """Per declared feature, over all requested rows: present, missing source, missing field."""
+
     name: str
     source_id: str
     payload_field: str
@@ -94,6 +104,8 @@ class FeatureCoverage:
 
 @dataclass(frozen=True)
 class AssemblyResult:
+    """What `assemble_features` returns: complete rows, excluded rows and coverage."""
+
     feature_spec: tuple[FeatureSpec, ...]
     requested_rows: tuple[tuple[str, int], ...]
     rows: tuple[FeatureRow, ...]
@@ -102,14 +114,17 @@ class AssemblyResult:
 
     @property
     def requested_count(self) -> int:
+        """Number of requested rows."""
         return len(self.requested_rows)
 
     @property
     def complete_count(self) -> int:
+        """Number of complete output rows."""
         return len(self.rows)
 
     @property
     def excluded_count(self) -> int:
+        """Number of requested rows excluded for a missing source or field."""
         return len(self.excluded)
 
 

@@ -170,7 +170,12 @@ def run_mid_frequency_pipeline_frames(
 
 
 def summarize_pipeline(out: dict[str, Any]) -> pl.DataFrame:
-    """Tabular summary for quick notebook inspection."""
+    """One-row summary of a `run_mid_frequency_pipeline` result, for notebook inspection.
+
+    Columns: the portfolio Sharpe ratio, return and risk, the realized Sharpe ratio, value
+    at risk, expected shortfall, conditional drawdown risk and the four `leakage_checks`
+    flags.
+    """
     risk = out["risk"]
     portfolio = out["portfolio"]
     leakage = out["leakage_checks"]
