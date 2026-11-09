@@ -75,6 +75,78 @@ def _check_fold_weight_mass(
                 raise ValueError(f"sample_weight fold {fold} {role} must contain a positive value")
 
 
+def _prepare_inputs(
+    X: Sequence[Sequence[float]],
+    y: Sequence[float],
+    feature_names: Sequence[str] | None,
+    sample_weight: Sequence[float] | None,
+) -> tuple[list[list[float]], list[float], list[str], list[float] | None]:
+    """Validated `X`, `y`, feature names and sample weights, in that validation order."""
+    x = _as_matrix(X)
+    yv = _as_vector(y, len(x))
+    names = _feature_names(len(x[0]), feature_names)
+    weights = _sample_weight(sample_weight, len(x))
+    return x, yv, names, weights
+
+
+def _cv_splits(
+    event_end_indices: Sequence[int] | None,
+    n_rows: int,
+    n_splits: int,
+    pct_embargo: float,
+    allow_unpurged: bool,
+    weights: Sequence[float] | None,
+) -> list[tuple[list[int], list[int]]]:
+    """Purged k-fold splits, each checked to keep positive weight on both sides."""
+    intervals = _build_intervals(event_end_indices, n_rows, allow_unpurged=allow_unpurged)
+    splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
+    _check_fold_weight_mass(weights, splits)
+    return splits
+
+
+def _cv_meta(
+    event_end_indices: Sequence[int] | None,
+    n_splits: int,
+    pct_embargo: float,
+    splits: Sequence[tuple[list[int], list[int]]],
+    scoring: str,
+) -> dict[str, Any]:
+    purged = event_end_indices is not None
+    return {
+        "method": "purged_kfold" if purged else "kfold_embargo_only",
+        "purged": purged,
+        "n_splits": n_splits,
+        "pct_embargo": pct_embargo,
+        "fold_count": len(splits),
+        "scoring": scoring,
+    }
+
+
+def _fold_data(
+    x: Sequence[Sequence[float]],
+    y: Sequence[float],
+    weights: Sequence[float] | None,
+    train_idx: Sequence[int],
+    test_idx: Sequence[int],
+) -> tuple[
+    list[Sequence[float]],
+    list[float],
+    list[Sequence[float]],
+    list[float],
+    list[float] | None,
+    list[float] | None,
+]:
+    """Training and test rows, labels and weights (None without weights) of one fold."""
+    return (
+        [x[i] for i in train_idx],
+        [y[i] for i in train_idx],
+        [x[i] for i in test_idx],
+        [y[i] for i in test_idx],
+        [weights[i] for i in train_idx] if weights is not None else None,
+        [weights[i] for i in test_idx] if weights is not None else None,
+    )
+
+
 def _build_intervals(
     event_end_indices: Sequence[int] | None,
     n_rows: int,
@@ -628,6 +700,17 @@ def _importance_table(
     return pl.DataFrame(rows).sort("mean", descending=True)
 
 
+def _importance_result(
+    method: str, feature_names: Sequence[str], per_feature_values: Sequence[Sequence[float]]
+) -> dict[str, Any]:
+    """`method`, the importance `table`, its `records` and its bar-chart `viz_payload`."""
+    table = _importance_table(feature_names, per_feature_values)
+    payload = viz.prepare_feature_importance_payload(
+        table["feature"].to_list(), table["mean"].to_list(), std=table["stderr"].to_list()
+    )
+    return {"method": method, "table": table, "records": table.to_dicts(), "viz_payload": payload}
+
+
 def mdi_importance(
     X: Sequence[Sequence[float]],
     y: Sequence[float],
@@ -676,10 +759,7 @@ def mdi_importance(
         If `X` is empty or not rectangular, a length does not match the rows of `X`, or
         `n_estimators < 2`.
     """
-    x = _as_matrix(X)
-    yv = _as_vector(y, len(x))
-    names = _feature_names(len(x[0]), feature_names)
-    weights = _sample_weight(sample_weight, len(x))
+    x, yv, names, weights = _prepare_inputs(X, y, feature_names, sample_weight)
 
     if n_estimators < 2:
         raise ValueError("n_estimators must be >= 2")
@@ -702,15 +782,8 @@ def mdi_importance(
         for j, v in enumerate(norm):
             per_feature[j].append(v)
 
-    table = _importance_table(names, per_feature)
-    payload = viz.prepare_feature_importance_payload(
-        table["feature"].to_list(), table["mean"].to_list(), std=table["stderr"].to_list()
-    )
     return {
-        "method": "mdi",
-        "table": table,
-        "records": table.to_dicts(),
-        "viz_payload": payload,
+        **_importance_result("mdi", names, per_feature),
         "meta": {"n_estimators": n_estimators, "seed": seed},
     }
 
@@ -747,7 +820,7 @@ def _score_with_perm_groups(
             imp = (base - perm_score) / (-perm_score) if abs(perm_score) > _EPS else 0.0
         else:
             imp = (base - perm_score) / (1.0 - perm_score) if abs(1.0 - perm_score) > _EPS else 0.0
-        out.append(imp if imp == imp and imp != float("inf") and imp != float("-inf") else 0.0)
+        out.append(imp if isfinite(imp) else 0.0)
 
     return base, out
 
@@ -828,26 +901,17 @@ def mda_importance(
         index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
         training set, or `scoring` is not supported.
     """
-    x = _as_matrix(X)
-    yv = _as_vector(y, len(x))
-    names = _feature_names(len(x[0]), feature_names)
-    weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
-    splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
-    _check_fold_weight_mass(weights, splits)
+    x, yv, names, weights = _prepare_inputs(X, y, feature_names, sample_weight)
+    splits = _cv_splits(event_end_indices, len(x), n_splits, pct_embargo, allow_unpurged, weights)
 
     per_feature: list[list[float]] = [[] for _ in names]
     fold_scores: list[float] = []
     rng = random.Random(seed)
 
     for train_idx, test_idx in splits:
-        x_train = [x[i] for i in train_idx]
-        y_train = [yv[i] for i in train_idx]
-        x_test = [x[i] for i in test_idx]
-        y_test = [yv[i] for i in test_idx]
-        w_train = [weights[i] for i in train_idx] if weights is not None else None
-        w_test = [weights[i] for i in test_idx] if weights is not None else None
-
+        x_train, y_train, x_test, y_test, w_train, w_test = _fold_data(
+            x, yv, weights, train_idx, test_idx
+        )
         base, scores = _score_with_perm_groups(
             x_train,
             y_train,
@@ -863,22 +927,10 @@ def mda_importance(
         for j, imp in enumerate(scores):
             per_feature[j].append(imp)
 
-    table = _importance_table(names, per_feature)
-    payload = viz.prepare_feature_importance_payload(
-        table["feature"].to_list(), table["mean"].to_list(), std=table["stderr"].to_list()
-    )
     return {
-        "method": "mda",
-        "table": table,
-        "records": table.to_dicts(),
-        "viz_payload": payload,
+        **_importance_result("mda", names, per_feature),
         "cv": {
-            "method": "purged_kfold" if event_end_indices is not None else "kfold_embargo_only",
-            "purged": event_end_indices is not None,
-            "n_splits": n_splits,
-            "pct_embargo": pct_embargo,
-            "fold_count": len(splits),
-            "scoring": scoring,
+            **_cv_meta(event_end_indices, n_splits, pct_embargo, splits, scoring),
             "seed": seed,
             "mean_base_score": _mean(fold_scores),
         },
@@ -956,48 +1008,36 @@ def sfi_importance(
         index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
         training set, or `scoring` is not supported.
     """
-    x = _as_matrix(X)
-    yv = _as_vector(y, len(x))
-    names = _feature_names(len(x[0]), feature_names)
-    weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
-    splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
-    _check_fold_weight_mass(weights, splits)
+    x, yv, names, weights = _prepare_inputs(X, y, feature_names, sample_weight)
+    splits = _cv_splits(event_end_indices, len(x), n_splits, pct_embargo, allow_unpurged, weights)
 
     per_feature: list[list[float]] = [[] for _ in names]
 
     for j in range(len(names)):
         xj = [[row[j]] for row in x]
         for train_idx, test_idx in splits:
-            x_train = [xj[i] for i in train_idx]
-            y_train = [yv[i] for i in train_idx]
-            x_test = [xj[i] for i in test_idx]
-            y_test = [yv[i] for i in test_idx]
-            w_train = [weights[i] for i in train_idx] if weights is not None else None
-            w_test = [weights[i] for i in test_idx] if weights is not None else None
-
+            x_train, y_train, x_test, y_test, w_train, w_test = _fold_data(
+                xj, yv, weights, train_idx, test_idx
+            )
             model = _fit_linear_probability_model(x_train, y_train, w_train)
             score_val = _score(y_test, _predict_proba(model, x_test), scoring, w_test)
             per_feature[j].append(score_val)
 
-    table = _importance_table(names, per_feature)
-    payload = viz.prepare_feature_importance_payload(
-        table["feature"].to_list(), table["mean"].to_list(), std=table["stderr"].to_list()
-    )
     return {
-        "method": "sfi",
-        "table": table,
-        "records": table.to_dicts(),
-        "viz_payload": payload,
-        "cv": {
-            "method": "purged_kfold" if event_end_indices is not None else "kfold_embargo_only",
-            "purged": event_end_indices is not None,
-            "n_splits": n_splits,
-            "pct_embargo": pct_embargo,
-            "fold_count": len(splits),
-            "scoring": scoring,
-        },
+        **_importance_result("sfi", names, per_feature),
+        "cv": _cv_meta(event_end_indices, n_splits, pct_embargo, splits, scoring),
     }
+
+
+def _scaled_gram(z: Sequence[Sequence[float]]) -> list[list[float]]:
+    """`z'z / (n - 1)`: the correlation matrix of columns standardized by `_standardize`."""
+    n = len(z)
+    p = len(z[0])
+    out = [[0.0 for _ in range(p)] for _ in range(p)]
+    for i in range(p):
+        for j in range(p):
+            out[i][j] = sum(row[i] * row[j] for row in z) / max(n - 1, 1)
+    return out
 
 
 def _standardize(
@@ -1056,13 +1096,7 @@ def orthogonalize_features_pca(
     if not np.isfinite(x).all():
         raise ValueError("X must contain only finite values")
     z, means, stds = _standardize(x)
-    n = len(z)
-    p = len(z[0])
-
-    cov = [[0.0 for _ in range(p)] for _ in range(p)]
-    for i in range(p):
-        for j in range(p):
-            cov[i][j] = sum(row[i] * row[j] for row in z) / max(n - 1, 1)
+    cov = _scaled_gram(z)
 
     # A fixed power-iteration seed can be orthogonal to a nonzero eigenspace (for
     # example, the all-ones vector for perfectly anticorrelated columns). Reusing
@@ -1111,13 +1145,7 @@ def orthogonalize_features_pca(
 
 def _corr_matrix(x: Sequence[Sequence[float]]) -> list[list[float]]:
     z, _, _ = _standardize(x)
-    n = len(z)
-    p = len(z[0])
-    corr = [[0.0 for _ in range(p)] for _ in range(p)]
-    for i in range(p):
-        for j in range(p):
-            corr[i][j] = sum(row[i] * row[j] for row in z) / max(n - 1, 1)
-    return corr
+    return _scaled_gram(z)
 
 
 def _max_abs_offdiag(m: Sequence[Sequence[float]]) -> float:
@@ -1207,13 +1235,8 @@ def substitution_effect_report(
         training set, or `scoring` is not supported; also if `orthogonalize` is True and
         every feature is constant.
     """
-    x = _as_matrix(X)
-    yv = _as_vector(y, len(x))
-    names = _feature_names(len(x[0]), feature_names)
-    weights = _sample_weight(sample_weight, len(x))
-    intervals = _build_intervals(event_end_indices, len(x), allow_unpurged=allow_unpurged)
-    splits = _purged_kfold_splits(intervals, n_splits=n_splits, pct_embargo=pct_embargo)
-    _check_fold_weight_mass(weights, splits)
+    x, yv, names, weights = _prepare_inputs(X, y, feature_names, sample_weight)
+    splits = _cv_splits(event_end_indices, len(x), n_splits, pct_embargo, allow_unpurged, weights)
 
     mda = mda_importance(
         x,
@@ -1241,12 +1264,9 @@ def substitution_effect_report(
 
             grouped_vals: list[float] = []
             for train_idx, test_idx in splits:
-                x_train = [x[k] for k in train_idx]
-                y_train = [yv[k] for k in train_idx]
-                x_test = [x[k] for k in test_idx]
-                y_test = [yv[k] for k in test_idx]
-                w_train = [weights[k] for k in train_idx] if weights is not None else None
-                w_test = [weights[k] for k in test_idx] if weights is not None else None
+                x_train, y_train, x_test, y_test, w_train, w_test = _fold_data(
+                    x, yv, weights, train_idx, test_idx
+                )
                 _, group_imp = _score_with_perm_groups(
                     x_train,
                     y_train,
@@ -1335,6 +1355,57 @@ def substitution_effect_report(
     return out
 
 
+def _screen_rows(
+    X: Sequence[Sequence[float]] | pl.DataFrame, feature_names: Sequence[str] | None
+) -> tuple[Sequence[Sequence[Any]], list[str]]:
+    """`feature_screen_report`'s rows (None and non-finite values kept) and feature names."""
+    if isinstance(X, pl.DataFrame):
+        if X.width == 0 or X.height == 0:
+            raise ValueError("X cannot be empty")
+        names = list(feature_names) if feature_names is not None else [str(c) for c in X.columns]
+        if feature_names is not None and len(names) != X.width:
+            raise ValueError(f"feature_names length mismatch: expected {X.width}, got {len(names)}")
+        return X.select([pl.col(c) for c in X.columns]).rows(), names
+    rows = [list(r) for r in X]
+    if not rows:
+        raise ValueError("X cannot be empty")
+    width = len(rows[0])
+    if width == 0:
+        raise ValueError("X must contain at least one feature")
+    if any(len(r) != width for r in rows):
+        raise ValueError("X must be rectangular")
+    return rows, _feature_names(width, feature_names)
+
+
+def _pairwise_corr(rows: Sequence[Sequence[Any]], i: int, j: int) -> float:
+    """Pearson correlation of columns `i` and `j` over the rows where both are finite.
+
+    0.0 with fewer than two such rows or when either column is (near) constant on them.
+    """
+    pairs: list[tuple[float, float]] = []
+    for row in rows:
+        vi = row[i]
+        vj = row[j]
+        if vi is None or vj is None:
+            continue
+        fi = float(vi)
+        fj = float(vj)
+        if isfinite(fi) and isfinite(fj):
+            pairs.append((fi, fj))
+    if len(pairs) < 2:
+        return 0.0
+    ai = [p[0] for p in pairs]
+    aj = [p[1] for p in pairs]
+    sdi = _std(ai)
+    sdj = _std(aj)
+    if sdi <= _EPS or sdj <= _EPS:
+        return 0.0
+    mi = _mean(ai)
+    mj = _mean(aj)
+    cov = sum((u - mi) * (v - mj) for u, v in pairs) / (len(pairs) - 1)
+    return cov / (sdi * sdj)
+
+
 def feature_screen_report(
     X: Sequence[Sequence[float]] | pl.DataFrame,
     y: Sequence[float] | None = None,
@@ -1349,24 +1420,7 @@ def feature_screen_report(
     if max_corr <= 0.0 or max_corr >= 1.0:
         raise ValueError("max_corr must be in (0, 1)")
 
-    if isinstance(X, pl.DataFrame):
-        if X.width == 0 or X.height == 0:
-            raise ValueError("X cannot be empty")
-        names = list(feature_names) if feature_names is not None else [str(c) for c in X.columns]
-        if feature_names is not None and len(names) != X.width:
-            raise ValueError(f"feature_names length mismatch: expected {X.width}, got {len(names)}")
-        rows: Sequence[Sequence[Any]] = X.select([pl.col(c) for c in X.columns]).rows()
-    else:
-        rows = [list(r) for r in X]
-        if not rows:
-            raise ValueError("X cannot be empty")
-        width = len(rows[0])
-        if width == 0:
-            raise ValueError("X must contain at least one feature")
-        if any(len(r) != width for r in rows):
-            raise ValueError("X must be rectangular")
-        names = _feature_names(width, feature_names)
-
+    rows, names = _screen_rows(X, feature_names)
     n_rows = len(rows)
     n_features = len(names)
     if y is not None:
@@ -1405,31 +1459,7 @@ def feature_screen_report(
     for i in range(n_features):
         corr[i][i] = 1.0
         for j in range(i + 1, n_features):
-            pairs: list[tuple[float, float]] = []
-            for k in range(n_rows):
-                vi = rows[k][i]
-                vj = rows[k][j]
-                if vi is None or vj is None:
-                    continue
-                fi = float(vi)
-                fj = float(vj)
-                if isfinite(fi) and isfinite(fj):
-                    pairs.append((fi, fj))
-
-            if len(pairs) < 2:
-                c = 0.0
-            else:
-                ai = [p[0] for p in pairs]
-                aj = [p[1] for p in pairs]
-                mi = _mean(ai)
-                mj = _mean(aj)
-                sdi = _std(ai)
-                sdj = _std(aj)
-                if sdi <= _EPS or sdj <= _EPS:
-                    c = 0.0
-                else:
-                    cov = sum((u - mi) * (v - mj) for u, v in pairs) / (len(pairs) - 1)
-                    c = cov / (sdi * sdj)
+            c = _pairwise_corr(rows, i, j)
             corr[i][j] = c
             corr[j][i] = c
             if abs(c) > max_corr:
