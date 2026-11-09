@@ -352,3 +352,165 @@ fn sadf_sm_power_uses_the_first_row() {
     assert!(from_row_0.is_finite() && from_row_1.is_finite());
     assert_rel(out[0], from_row_0.max(from_row_1), 1e-12, "sm_power sup");
 }
+
+/// `get_sadf`'s search as it was before the windows shared running `XᵀX` / `Xᵀy` sums: a fresh
+/// `_get_betas` regression per window, on the rows built by `sadf_rows`.
+fn sadf_one_regression_per_window(
+    x: &[Vec<f64>],
+    y: &[f64],
+    min_length: usize,
+    absolute: bool,
+) -> Vec<f64> {
+    let mut out = Vec::new();
+    for pos in min_length..y.len() {
+        let (x_t, y_t) = (&x[..=pos], &y[..=pos]);
+        let mut bsadf = f64::NEG_INFINITY;
+        for start in 0..=(y_t.len() - min_length) {
+            let y_subset = y_t[start..].iter().map(|v| vec![*v]).collect::<Vec<_>>();
+            let (b_mean, b_var) = _get_betas(&x_t[start..], &y_subset).unwrap();
+            if b_mean[0].is_nan() {
+                continue;
+            }
+            let ratio = b_mean[0] / b_var[0][0].sqrt();
+            let stat = if absolute { ratio.abs() } else { ratio };
+            if stat > bsadf {
+                bsadf = stat;
+            }
+        }
+        out.push(bsadf);
+    }
+    out
+}
+
+/// The regression rows `get_sadf` builds (AFML Snippet 17.2), for the reference above.
+fn sadf_rows(
+    series: &[f64],
+    model: &str,
+    add_const: bool,
+    lags: &[usize],
+) -> (Vec<Vec<f64>>, Vec<f64>) {
+    let diff: Vec<f64> = series.windows(2).map(|w| w[1] - w[0]).collect();
+    let start = lags.iter().max().unwrap_or(&0) + 1;
+    let mut x = Vec::new();
+    let mut y = Vec::new();
+    for (i, idx) in (start..series.len()).enumerate() {
+        let t = i as f64;
+        let lagged = lags.iter().map(|lag| diff[idx - lag - 1]);
+        let (row, target) = match model {
+            "linear" | "quadratic" => {
+                let mut row = vec![series[idx - 1]];
+                row.extend(lagged);
+                if add_const {
+                    row.push(1.0);
+                }
+                row.push(t);
+                if model == "quadratic" {
+                    row.push(t * t);
+                }
+                (row, diff[idx - 1])
+            }
+            "sm_poly_1" => (vec![t * t, 1.0, t], series[idx]),
+            "sm_poly_2" => (vec![t * t, 1.0, t], series[idx].ln()),
+            "sm_exp" => (vec![t, 1.0], series[idx].ln()),
+            "sm_power" => (vec![((i + 1) as f64).ln(), 1.0], series[idx].ln()),
+            _ => unreachable!(),
+        };
+        x.push(row);
+        y.push(target);
+    }
+    (x, y)
+}
+
+/// `β₀ / se(β₀)` by Householder QR of `X`, which never forms `XᵀX`: a more accurate
+/// reference than either normal-equations implementation.
+fn qr_stat(x: &[Vec<f64>], y: &[f64]) -> Option<f64> {
+    use nalgebra::{DMatrix, DVector};
+    let (n, k) = (x.len(), x[0].len());
+    if n <= k {
+        return None;
+    }
+    let xm = DMatrix::from_fn(n, k, |r, c| x[r][c]);
+    let yv = DVector::from_column_slice(y);
+    let qr = xm.clone().qr();
+    let r = qr.r();
+    let beta = r.solve_upper_triangular(&(qr.q().transpose() * &yv))?;
+    let e = &yv - &xm * &beta;
+    let s2 = e.dot(&e) / (n - k) as f64;
+    let r_inv = r.try_inverse()?;
+    let var_b0 = (&r_inv * r_inv.transpose())[(0, 0)] * s2;
+    Some(beta[0] / var_b0.sqrt())
+}
+
+/// The SADF search with [`qr_stat`] for each window.
+fn sadf_by_qr(x: &[Vec<f64>], y: &[f64], min_length: usize, absolute: bool) -> Vec<f64> {
+    (min_length..y.len())
+        .map(|end| {
+            (0..=end + 1 - min_length)
+                .filter_map(|start| qr_stat(&x[start..=end], &y[start..=end]))
+                .map(|s| if absolute { s.abs() } else { s })
+                .fold(f64::NEG_INFINITY, |best, s| if s > best { s } else { best })
+        })
+        .collect()
+}
+
+#[test]
+fn sadf_matches_one_regression_per_window() {
+    // Accumulating XᵀX and Xᵀy one row at a time sums them in a different order from
+    // nalgebra's product, so the statistics are not bit-for-bit the old ones. On well-posed
+    // windows they agree to ~1e-10 relative or better. The quadratic model with no lags is
+    // badly conditioned on short windows (y₋₁ barely moves, so it is almost collinear with the
+    // constant, next to t and t²): there any normal-equations solve is only good to ~1e-4,
+    // and old and new differ by about that much. Both are then about equally far from a QR
+    // solve, so the change is rounding, not a loss of accuracy. Random walks in log price,
+    // all six models.
+    let mut rng = StdRng::seed_from_u64(1708);
+    let normal = Normal::new(0.0, 0.01).unwrap();
+    for model in ["linear", "quadratic", "sm_poly_1", "sm_poly_2", "sm_exp", "sm_power"] {
+        let tol = if model == "quadratic" { 1e-3 } else { 1e-8 };
+        let (mut new_vs_old, mut new_vs_qr, mut old_vs_qr) = (0.0f64, 0.0f64, 0.0f64);
+        for case in 0..12 {
+            let mut log_p = 4.6_f64;
+            let prices: Vec<f64> = (0..30 + 4 * case)
+                .map(|_| {
+                    log_p += normal.sample(&mut rng);
+                    log_p.exp()
+                })
+                .collect();
+            let lags: Vec<usize> = match case % 3 {
+                0 => vec![],
+                1 => vec![1, 2],
+                _ => vec![1, 3],
+            };
+            let add_const = case % 2 == 0;
+            let min_length = 8 + case % 5;
+            let absolute = model.starts_with("sm_");
+            let got =
+                get_sadf(&prices, model, add_const, min_length, SadfLags::Array(lags.clone()))
+                    .unwrap();
+            let (x, y) = sadf_rows(&prices, model, add_const, &lags);
+            let old = sadf_one_regression_per_window(&x, &y, min_length, absolute);
+            let qr = sadf_by_qr(&x, &y, min_length, absolute);
+            assert_eq!(got.len(), old.len(), "{model} case {case}");
+            for (i, ((g, o), q)) in got.iter().zip(&old).zip(&qr).enumerate() {
+                if o.is_infinite() || g.is_infinite() {
+                    assert_eq!(g, o, "{model} case {case} [{i}]");
+                    continue;
+                }
+                let rel = |a: f64, b: f64| (a - b).abs() / b.abs().max(1.0);
+                assert!(rel(*g, *o) <= tol, "{model} case {case} [{i}]: got {g}, old {o}");
+                new_vs_old = new_vs_old.max(rel(*g, *o));
+                if q.is_finite() {
+                    new_vs_qr = new_vs_qr.max(rel(*g, *q));
+                    old_vs_qr = old_vs_qr.max(rel(*o, *q));
+                }
+            }
+        }
+        eprintln!(
+            "{model}: new vs old {new_vs_old:.1e}, new vs QR {new_vs_qr:.1e}, old vs QR {old_vs_qr:.1e}"
+        );
+        assert!(
+            new_vs_qr <= 4.0 * old_vs_qr + 1e-12,
+            "{model}: new is further from QR ({new_vs_qr:e}) than old ({old_vs_qr:e})"
+        );
+    }
+}
