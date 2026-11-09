@@ -152,6 +152,19 @@ fn test_weights_invariant_to_covariance_scale() {
     }
 }
 
+/// A constant-return asset has zero variance, which `allocate` rejects. The sample covariance
+/// used to compute each column's mean as `sum / rows`, which rounds for a constant `0.1`
+/// (`0.30000000000000004 / 3`), leaving a variance of about `1e-34`: the asset passed the
+/// positive-variance check and took practically all the weight.
+#[test]
+fn test_constant_return_asset_is_rejected() {
+    let names: Vec<String> = ["flat", "risky"].map(String::from).to_vec();
+    let returns = DMatrix::from_row_slice(3, 2, &[0.1, 0.01, 0.1, -0.02, 0.1, 0.03]);
+    let mut hrp = HierarchicalRiskParity::new();
+    let result = hrp.allocate(&names, None, Some(&returns), None, None, false);
+    assert_eq!(result, Err(HrpError::NoData), "weights {:?}", hrp.weights);
+}
+
 /// Leaf order of scipy's single-linkage dendrogram on the same prices, clustered on the distance
 /// of distances as Snippet 16.4 does (tests/fixtures/hrp/generate.py).
 fn reference_leaf_order() -> Vec<usize> {

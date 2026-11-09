@@ -117,7 +117,12 @@ pub fn covariance(returns: &DMatrix<f64>) -> Option<DMatrix<f64>> {
     if rows < 2 {
         return None;
     }
-    let means: Vec<f64> = (0..cols).map(|c| returns.column(c).sum() / rows as f64).collect();
+    // [`mean`] keeps a finite constant column's mean exact, so its variance is exactly zero;
+    // `sum / rows` can round (three `0.1`s give `0.10000000000000002`). The storage is
+    // column-major, so column `c` is one contiguous slice.
+    let data = returns.as_slice();
+    let means: Vec<f64> =
+        (0..cols).map(|c| mean(&data[c * rows..(c + 1) * rows]).unwrap_or(f64::NAN)).collect();
     let mut cov = DMatrix::<f64>::zeros(cols, cols);
     for i in 0..cols {
         for j in i..cols {
@@ -332,5 +337,16 @@ mod tests {
         assert_eq!(cov[(0, 1)], cov[(1, 0)]);
         let c0: Vec<f64> = r.column(0).iter().copied().collect();
         assert!((cov[(0, 0)] - variance(&c0, 1).unwrap()).abs() < 1e-15);
+    }
+
+    #[test]
+    fn covariance_of_a_constant_column_is_exactly_zero() {
+        // 0.1 + 0.1 + 0.1 rounds, so `sum / rows` is not 0.1 and left a variance near 1e-34.
+        let r = DMatrix::from_row_slice(3, 2, &[0.1, 0.01, 0.1, -0.02, 0.1, 0.03]);
+        let cov = covariance(&r).unwrap();
+        assert_eq!(cov[(0, 0)], 0.0);
+        assert_eq!(cov[(0, 1)], 0.0);
+        assert_eq!(cov[(1, 0)], 0.0);
+        assert!(cov[(1, 1)] > 0.0);
     }
 }

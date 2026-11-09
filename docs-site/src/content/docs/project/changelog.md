@@ -47,6 +47,8 @@ file disagree).
 
 ### Fixed
 
+- `util::stats::covariance` (used by `hrp`, `hcaa`, `cla` and `portfolio_optimization`): keep a finite constant column's mean exact, so its variance and covariances are exactly zero. Rounding in `sum / rows` left a variance near `1e-34`, so HRP and HCAA accepted a constant-return asset and gave it practically all the weight instead of rejecting the non-positive variance.
+
 - `hrp`, `hcaa`: split cluster weight by the plain ratio of the two sides' risks; the absolute `f64::EPSILON` added to the denominator made weights depend on the scale of the covariance or returns (`diag(1e-18, 4e-18)` gave about 0.9955/0.0045 instead of 0.8/0.2). Two zero risks now split evenly.
 
 - Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
