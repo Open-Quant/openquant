@@ -265,3 +265,25 @@ fn distance_correlation_stays_within_its_bounds_under_rounding() {
     // Non-finite inputs still propagate rather than being clamped into range.
     assert!(distance_correlation(&[1.0, f64::NAN, 3.0], &[1.0, 2.0, 4.0]).unwrap().is_nan());
 }
+
+/// Identical series sit on the bounds: variation of information 0 and normalised mutual
+/// information 1. The entropies and mutual information round separately, which gave a VI of
+/// about `-9e-16` (a negative distance) and a normalised MI of `1.0000000000000002`.
+#[test]
+fn information_scores_of_identical_series_stay_within_bounds() {
+    let mut worst_vi = f64::INFINITY;
+    let mut worst_mi = f64::NEG_INFINITY;
+    for n in 3..60 {
+        let x: Vec<f64> = (0..n).map(|i| ((i * 37 % 101) as f64 * 0.013).sin()).collect();
+        for bins in [2, 3, 5, 7, 10] {
+            for normalize in [false, true] {
+                let vi = variation_of_information_score(&x, &x, Some(bins), normalize).unwrap();
+                worst_vi = worst_vi.min(vi);
+            }
+            let mi = get_mutual_info(&x, &x, Some(bins), true).unwrap();
+            worst_mi = worst_mi.max(mi);
+        }
+    }
+    assert!(worst_vi >= 0.0, "{worst_vi}");
+    assert!(worst_mi <= 1.0, "{worst_mi}");
+}

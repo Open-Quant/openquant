@@ -496,7 +496,9 @@ pub fn get_mutual_info(
         mutual_info /= denom;
     }
 
-    Ok(mutual_info)
+    // The plug-in estimate is a KL divergence, so non-negative, and at most 1 normalised;
+    // rounding in the sum can step just outside. NaN passes through.
+    Ok(clamp_finite(mutual_info, 0.0, if normalize { 1.0 } else { f64::INFINITY }))
 }
 
 /// Variation of information `VI[X;Y] = H[X] + H[Y] - 2 I[X;Y]` of `x` and `y` (Meilă, 2007),
@@ -578,5 +580,16 @@ pub fn variation_of_information_score(
         score /= joint_dist;
     }
 
-    Ok(score)
+    // VI is non-negative (and at most 1 normalised), but the entropies and the mutual
+    // information round separately: identical series gave about -9e-16. NaN passes through.
+    Ok(clamp_finite(score, 0.0, if normalize { 1.0 } else { f64::INFINITY }))
+}
+
+/// `value` clamped into `[lo, hi]` when finite; a non-finite value is returned unchanged.
+fn clamp_finite(value: f64, lo: f64, hi: f64) -> f64 {
+    if value.is_finite() {
+        value.clamp(lo, hi)
+    } else {
+        value
+    }
 }

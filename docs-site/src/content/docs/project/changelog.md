@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-11-08'
+last_generated: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -46,6 +46,8 @@ file disagree).
 - Docs: clarify human and agent entry points, add a revision-aware `llms.txt` index, and check documentation routes, anchors and redirects. ([#246](https://github.com/Open-Quant/openquant/pull/246))
 
 ### Fixed
+
+- `codependence::get_mutual_info`, `variation_of_information_score`: keep finite results within their bounds (MI and VI non-negative, normalised values at most 1). For identical series, separately rounded entropies gave a negative VI of about `-9e-16` and a normalised MI of `1.0000000000000002`.
 
 - `codependence::distance_correlation`: keep the result in its documented `[0, 1]`. Rounding made the distance covariance of a product-form (independent) sample slightly negative, so the result was `NaN`, and a linear relation gave `1.0000000000000002`. Non-finite inputs still give `NaN`.
 
