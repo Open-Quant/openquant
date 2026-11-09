@@ -215,7 +215,8 @@ fn labeling_triple_barrier_events(
 /// AFML Snippets 3.2 and 3.5. Builds events as `triple_barrier_events` (without a side) and
 /// labels each by the simple return `close[t1] / close[t0] - 1`: 1 if positive, -1 if
 /// negative, 0 only for an exactly zero return. A vertical-barrier exit is labelled by the
-/// sign of the return there, not 0. Events whose `t1` is None (unresolved) are skipped.
+/// sign of the return there, not 0. Events whose `t1` is None (unresolved), or whose `t0`
+/// or `t1` is not one of `close_timestamps`, are skipped.
 ///
 /// Parameters
 /// ----------

@@ -234,7 +234,7 @@ fn dynamic_allocation_trajectory_sharpe_ratio(
     costs,
     k=None,
     initial_weights=None,
-    max_trajectories=da::DEFAULT_MAX_TRAJECTORIES,
+    max_trajectories=1_000_000,
 ))]
 fn dynamic_allocation_dynamic_optimal_portfolio(
     py: Python<'_>,
@@ -245,6 +245,9 @@ fn dynamic_allocation_dynamic_optimal_portfolio(
     initial_weights: Option<Vec<f64>>,
     max_trajectories: usize,
 ) -> PyResult<Py<PyAny>> {
+    // A literal default, so the stub and `__text_signature__` show it; it must stay the
+    // Rust default.
+    const _: () = assert!(da::DEFAULT_MAX_TRAJECTORIES == 1_000_000);
     // The book's default: as many units of capital as assets.
     let units = k.unwrap_or_else(|| means.first().map_or(0, Vec::len));
     let horizons = forecasts(means, covariances, costs)?;

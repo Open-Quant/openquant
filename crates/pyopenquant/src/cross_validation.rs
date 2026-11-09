@@ -191,11 +191,11 @@ fn cv_split_with_diagnostics<'py>(
 ///     End of each sample's label span, in the same units as `t0`. Must be `>= t0`.
 /// n_splits : int
 ///     Number of contiguous test folds; `2 <= n_splits <= len(t0)`.
+/// n_test_splits : int
+///     Number of folds tested together in each split; `1 <= n_test_splits < n_splits`.
 /// pct_embargo : float
 ///     Embargo as a fraction of the whole sample count, in `[0, 1)`; rounded up to a number of
 ///     samples, so any positive value embargoes at least one. AFML suggests about 0.01.
-/// n_test_splits : int
-///     Number of folds tested together in each split; `1 <= n_test_splits < n_splits`.
 ///
 /// Returns
 /// -------

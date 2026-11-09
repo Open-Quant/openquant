@@ -81,7 +81,8 @@ type AlignedOhlcvColumns = (
 ///     the cleaned rows. `report` has keys `row_count`, `symbol_count`,
 ///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
 ///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
-///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, with a fractional second
+///     when there is one; None when empty) and
 ///     `rows_removed_by_deduplication`.
 ///
 /// Raises
@@ -161,7 +162,8 @@ fn data_clean_ohlcv(
 /// dict[str, Any]
 ///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
 ///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
-///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, with a fractional second
+///     when there is one; None when empty) and
 ///     `rows_removed_by_deduplication` (always 0 here).
 ///
 /// Raises
@@ -317,7 +319,8 @@ fn data_align_calendar(
 ///     `(cleaned_frame, report)`. `report` has keys `row_count`, `symbol_count`,
 ///     `duplicate_key_count` (always 0 after cleaning), `gap_interval_count`,
 ///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
-///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, with a fractional second
+///     when there is one; None when empty) and
 ///     `rows_removed_by_deduplication`.
 ///
 /// Raises
@@ -357,7 +360,8 @@ fn data_clean_ohlcv_df(
 /// dict[str, Any]
 ///     Keys `row_count`, `symbol_count`, `duplicate_key_count`, `gap_interval_count`,
 ///     `inferred_interval_us` (the inferred bar spacing, None with no positive spacing),
-///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, None when empty) and
+///     `ts_min` and `ts_max` (UTC `"%Y-%m-%d %H:%M:%S"` strings, with a fractional second
+///     when there is one; None when empty) and
 ///     `rows_removed_by_deduplication` (always 0 here).
 ///
 /// Raises

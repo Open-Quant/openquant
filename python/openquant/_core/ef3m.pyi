@@ -60,8 +60,8 @@ def fit_m2n(
     moments : list[float]
         Raw moments `[E[x], E[x^2], E[x^3], E[x^4], E[x^5]]`; at least five.
     epsilon : float, default 1e-5
-        Convergence tolerance on `p_1` and spacing of the `mu_2` start grid; must be > 0
-        (0 never returns, a negative value yields no fits). Smaller values are slower.
+        Convergence tolerance on `p_1` and spacing of the `mu_2` start grid; must be finite
+        and > 0. Smaller values are slower.
     factor : float, default 5.0
         Width of the `mu_2` start grid in standard deviations.
     n_runs : int, default 1
@@ -82,7 +82,8 @@ def fit_m2n(
     Raises
     ------
     ValueError
-        If `moments` has fewer than five entries or `variant` is not 1 or 2.
+        If `moments` has fewer than five entries, `variant` is not 1 or 2, or `epsilon` is
+        not finite and > 0.
     """
 
 def most_likely_parameters(
