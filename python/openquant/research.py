@@ -55,7 +55,12 @@ def research_run_manifest(
     config: dict[str, Any],
     dataset_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build deterministic run metadata for notebook/script parity."""
+    """Build deterministic run metadata for notebook/script parity.
+
+    Returns `config_digest` (the first 12 hex digits of the SHA-256 of `config` as JSON
+    with sorted keys and no whitespace; values JSON cannot represent are converted with
+    `str`), `config` itself and, when given, `dataset` (`dataset_meta`).
+    """
     payload = json.dumps(config, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:12]
     meta: dict[str, Any] = {
@@ -295,7 +300,32 @@ def run_flywheel_grid(
     *,
     run_names: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Execute multiple flywheel configs and return a ranked leaderboard."""
+    """Run `run_flywheel_iteration` once per config and rank the runs.
+
+    Parameters
+    ----------
+    dataset : ResearchDataset
+        Pipeline inputs, shared by every run.
+    configs : list[dict[str, Any]]
+        One `run_flywheel_iteration` config per run; must not be empty.
+    run_names : list[str] or None, default None
+        One name per config; defaults to `run_00`, `run_01`, ...
+
+    Returns
+    -------
+    dict[str, Any]
+        `leaderboard` (polars.DataFrame, one row per run with its name, index,
+        `config_digest` from `research_run_manifest`, Sharpe ratios, returns, turnover,
+        estimated cost and promotion flags, sorted by `promote_candidate`, `net_sharpe`
+        and `realized_sharpe` descending, then `run_index`), `records` (`leaderboard` as a
+        list of dicts) and `runs` (`run_name`, `config` and full `output` per run, in input
+        order).
+
+    Raises
+    ------
+    ValueError
+        If `configs` is empty or `run_names` differs in length from it.
+    """
     if not configs:
         raise ValueError("configs cannot be empty")
     if run_names is not None and len(run_names) != len(configs):

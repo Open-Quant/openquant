@@ -1204,13 +1204,13 @@ def substitution_effect_report(
         test row; the post-fold window starts strictly after all test labels resolve.
     scoring : {"neg_log_loss", "accuracy", "f1"}, default "neg_log_loss"
         Out-of-sample score; accuracy and F1 threshold the probability at 0.5.
-    allow_unpurged : bool, default False
-        Accept `event_end_indices=None`, giving embargo-only splits that leak label
-        information across folds.
     corr_threshold : float, default 0.9
         Minimum absolute correlation for a pair to be tested.
     orthogonalize : bool, default True
         Also compute MDA on principal components.
+    allow_unpurged : bool, default False
+        Accept `event_end_indices=None`, giving embargo-only splits that leak label
+        information across folds.
     seed : int, default 42
         Seed for the permutations.
 
@@ -1414,7 +1414,46 @@ def feature_screen_report(
     min_coverage: float = 0.95,
     max_corr: float = 0.95,
 ) -> dict[str, Any]:
-    """Run lightweight feature QA checks for notebook discovery loops."""
+    """Run lightweight feature QA checks for notebook discovery loops.
+
+    Per feature, `coverage` is the share of rows holding a finite value (None and
+    non-finite values count as missing) and `std` the sample standard deviation of those
+    values. A feature is rejected for coverage below `min_coverage`, for a standard
+    deviation at most 1e-12, or as the weaker of a pair whose absolute Pearson correlation
+    (over the rows where both are finite) exceeds `max_corr`. Pairs are resolved greedily,
+    strongest correlation first, keeping the feature with the higher `(coverage, std)`;
+    a pair with an already dropped feature is skipped.
+
+    Parameters
+    ----------
+    X : Sequence[Sequence[float]] or polars.DataFrame
+        Feature matrix, one row per sample; must be non-empty and rectangular. A frame's
+        columns are the features.
+    y : Sequence[float] or None, default None
+        Optional labels; only their length is checked against `X`.
+    feature_names : Sequence[str] or None, default None
+        Feature names; defaults to the frame's column names, or `f0`, `f1`, ...
+    min_coverage : float, default 0.95
+        Minimum share of finite values, in `(0, 1]`.
+    max_corr : float, default 0.95
+        Absolute correlation above which one feature of a pair is dropped, in `(0, 1)`.
+
+    Returns
+    -------
+    dict[str, Any]
+        `table` (polars.DataFrame with columns `feature`, `status` (`"accepted"` or
+        `"rejected"`), `coverage`, `std`, `max_abs_corr` and `reasons` (comma-separated),
+        accepted first, then by coverage and std descending), `records` (`table` as a list
+        of dicts), `selected_features` and `rejected_features` (in feature order),
+        `rejection_reasons` (feature to list of reasons) and `meta` (`n_rows`,
+        `n_features`, `min_coverage`, `max_corr`).
+
+    Raises
+    ------
+    ValueError
+        If a threshold is out of range, `X` is empty or not rectangular, or
+        `feature_names` or `y` has the wrong length.
+    """
     if min_coverage <= 0.0 or min_coverage > 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
     if max_corr <= 0.0 or max_corr >= 1.0:

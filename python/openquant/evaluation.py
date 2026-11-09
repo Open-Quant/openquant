@@ -4,7 +4,6 @@ An evaluation layer built on the compiled `backtest_stats` and `strategy_risk` m
 working from a returns series instead of pre-computed moments. It also retains the
 original returns for numerical recovery when rounded moments lose uncertainty:
 
-
 - `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`
   (Bailey and López de Prado 2012, 2014; AFML Chapter 14, §14.7);
 - `efficiency_stats`: those statistics, the annualised Sharpe ratio and the information
@@ -634,6 +633,7 @@ class TrialRegistry:
 
     @property
     def path(self) -> Path:
+        """The registry's JSON file."""
         return self._path
 
     @property
@@ -643,6 +643,7 @@ class TrialRegistry:
 
     @property
     def n_trials(self) -> int:
+        """Number of distinct configurations registered (as of the last load or write)."""
         return len(self._trials)
 
     def __len__(self) -> int:
@@ -665,7 +666,7 @@ class TrialRegistry:
         """
         r = _as_returns(returns)
         try:
-            m = return_moments(r)
+            m = _return_moments(r)
         except _ConstantReturns:
             m = ReturnMoments(
                 n_obs=len(r), mean=r[0], std=0.0, sharpe=0.0, skewness=0.0, kurtosis=3.0
