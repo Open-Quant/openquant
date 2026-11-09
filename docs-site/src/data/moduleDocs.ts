@@ -378,7 +378,7 @@ export const moduleDocs: ModuleDoc[] = [
     handwritten: true,
     afmlChapters: [3, 14, 15],
     apiSurface: "python-only",
-    pythonApis: ["evaluation.return_moments", "evaluation.probabilistic_sharpe_ratio", "evaluation.deflated_sharpe_ratio", "evaluation.expected_max_sharpe", "evaluation.minimum_track_record_length", "evaluation.meta_label_metrics", "evaluation.strategy_failure_probability", "evaluation.config_hash", "evaluation.TrialRegistry"],
+    pythonApis: ["evaluation.return_moments", "evaluation.probabilistic_sharpe_ratio", "evaluation.deflated_sharpe_ratio", "evaluation.expected_max_sharpe", "evaluation.minimum_track_record_length", "evaluation.meta_label_metrics", "evaluation.strategy_failure_probability", "evaluation.strategy_risk_sensitivity", "evaluation.efficiency_stats", "evaluation.config_hash", "evaluation.TrialRegistry"],
   },
   {
     slug: "feature-diagnostics",

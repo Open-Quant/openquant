@@ -7,9 +7,12 @@ original returns for numerical recovery when rounded moments lose uncertainty:
 
 - `probabilistic_sharpe_ratio`, `deflated_sharpe_ratio`, `minimum_track_record_length`
   (Bailey and López de Prado 2012, 2014; AFML Chapter 14, §14.7);
-- `meta_label_metrics`: precision, recall and F1 of a meta-labeling overlay against the
-  primary model it filters (AFML Chapter 3, §3.6);
-- `strategy_failure_probability` (AFML Chapter 15, §15.4);
+- `efficiency_stats`: those statistics, the annualised Sharpe ratio and the information
+  ratio in one report (AFML §14.7.1);
+- `meta_label_metrics`: precision, recall, F1 and log loss of a meta-labeling overlay
+  against the primary model it filters (AFML Chapter 3, §3.6);
+- `strategy_failure_probability` (AFML Chapter 15, §15.4) and `strategy_risk_sensitivity`,
+  the partial derivatives of the Chapter 15 Sharpe ratio in p, n, π+ and π-;
 - `TrialRegistry`: a JSON file keyed by explicit configurations. Re-recording a key
   replaces its entry; the DSR count includes only distinct recorded keys. Include the
   data and protocol choices that distinguish trials; unrecorded choices are not inferred.
@@ -265,6 +268,72 @@ def minimum_track_record_length(
     return _bs.minimum_track_record_length(m.sharpe, benchmark_sr, m.skewness, m.kurtosis, alpha)
 
 
+def efficiency_stats(
+    returns: Iterable[float],
+    *,
+    periods_per_year: float = 252.0,
+    benchmark_returns: float | Sequence[float] = 0.0,
+    benchmark_sr: float = 0.0,
+    trial_sharpes: Sequence[float] | None = None,
+    n_trials: int | None = None,
+    sharpe_std: float | None = None,
+) -> dict[str, float | int | None]:
+    """AFML §14.7 efficiency statistics of one returns series, in one report.
+
+    `sharpe` is per period; `annualized_sharpe` multiplies it by `sqrt(periods_per_year)`,
+    which assumes IID returns. `information_ratio` is the annualised Sharpe ratio of the
+    excess returns over `benchmark_returns`, a constant per-period return or a series of the
+    same length; it is NaN when the excess returns are constant. `psr` is measured against
+    `benchmark_sr` (per period). `dsr` and `expected_max_sharpe` are given only when the
+    trials are, as `trial_sharpes` or as `n_trials` and `sharpe_std` (see
+    `deflated_sharpe_ratio`); otherwise they are None.
+    """
+    r = _as_returns(returns)
+    m = _return_moments(r)
+    ppy = _finite(periods_per_year, "periods_per_year")
+    if ppy <= 0.0:
+        raise ValueError(f"periods_per_year must be positive, got {ppy}")
+    if isinstance(benchmark_returns, bool):
+        raise TypeError("benchmark_returns must be a number or a sequence of numbers")
+    if isinstance(benchmark_returns, (int, float)):
+        bench = [_finite(benchmark_returns, "benchmark_returns")] * len(r)
+    else:
+        bench = [_finite(b, "benchmark_returns") for b in benchmark_returns]
+        if len(bench) != len(r):
+            raise ValueError(
+                f"benchmark_returns and returns differ in length: {len(bench)} vs {len(r)}"
+            )
+    excess = [x - b for x, b in zip(r, bench)]
+    if not all(math.isfinite(x) for x in excess):
+        raise ValueError("excess returns overflow; rescale returns and benchmark_returns")
+    try:
+        information_ratio = _return_moments(excess).sharpe * math.sqrt(ppy)
+    except _ConstantReturns:
+        information_ratio = math.nan
+    psr = probabilistic_sharpe_ratio(r, benchmark_sr)
+    dsr = sr0 = None
+    if trial_sharpes is not None or n_trials is not None or sharpe_std is not None:
+        dsr = deflated_sharpe_ratio(r, trial_sharpes, n_trials=n_trials, sharpe_std=sharpe_std)
+        if trial_sharpes is not None:
+            sharpes = _as_trial_sharpes(trial_sharpes)
+            sr0 = expected_max_sharpe(len(sharpes), _population_std(sharpes))
+        else:
+            sr0 = expected_max_sharpe(n_trials, sharpe_std)  # type: ignore[arg-type]
+    return {
+        "n_obs": m.n_obs,
+        "mean": m.mean,
+        "std": m.std,
+        "skewness": m.skewness,
+        "kurtosis": m.kurtosis,
+        "sharpe": m.sharpe,
+        "annualized_sharpe": m.sharpe * math.sqrt(ppy),
+        "information_ratio": information_ratio,
+        "psr": psr,
+        "expected_max_sharpe": sr0,
+        "dsr": dsr,
+    }
+
+
 def _needs_precise_sharpe_variance(m: ReturnMoments) -> bool:
     skew_term = m.skewness * m.sharpe
     kurtosis_term = (m.kurtosis - 1.0) / 4.0 * m.sharpe * m.sharpe
@@ -377,6 +446,11 @@ def meta_label_metrics(
     was; the overlay takes the bet when it is at least `threshold`. The primary model alone
     takes every bet, so its precision is the share of profitable bets and its recall is 1.
     A ratio with a zero denominator is reported as 0.0.
+
+    `log_loss` is the mean binary cross-entropy of `meta_predictions` against
+    `meta_labels`, in nats, with each prediction clipped to `[1e-15, 1 - 1e-15]`. It scores
+    the probabilities themselves, independent of `threshold`; for 0/1 decisions it is only
+    the share of mistakes times about 34.5.
     """
     labels = [_binary(v) for v in meta_labels]
     preds = [float(v) for v in meta_predictions]
@@ -414,7 +488,19 @@ def meta_label_metrics(
         "primary_precision": primary_precision,
         "primary_recall": primary_recall,
         "primary_f1": _f1(primary_precision, primary_recall),
+        "log_loss": _log_loss(labels, preds),
     }
+
+
+_LOG_LOSS_EPS = 1e-15
+
+
+def _log_loss(labels: Sequence[int], preds: Sequence[float]) -> float:
+    total = math.fsum(
+        -math.log(min(max(p if y == 1 else 1.0 - p, _LOG_LOSS_EPS), 1.0 - _LOG_LOSS_EPS))
+        for y, p in zip(labels, preds)
+    )
+    return total / len(labels)
 
 
 def _binary(value: Any) -> int:
@@ -469,6 +555,49 @@ def strategy_failure_probability(
     )
     report["failure_probability"] = report["empirical_failure_probability"]
     return report
+
+
+def strategy_risk_sensitivity(
+    precision: float,
+    annual_bet_frequency: float,
+    pi_plus: float,
+    pi_minus: float,
+    *,
+    target_sharpe: float | None = None,
+) -> dict[str, float | None]:
+    """How the AFML §15.3 annualised Sharpe ratio responds to p, n, π+ and π-.
+
+    With d = π+ - π- and θ = √(n / (p(1 - p))), SR = θ·(p + π-/d), and the partials are
+    ∂SR/∂p = √n·(p(1 + 2π-/d) - π-/d) / (2(p(1 - p))^{3/2}), ∂SR/∂n = SR/(2n),
+    ∂SR/∂π+ = -θ·π-/d² and ∂SR/∂π- = θ·π+/d². A derivative is local: it says which input
+    the strategy's Sharpe ratio is most exposed to near these values, not what a large
+    change does. With `target_sharpe`, the report adds `implied_precision`, the smallest
+    precision that reaches the target at this frequency and these payouts
+    (`strategy_risk.implied_precision_asymmetric`), and `precision_margin`, how far `p` can
+    fall before the target is missed. Without it both are None.
+    """
+    p = float(precision)
+    n = float(annual_bet_frequency)
+    up = float(pi_plus)
+    down = float(pi_minus)
+    sharpe = _sr.sharpe_asymmetric(p, n, up, down)  # validates the inputs
+    d = up - down
+    a = down / d
+    variance = p * (1.0 - p)
+    theta = math.sqrt(n / variance)
+    implied = margin = None
+    if target_sharpe is not None:
+        implied = _sr.implied_precision_asymmetric(float(target_sharpe), n, up, down)
+        margin = p - implied
+    return {
+        "sharpe": sharpe,
+        "d_sharpe_d_precision": math.sqrt(n) * (p * (1.0 + 2.0 * a) - a) / (2.0 * variance**1.5),
+        "d_sharpe_d_frequency": sharpe / (2.0 * n),
+        "d_sharpe_d_pi_plus": -theta * down / (d * d),
+        "d_sharpe_d_pi_minus": theta * up / (d * d),
+        "implied_precision": implied,
+        "precision_margin": margin,
+    }
 
 
 # --- trial registry ----------------------------------------------------------------------
@@ -622,10 +751,12 @@ __all__ = [
     "TrialRegistry",
     "config_hash",
     "deflated_sharpe_ratio",
+    "efficiency_stats",
     "expected_max_sharpe",
     "meta_label_metrics",
     "minimum_track_record_length",
     "probabilistic_sharpe_ratio",
     "return_moments",
     "strategy_failure_probability",
+    "strategy_risk_sensitivity",
 ]

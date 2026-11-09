@@ -53,12 +53,14 @@ export const apiInventory = {
     "evaluation": [
       "config_hash",
       "deflated_sharpe_ratio",
+      "efficiency_stats",
       "expected_max_sharpe",
       "meta_label_metrics",
       "minimum_track_record_length",
       "probabilistic_sharpe_ratio",
       "return_moments",
-      "strategy_failure_probability"
+      "strategy_failure_probability",
+      "strategy_risk_sensitivity"
     ],
     "feature_assembly": [
       "assemble_features"
