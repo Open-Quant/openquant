@@ -14,8 +14,8 @@ afml_chapter:
   - "15"
 citation:
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 14: §14.7.1 The Sharpe Ratio; §14.7.2 The Probabilistic Sharpe Ratio; §14.7.3 The Deflated Sharpe Ratio. Chapter 3: §3.6 Meta-Labeling; §3.7 How to Use Meta-Labeling. Chapter 15: §15.4 The Probability of Strategy Failure (Snippets 15.4–15.5)."
-  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44."
-  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107."
+  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44. https://doi.org/10.21314/JOR.2012.255"
+  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107. https://doi.org/10.3905/jpm.2014.40.5.094"
 python_api:
   - "evaluation.return_moments"
   - "evaluation.probabilistic_sharpe_ratio"
@@ -26,6 +26,8 @@ python_api:
   - "evaluation.config_hash"
   - "evaluation.meta_label_metrics"
   - "evaluation.strategy_failure_probability"
+  - "evaluation.efficiency_stats"
+  - "evaluation.strategy_risk_sensitivity"
 sidebar:
   badge: Module
 ---
@@ -273,6 +275,60 @@ bets, producing a much smaller bootstrap failure estimate here. A displayed `0.0
 rounded finite-simulation estimate, not a guarantee of no future failures. Neither parameter
 uncertainty, dependence between bets nor out-of-sample model degradation is included.
 
+## One report, and how fragile the Chapter 15 Sharpe is
+
+`efficiency_stats(returns, ...)` collects the §14.7 statistics of one series: per-period and
+annualised Sharpe ratio, the information ratio against a benchmark (a constant per-period
+return or a series of the same length), the moments, PSR and, when the trials are given,
+$SR_0$ and DSR. Annualising by $\sqrt{\text{periods per year}}$ assumes IID returns.
+
+`strategy_risk_sensitivity(p, n, π+, π-)` differentiates the asymmetric-payout Sharpe ratio
+of AFML §15.3, $SR = \theta\,(p + \pi_-/d)$ with $d = \pi_+ - \pi_-$ and
+$\theta = \sqrt{n/(p(1-p))}$, in each input. With `target_sharpe` it also reports the implied
+precision (Snippet 15.3) and how far $p$ can fall before the target is missed.
+
+```python
+import random
+
+from openquant import evaluation as ev
+
+# Two years of daily returns with a small edge, and the market they are measured against.
+rng = random.Random(5)
+market = [rng.gauss(0.0003, 0.01) for _ in range(504)]
+strategy = [0.5 * m + rng.gauss(0.0004, 0.006) for m in market]
+
+s = ev.efficiency_stats(strategy, periods_per_year=252, benchmark_returns=market,
+                        n_trials=20, sharpe_std=0.02)
+print(f"Sharpe {s['sharpe']:.4f}/day = {s['annualized_sharpe']:.2f} annualised; "
+      f"IR vs market {s['information_ratio']:.2f}")
+print(f"skew {s['skewness']:.2f}  kurtosis {s['kurtosis']:.2f}  PSR(0) {s['psr']:.3f}  "
+      f"SR0 {s['expected_max_sharpe']:.4f}  DSR {s['dsr']:.3f}")
+
+# Chapter 15: 260 bets a year, 70% winners, +0.5% or -1%. Which input matters most?
+k = ev.strategy_risk_sensitivity(0.70, 260.0, 0.005, -0.01, target_sharpe=1.0)
+print(f"annualised Sharpe {k['sharpe']:.3f}; dSR/dp {k['d_sharpe_d_precision']:.1f}  "
+      f"dSR/dn {k['d_sharpe_d_frequency']:.5f}")
+print(f"dSR/dpi+ {k['d_sharpe_d_pi_plus']:.0f}  dSR/dpi- {k['d_sharpe_d_pi_minus']:.0f}")
+print(f"precision needed for Sharpe 1: {k['implied_precision']:.4f}  "
+      f"margin {k['precision_margin']:.4f}")
+```
+
+```text
+Sharpe 0.0274/day = 0.43 annualised; IR vs market 0.10
+skew -0.18  kurtosis 2.96  PSR(0) 0.730  SR0 0.0380  DSR 0.406
+annualised Sharpe 1.173; dSR/dp 36.3  dSR/dn 0.00226
+dSR/dpi+ 1564  dSR/dpi- 782
+precision needed for Sharpe 1: 0.6952  margin 0.0048
+```
+
+The strategy carries half of each market move, so its excess over the full market keeps the
+other half with the sign reversed: the information ratio is about a quarter of the Sharpe
+ratio. Twenty trials with this dispersion take DSR well below PSR. The Chapter 15
+strategy clears a Sharpe of 1 with half a point of precision to spare: one point of
+precision is worth 0.36 of Sharpe, one basis point on the winning payout 0.16, and ten more
+bets a year only 0.02. The derivatives are local, per unit of each input; they rank
+exposures near these values and do not predict a large change.
+
 ## API
 
 | Function | Returns |
@@ -284,8 +340,10 @@ uncertainty, dependence between bets nor out-of-sample model degradation is incl
 | `deflated_sharpe_ratio(returns, trial_sharpes)` or `(returns, n_trials=, sharpe_std=)` | DSR |
 | `TrialRegistry(path)` | registry with `record(config, returns)`, `trials`, `n_trials`, `reload()`, `sharpe_std()`, `expected_max_sharpe()`, `deflated_sharpe_ratio(returns)` |
 | `config_hash(config)` | SHA-256 of the configuration's sorted-key JSON |
-| `meta_label_metrics(meta_labels, meta_predictions, threshold=0.5)` | precision, recall, F1, accuracy, confusion counts, and `primary_*` for the primary model alone |
+| `efficiency_stats(returns, *, periods_per_year=252, benchmark_returns=0.0, benchmark_sr=0.0, trial_sharpes=None, n_trials=None, sharpe_std=None)` | dict: `n_obs`, `mean`, `std`, `skewness`, `kurtosis`, `sharpe`, `annualized_sharpe`, `information_ratio` (NaN for constant excess returns), `psr`, and `expected_max_sharpe`, `dsr` (None without trials) |
+| `meta_label_metrics(meta_labels, meta_predictions, threshold=0.5)` | precision, recall, F1, accuracy, confusion counts, `primary_*` for the primary model alone, and `log_loss` of the predictions (clipped to $[10^{-15}, 1-10^{-15}]$, independent of `threshold`) |
 | `strategy_failure_probability(bet_outcomes, years_elapsed, target_sharpe, investor_horizon_years, ...)` | the `strategy_risk` report plus `failure_probability` |
+| `strategy_risk_sensitivity(precision, annual_bet_frequency, pi_plus, pi_minus, *, target_sharpe=None)` | dict: `sharpe`, `d_sharpe_d_precision`, `d_sharpe_d_frequency`, `d_sharpe_d_pi_plus`, `d_sharpe_d_pi_minus`, and `implied_precision`, `precision_margin` (None without a target) |
 
 Returns must hold at least three finite values and must not be constant, except in
 `TrialRegistry.record`, which records constant returns as Sharpe 0 (above). `n_trials` must

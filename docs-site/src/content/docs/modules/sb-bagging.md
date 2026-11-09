@@ -12,7 +12,7 @@ afml_chapter:
   - "4"
   - "6"
 citation:
-  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 4, §4.5 Bagging Classifiers and Uniqueness; §4.5.1 Sequential Bootstrap. Chapter 6, §6.3 Bootstrap Aggregation."
+  - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 4, §4.5 Bagging Classifiers and Uniqueness; §4.5.1 Sequential Bootstrap; §4.5.2 Implementation of Sequential Bootstrap (Snippets 4.3–4.5). Chapter 6, §6.3 Bootstrap Aggregation."
   - "Breiman, L. (1996). Bagging predictors. Machine Learning 24(2), 123–140."
 rust_api:
   - "SequentiallyBootstrappedBaggingClassifier"

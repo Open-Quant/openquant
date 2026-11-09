@@ -99,6 +99,30 @@ if (blocks.length === 0) {
   process.exit(1);
 }
 
+// Every module page with a Python surface shows one executed example with its output
+// (issue #53). A page whose only examples are skipped, or that runs code but shows no
+// ```text output under it, documents an API without demonstrating it. Rust-only modules
+// (api_surface: "rust-only") have nothing to import and are exempt; their Rust examples are
+// compile-checked by check:examples and executed by the crate's docs_* tests.
+const modulePagesWithoutOutput = [];
+for (const file of walkPages(path.join(pagesRoot, 'modules'))) {
+  const page = path.relative(pagesRoot, file);
+  if (/(^|\/)index\.mdx?$/.test(page)) continue;
+  const surface = fs.readFileSync(file, 'utf8').match(/^api_surface:\s*["']?([^"'\n]+)["']?\s*$/m)?.[1];
+  if (surface === 'rust-only') continue;
+  if (!blocks.some((b) => b.page === page && !b.skip && b.expected !== null)) {
+    modulePagesWithoutOutput.push(page);
+  }
+}
+if (modulePagesWithoutOutput.length) {
+  console.error('check:python-examples: FAILED — module page(s) without an executed Python example');
+  console.error('followed by its ```text output:');
+  for (const page of modulePagesWithoutOutput) console.error(`  ${page}`);
+  console.error('Add a runnable ```python block and the ```text it prints, or set');
+  console.error('api_surface: "rust-only" if the module has no Python binding.');
+  process.exit(1);
+}
+
 // --- 2. Materialise one .py file per block ----------------------------------
 
 fs.rmSync(outDir, { recursive: true, force: true });

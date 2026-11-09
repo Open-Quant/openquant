@@ -12,7 +12,7 @@ afml_chapter:
   - "16"
 citation:
   - "Markowitz, H. (1956). The optimization of a quadratic function subject to linear constraints. Naval Research Logistics Quarterly 3(1–2), 111–133."
-  - "Bailey, D. H. and López de Prado, M. (2013). An open-source implementation of the critical-line algorithm for portfolio optimization. Algorithms 6(1), 169–196."
+  - "Bailey, D. H. and López de Prado, M. (2013). An open-source implementation of the critical-line algorithm for portfolio optimization. Algorithms 6(1), 169–196. https://doi.org/10.3390/a6010169"
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 16: §16.2 The Problem with Convex Portfolio Optimization; §16.3 Markowitz's Curse."
 rust_api:
   - "CLA"

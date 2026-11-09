@@ -30,6 +30,7 @@ file disagree).
 
 ### Added
 
+- `evaluation`: `efficiency_stats` (per-period and annualised Sharpe, information ratio, PSR and DSR in one report), `strategy_risk_sensitivity` (partial derivatives of the AFML §15.3 Sharpe ratio in p, n, π+ and π-, with the implied-precision margin), and a `log_loss` key in `meta_label_metrics`.
 - Research: add point-in-time availability, exact revision association and complete-feature assembly APIs, examples and guides. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - Research: add 20 qualified offline studies, reproducible report replay, lossless storage and numerical-runtime diagnostics; synthetic results do not establish investment performance. ([#270](https://github.com/Open-Quant/openquant/pull/270))
 - Example: a runnable synthetic-data research journey through dollar bars, events, labels and forward-only classification evaluation. ([#260](https://github.com/Open-Quant/openquant/pull/260))
