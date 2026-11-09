@@ -14,8 +14,8 @@ afml_chapter:
   - "15"
 citation:
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 14: §14.7.1 The Sharpe Ratio; §14.7.2 The Probabilistic Sharpe Ratio; §14.7.3 The Deflated Sharpe Ratio. Chapter 3: §3.6 Meta-Labeling; §3.7 How to Use Meta-Labeling. Chapter 15: §15.4 The Probability of Strategy Failure (Snippets 15.4–15.5)."
-  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44."
-  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107."
+  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44. https://doi.org/10.21314/JOR.2012.255"
+  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107. https://doi.org/10.3905/jpm.2014.40.5.094"
 python_api:
   - "evaluation.return_moments"
   - "evaluation.probabilistic_sharpe_ratio"

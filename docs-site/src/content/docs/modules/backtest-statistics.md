@@ -12,8 +12,8 @@ afml_chapter:
   - "14"
 citation:
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 14: §14.3 General Characteristics (Snippets 14.1–14.2); §14.5.1 Returns Concentration (Snippet 14.3); §14.5.2 Drawdown and Time under Water (Snippet 14.4); §14.7.1 The Sharpe Ratio; §14.7.2 The Probabilistic Sharpe Ratio; §14.7.3 The Deflated Sharpe Ratio."
-  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44."
-  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107."
+  - "Bailey, D. H. and López de Prado, M. (2012). The Sharpe ratio efficient frontier. Journal of Risk 15(2), 3–44. https://doi.org/10.21314/JOR.2012.255"
+  - "Bailey, D. H. and López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting, and non-normality. Journal of Portfolio Management 40(5), 94–107. https://doi.org/10.3905/jpm.2014.40.5.094"
 rust_api:
   - "sharpe_ratio"
   - "information_ratio"

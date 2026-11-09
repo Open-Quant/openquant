@@ -12,7 +12,7 @@ afml_chapter:
   - "16"
 citation:
   - "López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley. Chapter 16: §16.2 The Problem with Convex Portfolio Optimization; §16.3 Markowitz's Curse; §16.4 From Geometric to Hierarchical Relationships; §16.4.1 Tree Clustering (Snippet 16.1); §16.4.2 Quasi-Diagonalization (Snippet 16.2); §16.4.3 Recursive Bisection (Snippet 16.3); §16.6 Out-of-Sample Monte Carlo Simulations."
-  - "López de Prado, M. (2016). Building diversified portfolios that outperform out of sample. Journal of Portfolio Management 42(4), 59–69."
+  - "López de Prado, M. (2016). Building diversified portfolios that outperform out of sample. Journal of Portfolio Management 42(4), 59–69. https://doi.org/10.3905/jpm.2016.42.4.059"
 rust_api:
   - "HierarchicalRiskParity"
   - "HrpDendrogram"
