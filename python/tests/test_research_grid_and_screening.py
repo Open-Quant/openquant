@@ -106,3 +106,20 @@ def test_feature_screen_report_flags_missing_constant_and_correlation():
     assert len(out["selected_features"]) >= 1
     assert "f2" in out["rejected_features"]
     assert "f3" in out["rejected_features"]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"min_coverage": float("nan")},
+        {"min_coverage": 0.0},
+        {"min_coverage": 1.5},
+        {"max_corr": float("nan")},
+        {"max_corr": 1.0},
+        {"max_corr": 0.0},
+    ],
+)
+def test_feature_screen_report_rejects_out_of_range_thresholds(kwargs):
+    # A NaN threshold used to pass the range check and silently disable its screen.
+    with pytest.raises(ValueError, match="must be in"):
+        openquant.feature_diagnostics.feature_screen_report([[1.0, 2.0], [2.0, 1.0]], **kwargs)

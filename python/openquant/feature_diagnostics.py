@@ -1454,9 +1454,9 @@ def feature_screen_report(
         If a threshold is out of range, `X` is empty or not rectangular, or
         `feature_names` or `y` has the wrong length.
     """
-    if min_coverage <= 0.0 or min_coverage > 1.0:
+    if not 0.0 < min_coverage <= 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
-    if max_corr <= 0.0 or max_corr >= 1.0:
+    if not 0.0 < max_corr < 1.0:
         raise ValueError("max_corr must be in (0, 1)")
 
     rows, names = _screen_rows(X, feature_names)
