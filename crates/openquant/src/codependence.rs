@@ -356,7 +356,12 @@ pub fn distance_correlation(x: &[f64], y: &[f64]) -> CodependenceResult<f64> {
         return Err(CodependenceError::ZeroDistanceVariance);
     }
 
-    Ok(d_cov_xy.sqrt() / denom)
+    // The squared distance covariance is non-negative and the ratio is at most 1, but rounding
+    // can put either just outside (about -1e-19 for a product-form sample, whose square root
+    // is NaN; 1 + 2^-52 for a linear relation). Restore the bounds without masking NaN.
+    let d_cov_xy = if d_cov_xy < 0.0 { 0.0 } else { d_cov_xy };
+    let dcor = d_cov_xy.sqrt() / denom;
+    Ok(if dcor.is_finite() { dcor.clamp(0.0, 1.0) } else { dcor })
 }
 
 /// Histogram bin count that minimises the bias of entropy estimates (Hacine-Gharbi et al.,

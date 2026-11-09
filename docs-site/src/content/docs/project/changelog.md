@@ -47,6 +47,8 @@ file disagree).
 
 ### Fixed
 
+- `codependence::distance_correlation`: keep the result in its documented `[0, 1]`. Rounding made the distance covariance of a product-form (independent) sample slightly negative, so the result was `NaN`, and a linear relation gave `1.0000000000000002`. Non-finite inputs still give `NaN`.
+
 - `sb_bagging::SequentiallyBootstrappedBaggingRegressor`: flatten a line only when its sample's feature values are all equal, and score an out-of-bag R² of 0 only for constant targets. Absolute `1e-12` floors on the feature variance and target sum of squares made the fit depend on units: a feature and target in units of `1e-8` gave flat lines and an R² of 0 for an exact linear relation.
 
 - `synthetic_backtesting::calibrate_ou_params`: reject constant lagged prices whose mean rounds (for example three `0.1`s) with `ConstantPrices`; the rounded mean left a tiny variance and the fit returned a meaningless `phi` (`-0.67` for `[0.1, 0.1, 0.1, 0.2]`).

@@ -245,3 +245,23 @@ fn nonfinite_correlations_are_not_clamped_into_valid_distances() {
     let tiny = [1e-100, 2e-100, 3e-100];
     assert!(angular_distance(&tiny, &tiny).unwrap().is_nan());
 }
+
+/// Distance correlation stays in its documented `[0, 1]` at both ends. A sample whose empirical
+/// joint distribution is a product of its marginals has a distance covariance of exactly 0;
+/// rounding made the computed one about `-7e-19`, and its square root was `NaN`. A linear
+/// relation has a distance correlation of exactly 1; rounding gave `1.0000000000000002`.
+#[test]
+fn distance_correlation_stays_within_its_bounds_under_rounding() {
+    let x = [0.1, 0.1, 0.1, 0.3, 0.3, 0.3, 0.7, 0.7, 0.7];
+    let y = [0.2, 0.9, 0.3, 0.2, 0.9, 0.3, 0.2, 0.9, 0.3];
+    let independent = distance_correlation(&x, &y).unwrap();
+    assert!((0.0..1e-6).contains(&independent), "{independent}");
+
+    let x = [0.896, -0.887, -0.83, 0.671, 0.472, 0.339, -0.384, 0.212];
+    let y: Vec<f64> = x.iter().map(|v| 7.3 * v).collect();
+    let linear = distance_correlation(&x, &y).unwrap();
+    assert!(linear <= 1.0 && linear > 1.0 - 1e-12, "{linear}");
+
+    // Non-finite inputs still propagate rather than being clamped into range.
+    assert!(distance_correlation(&[1.0, f64::NAN, 3.0], &[1.0, 2.0, 4.0]).unwrap().is_nan());
+}
