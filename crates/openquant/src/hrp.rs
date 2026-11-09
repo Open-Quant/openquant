@@ -401,7 +401,10 @@ fn recursive_bisection_min_var(
             let right = &split[i + 1];
             let lv = cluster_variance(covariance, left)?;
             let rv = cluster_variance(covariance, right)?;
-            let a = 1.0 - lv / (lv + rv + f64::EPSILON);
+            // No absolute epsilon in the denominator: it would make the split depend on the
+            // covariance's scale. Both variances zero (or a non-finite ratio) splits evenly.
+            let a = 1.0 - lv / (lv + rv);
+            let a = if a.is_finite() { a.clamp(0.0, 1.0) } else { 0.5 };
             for &idx in left {
                 weights[idx] *= a;
             }

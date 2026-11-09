@@ -137,6 +137,21 @@ fn test_value_error_for_incorrect_dimensions() {
     assert!(matches!(err, HrpError::DimensionMismatch(_)));
 }
 
+/// HRP weights do not depend on the scale of the covariance. The bisection split used to add
+/// `f64::EPSILON` to the sum of the two cluster variances, which dominates when variances are
+/// tiny: `diag(1e-18, 4e-18)` gave about `[0.9955, 0.0045]` instead of `[0.8, 0.2]`.
+#[test]
+fn test_weights_invariant_to_covariance_scale() {
+    let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+    for scale in [1.0, 1e-4, 1e-12, 1e-18, 1e-300] {
+        let cov = DMatrix::from_row_slice(2, 2, &[scale, 0.0, 0.0, 4.0 * scale]);
+        let mut hrp = HierarchicalRiskParity::new();
+        hrp.allocate(&names, None, None, Some(&cov), None, false).unwrap();
+        assert!((hrp.weights[0] - 0.8).abs() < 1e-12, "scale {scale}: {:?}", hrp.weights);
+        assert!((hrp.weights[1] - 0.2).abs() < 1e-12, "scale {scale}: {:?}", hrp.weights);
+    }
+}
+
 /// Leaf order of scipy's single-linkage dendrogram on the same prices, clustered on the distance
 /// of distances as Snippet 16.4 does (tests/fixtures/hrp/generate.py).
 fn reference_leaf_order() -> Vec<usize> {

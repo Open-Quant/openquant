@@ -33,6 +33,8 @@ file disagree).
 
 ### Fixed
 
+- `hrp`, `hcaa`: split cluster weight by the plain ratio of the two sides' risks; the absolute `f64::EPSILON` added to the denominator made weights depend on the scale of the covariance or returns (`diag(1e-18, 4e-18)` gave about 0.9955/0.0045 instead of 0.8/0.2). Two zero risks now split evenly.
+
 - Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
 
 - `sample_weights`: recover log returns when finite positive price ratios underflow, become subnormal or overflow, while preserving ordinary-ratio arithmetic and invalid-price behavior.
