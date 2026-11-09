@@ -319,6 +319,25 @@ fn test_drop_labels() {
     assert!(dropped2.len() <= labels.len());
 }
 
+/// When two labels tie for rarest, the one that appears first is dropped, every time. The
+/// label counts were kept in a `HashMap`, so the tie went to whichever label its randomly
+/// seeded iteration order visited first and repeated calls on the same input disagreed.
+#[test]
+fn test_drop_labels_breaks_ties_deterministically() {
+    let t0 = chrono::DateTime::from_timestamp(0, 0).unwrap().naive_utc();
+    let bins: [i8; 10] = [1, 1, 1, 1, 1, 1, 1, 1, 0, -1];
+    let rows: Vec<_> = bins
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| (t0 + chrono::Duration::seconds(i as i64), 0.0, 0.01, b, None))
+        .collect();
+    for _ in 0..64 {
+        // 0 and -1 each hold 10% <= 20%: drop 0 (seen first); two labels remain, so stop.
+        let kept: Vec<i8> = drop_labels(&rows, 0.2).iter().map(|r| r.3).collect();
+        assert_eq!(kept, [1, 1, 1, 1, 1, 1, 1, 1, -1]);
+    }
+}
+
 #[test]
 fn test_triple_barrier_disabled_barrier_configurations() {
     let close = load_close();

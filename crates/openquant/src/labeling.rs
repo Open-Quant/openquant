@@ -432,17 +432,22 @@ pub fn get_bins(
 /// Drops under-represented labels (AFML Snippet 3.8).
 ///
 /// Repeatedly removes the rarest label while its share is at most `min_pct` and at least
-/// three distinct labels remain. Rows are `(t0, ret, trgt, label, side)` as from
-/// [`get_bins`].
+/// three distinct labels remain. Of labels tied for rarest, the one that appears first in
+/// `events` is removed. Rows are `(t0, ret, trgt, label, side)` as from [`get_bins`].
 pub fn drop_labels(
     events: &[(NaiveDateTime, f64, f64, i8, Option<f64>)],
     min_pct: f64,
 ) -> Vec<(NaiveDateTime, f64, f64, i8, Option<f64>)> {
     let mut filtered: Vec<_> = events.to_vec();
     loop {
-        let mut counts: std::collections::HashMap<i8, usize> = std::collections::HashMap::new();
+        // Counts in order of first appearance, so a tie for rarest is broken the same way on
+        // every call (a `HashMap`'s iteration order is randomly seeded).
+        let mut counts: Vec<(i8, usize)> = Vec::new();
         for (_, _, _, bin, _) in &filtered {
-            *counts.entry(*bin).or_default() += 1;
+            match counts.iter_mut().find(|(label, _)| label == bin) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((*bin, 1)),
+            }
         }
         let total = filtered.len() as f64;
         let mut min_label: Option<(i8, f64)> = None;

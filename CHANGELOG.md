@@ -33,6 +33,8 @@ file disagree).
 
 ### Fixed
 
+- `labeling::drop_labels`: break a tie for rarest label deterministically (the label that appears first is dropped). Counts were kept in a randomly seeded `HashMap`, so repeated calls on the same input could drop different labels.
+
 - `feature_importance::get_orthogonal_features`, `feature_pca_analysis`: a constant column standardises to 0 as documented even when its mean rounds (for example three `0.1`s). It became a constant `-1` column and a spurious principal component with as much variance as a real feature.
 
 - `portfolio_optimization`: a `NaN` portfolio risk now returns the documented `NaNResult` error. The variance was floored with `f64::max(v, 0.0)` before the finiteness check, so a `NaN` covariance reported a risk and Sharpe ratio of 0.
