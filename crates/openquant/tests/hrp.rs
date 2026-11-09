@@ -152,6 +152,19 @@ fn test_weights_invariant_to_covariance_scale() {
     }
 }
 
+/// A `NaN` in the covariance reaches the weights instead of being read as zero risk. The
+/// cluster variance was floored with `f64::max(v, 0.0)`, which returns 0 for a `NaN` `v`, so the
+/// pair with the unknown covariance looked riskless and took nearly all the weight.
+#[test]
+fn test_nan_covariance_propagates_to_weights() {
+    let names: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+    let nan = f64::NAN;
+    let cov = DMatrix::from_row_slice(3, 3, &[0.04, nan, 0.0, nan, 0.04, 0.0, 0.0, 0.0, 0.04]);
+    let mut hrp = HierarchicalRiskParity::new();
+    hrp.allocate(&names, None, None, Some(&cov), None, false).unwrap();
+    assert!(hrp.weights.iter().all(|w| w.is_nan()), "{:?}", hrp.weights);
+}
+
 /// A constant-return asset has zero variance, which `allocate` rejects. The sample covariance
 /// used to compute each column's mean as `sum / rows`, which rounds for a constant `0.1`
 /// (`0.30000000000000004 / 3`), leaving a variance of about `1e-34`: the asset passed the

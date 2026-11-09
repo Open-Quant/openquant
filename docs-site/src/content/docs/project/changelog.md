@@ -47,6 +47,8 @@ file disagree).
 
 ### Fixed
 
+- `hrp`: a `NaN` in the covariance now gives `NaN` weights. The cluster variance was floored with `f64::max(v, 0.0)`, which turns `NaN` into 0, so the cluster with the unknown covariance looked riskless (`[0.5, 0.5, 0.0]` for a `NaN` between the first two of three assets). The bisection split no longer maps a non-finite factor to 0.5; only two zero variances split evenly.
+
 - `codependence::get_mutual_info`, `variation_of_information_score`: keep finite results within their bounds (MI and VI non-negative, normalised values at most 1). For identical series, separately rounded entropies gave a negative VI of about `-9e-16` and a normalised MI of `1.0000000000000002`.
 
 - `codependence::distance_correlation`: keep the result in its documented `[0, 1]`. Rounding made the distance covariance of a product-form (independent) sample slightly negative, so the result was `NaN`, and a linear relation gave `1.0000000000000002`. Non-finite inputs still give `NaN`.

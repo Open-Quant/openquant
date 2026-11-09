@@ -374,7 +374,8 @@ fn cluster_variance(cov: &DMatrix<f64>, indices: &[usize]) -> Result<f64, HrpErr
             v += w[ii] * cov[(i, j)] * w[jj];
         }
     }
-    Ok(v.max(0.0))
+    // Floor rounding below zero, but keep NaN: `f64::max` would turn it into a riskless 0.
+    Ok(if v < 0.0 { 0.0 } else { v })
 }
 
 fn recursive_bisection_min_var(
@@ -402,9 +403,9 @@ fn recursive_bisection_min_var(
             let lv = cluster_variance(covariance, left)?;
             let rv = cluster_variance(covariance, right)?;
             // No absolute epsilon in the denominator: it would make the split depend on the
-            // covariance's scale. Both variances zero (or a non-finite ratio) splits evenly.
-            let a = 1.0 - lv / (lv + rv);
-            let a = if a.is_finite() { a.clamp(0.0, 1.0) } else { 0.5 };
+            // covariance's scale. Both variances zero splits evenly.
+            let total = lv + rv;
+            let a = if total == 0.0 { 0.5 } else { 1.0 - lv / total };
             for &idx in left {
                 weights[idx] *= a;
             }
