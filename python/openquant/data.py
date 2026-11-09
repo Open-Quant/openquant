@@ -122,10 +122,6 @@ def _cast_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
     return lf.select(CANONICAL_OHLCV_COLUMNS)
 
 
-def _prepare_ohlcv_lf(df: pl.DataFrame) -> pl.LazyFrame:
-    return _cast_ohlcv_lf(df).drop_nulls(CANONICAL_OHLCV_COLUMNS)
-
-
 def _null_counts(cast_lf: pl.LazyFrame) -> dict[str, int]:
     """Nulls per canonical column of `_cast_ohlcv_lf`'s frame, i.e. before they are dropped.
 
@@ -198,6 +194,18 @@ def _gap_count(sorted_df: pl.DataFrame, interval_us: int | None) -> int:
     return int(sorted_df.select(gap.fill_null(False).cast(pl.UInt32).sum()).item())
 
 
+def _duplicate_key_count() -> pl.Expr:
+    """Rows repeating the previous row's `(symbol, ts_us)` key, in a frame sorted by it."""
+    return (
+        (
+            (pl.col("symbol") == pl.col("symbol").shift(1))
+            & (pl.col("ts_us") == pl.col("ts_us").shift(1))
+        )
+        .cast(pl.UInt32)
+        .sum()
+    )
+
+
 def _build_quality_report(
     sorted_df: pl.DataFrame, rows_removed_by_deduplication: int, null_counts: dict[str, int]
 ) -> dict[str, Any]:
@@ -221,14 +229,7 @@ def _build_quality_report(
         .select(
             pl.len().alias("row_count"),
             pl.col("symbol").n_unique().alias("symbol_count"),
-            (
-                (
-                    (pl.col("symbol") == pl.col("symbol").shift(1))
-                    & (pl.col("ts_us") == pl.col("ts_us").shift(1))
-                )
-                .cast(pl.UInt32)
-                .sum()
-            ).alias("duplicate_key_count"),
+            _duplicate_key_count().alias("duplicate_key_count"),
             pl.col("ts").min().alias("ts_min"),
             pl.col("ts").max().alias("ts_max"),
         )
@@ -346,20 +347,7 @@ def clean_ohlcv(
 
     duplicate_key_count = 0
     if return_report:
-        duplicate_key_count = int(
-            sorted_lf.select(
-                (
-                    (
-                        (pl.col("symbol") == pl.col("symbol").shift(1))
-                        & (pl.col("ts_us") == pl.col("ts_us").shift(1))
-                    )
-                    .cast(pl.UInt32)
-                    .sum()
-                ).alias("duplicate_key_count")
-            )
-            .collect()
-            .item(0, 0)
-        )
+        duplicate_key_count = int(sorted_lf.select(_duplicate_key_count()).collect().item(0, 0))
 
     cleaned = (
         sorted_lf.unique(
@@ -425,6 +413,33 @@ def data_quality_report(df: pl.DataFrame) -> dict[str, Any]:
     return _build_quality_report(
         sorted_df, rows_removed_by_deduplication=0, null_counts=_null_counts(cast_lf)
     )
+
+
+@overload
+def load_ohlcv(
+    path: str | Path,
+    *,
+    symbol: str | None = ...,
+    return_report: Literal[False] = ...,
+) -> pl.DataFrame: ...
+
+
+@overload
+def load_ohlcv(
+    path: str | Path,
+    *,
+    symbol: str | None = ...,
+    return_report: Literal[True],
+) -> tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+@overload
+def load_ohlcv(
+    path: str | Path,
+    *,
+    symbol: str | None = ...,
+    return_report: bool = ...,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]: ...
 
 
 def load_ohlcv(
@@ -788,9 +803,7 @@ class LocalFileSource:
 
     def _data(self) -> pl.DataFrame:
         if self._frame is None:
-            frame = load_ohlcv(self.path)
-            assert isinstance(frame, pl.DataFrame)
-            self._frame = frame
+            self._frame = load_ohlcv(self.path)
         return self._frame
 
     @property
@@ -942,11 +955,16 @@ def _cache_component(value: str) -> str:
     return encoded.replace(".", "%2E") if encoded in {".", ".."} else encoded
 
 
+def _source_version(source: Any) -> str:
+    """The source's optional `version`, as a string ("" when absent)."""
+    return str(getattr(source, "version", "") or "")
+
+
 def _source_dir(source: Any) -> str:
     name = getattr(source, "name", None)
     if not isinstance(name, str) or not name.strip():
         raise ValueError("source.name must be a non-empty string")
-    version = str(getattr(source, "version", "") or "")
+    version = _source_version(source)
     key = _cache_component(name)
     return f"{key}@{quote(version, safe='')}" if version else key
 
@@ -969,6 +987,45 @@ def _atomic_write(path: Path, write: Callable[[Path], None]) -> None:
             os.remove(tmp)
 
 
+def _read_cache_entry(
+    data_path: Path, meta_path: Path, request_metadata: Mapping[str, Any]
+) -> pl.DataFrame | None:
+    """The cached frame if its sidecar records this request and the frame's hash, else None."""
+    try:
+        recorded = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(recorded, dict) or not all(
+        recorded.get(key) == value for key, value in request_metadata.items()
+    ):
+        return None
+    cached = pl.read_parquet(data_path)
+    return cached if recorded.get("dataset_hash") == dataset_hash(cached) else None
+
+
+def _write_cache_entry(
+    data_path: Path,
+    meta_path: Path,
+    frame: pl.DataFrame,
+    request_metadata: Mapping[str, Any],
+    terms: Any,
+) -> None:
+    """Write `frame` and its JSON sidecar (request, terms, row count, hash, fetch time)."""
+    entry = {
+        **request_metadata,
+        "terms": terms,
+        "rows": frame.height,
+        "dataset_hash": dataset_hash(frame),
+        "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+    _atomic_write(data_path, frame.write_parquet)
+
+    def _write_meta(p: Path) -> None:
+        p.write_text(json.dumps(entry, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    _atomic_write(meta_path, _write_meta)
+
+
 def _normalize_source_frame(
     raw: Any, source_name: str, symbol: str, start: date, end: date
 ) -> pl.DataFrame:
@@ -981,9 +1038,9 @@ def _normalize_source_frame(
             )
     else:
         frame = frame.with_columns(pl.lit(symbol).alias("symbol"))
-    cleaned = clean_ohlcv(frame)
-    assert isinstance(cleaned, pl.DataFrame)
-    cleaned = cleaned.filter(pl.col("ts").dt.date().is_between(start, end, closed="both"))
+    cleaned = clean_ohlcv(frame).filter(
+        pl.col("ts").dt.date().is_between(start, end, closed="both")
+    )
     if cleaned.height == 0:
         raise ValueError(
             f"source {source_name!r} returned no usable rows for {symbol!r} between {start} and {end}"
@@ -1006,6 +1063,48 @@ def quality_failures(report: Mapping[str, Any]) -> list[str]:
     if nulls:
         failures.append(f"nulls in {nulls}")
     return failures
+
+
+@overload
+def fetch(
+    symbols: str | Iterable[str],
+    start: date | datetime | str,
+    end: date | datetime | str,
+    *,
+    source: DataSource | None = ...,
+    cache_dir: str | Path | None = ...,
+    refresh: bool = ...,
+    offline: bool = ...,
+    return_meta: Literal[False] = ...,
+) -> pl.DataFrame: ...
+
+
+@overload
+def fetch(
+    symbols: str | Iterable[str],
+    start: date | datetime | str,
+    end: date | datetime | str,
+    *,
+    source: DataSource | None = ...,
+    cache_dir: str | Path | None = ...,
+    refresh: bool = ...,
+    offline: bool = ...,
+    return_meta: Literal[True],
+) -> tuple[pl.DataFrame, dict[str, Any]]: ...
+
+
+@overload
+def fetch(
+    symbols: str | Iterable[str],
+    start: date | datetime | str,
+    end: date | datetime | str,
+    *,
+    source: DataSource | None = ...,
+    cache_dir: str | Path | None = ...,
+    refresh: bool = ...,
+    offline: bool = ...,
+    return_meta: bool = ...,
+) -> pl.DataFrame | tuple[pl.DataFrame, dict[str, Any]]: ...
 
 
 def fetch(
@@ -1054,25 +1153,17 @@ def fetch(
         request_metadata = {
             "format": CACHE_FORMAT,
             "source": src.name,
-            "source_version": str(getattr(src, "version", "") or ""),
+            "source_version": _source_version(src),
             "symbol": sym,
             "start": start_d.isoformat(),
             "end": end_d.isoformat(),
         }
         frame: pl.DataFrame | None = None
         if not refresh and data_path.exists() and meta_path.exists():
-            try:
-                recorded = json.loads(meta_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                recorded = None
-            if isinstance(recorded, dict) and all(
-                recorded.get(key) == value for key, value in request_metadata.items()
-            ):
-                cached = pl.read_parquet(data_path)
-                if recorded.get("dataset_hash") == dataset_hash(cached):
-                    frame = cached
-                    cache_status[sym] = "hit"
-            if frame is None and offline:
+            frame = _read_cache_entry(data_path, meta_path, request_metadata)
+            if frame is not None:
+                cache_status[sym] = "hit"
+            elif offline:
                 raise CacheMissError(
                     f"cache entry {data_path} does not match its request metadata or recorded hash"
                 )
@@ -1084,19 +1175,9 @@ def fetch(
             frame = _normalize_source_frame(
                 src.fetch_symbol(sym, start_d, end_d), src.name, sym, start_d, end_d
             )
-            entry = {
-                **request_metadata,
-                "terms": getattr(src, "terms", None),
-                "rows": frame.height,
-                "dataset_hash": dataset_hash(frame),
-                "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-            }
-            _atomic_write(data_path, frame.write_parquet)
-
-            def _write_meta(p: Path, e: dict[str, Any] = entry) -> None:
-                p.write_text(json.dumps(e, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-            _atomic_write(meta_path, _write_meta)
+            _write_cache_entry(
+                data_path, meta_path, frame, request_metadata, getattr(src, "terms", None)
+            )
             cache_status[sym] = "refresh" if refresh else "miss"
         frames.append(frame)
 
@@ -1108,7 +1189,7 @@ def fetch(
         return out
     meta = {
         "source": src.name,
-        "source_version": str(getattr(src, "version", "") or ""),
+        "source_version": _source_version(src),
         "terms": getattr(src, "terms", None),
         "symbols": syms,
         "start": start_d.isoformat(),
