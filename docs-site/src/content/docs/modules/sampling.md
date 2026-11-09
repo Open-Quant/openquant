@@ -2,7 +2,7 @@
 title: "sampling"
 description: "Label concurrency, average uniqueness and the sequential bootstrap, for training sets whose labels overlap in time."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering

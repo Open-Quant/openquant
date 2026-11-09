@@ -2,7 +2,7 @@
 title: "sb_bagging"
 description: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a deliberately simple one-feature base learner."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering

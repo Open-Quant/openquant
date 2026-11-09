@@ -3,7 +3,7 @@ title: "Performance"
 description: "Committed criterion and Python benchmark results, what each benchmark measures, and how CI gates regressions."
 status: generated
 generated_from: "benchmarks/"
-last_generated: '2026-11-08'
+last_generated: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
