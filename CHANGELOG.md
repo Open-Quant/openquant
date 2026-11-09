@@ -33,6 +33,7 @@ file disagree).
 
 ### Fixed
 
+- `feature_diagnostics`: `feature_screen_report` rejects a NaN `min_coverage` or `max_corr` instead of silently disabling that screen; binding docstrings for `cpcv_splits`, `implied_frequency_*`, `fit_m2n` and others now match the Rust behaviour.
 - Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
 
 - `sample_weights`: recover log returns when finite positive price ratios underflow, become subnormal or overflow, while preserving ordinary-ratio arithmetic and invalid-price behavior.
