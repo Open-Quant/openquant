@@ -1,0 +1,125 @@
+---
+import DefaultHero from '@astrojs/starlight/components/Hero.astro';
+const isHome = Astro.locals.starlightRoute.entry.id === '' || Astro.locals.starlightRoute.entry.id === 'index';
+const points = Array.from({ length: 49 }, (_, i) => ({ x: 28 + i * 8, y: 150 - i * 1.65 + Math.sin(i * .57) * 17 }));
+const firstTouch = points.findIndex(p => p.y <= 94);
+const path = points.map(p => `${p.x},${p.y}`).join(' ');
+---
+{isHome ? (
+<section class="oq-hero" aria-labelledby="_top">
+  <div class="oq-hero-copy">
+    <p class="oq-eyebrow">Rust core · Python bindings</p>
+    <h1 id="_top">OpenQuant</h1>
+    <p class="oq-hero-tagline">From observations<br />to defensible research.</p>
+    <p class="oq-hero-description">The methods from López de Prado’s <em>Advances in Financial Machine Learning</em>, implemented in Rust and callable from Python.</p>
+    <div class="oq-hero-actions"><a class="oq-primary" href={`${import.meta.env.BASE_URL}/quickstart/`}>Start with Python <span aria-hidden="true">→</span></a><a href={`${import.meta.env.BASE_URL}/agents/`}>Agent guide <span aria-hidden="true">→</span></a></div>
+  </div>
+  <oq-barrier-study>
+    <figure class="oq-study">
+      <div class="oq-study-heading"><span>01 / LABEL AN EVENT</span><span>Triple barrier</span></div>
+      <svg viewBox="0 0 440 250" role="img" aria-labelledby="study-title study-desc">
+        <title id="study-title">Synthetic triple-barrier labeling study</title>
+        <desc id="study-desc">A synthetic series reaches the upper barrier before its lower barrier or time limit. The first touch determines the label.</desc>
+        <g class="oq-grid" aria-hidden="true">{Array.from({length: 11}, (_, x) => Array.from({length: 6}, (_, y) => <circle cx={28+x*38} cy={38+y*35} r="1" />))}</g>
+        <path class="oq-barriers" d="M28 94H412M28 198H412M412 45V215" />
+        <text x="28" y="82">UPPER</text><text x="28" y="222">LOWER</text><text x="332" y="35">TIME LIMIT</text>
+        <polyline class="oq-observations" points={path}/>
+        <g class="oq-dots" aria-hidden="true">{points.map((p,i) => <circle data-step={i} cx={p.x} cy={p.y} r="2.6" />)}</g>
+        <circle class="oq-touch" cx={points[firstTouch].x} cy={points[firstTouch].y} r="6" />
+        <circle class="oq-cursor" cx={points[48].x} cy={points[48].y} r="5" hidden />
+      </svg>
+      <div class="oq-study-controls" hidden>
+        <label for="oq-study-step">Observation</label>
+        <input id="oq-study-step" type="range" min="0" max="48" value="48" step="1" />
+        <output for="oq-study-step" aria-live="off">49 / 49</output>
+        <button type="button">Replay</button>
+      </div>
+      <figcaption>Synthetic illustration, not a performance result. The outlined dot marks the first upper-barrier touch.</figcaption>
+    </figure>
+  </oq-barrier-study>
+</section>
+) : <DefaultHero><slot /></DefaultHero>}
+<script>
+class BarrierStudy extends HTMLElement {
+  connectedCallback() {
+    if (this.dataset.ready) return;
+    this.dataset.ready = 'true';
+    const input = this.querySelector('input')!;
+    const output = this.querySelector('output')!;
+    const button = this.querySelector('button')!;
+    const controls = this.querySelector<HTMLElement>('.oq-study-controls')!;
+    const cursor = this.querySelector<SVGCircleElement>('.oq-cursor')!;
+    const dots = [...this.querySelectorAll<SVGCircleElement>('[data-step]')];
+    controls.hidden = false;
+    cursor.removeAttribute('hidden');
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    const stop = () => { cancelAnimationFrame(frame); frame = 0; button.textContent = 'Replay'; };
+    const show = (step: number) => {
+      input.value = String(step);
+      input.setAttribute('aria-valuetext', `Observation ${step + 1} of 49`);
+      output.value = `${step + 1} / 49`;
+      cursor.setAttribute('cx', dots[step].getAttribute('cx')!);
+      cursor.setAttribute('cy', dots[step].getAttribute('cy')!);
+      dots.forEach((dot, index) => dot.classList.toggle('oq-past', index <= step));
+    };
+    input.addEventListener('input', () => { stop(); show(Number(input.value)); });
+    button.addEventListener('click', () => {
+      if (frame) { stop(); return; }
+      if (motion.matches) { show(48); return; }
+      button.textContent = 'Pause';
+      const start = performance.now();
+      const tick = (now: number) => {
+        const step = Math.min(48, Math.floor((now - start) / 70)); show(step);
+        if (step < 48) frame = requestAnimationFrame(tick); else stop();
+      };
+      frame = requestAnimationFrame(tick);
+    });
+    this.addEventListener('pointermove', (event) => {
+      // Pointer motion scrubs only over the diagram; controls remain native for touch/keyboard.
+      const svg = this.querySelector('svg')!;
+      if (event.pointerType !== 'mouse' || event.target !== svg && !svg.contains(event.target as Node)) return;
+      stop(); const rect = svg.getBoundingClientRect();
+      show(Math.max(0, Math.min(48, Math.round(((event.clientX - rect.left) / rect.width * 440 - 28) / 8))));
+    });
+    this.addEventListener('pointerleave', stop);
+    const preferenceChanged = () => { if (motion.matches) { stop(); show(48); } };
+    motion.addEventListener('change', preferenceChanged);
+    show(48);
+    this.cleanup = () => { stop(); motion.removeEventListener('change', preferenceChanged); };
+  }
+  cleanup?: () => void;
+  disconnectedCallback() { this.cleanup?.(); }
+}
+if (!customElements.get('oq-barrier-study')) customElements.define('oq-barrier-study', BarrierStudy);
+</script>
+<style>
+.oq-hero { display: grid; gap: 3rem; align-items: center; padding: 3rem 0 2.5rem; }
+h1 { font-family: var(--oq-serif); font-weight: 600; font-size: clamp(3rem, 6vw, 4.8rem); line-height: 1.05; margin: .7rem 0 1rem; }
+.oq-eyebrow { font-family: var(--oq-mono); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--oq-muted); }
+.oq-hero-tagline { font-family: var(--oq-serif); font-size: clamp(1.7rem, 3vw, 2.4rem); line-height: 1.2; margin: 0 0 1rem; }
+.oq-hero-description { color: var(--oq-muted); max-width: 45ch; font-size: 1rem; line-height: 1.65; }
+.oq-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem; margin-top: 1.7rem; font-size: .95rem; }
+.oq-hero-actions a { color: var(--oq-accent); text-underline-offset: .2em; }
+.oq-hero-actions .oq-primary { background: var(--oq-accent); color: var(--oq-ground); padding: .7rem 1rem; border-radius: 3px; text-decoration: none; font-weight: 600; }
+.oq-study { margin: 0; border-block: 1px solid var(--oq-rule); padding: 1rem 0; }
+.oq-study-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-family: var(--oq-mono); font-size: .65rem; color: var(--oq-muted); }
+svg { width: 100%; height: auto; display: block; overflow: visible; }
+.oq-grid { fill: var(--oq-rule); }
+.oq-barriers { stroke: var(--oq-muted); stroke-dasharray: 4 5; fill: none; }
+svg text { fill: var(--oq-muted); font: 9px var(--oq-mono); }
+.oq-observations { fill: none; stroke: var(--oq-muted); stroke-width: 1; }
+.oq-dots { fill: var(--oq-accent); }
+.oq-past { r: 3.2px; }
+.oq-touch { fill: var(--oq-ground); stroke: var(--oq-accent); stroke-width: 2; }
+.oq-cursor { fill: var(--oq-accent); stroke: var(--oq-ground); stroke-width: 2; }
+[hidden] { display: none !important; }
+.oq-study-controls { display: flex; align-items: center; gap: .6rem; font-family: var(--oq-mono); font-size: .7rem; }
+input { min-width: 40px; width: 100%; accent-color: var(--oq-accent); min-height: 44px; }
+button { color: var(--oq-accent); background: var(--oq-ground); border: 1px solid var(--oq-rule); border-radius: 3px; padding: .4rem .6rem; min-height: 44px; cursor: pointer; }
+output { white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--oq-accent); outline-offset: 4px; }
+figcaption { margin-top: .8rem; color: var(--oq-muted); font-size: .75rem; line-height: 1.5; }
+@media (min-width: 800px) { .oq-hero { grid-template-columns: 1fr 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>

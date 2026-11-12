@@ -22,14 +22,14 @@ const theme = (name, type, { surface, text, muted, accent }) => ({
 
 export const monographLight = theme('monograph-light', 'light', {
   surface: '#f2eee4',
-  text: '#1d1a16',
-  muted: '#5c554b',
+  text: '#171717',
+  muted: '#525252',
   accent: '#97196a',
 });
 
 export const monographDark = theme('monograph-dark', 'dark', {
-  surface: '#221e17',
-  text: '#ece6d8',
-  muted: '#aaa190',
+  surface: '#1b1b1b',
+  text: '#ededed',
+  muted: '#ababab',
   accent: '#f29ad6',
 });

@@ -91,6 +91,7 @@ export default defineConfig({
         // Derives each page's status pill from its `status` frontmatter rather
         // than from hand-written markup in `banner.content`.
         Banner: './src/components/DocStatusBanner.astro',
+        Hero: './src/components/ResearchHero.astro',
       },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/Open-Quant/openquant' },

@@ -17,18 +17,14 @@ hero:
       link: /openquant/agents/
       variant: minimal
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-12'
 audience:
   - quant-dev
   - platform-engineering
 ---
 
-OpenQuant is a library of the building blocks in *Advances in Financial Machine
-Learning* (AFML): event-driven bars, CUSUM filters, triple-barrier and
-meta-labels, sample weights, fractional differentiation, purged
-cross-validation, backtest statistics, bet sizing, and hierarchical portfolio
-construction. The numerical core is Rust; a PyO3 extension exposes it to Python.
-Functions take plain sequences, and the data-loading layer works in Polars frames.
+Build research from explicit observations, labels and validation boundaries.
+Use the Rust core directly or work through its Python bindings.
 
 ## Choose your path
 

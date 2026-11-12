@@ -11,12 +11,12 @@ The logo's cyan and yellow appear **only in the mark**.
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `ground` | `#fbf9f4` | `#17140f` | page |
-| `surface` | `#f2eee4` | `#221e17` | code blocks, inline code |
-| `text` | `#1d1a16` | `#ece6d8` | body, headings, heavy table rules |
-| `muted` | `#5c554b` | `#aaa190` | captions, code comments, status line |
+| `ground` | `#fbf9f4` | `#101010` | page |
+| `surface` | `#f2eee4` | `#1b1b1b` | code blocks, inline code |
+| `text` | `#171717` | `#ededed` | body, headings, heavy table rules |
+| `muted` | `#525252` | `#ababab` | captions, code comments, status line |
 | `accent` | `#97196a` | `#f29ad6` | links, current nav item, eyebrow labels, code keywords, status pill ground |
-| `rule` | `#cdc4b1` | `#4c4536` | hairlines (not text: 1.65:1 / 1.93:1) |
+| `rule` | `#cdc4b1` | `#464646` | hairlines (not text: 1.65:1 / 1.93:1) |
 
 Lowest required text contrast: 6.35:1 (muted on surface, light). `color-scheme` follows the theme.
 
@@ -104,3 +104,7 @@ References reviewed for this refinement:
 These are design principles, not copied visual assets. No dependencies or remote
 scripts were added. `test:design` protects semantic stage labels, local module
 links, accessible glyph treatment, logo consistency and loaded type weights.
+
+## November 12 landing refinement
+
+Keep pink and the CMY pinwheel identity. Replace brown-black with neutral black/charcoal; preserve the warm light paper and editorial type. The home hero uses a bounded synthetic triple-barrier study, with a complete static fallback and native keyboard/touch controls. No perpetual animation, performance implication, or live data.
