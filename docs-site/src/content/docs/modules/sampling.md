@@ -2,7 +2,7 @@
 title: "sampling"
 description: "Label concurrency, average uniqueness and the sequential bootstrap, for training sets whose labels overlap in time."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -296,11 +296,12 @@ shape checks do not validate all numerical contents.
   the thread-local generator, so repeated calls differ; from Rust, `seq_bootstrap_with_rng`
   takes any generator. `warmup_samples` forces the first draws and is consumed from the
   *end* of the list; every later draw is uniqueness-weighted.
-- **The matrix is dense.** `get_ind_matrix` allocates bars × labels bytes and
-  `seq_bootstrap` rescans all of it for every draw, so a full-length sample costs on the
-  order of bars × labels² operations. Ten thousand labels over a hundred thousand bars is a
-  gigabyte and will not finish. Bootstrap within blocks, or draw `sample_length` well below
-  the label count.
+- **The matrix is dense.** `get_ind_matrix` allocates bars × labels bytes. `seq_bootstrap`
+  reads all of it once; after that each draw costs on the order of the nonzero cells (the
+  labels' total span length) plus the label count, so a full-length sample costs on the
+  order of labels × (total span + labels) operations. Ten thousand labels over a hundred
+  thousand bars is still a gigabyte matrix. Bootstrap within blocks, or draw
+  `sample_length` well below the label count.
 - **Spans are inclusive bar positions.** Convert event and barrier-touch timestamps to
   positions in the *same* bar series before calling. An `end` beyond the last bar is
   not an error: both `num_concurrent_events` and `get_ind_matrix` truncate the span silently.

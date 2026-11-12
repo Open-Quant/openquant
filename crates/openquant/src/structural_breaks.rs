@@ -247,8 +247,9 @@ pub fn get_chu_stinchcombe_white_statistics(
 /// `lags` sets the lagged differences in the ADF models; for the `sm_*` models it only sets
 /// where the output starts. The output has `rows - min_length` values, where
 /// `rows = series.len() - max_lag - 1`, and is empty when `rows <= min_length`. Cost is
-/// `O(n²)` regressions, so compute it on sampled bars. The `(t - t0)^φ` window penalty of
-/// §17.4.3 is not implemented (`φ = 0`).
+/// `O(n²)` regressions (the windows ending at a row share running `XᵀX` sums, but each one
+/// still recomputes its residuals, so the total is `O(n³)` cheap row operations): compute it
+/// on sampled bars. The `(t - t0)^φ` window penalty of §17.4.3 is not implemented (`φ = 0`).
 ///
 /// # Errors
 ///
@@ -278,7 +279,7 @@ pub fn get_sadf(
     _min_length: usize,
     _lags: SadfLags,
 ) -> StructuralBreakResult<Vec<f64>> {
-    let (x, y, indices) = get_y_x(_series, _model, _lags, _add_const)?;
+    let (x, y, _) = get_y_x(_series, _model, _lags, _add_const)?;
     // AFML 17.4.3: the sub/super-martingale statistic is |beta| / se, since a trend of either
     // sign is of interest. The ADF-based models keep the signed t-statistic (explosiveness
     // is beta > 0).
@@ -287,12 +288,15 @@ pub fn get_sadf(
         return Ok(Vec::new());
     }
 
-    let mut sadf_values = Vec::with_capacity(y.len().saturating_sub(_min_length));
-    for (pos, _) in indices.iter().enumerate().skip(_min_length) {
-        let x_subset = x[..=pos].to_vec();
-        let y_subset = y[..=pos].to_vec();
-        let value = get_sadf_at_t(&x_subset, &y_subset, _min_length, absolute)?;
-        sadf_values.push(value);
+    if _min_length == 0 {
+        // A window must hold at least one row.
+        return Err(StructuralBreakError::InputTooShort);
+    }
+
+    let mut windows = SadfWindows::new(&x, &y);
+    let mut sadf_values = Vec::with_capacity(y.len() - _min_length);
+    for end in _min_length..y.len() {
+        sadf_values.push(windows.supremum(end, _min_length, absolute));
     }
 
     Ok(sadf_values)
@@ -338,10 +342,11 @@ pub fn _get_values_diff(
 /// `x` holds one row per observation and `y` one single-element row per observation.
 /// Returns `(coefficients, covariance)`: the coefficient vector `(XᵀX)⁻¹ Xᵀy` and its
 /// covariance matrix `(XᵀX)⁻¹ s²`, with `s² = eᵀe / (rows - cols)`. If `XᵀX` is singular both
-/// are all `NaN`, which is how the SADF search recognises a window to skip.
+/// are all `NaN`.
 ///
-/// A helper of [`get_sadf`] and [`get_chow_type_stat`], public (with mlfinlab's
-/// underscore-prefixed name) so that tests can check it directly.
+/// A helper of [`get_chow_type_stat`]; [`get_sadf`] runs the same regression on each window
+/// from running sums of `XᵀX` and `Xᵀy`, skipping a window whose `XᵀX` is singular. Public
+/// (with mlfinlab's underscore-prefixed name) so that tests can check it directly.
 ///
 /// # Errors
 ///
@@ -521,38 +526,105 @@ fn get_y_x(
     Ok((x, y, indices))
 }
 
-fn get_sadf_at_t(
-    x: &[Vec<f64>],
-    y: &[f64],
-    min_length: usize,
-    absolute: bool,
-) -> StructuralBreakResult<f64> {
-    let y_len = y.len();
-    if y_len < min_length {
-        return Ok(f64::NEG_INFINITY);
+/// The SADF regressions over every window `start..=end` of one regression sample.
+///
+/// [`_get_betas`] on each window would rebuild `X` and form `XᵀX` and `Xᵀy` from scratch, at
+/// `O(len · k²)` per window. Here the windows ending at a row are visited from shortest to
+/// longest, so each one adds a single row to running sums of `XᵀX` and `Xᵀy`. The estimator is
+/// unchanged: the same normal-equations inverse (nalgebra's `try_inverse` of `XᵀX`, `NaN` on a
+/// singular window), the residuals of each window recomputed directly, and
+/// `var(β₀) = (XᵀX)⁻¹₀₀ · eᵀe / (rows - k)`. Only the order in which `XᵀX` and `Xᵀy` are summed
+/// differs. That is rounding: about 1e-10 relative on well-conditioned windows, and up to the
+/// method's own error (about 1e-4 for the quadratic model on short windows) where `XᵀX` is
+/// ill-conditioned.
+struct SadfWindows<'a> {
+    /// `rows × k` regressors, row-major.
+    x: Vec<f64>,
+    y: &'a [f64],
+    k: usize,
+    xx: Vec<f64>,
+    xy: Vec<f64>,
+    beta: Vec<f64>,
+}
+
+impl<'a> SadfWindows<'a> {
+    fn new(x: &[Vec<f64>], y: &'a [f64]) -> Self {
+        let k = x.first().map_or(0, Vec::len);
+        debug_assert!(k > 0 && x.iter().all(|row| row.len() == k));
+        Self {
+            x: x.iter().flatten().copied().collect(),
+            y,
+            k,
+            xx: vec![0.0; k * k],
+            xy: vec![0.0; k],
+            beta: vec![0.0; k],
+        }
     }
 
-    let mut bsadf = f64::NEG_INFINITY;
-    let start_points = 0..=(y_len - min_length);
-    for start in start_points {
-        let y_subset = y[start..].iter().map(|v| vec![*v]).collect::<Vec<_>>();
-        let x_subset = x[start..].to_vec();
-
-        let (b_mean, b_var) = _get_betas(&x_subset, &y_subset)?;
-        if b_mean.first().map(|v| v.is_nan()).unwrap_or(true) {
-            continue;
+    /// Supremum of the statistic over the windows `start..=end` with at least `min_length`
+    /// rows; `-inf` if every window is singular or gives `NaN`.
+    fn supremum(&mut self, end: usize, min_length: usize, absolute: bool) -> f64 {
+        self.xx.fill(0.0);
+        self.xy.fill(0.0);
+        // The shortest window first, then one more row at a time.
+        let shortest = end + 1 - min_length;
+        for row in shortest..=end {
+            self.add_row(row);
         }
+        let mut bsadf = f64::NEG_INFINITY;
+        for start in (0..=shortest).rev() {
+            if start < shortest {
+                self.add_row(start);
+            }
+            if let Some(stat) = self.statistic(start, end) {
+                let stat = if absolute { stat.abs() } else { stat };
+                if stat > bsadf {
+                    bsadf = stat;
+                }
+            }
+        }
+        bsadf
+    }
 
-        let b_estimate = b_mean[0];
-        let b_std = b_var[0][0].sqrt();
-        let ratio = b_estimate / b_std;
-        let all_adf = if absolute { ratio.abs() } else { ratio };
-        if all_adf > bsadf {
-            bsadf = all_adf;
+    /// Adds row `row`'s contribution to `XᵀX` and `Xᵀy`.
+    fn add_row(&mut self, row: usize) {
+        let k = self.k;
+        let xr = &self.x[row * k..(row + 1) * k];
+        let yr = self.y[row];
+        for (i, &xi) in xr.iter().enumerate() {
+            self.xy[i] += xi * yr;
+            for (cell, &xj) in self.xx[i * k..(i + 1) * k].iter_mut().zip(xr) {
+                *cell += xi * xj;
+            }
         }
     }
 
-    Ok(bsadf)
+    /// `β₀ / se(β₀)` for the window `start..=end` from the current sums, or `None` if `XᵀX` is
+    /// singular or `β₀` is `NaN`.
+    fn statistic(&mut self, start: usize, end: usize) -> Option<f64> {
+        let k = self.k;
+        let xx_inv = DMatrix::from_row_slice(k, k, &self.xx).try_inverse()?;
+        for i in 0..k {
+            let mut b = 0.0;
+            for j in 0..k {
+                b += xx_inv[(i, j)] * self.xy[j];
+            }
+            self.beta[i] = b;
+        }
+        if self.beta[0].is_nan() {
+            return None;
+        }
+        let mut err_t_err = 0.0;
+        for row in start..=end {
+            let xr = &self.x[row * k..(row + 1) * k];
+            let fitted: f64 = xr.iter().zip(&self.beta).map(|(a, b)| a * b).sum();
+            let e = self.y[row] - fitted;
+            err_t_err += e * e;
+        }
+        let rows = end - start + 1;
+        let b_var = xx_inv[(0, 0)] * (err_t_err / (rows as f64 - k as f64));
+        Some(self.beta[0] / b_var.sqrt())
+    }
 }
 
 fn to_matrix(data: &[Vec<f64>]) -> StructuralBreakResult<DMatrix<f64>> {

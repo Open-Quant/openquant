@@ -58,8 +58,21 @@ pub fn ewma(arr_in: &[f64], window: usize) -> Result<Vec<f64>, InputError> {
     let mut out = vec![0.0; arr_in.len()];
     out[0] = ewma_old;
 
+    // The weight's terms `(1 - alpha)^i` shrink geometrically. Once one is below
+    // `weight * 2^-60` (a 128th of half an ulp of `weight`, which never decreases) adding it,
+    // or any later and smaller term, rounds back to `weight`, so the `powi` calls stop there
+    // and the output is bit for bit the same.
+    let negligible = 2f64.powi(-60);
+    let mut weight_settled = false;
     for i in 1..arr_in.len() {
-        weight += (1.0 - alpha).powi(i as i32);
+        if !weight_settled {
+            let term = (1.0 - alpha).powi(i as i32);
+            if term < weight * negligible {
+                weight_settled = true;
+            } else {
+                weight += term;
+            }
+        }
         ewma_old = ewma_old * (1.0 - alpha) + arr_in[i];
         out[i] = ewma_old / weight;
     }

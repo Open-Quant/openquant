@@ -2,7 +2,7 @@
 title: "sb_bagging"
 description: "A bagging ensemble that draws each estimator's sample with the sequential bootstrap, around a deliberately simple one-feature base learner."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -246,9 +246,11 @@ estimators in stages need not match training the final count in one call.
   one of them, chosen at random.
 - **Labels are `u8` with 1 as the positive class.** Anything other than 1 counts as negative
   when the stump picks its side, so a −1/+1 encoding must be mapped to 0/1 first.
-- **The sequential draw is expensive.** Each draw rescans the whole indicator matrix, so one
-  estimator costs on the order of bars × labels × `max_samples` operations. Thousands of
-  labels over many estimators is slow; lower `max_samples` or bootstrap within blocks.
+- **The sequential draw is the main cost.** Each estimator reads the indicator matrix once,
+  then each draw costs on the order of its nonzero cells (the labels' total span length)
+  plus the label count, so one estimator costs about `max_samples` × (total span + labels)
+  operations. Thousands of long, overlapping labels over many estimators is slow; lower
+  `max_samples` or bootstrap within blocks.
 
 ## Related modules
 

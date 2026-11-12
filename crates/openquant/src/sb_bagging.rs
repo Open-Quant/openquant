@@ -33,8 +33,9 @@
 //! - Out-of-bag scores remain optimistic when labels overlap, because a held-out label still
 //!   overlaps drawn labels in time (AFML §4.5); treat them as a sanity check and score the
 //!   model under purged cross-validation ([`crate::cross_validation`]).
-//! - Each sequential draw rescans the whole indicator matrix, so one estimator costs on the
-//!   order of bars × labels × `max_samples` operations.
+//! - Each estimator reads the indicator matrix once; each sequential draw then costs on the
+//!   order of the matrix's nonzero cells plus the label count, `max_samples` draws per
+//!   estimator.
 //!
 //! ```
 //! use nalgebra::DMatrix;

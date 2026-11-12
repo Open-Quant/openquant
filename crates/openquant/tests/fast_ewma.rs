@@ -31,3 +31,33 @@ fn test_ewma() {
     assert_eq!(&price_arr[..2], &[1205.0, 1005.0]);
     assert!((ewma_res[1] - 1100.0).abs() < 1e-9);
 }
+
+/// `ewma` as it was before it stopped adding weight terms too small to change the weight.
+fn ewma_every_term(arr_in: &[f64], window: usize) -> Vec<f64> {
+    let alpha = 2.0 / (window as f64 + 1.0);
+    let mut weight = 1.0;
+    let mut ewma_old = arr_in[0];
+    let mut out = vec![0.0; arr_in.len()];
+    out[0] = ewma_old;
+    for i in 1..arr_in.len() {
+        weight += (1.0 - alpha).powi(i as i32);
+        ewma_old = ewma_old * (1.0 - alpha) + arr_in[i];
+        out[i] = ewma_old / weight;
+    }
+    out
+}
+
+#[test]
+fn ewma_matches_summing_every_weight_term() {
+    let bits = |v: &[f64]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+    let prices = load_prices();
+    let long: Vec<f64> = (0..300_000).map(|i| 100.0 + (i as f64 / 37.0).sin()).collect();
+    // Short windows stop summing weight terms early; the longest never stop on these lengths.
+    for window in [1, 2, 3, 5, 20, 64, 100, 250, 1000, 5000, 100_000, 10_000_000] {
+        for series in [&prices, &long] {
+            let got = ewma(series, window).unwrap();
+            let want = ewma_every_term(series, window);
+            assert_eq!(bits(&got), bits(&want), "window {window}, {} values", series.len());
+        }
+    }
+}
