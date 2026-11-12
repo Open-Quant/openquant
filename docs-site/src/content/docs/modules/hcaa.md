@@ -2,7 +2,7 @@
 title: "hcaa"
 description: "Hierarchical allocation down the cluster tree, cut into a chosen number of clusters, with a choice of risk measure: variance, standard deviation, expected shortfall, conditional drawdown, Sharpe ratio or equal splits."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -364,7 +364,7 @@ for this shared binding behavior. HCAA core shape failures are
 An all-positive lower tail gives a **negative** expected-shortfall loss estimate. Unlike the
 Sharpe branch, the ES branch has no negative-risk fallback. Its inverse-risk formula can
 therefore favour the smaller gain or clip a mixed-sign allocation to 0 or 1. If both side
-risks are zero, the denominator epsilon makes the left share 1, not an equal split.
+risks are zero, the 0/0 split falls back to an equal split (one half each).
 These are current implementation limitations, not recommended allocation policies:
 
 ```python
@@ -378,7 +378,7 @@ assert abs(weights[0] - 0.75) < 1e-12  # loss estimates are -0.01 and -0.03
 zero_risk, _ = hcaa.allocate_hcaa(
     ["a", "b"], asset_returns=[[0.0, 0.0]] * 4,
     covariance_matrix=[[1.0, 0.0], [0.0, 1.0]], allocation_metric="conditional_drawdown_risk")
-assert zero_risk == [1.0, 0.0]
+assert zero_risk == [0.5, 0.5]  # two zero risks split evenly
 ```
 
 Supply aligned, finite histories and a finite symmetric positive-semidefinite covariance

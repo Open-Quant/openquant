@@ -715,11 +715,11 @@ fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64
     let left_var = cluster_variance(m.cov, left)?;
     let right_var = cluster_variance(m.cov, right)?;
     let alloc_factor = match m.metric {
-        "minimum_variance" => 1.0 - left_var / (left_var + right_var + f64::EPSILON),
+        "minimum_variance" => 1.0 - left_var / (left_var + right_var),
         "minimum_standard_deviation" => {
             let left_sd = left_var.sqrt();
             let right_sd = right_var.sqrt();
-            1.0 - left_sd / (left_sd + right_sd + f64::EPSILON)
+            1.0 - left_sd / (left_sd + right_sd)
         }
         "sharpe_ratio" => {
             let left_sr = cluster_sharpe(m.expected, m.cov, left)?;
@@ -729,23 +729,25 @@ fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64
             if left_sr >= 0.0 && right_sr >= 0.0 && left_sr + right_sr > 0.0 {
                 left_sr / (left_sr + right_sr)
             } else {
-                1.0 - left_var / (left_var + right_var + f64::EPSILON)
+                1.0 - left_var / (left_var + right_var)
             }
         }
         "expected_shortfall" => {
             let left_es = cluster_expected_shortfall(m.returns, m.cov, m.confidence_level, left)?;
             let right_es = cluster_expected_shortfall(m.returns, m.cov, m.confidence_level, right)?;
-            1.0 - left_es / (left_es + right_es + f64::EPSILON)
+            1.0 - left_es / (left_es + right_es)
         }
         "conditional_drawdown_risk" => {
             let left_cdd =
                 cluster_conditional_drawdown(m.returns, m.cov, m.confidence_level, left)?;
             let right_cdd =
                 cluster_conditional_drawdown(m.returns, m.cov, m.confidence_level, right)?;
-            1.0 - left_cdd / (left_cdd + right_cdd + f64::EPSILON)
+            1.0 - left_cdd / (left_cdd + right_cdd)
         }
         _ => 0.5,
     };
+    // No absolute epsilon in the denominators above: it would make the split depend on the
+    // scale of the returns. Two zero risks give 0 / 0, which splits evenly here.
     Ok(if alloc_factor.is_finite() { alloc_factor.clamp(0.0, 1.0) } else { 0.5 })
 }
 

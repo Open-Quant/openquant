@@ -155,3 +155,13 @@ fn test_run_synthetic_otr_workflow_end_to_end() {
     assert!(result.best_point.sharpe.is_finite());
     assert!(result.params.sigma > 0.0);
 }
+
+/// Constant lagged prices cannot identify `phi`. The mean used to be `sum / n`, which rounds for
+/// three `0.1`s (`0.10000000000000002`), so the lagged variance was about `6e-34` instead of 0
+/// and the fit went ahead with a `phi` that is the ratio of two rounding residues.
+#[test]
+fn test_calibration_rejects_constant_lagged_prices_that_round() {
+    use openquant::synthetic_backtesting::SyntheticBacktestError;
+    let result = calibrate_ou_params(&[0.1, 0.1, 0.1, 0.2]);
+    assert_eq!(result, Err(SyntheticBacktestError::ConstantPrices));
+}

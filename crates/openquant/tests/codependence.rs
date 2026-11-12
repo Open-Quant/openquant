@@ -245,3 +245,45 @@ fn nonfinite_correlations_are_not_clamped_into_valid_distances() {
     let tiny = [1e-100, 2e-100, 3e-100];
     assert!(angular_distance(&tiny, &tiny).unwrap().is_nan());
 }
+
+/// Distance correlation stays in its documented `[0, 1]` at both ends. A sample whose empirical
+/// joint distribution is a product of its marginals has a distance covariance of exactly 0;
+/// rounding made the computed one about `-7e-19`, and its square root was `NaN`. A linear
+/// relation has a distance correlation of exactly 1; rounding gave `1.0000000000000002`.
+#[test]
+fn distance_correlation_stays_within_its_bounds_under_rounding() {
+    let x = [0.1, 0.1, 0.1, 0.3, 0.3, 0.3, 0.7, 0.7, 0.7];
+    let y = [0.2, 0.9, 0.3, 0.2, 0.9, 0.3, 0.2, 0.9, 0.3];
+    let independent = distance_correlation(&x, &y).unwrap();
+    assert!((0.0..1e-6).contains(&independent), "{independent}");
+
+    let x = [0.896, -0.887, -0.83, 0.671, 0.472, 0.339, -0.384, 0.212];
+    let y: Vec<f64> = x.iter().map(|v| 7.3 * v).collect();
+    let linear = distance_correlation(&x, &y).unwrap();
+    assert!(linear <= 1.0 && linear > 1.0 - 1e-12, "{linear}");
+
+    // Non-finite inputs still propagate rather than being clamped into range.
+    assert!(distance_correlation(&[1.0, f64::NAN, 3.0], &[1.0, 2.0, 4.0]).unwrap().is_nan());
+}
+
+/// Identical series sit on the bounds: variation of information 0 and normalised mutual
+/// information 1. The entropies and mutual information round separately, which gave a VI of
+/// about `-9e-16` (a negative distance) and a normalised MI of `1.0000000000000002`.
+#[test]
+fn information_scores_of_identical_series_stay_within_bounds() {
+    let mut worst_vi = f64::INFINITY;
+    let mut worst_mi = f64::NEG_INFINITY;
+    for n in 3..60 {
+        let x: Vec<f64> = (0..n).map(|i| ((i * 37 % 101) as f64 * 0.013).sin()).collect();
+        for bins in [2, 3, 5, 7, 10] {
+            for normalize in [false, true] {
+                let vi = variation_of_information_score(&x, &x, Some(bins), normalize).unwrap();
+                worst_vi = worst_vi.min(vi);
+            }
+            let mi = get_mutual_info(&x, &x, Some(bins), true).unwrap();
+            worst_mi = worst_mi.max(mi);
+        }
+    }
+    assert!(worst_vi >= 0.0, "{worst_vi}");
+    assert!(worst_mi <= 1.0, "{worst_mi}");
+}

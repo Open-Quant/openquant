@@ -534,3 +534,51 @@ fn test_warm_start_seed_is_random_state_plus_fitted_count_wrapping() {
     no_panic("warm-start fit", || reg.fit(&x, &y_reg, &ind, None)).unwrap();
     assert_eq!(reg.estimators_samples.len(), 3);
 }
+
+/// The regressor's lines and out-of-bag R² do not depend on the units of `x` and `y`. An
+/// absolute `1e-12` floor on the feature variance flattened every line of a feature measured
+/// in small units, and the same floor on the target sum of squares reported an R² of 0 for a
+/// perfect fit of small-valued targets.
+#[test]
+fn test_regressor_is_invariant_to_units() {
+    let n = 30;
+    let spans: Vec<(usize, usize)> = (0..n).map(|i| (i, i + 3)).collect();
+    let bars: Vec<usize> = (0..n + 4).collect();
+    let ind = get_ind_matrix(&spans, &bars).unwrap();
+    for scale in [1.0, 1e-4, 1e-8] {
+        // y = 2x + 1 exactly, in units of `scale`.
+        let x = DMatrix::from_fn(n, 1, |r, _| r as f64 * scale);
+        let y: Vec<f64> = (0..n).map(|r| (2.0 * r as f64 + 1.0) * scale).collect();
+        let mut model = SequentiallyBootstrappedBaggingRegressor::new(11);
+        model.max_samples = MaxSamples::Float(0.5);
+        model.oob_score = true;
+        model.fit(&x, &y, &ind, None).unwrap();
+        let pred = model.predict(&DMatrix::from_row_slice(1, 1, &[100.0 * scale])).unwrap();
+        assert!((pred[0] / scale - 201.0).abs() < 1e-6, "scale {scale}: {}", pred[0]);
+        let oob = model.oob_score_value.unwrap();
+        assert!((oob - 1.0).abs() < 1e-9, "scale {scale}: oob {oob}");
+    }
+}
+
+/// A constant feature still gives a flat line at the mean of `y`, even when its weighted mean
+/// rounds (`0.1` repeated), and constant targets still score an out-of-bag R² of 0.
+#[test]
+fn test_regressor_constant_feature_and_targets() {
+    let n = 30;
+    let spans: Vec<(usize, usize)> = (0..n).map(|i| (i, i + 3)).collect();
+    let bars: Vec<usize> = (0..n + 4).collect();
+    let ind = get_ind_matrix(&spans, &bars).unwrap();
+    let x = DMatrix::from_element(n, 1, 0.1);
+    let y: Vec<f64> = (0..n).map(|r| r as f64).collect();
+    let mut model = SequentiallyBootstrappedBaggingRegressor::new(5);
+    model.fit(&x, &y, &ind, None).unwrap();
+    let pred = model.predict(&DMatrix::from_row_slice(2, 1, &[0.1, 1e6])).unwrap();
+    assert!((pred[0] - pred[1]).abs() < 1e-9, "{pred:?}");
+
+    let constant_y = vec![0.1; n];
+    let mut model = SequentiallyBootstrappedBaggingRegressor::new(5);
+    model.oob_score = true;
+    model.max_samples = MaxSamples::Float(0.5);
+    model.fit(&DMatrix::from_fn(n, 1, |r, _| r as f64), &constant_y, &ind, None).unwrap();
+    assert_eq!(model.oob_score_value, Some(0.0));
+}

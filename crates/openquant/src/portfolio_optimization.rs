@@ -602,7 +602,9 @@ fn summarise(
     cov: &DMatrix<f64>,
     risk_free: f64,
 ) -> Result<MeanVariance, AllocError> {
-    let risk = quad_risk(cov, &weights).max(0.0).sqrt();
+    // Floor rounding below zero, but keep NaN for the check below (`f64::max` would make it 0).
+    let variance = quad_risk(cov, &weights);
+    let risk = if variance < 0.0 { 0.0 } else { variance.sqrt() };
     if !risk.is_finite() {
         return Err(AllocError::NaNResult("risk not finite"));
     }

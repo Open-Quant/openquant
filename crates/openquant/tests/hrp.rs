@@ -137,6 +137,47 @@ fn test_value_error_for_incorrect_dimensions() {
     assert!(matches!(err, HrpError::DimensionMismatch(_)));
 }
 
+/// HRP weights do not depend on the scale of the covariance. The bisection split used to add
+/// `f64::EPSILON` to the sum of the two cluster variances, which dominates when variances are
+/// tiny: `diag(1e-18, 4e-18)` gave about `[0.9955, 0.0045]` instead of `[0.8, 0.2]`.
+#[test]
+fn test_weights_invariant_to_covariance_scale() {
+    let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+    for scale in [1.0, 1e-4, 1e-12, 1e-18, 1e-300] {
+        let cov = DMatrix::from_row_slice(2, 2, &[scale, 0.0, 0.0, 4.0 * scale]);
+        let mut hrp = HierarchicalRiskParity::new();
+        hrp.allocate(&names, None, None, Some(&cov), None, false).unwrap();
+        assert!((hrp.weights[0] - 0.8).abs() < 1e-12, "scale {scale}: {:?}", hrp.weights);
+        assert!((hrp.weights[1] - 0.2).abs() < 1e-12, "scale {scale}: {:?}", hrp.weights);
+    }
+}
+
+/// A `NaN` in the covariance reaches the weights instead of being read as zero risk. The
+/// cluster variance was floored with `f64::max(v, 0.0)`, which returns 0 for a `NaN` `v`, so the
+/// pair with the unknown covariance looked riskless and took nearly all the weight.
+#[test]
+fn test_nan_covariance_propagates_to_weights() {
+    let names: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+    let nan = f64::NAN;
+    let cov = DMatrix::from_row_slice(3, 3, &[0.04, nan, 0.0, nan, 0.04, 0.0, 0.0, 0.0, 0.04]);
+    let mut hrp = HierarchicalRiskParity::new();
+    hrp.allocate(&names, None, None, Some(&cov), None, false).unwrap();
+    assert!(hrp.weights.iter().all(|w| w.is_nan()), "{:?}", hrp.weights);
+}
+
+/// A constant-return asset has zero variance, which `allocate` rejects. The sample covariance
+/// used to compute each column's mean as `sum / rows`, which rounds for a constant `0.1`
+/// (`0.30000000000000004 / 3`), leaving a variance of about `1e-34`: the asset passed the
+/// positive-variance check and took practically all the weight.
+#[test]
+fn test_constant_return_asset_is_rejected() {
+    let names: Vec<String> = ["flat", "risky"].map(String::from).to_vec();
+    let returns = DMatrix::from_row_slice(3, 2, &[0.1, 0.01, 0.1, -0.02, 0.1, 0.03]);
+    let mut hrp = HierarchicalRiskParity::new();
+    let result = hrp.allocate(&names, None, Some(&returns), None, None, false);
+    assert_eq!(result, Err(HrpError::NoData), "weights {:?}", hrp.weights);
+}
+
 /// Leaf order of scipy's single-linkage dendrogram on the same prices, clustered on the distance
 /// of distances as Snippet 16.4 does (tests/fixtures/hrp/generate.py).
 fn reference_leaf_order() -> Vec<usize> {

@@ -257,6 +257,55 @@ fn test_value_error_for_allocation_metric() {
     assert!(matches!(err, HcaaError::UnknownAllocationMetric(_)));
 }
 
+/// The split between two clusters does not depend on the scale of the risk measure. It used to
+/// add `f64::EPSILON` to the sum of the two sides, which dominates when they are tiny:
+/// `diag(1e-18, 4e-18)` gave about `[0.9955, 0.0045]` under minimum variance instead of
+/// `[0.8, 0.2]`.
+#[test]
+fn test_split_invariant_to_covariance_scale() {
+    let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+    // Minimum variance: 1 - 1 / (1 + 4); minimum standard deviation: 1 - 1 / (1 + 2).
+    for (metric, expected) in [("minimum_variance", 0.8), ("minimum_standard_deviation", 2.0 / 3.0)]
+    {
+        for scale in [1.0, 1e-4, 1e-12, 1e-18, 1e-300] {
+            let cov = DMatrix::from_row_slice(2, 2, &[scale, 0.0, 0.0, 4.0 * scale]);
+            let mut hcaa = HierarchicalClusteringAssetAllocation::default();
+            hcaa.allocate(&names, None, None, Some(&cov), None, metric, 0.05, None, None).unwrap();
+            let w = &hcaa.weights;
+            assert!((w[0] - expected).abs() < 1e-12, "{metric} scale {scale}: {w:?}");
+            assert!((w[1] - (1.0 - expected)).abs() < 1e-12, "{metric} scale {scale}: {w:?}");
+        }
+    }
+}
+
+/// Expected shortfall scales with the returns, so the split must too: asset `b` returns twice
+/// asset `a`, so its shortfall is twice as large and `a` gets 2/3 at every scale.
+#[test]
+fn test_expected_shortfall_split_invariant_to_return_scale() {
+    let names: Vec<String> = ["a", "b"].map(String::from).to_vec();
+    let base = [[-0.01, -0.02], [0.01, 0.02], [-0.02, -0.04], [0.02, 0.04]];
+    for scale in [1.0, 1e-10, 1e-16] {
+        let flat: Vec<f64> = base.iter().flat_map(|r| r.iter().map(|v| v * scale)).collect();
+        let returns = DMatrix::from_row_slice(4, 2, &flat);
+        let mut hcaa = HierarchicalClusteringAssetAllocation::default();
+        hcaa.allocate(
+            &names,
+            None,
+            Some(&returns),
+            None,
+            None,
+            "expected_shortfall",
+            0.5,
+            None,
+            None,
+        )
+        .unwrap();
+        let w = &hcaa.weights;
+        assert!((w[0] - 2.0 / 3.0).abs() < 1e-9, "scale {scale}: {w:?}");
+        assert!((w[1] - 1.0 / 3.0).abs() < 1e-9, "scale {scale}: {w:?}");
+    }
+}
+
 /// Leaf order of scipy's single-linkage dendrogram on the same prices
 /// (tests/fixtures/hrp/generate.py).
 fn reference_leaf_order() -> Vec<usize> {

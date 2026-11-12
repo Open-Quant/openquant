@@ -874,15 +874,14 @@ fn mean_std(v: &[f64], ddof: usize) -> (f64, f64) {
 fn standardize(rows: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let n = rows.len();
     let m = rows[0].len();
-    let mut means = vec![0.0; m];
-    for r in rows {
-        for j in 0..m {
-            means[j] += r[j];
-        }
-    }
-    for v in &mut means {
-        *v /= n as f64;
-    }
+    // `stats::mean` keeps a finite constant column's mean exact, so its deviation is 0 and it
+    // standardises to 0; `sum / n` can round (three 0.1s) and turned it into a constant -1.
+    let means: Vec<f64> = (0..m)
+        .map(|j| {
+            let column: Vec<f64> = rows.iter().map(|r| r[j]).collect();
+            stats::mean(&column).unwrap_or(f64::NAN)
+        })
+        .collect();
     let mut stds = vec![0.0; m];
     for r in rows {
         for j in 0..m {

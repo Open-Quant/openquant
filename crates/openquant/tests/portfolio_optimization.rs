@@ -443,3 +443,15 @@ fn inverse_variance_rejects_negative_and_non_finite_variances() {
         );
     }
 }
+
+/// A non-finite portfolio risk is reported as `NaNResult`, as documented. The risk was floored
+/// with `f64::max(v, 0.0)` before the finiteness check, which turns `NaN` into 0, so a `NaN`
+/// covariance gave a portfolio risk of 0 and a Sharpe ratio of 0.
+#[test]
+fn nan_portfolio_risk_is_an_error_not_zero() {
+    let mu = [0.05, 0.08];
+    let cov = DMatrix::from_row_slice(2, 2, &[0.04, f64::NAN, f64::NAN, 0.09]);
+    let opts = AllocationOptions::default();
+    let result = allocate_from_inputs(&mu, &cov, "inverse_variance", &opts);
+    assert!(matches!(result, Err(AllocError::NaNResult(_))), "{result:?}");
+}

@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-11-08'
+last_generated: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -46,6 +46,26 @@ file disagree).
 - Docs: clarify human and agent entry points, add a revision-aware `llms.txt` index, and check documentation routes, anchors and redirects. ([#246](https://github.com/Open-Quant/openquant/pull/246))
 
 ### Fixed
+
+- `labeling::drop_labels`: break a tie for rarest label deterministically (the label that appears first is dropped). Counts were kept in a randomly seeded `HashMap`, so repeated calls on the same input could drop different labels.
+
+- `feature_importance::get_orthogonal_features`, `feature_pca_analysis`: a constant column standardises to 0 as documented even when its mean rounds (for example three `0.1`s). It became a constant `-1` column and a spurious principal component with as much variance as a real feature.
+
+- `portfolio_optimization`: a `NaN` portfolio risk now returns the documented `NaNResult` error. The variance was floored with `f64::max(v, 0.0)` before the finiteness check, so a `NaN` covariance reported a risk and Sharpe ratio of 0.
+
+- `hrp`: a `NaN` in the covariance now gives `NaN` weights. The cluster variance was floored with `f64::max(v, 0.0)`, which turns `NaN` into 0, so the cluster with the unknown covariance looked riskless (`[0.5, 0.5, 0.0]` for a `NaN` between the first two of three assets). The bisection split no longer maps a non-finite factor to 0.5; only two zero variances split evenly.
+
+- `codependence::get_mutual_info`, `variation_of_information_score`: keep finite results within their bounds (MI and VI non-negative, normalised values at most 1). For identical series, separately rounded entropies gave a negative VI of about `-9e-16` and a normalised MI of `1.0000000000000002`.
+
+- `codependence::distance_correlation`: keep the result in its documented `[0, 1]`. Rounding made the distance covariance of a product-form (independent) sample slightly negative, so the result was `NaN`, and a linear relation gave `1.0000000000000002`. Non-finite inputs still give `NaN`.
+
+- `sb_bagging::SequentiallyBootstrappedBaggingRegressor`: flatten a line only when its sample's feature values are all equal, and score an out-of-bag R² of 0 only for constant targets. Absolute `1e-12` floors on the feature variance and target sum of squares made the fit depend on units: a feature and target in units of `1e-8` gave flat lines and an R² of 0 for an exact linear relation.
+
+- `synthetic_backtesting::calibrate_ou_params`: reject constant lagged prices whose mean rounds (for example three `0.1`s) with `ConstantPrices`; the rounded mean left a tiny variance and the fit returned a meaningless `phi` (`-0.67` for `[0.1, 0.1, 0.1, 0.2]`).
+
+- `util::stats::covariance` (used by `hrp`, `hcaa`, `cla` and `portfolio_optimization`): keep a finite constant column's mean exact, so its variance and covariances are exactly zero. Rounding in `sum / rows` left a variance near `1e-34`, so HRP and HCAA accepted a constant-return asset and gave it practically all the weight instead of rejecting the non-positive variance.
+
+- `hrp`, `hcaa`: split cluster weight by the plain ratio of the two sides' risks; the absolute `f64::EPSILON` added to the denominator made weights depend on the scale of the covariance or returns (`diag(1e-18, 4e-18)` gave about 0.9955/0.0045 instead of 0.8/0.2). Two zero risks now split evenly.
 
 - Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
 
