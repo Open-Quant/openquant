@@ -130,3 +130,18 @@ test('sidebar disclosure respects reduced motion', () => {
   const css = fs.readFileSync(path.join(root, 'src/styles/starlight.css'), 'utf8');
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.sidebar-content\s+\.caret\s*\{\s*transition:\s*none/s);
 });
+
+test('home hero exposes a complete synthetic study and progressive controls', () => {
+  const nodes = walk(html());
+  assert.equal(nodes.filter(n => n.tagName === 'h1').length, 1);
+  assert.ok(nodes.some(n => n.tagName === 'oq-barrier-study'));
+  assert.ok(nodes.some(n => n.tagName === 'figcaption' && text(n).includes('Synthetic illustration, not a performance result')));
+  const slider = nodes.find(n => n.tagName === 'input' && attr(n, 'id') === 'oq-study-step');
+  assert.equal(attr(slider, 'type'), 'range');
+  assert.equal(attr(slider, 'max'), '48');
+  assert.ok(nodes.some(n => n.tagName === 'label' && attr(n, 'for') === 'oq-study-step'));
+  assert.equal(nodes.filter(n => attr(n, 'data-step') !== undefined).length, 49);
+  const source = fs.readFileSync(path.join(root, 'src/components/ResearchHero.astro'), 'utf8');
+  assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /cancelAnimationFrame/);
+});

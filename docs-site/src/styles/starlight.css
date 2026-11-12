@@ -11,20 +11,20 @@
 :root[data-theme='light'] {
   --oq-ground: #fbf9f4;
   --oq-surface: #f2eee4;
-  --oq-text: #1d1a16;
-  --oq-muted: #5c554b;
+  --oq-text: #171717;
+  --oq-muted: #525252;
   --oq-accent: #97196a;
   --oq-rule: #cdc4b1;
   color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  --oq-ground: #17140f;
-  --oq-surface: #221e17;
-  --oq-text: #ece6d8;
-  --oq-muted: #aaa190;
+  --oq-ground: #101010;
+  --oq-surface: #1b1b1b;
+  --oq-text: #ededed;
+  --oq-muted: #ababab;
   --oq-accent: #f29ad6;
-  --oq-rule: #4c4536;
+  --oq-rule: #464646;
   color-scheme: dark;
 }
 

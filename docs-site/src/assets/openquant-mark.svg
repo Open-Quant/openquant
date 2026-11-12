@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-48 -48 96 96" role="img" aria-labelledby="title desc">
-  <title id="title">OpenQuant</title>
-  <desc id="desc">Three interlocking blades around an open center: the OpenQuant research pinwheel.</desc>
-  <!-- Open-center revision. Threefold geometry keeps the original magenta, cyan and yellow
-       identity; generous channels remain visible at favicon sizes. No gradients or filters. -->
-  <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#e44de0"/>
-  <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#52c8f5" transform="rotate(120)"/>
-  <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#f0e050" transform="rotate(240)"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-48 -48 96 96" role="img" aria-labelledby="title desc"><title id="title">OpenQuant</title><desc id="desc">Three interlocking research blades surrounding an open center.</desc><path d="M-7-16-17-34Q-18-36-15-37L7-42Q9-43 12-41L30-31Q33-29 31-27L17-13Q15-11 13-12L5-16Z" fill="#e44de0" transform="rotate(0)"/><path d="M-7-16-17-34Q-18-36-15-37L7-42Q9-43 12-41L30-31Q33-29 31-27L17-13Q15-11 13-12L5-16Z" fill="#52c8f5" transform="rotate(120)"/><path d="M-7-16-17-34Q-18-36-15-37L7-42Q9-43 12-41L30-31Q33-29 31-27L17-13Q15-11 13-12L5-16Z" fill="#f0e050" transform="rotate(240)"/></svg>
