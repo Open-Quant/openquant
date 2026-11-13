@@ -224,3 +224,27 @@ def test_covariance_optional_scipy_fallback_replays_in_fresh_process(tmp_path):
     checked = without_scipy("replay_offline_report", report, "--lab", "covariance_estimation")
     assert checked.returncode == 0, checked.stdout + checked.stderr
     assert json.loads(checked.stdout)["matched"] is True
+
+
+@pytest.mark.parametrize("name", ["cash_budget", "execution_segments", "fill_ledger"])
+def test_sibling_imports_replay_from_unrelated_directory_without_pythonpath(
+    name, tmp_path, monkeypatch
+):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    report = tmp_path / "report.json"
+    run_cli(
+        "run_offline_lab",
+        "run",
+        "--lab",
+        name,
+        "--config",
+        FIXTURES / f"{name}.json",
+        "--out",
+        report,
+        cwd=tmp_path,
+    )
+    original = report.read_bytes()
+    verdict = run_cli("replay_offline_report", report, "--lab", name, cwd=tmp_path)
+    assert verdict["matched"] is True
+    assert verdict["first_difference"] is None
+    assert report.read_bytes() == original

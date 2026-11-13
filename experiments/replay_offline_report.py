@@ -184,6 +184,11 @@ def _load_lab(name: str) -> Any:
     if name not in LABS:
         raise ValueError(f"unknown lab: {name}")
     path = Path(__file__).resolve().parent / LABS[name]
+    # File-based CLI invocation puts experiments/, not the checkout root, on
+    # sys.path. Registered labs may import siblings through experiments.*.
+    root = str(path.parent.parent)
+    if root not in sys.path:
+        sys.path.insert(0, root)
     spec = importlib.util.spec_from_file_location(f"_openquant_replay_{name}", path)
     if spec is None or spec.loader is None:
         raise ValueError("lab module unavailable")
