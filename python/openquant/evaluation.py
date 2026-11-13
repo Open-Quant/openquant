@@ -28,12 +28,15 @@ import hashlib
 import json
 import math
 import os
+import sys
 import tempfile
 from collections.abc import Iterable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Context, Decimal, localcontext
 from fractions import Fraction
+from numbers import Integral
 from pathlib import Path
 from statistics import NormalDist
 from statistics import mean as _exact_mean
@@ -197,6 +200,7 @@ def expected_max_sharpe(n_trials: int, sharpe_std: float) -> float:
     """SR0: the expected maximum per-period Sharpe ratio of `n_trials` skill-less trials.
 
     SR0 = σ_SR·[(1 - γ)·Z⁻¹(1 - 1/N) + γ·Z⁻¹(1 - 1/(N·e))], γ the Euler–Mascheroni constant.
+    `n_trials` accepts Python and NumPy integer scalars, but not booleans or floats.
     """
     n = _n_trials(n_trials)
     sd = _sharpe_std(sharpe_std)
@@ -402,11 +406,11 @@ def _precise_sharpe_difference_and_variance(
 
 
 def _n_trials(n_trials: int) -> int:
-    if isinstance(n_trials, bool) or not isinstance(n_trials, int):
+    if isinstance(n_trials, bool) or not isinstance(n_trials, Integral):
         raise TypeError(f"n_trials must be an int, got {type(n_trials).__name__}")
     if n_trials < 2:
         raise ValueError(f"n_trials must be at least 2, got {n_trials}")
-    return n_trials
+    return int(n_trials)
 
 
 def _sharpe_std(sharpe_std: float) -> float:
@@ -585,16 +589,61 @@ def strategy_risk_sensitivity(
     a = down / d
     variance = p * (1.0 - p)
     theta = math.sqrt(n / variance)
+    # Squaring a valid payout spread can overflow or underflow even when every
+    # derivative is representable. Keep the ordinary float path; recover only
+    # exceptional arithmetic with a context independent of the caller's Decimal settings.
+    denominator = 2.0 * variance**1.5
+    squared_spread = d * d
+    partials: tuple[float, float, float, float] | None = None
+    if denominator >= sys.float_info.min and squared_spread >= sys.float_info.min:
+        partials = (
+            math.sqrt(n) * (p * (1.0 + 2.0 * a) - a) / denominator,
+            sharpe / (2.0 * n),
+            -theta * down / squared_spread,
+            theta * up / squared_spread,
+        )
+    # Recover derivatives near cancellation too: finite nonzero intermediates
+    # can lose most relative accuracy near a stationary point or zero mean.
+    cancellation_tolerance = math.sqrt(sys.float_info.epsilon)
+    precision_term = p * (1.0 + 2.0 * a)
+    cancellation = abs(precision_term - a) <= cancellation_tolerance * (
+        abs(precision_term) + abs(a)
+    ) or abs(p + a) <= cancellation_tolerance * (abs(p) + abs(a))
+    if (
+        cancellation
+        or partials is None
+        or not all(math.isfinite(value) and value != 0.0 for value in partials)
+    ):
+        with localcontext(Context(prec=100)):
+            dp, dn, du, dd = map(Decimal.from_float, (p, n, up, down))
+            spread = du - dd
+            var = dp * (1 - dp)
+            scale = (dn / var).sqrt()
+            # Cancel rational terms exactly before converting to Decimal. Even
+            # 100 digits can erase a representable residual for binary64 inputs.
+            fp, fu, fd = map(Fraction, (p, up, down))
+            mean_ratio = fp + fd / (fu - fd)
+            precision_ratio = (fp * fu - (1 - fp) * fd) / (fu - fd)
+            mean_term = Decimal(mean_ratio.numerator) / Decimal(mean_ratio.denominator)
+            precision_term_exact = Decimal(precision_ratio.numerator) / Decimal(
+                precision_ratio.denominator
+            )
+            partials = (
+                float(dn.sqrt() * precision_term_exact / (2 * var * var.sqrt())),
+                float(scale * mean_term / (2 * dn)),
+                float(-scale * dd / spread**2),
+                float(scale * du / spread**2),
+            )
     implied = margin = None
     if target_sharpe is not None:
         implied = _sr.implied_precision_asymmetric(float(target_sharpe), n, up, down)
         margin = p - implied
     return {
         "sharpe": sharpe,
-        "d_sharpe_d_precision": math.sqrt(n) * (p * (1.0 + 2.0 * a) - a) / (2.0 * variance**1.5),
-        "d_sharpe_d_frequency": sharpe / (2.0 * n),
-        "d_sharpe_d_pi_plus": -theta * down / (d * d),
-        "d_sharpe_d_pi_minus": theta * up / (d * d),
+        "d_sharpe_d_precision": partials[0],
+        "d_sharpe_d_frequency": partials[1],
+        "d_sharpe_d_pi_plus": partials[2],
+        "d_sharpe_d_pi_minus": partials[3],
         "implied_precision": implied,
         "precision_margin": margin,
     }
@@ -626,6 +675,10 @@ class TrialRegistry:
     count. Recording a configuration that is already registered replaces its entry: re-running
     the same notebook does not inflate the trial count. Two processes recording at the same
     instant can still lose one write; the registry is not a database.
+    Input configurations and returned trials are detached snapshots: mutating them
+    cannot change the registry's stored configuration/hash association. Loading rejects
+    duplicate hashes, nonfinite/non-numeric moments, and observation counts below 3.
+    This is structural validation, not authentication of the recorded research.
     """
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
@@ -638,8 +691,8 @@ class TrialRegistry:
 
     @property
     def trials(self) -> list[Trial]:
-        """The registered trials, oldest first."""
-        return list(self._trials)
+        """Detached snapshots of registered trials, oldest first."""
+        return deepcopy(self._trials)
 
     @property
     def n_trials(self) -> int:
@@ -677,13 +730,13 @@ class TrialRegistry:
             n_obs=m.n_obs,
             skewness=m.skewness,
             kurtosis=m.kurtosis,
-            config=config,
+            config=deepcopy(config),
         )
         trials = [t for t in self._load() if t.config_hash != trial.config_hash]
         trials.append(trial)
         self._write(trials)
         self._trials = trials
-        return trial
+        return deepcopy(trial)
 
     def sharpe_std(self) -> float:
         """Standard deviation (population) of the registered per-period Sharpe ratios."""
@@ -720,8 +773,25 @@ class TrialRegistry:
         if not isinstance(payload, Mapping) or payload.get("schema") != REGISTRY_SCHEMA:
             raise ValueError(f"{self._path} is not a schema-{REGISTRY_SCHEMA} trial registry")
         try:
-            return [Trial(**entry) for entry in payload["trials"]]
-        except (KeyError, TypeError) as exc:
+            entries = payload["trials"]
+            if not isinstance(entries, list):
+                raise ValueError("trials must be a JSON array")
+            trials = [Trial(**entry) for entry in entries]
+            seen: set[str] = set()
+            for trial in trials:
+                if not isinstance(trial.config_hash, str):
+                    raise ValueError("config_hash must be a string")
+                if trial.config_hash in seen:
+                    raise ValueError("duplicate config_hash")
+                seen.add(trial.config_hash)
+                if type(trial.n_obs) is not int or trial.n_obs < 3:
+                    raise ValueError("n_obs must be an integer of at least 3")
+                for name in ("sharpe", "skewness", "kurtosis"):
+                    value = getattr(trial, name)
+                    if type(value) not in (int, float) or not math.isfinite(value):
+                        raise ValueError(f"{name} must be a finite number")
+            return trials
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{self._path} has a malformed trial entry: {exc}") from exc
 
     def _write(self, trials: list[Trial]) -> None:

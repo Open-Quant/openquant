@@ -2,7 +2,7 @@
 title: "fingerprint"
 description: "Decompose what a fitted model has learned into linear, non-linear and pairwise-interaction effects per feature."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -70,6 +70,17 @@ All three are in the units of the prediction, so they can be compared with each 
 An all-zero family stays zero. Normalised effects compare features within a family, not
 linear against non-linear families; use raw effects for the latter. These absolute summaries
 are not an additive decomposition of prediction variance or an out-of-sample performance score.
+
+<img src="/figures/modules/fingerprint.svg" alt="Idealized linear dependence 2v, quadratic dependence v squared with a flat fitted line at one third, and interaction residual vw whose slope changes with w." />
+
+[Open the full-size figure](/figures/modules/fingerprint.svg) to inspect labels or zoom on a narrow screen.
+
+*Analytic illustration for $2x_0+x_1^2+x_0x_2$ with independent, continuous
+uniform features on $[-1,1]$. The panels show curves, not effect-size estimates:
+centered linear dependence, quadratic dependence with its population least-squares
+line, and the joint interaction residual. Averaging the last panel over a symmetric
+$x_2$ hides the interaction. These idealized curves are not output from `fit`:
+the finite sample and quantile grid below give slightly different effects.*
 
 ## On a model whose answer is known
 

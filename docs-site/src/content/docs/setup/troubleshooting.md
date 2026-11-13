@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -16,6 +16,24 @@ machine while writing this page; entries marked **not reproduced** are
 derived from reading the source or the CI configuration and have not been
 observed in the original troubleshooting session. **Source-checked** entries identify
 implementation behavior without claiming the failure was reproduced on your machine.
+
+## Find the first failing stage
+
+Read the first substantive error, not only the final nonzero exit. Start with the
+row matching the command you ran; a later stage cannot diagnose an earlier one.
+
+| Where it fails | Start here | Preserve while diagnosing |
+| --- | --- | --- |
+| Resolving or installing dependencies | [`uv sync` build errors](#uv-sync-fails-with-an-opaque-pep517-build-wheel-error) | Full log and lockfile; separate dependency setup from the native build |
+| Finding the build tool | [`maturin` not found](#maturin-command-not-found) | Selected interpreter and development dependencies |
+| Compiling for the wrong CPU | [Architecture mismatch](#rust-toolchain-and-python-interpreter-disagree-on-architecture) | Rust target and Python architecture, not only operating system |
+| Importing after a build | [Import failures](#import-openquant-fails-after-a-successful-build) | Package and binary locations; restart processes that loaded an older extension |
+| Running a function on your data | [Input-error guide](/setup/input-errors/) | Exact shape, time units and row order; do not relax validation to force success |
+| Building or checking the website | [Docs quality gates](/setup/local-build/#documentation-quality-gates) | First failed gate and which later gates did not run |
+
+If the [quickstart](/quickstart/) runs but prints `promote_candidate: False`,
+setup has not failed. That is a research decision from its synthetic example,
+not a request to reinstall or tune thresholds until it passes.
 
 ## Rust toolchain and Python interpreter disagree on architecture
 
@@ -272,6 +290,10 @@ partial bar and start the next call with a new anchor. A calendar-date boundary
 does not in general fix either problem. The Python wrappers do not expose
 state to carry an unfinished bar into the next call.
 
+The [executed chunk-boundary comparison](/modules/data-structures/#decide-where-aggregation-state-resets)
+shows a case where both paths return two time bars but their member rows differ.
+Compare complete records when checking a proposed batching change, not only bar counts.
+
 If one complete symbol still exceeds the memory budget, use more memory or
 implement state-preserving streaming and verify it against a single-pass
 reference. There is no general safe chunk size for the existing wrappers.
@@ -279,6 +301,29 @@ reference. There is no general safe chunk size for the existing wrappers.
 **Status: source-checked.** The materialization and per-call state behavior
 come from `python/openquant/bars.py` and the Rust bar builders; no peak-memory
 profile was measured here.
+
+## Run or imbalance bars close at unexpected trades
+
+First distinguish the stopping statistic from the output's observation count and
+unsigned volume. These native builders take ordered trade lists, not the frame
+wrapper, and they implement fixed-threshold variants rather than AFML's adaptive
+expectations.
+
+| Symptom | Check |
+| --- | --- |
+| A flat price extends a run | After a signed price change, a tie inherits that sign and counts toward the run. Initial ties have sign zero. |
+| The second bar needs more rows than expected | Direction resets after every completed bar. Its first trade and subsequent initial ties are unsigned, even when the previous bar ended with a nonzero sign. |
+| Tick imbalance closes but a run does not | Opposite signs subtract from imbalance but break a consecutive run. The [reversal example](/modules/data-structures/#separate-consecutive-runs-from-net-imbalance) distinguishes them. |
+| Reported volume greatly exceeds the imbalance threshold | Every trade contributes to reported volume, including unsigned and negatively signed trades. The threshold instead tests the absolute signed sum in the selected units. |
+| A flat path yields no bars at a positive threshold | No direction is established; a large total volume alone cannot close an imbalance bar. The unfinished tail is dropped. |
+
+Use the [row-by-row reset trace](/modules/data-structures/#trace-direction-across-a-completed-bar)
+and [weighted totals example](/modules/data-structures/#distinguish-signed-activity-from-reported-totals)
+as small reproducers. Compare exact first/last timestamps and full bar records,
+then preserve the raw input, builder, threshold units and loaded revision in the
+report. Do not adjust the threshold just to make counts match another library:
+first reconcile its tie, reset and adaptive-threshold policies. The current reset
+policy is under discussion in [#279](https://github.com/Open-Quant/openquant/issues/279).
 
 ## The slow structural-break test looks stalled
 
@@ -388,3 +433,24 @@ uv run --no-sync --python .venv/bin/python python -c "import platform, sys; prin
 Include the exact failing command and its first substantive error, plus the interpreter
 and extension paths when import succeeds. Redact credentials or private source locations
 from logs before sharing them.
+
+## Notebook kernel dies before replying to `kernel_info`
+
+**Symptom** — the notebook executor or the documentation's kernel probe exits with
+`RuntimeError: Kernel died before replying to kernel_info`. Earlier in the same log,
+ZeroMQ or interface discovery reports `Operation not permitted`.
+
+**Reproduced** in a restricted Linux execution environment: the package imported and
+ordinary Python examples ran, but the Jupyter kernel could not initialize its local
+communication sockets. The final `kernel_info` error alone does not establish this
+cause; check the earlier error before applying this diagnosis.
+
+**Next step** — run the same probe in an environment that permits Jupyter's local
+kernel communication, following that environment's access policy. Preserve the failed
+log and selected Python/kernel paths. Do not replace the notebook executor with a plain
+cell loop, mark the example as skipped, or report an executed notebook just because its
+cells pass as independent scripts. If no suitable environment is available, report
+notebook execution as blocked while retaining the results of independent checks.
+
+See the [notebook workflow](/workflows/notebook-research-workflow/) for the kernel probe
+and the distinction between executing cells and reproducing a saved notebook.

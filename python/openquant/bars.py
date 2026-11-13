@@ -215,10 +215,11 @@ def build_volume_bars(df: pl.DataFrame, *, volume_per_bar: float = 100_000.0) ->
     Raises
     ------
     ValueError
-        If `volume_per_bar` is not positive and finite, or `df` lacks a required column.
+        If `volume_per_bar` is not positive and finite (also checked for empty input),
+        or `df` lacks a required column.
     """
-    if volume_per_bar <= 0:
-        raise ValueError("volume_per_bar must be > 0")
+    if not math.isfinite(volume_per_bar) or volume_per_bar <= 0:
+        raise ValueError("volume_per_bar must be finite and > 0")
     return _build_by_symbol(df, _core.bars.build_volume_bars, volume_per_bar)
 
 
@@ -258,11 +259,11 @@ def build_dollar_bars(
     Raises
     ------
     ValueError
-        If `dollar_value_per_bar` is not positive and finite, or `df` lacks a required
-        column.
+        If `dollar_value_per_bar` is not positive and finite (also checked for empty
+        input), or `df` lacks a required column.
     """
-    if dollar_value_per_bar <= 0:
-        raise ValueError("dollar_value_per_bar must be > 0")
+    if not math.isfinite(dollar_value_per_bar) or dollar_value_per_bar <= 0:
+        raise ValueError("dollar_value_per_bar must be finite and > 0")
     return _build_by_symbol(df, _core.bars.build_dollar_bars, dollar_value_per_bar)
 
 

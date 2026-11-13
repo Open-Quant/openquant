@@ -293,8 +293,9 @@ pub fn sample_log_uniform<R: Rng + ?Sized>(
 /// `y_true` holds 0/1 labels, `probabilities` the predicted probability of class 1, and
 /// `sample_weight` a finite, non-negative weight per sample (samples with weight zero are skipped).
 /// Predictions for accuracy use a 0.5 threshold (`p >= 0.5` is class 1); log loss clips
-/// probabilities to `[1e-15, 1 - 1e-15]`. Weights are not rescaled: overflowing weight sums
-/// or selected score aggregates are errors.
+/// probabilities to `[1e-15, 1 - 1e-15]`. Log loss rescales tiny positive weight totals
+/// to avoid underflow; ordinary weights retain their arithmetic. Overflowing weight sums
+/// or selected score aggregates remain errors.
 ///
 /// # Errors
 ///
@@ -404,6 +405,28 @@ pub fn classification_score(
 
     let score = match scoring {
         SearchScoring::Accuracy => accuracy,
+        SearchScoring::NegLogLoss if sum_w < 1e-150 => {
+            // Match feature-importance scoring's tiny-total guard. The clipped
+            // per-row loss can be about 1e-15, so raw weight * loss may lose
+            // precision or underflow even for positive normal weights. Rescale
+            // only this exceptional path, after the original sum validation.
+            let scale = sample_weight
+                .map(|weights| weights.iter().copied().fold(0.0_f64, f64::max))
+                .unwrap_or(1.0);
+            let mut scaled_loss = 0.0;
+            let mut scaled_sum = 0.0;
+            for i in 0..y_true.len() {
+                let w = sample_weight.map(|weights| weights[i]).unwrap_or(1.0) / scale;
+                if w == 0.0 {
+                    continue;
+                }
+                let y = y_true[i];
+                let p = probabilities[i].max(eps).min(1.0 - eps);
+                scaled_loss += -w * (y * p.ln() + (1.0 - y) * (1.0 - p).ln());
+                scaled_sum += w;
+            }
+            -(scaled_loss / scaled_sum)
+        }
         SearchScoring::NegLogLoss => neg_log_loss,
         SearchScoring::BalancedAccuracy => {
             // Handle single-class folds by averaging recall over classes present in the fold.

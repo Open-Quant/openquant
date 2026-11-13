@@ -7,5 +7,6 @@
   "synthetic_ticker_seq_bootstrap_2k_600",
   "synthetic_ticker_pipeline_end_to_end",
   "sampling_get_av_uniqueness_from_triple_barrier",
-  "sampling_get_ind_mat_average_uniqueness"
+  "sampling_get_ind_mat_average_uniqueness",
+  "structural_breaks_csw_prefix_1024"
 ]

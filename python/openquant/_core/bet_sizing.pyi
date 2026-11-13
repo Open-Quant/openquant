@@ -353,7 +353,10 @@ def bet_size_reserve_with_fit(
 def bet_size_sigmoid(w_param: float, price_div: float) -> float:
     """Sigmoid bet size `x / sqrt(w + x^2)` for a price divergence `x`.
 
-    AFML Snippet 10.4. The result is in `(-1, 1)`.
+    AFML Snippet 10.4. For positive width the exact result is in `(-1, 1)`, but binary64
+    may round to an endpoint. Finite nonnegative widths and finite divergences use a scaled
+    norm if the squared denominator overflows, is subnormal, or underflows to zero for
+    nonzero divergence.
 
     Parameters
     ----------
@@ -410,7 +413,9 @@ def discrete_signal(signal0: Sequence[float], step_size: float) -> list[float]:
     """Round bet sizes to multiples of `step_size` and clamp them to `[-1, 1]`.
 
     AFML Snippet 10.3. Discretising avoids overtrading on tiny size changes. A `step_size` of
-    zero or less returns the input unchanged (not clamped).
+    zero or less returns the input unchanged (not clamped). For finite sizes and a finite
+    positive step, quotient overflow preserves each size before clamping because the step
+    is too small to change its floating-point value.
 
     Parameters
     ----------
@@ -628,6 +633,10 @@ def get_w_sigmoid(price_div: float, m_bet_size: float) -> float:
 
     AFML Snippet 10.4.
 
+    Finite divergences and `0 < |m| < 1` use a scaled expression when the ordinary
+    calculation gives a nonfinite or zero result. Ordinary finite nonzero arithmetic is
+    unchanged, including its loss of relative accuracy near `|m| = 1`.
+
     Parameters
     ----------
     price_div : float
@@ -692,6 +701,8 @@ def inv_price_sigmoid(forecast_price: float, w_param: float, m_bet_size: float) 
     """Market price at which the sigmoid bet size equals `m_bet_size`.
 
     AFML Snippet 10.4. Returns `f - m sqrt(w / (1 - m^2))`, which is not finite at `|m| = 1`.
+    For finite nonnegative width and `|m| < 1`, separate square roots avoid overflow in
+    the intermediate quotient when the implied price remains finite.
 
     Parameters
     ----------

@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-12'
 audience:
   - coding-agent
   - platform-engineering
@@ -28,6 +28,7 @@ second list of APIs.
 | Change the Rust core | [Rust workflow](/workflows/rust-core-workflow/) and [rustdoc](/api/rust/openquant/) | The implementation and its independent-reference tests |
 | Run or reproduce a research experiment | [Research workflow](/workflows/notebook-research-workflow/) and [runbooks](/runbooks/) | Notebook tier, dataset hash, seed, trial count, costs and out-of-sample evaluation |
 | Select data available at a decision cutoff | [Point-in-time data workflow](/workflows/point-in-time-data/) | Observation versus availability time, revision selection and policy identity; synthetic checks do not verify a provider’s history |
+| Build or repartition bars | [Bar contract examples](/modules/data-structures/#audit-a-small-bar-by-hand) and [reset policy](/modules/data-structures/#decide-where-aggregation-state-resets) | Retained trades, closing-row membership, overshoot, partial tails and session boundaries; equal output counts do not establish equivalent bars |
 | Load or adapt market data | [Data](/modules/data/) and [adapters](/modules/adapters/) | Timestamp units, row order, missing values and provenance; a converted frame is not a quality certificate |
 | Connect market-data rows to named allocations | [Multi-asset allocation walkthrough](/workflows/multi-asset-allocation/) | Common observation times, matrix axes, weight names and fitting boundary; calculated weights are not a realized backtest |
 | Select parameters and assess a final holdout | [Model-selection walkthrough](/workflows/model-selection-holdout/), then [cross-validation](/modules/cross-validation/) | Development-only search, fold-local preprocessing, final refit and an untouched assessment span |
@@ -156,6 +157,12 @@ results match an independent reference.
 Keep example coverage precise. `check:examples` compiles Rust fences on module
 pages and the complete Rust core workflow without running them; it does not scan every
 Rust fence across the site.
+`check:rust-output` separately runs `crates/openquant/examples/docs_etf_trick.rs`
+and compares its complete stdout with both displayed output blocks on the ETF page.
+`check:module-figures` runs the independent figure-reference tests and detects SVG
+drift. Edit `scripts/docs/generate_rust_module_figures.py`, then regenerate with
+`--write`; do not hand-edit its SVGs. These diagrams explain mechanics, not observed
+trading performance or evidence that all Rust examples executed.
 `check:python-examples` scans the Markdown content tree and executes each runnable
 Python fence in a separate interpreter. For runnable fences, a following `text` fence is
 also compared with captured stdout unless marked `doc-output=skip`; rerunning code alone
@@ -164,7 +171,9 @@ syntax check only. Neither gate executes code embedded in API docstrings or
 notebooks. Check those through their own tests and notebook workflow, and report
 any walkthrough that falls outside the gates as unverified until checked directly.
 
-The Python example gate may fall back to an installed package when the checkout
+Set `DOC_PYTHON` to an absolute executable path for reproducible handoffs. An explicit
+selection fails closed on a missing interpreter or failed import; unset/empty values
+still enable environment discovery. The gate may load an installed package when the checkout
 has no local extension. Its success alone therefore does not establish that the
 checkout's Python implementation ran. Rebuild locally and verify import locations
 when using the result as evidence for a source change.
@@ -176,6 +185,47 @@ loaded binary. Include the saved artifacts and unresolved failures so the next a
 read back evidence before rerunning or overwriting it. Distinguish an API tour from a research runbook using the
 [notebook contract](/workflows/research-notebook-contract/); successful execution of a tour
 is not experimental validation.
+
+## Before changing a bar pipeline
+
+Use the [bar-construction handoff](/modules/data-structures/#a-bar-construction-handoff)
+as the task's acceptance checklist. The module page contains independent literal
+expectations for aggregation, overshoot, partial tails, equal-timestamp cleaning and
+chunk boundaries, plus [run/imbalance direction traces](/modules/data-structures/#trace-direction-across-a-completed-bar).
+Its runnable Python fences and displayed output are covered by
+`check:python-examples`.
+
+1. Identify whether the input rows are trades or already aggregated OHLCV bars.
+   The frame wrapper aggregates closes, not input highs and lows.
+2. Compare raw and retained rows before explaining a missing bar. The frame cleaner
+   deduplicates `(symbol, ts)`; switching to `_core.bars` preserves duplicates but
+   also transfers sorting and input validation to the caller.
+3. Keep a continuous symbol history together, or record the intended reset rule.
+   A batch-size optimization that splits a symbol can change behavior. Verify
+   equivalence against one continuous pass, including any state carried between batches. Equal time-bar counts can conceal different
+   membership, timestamps and OHLC.
+4. Preserve the policy's information boundary. A threshold estimated from completed
+   past sessions differs from one fitted to the full future assessment session.
+   Record the effective time and estimation window alongside the threshold.
+5. Verify complete bar records against a small independently calculated case before
+   comparing downstream labels or scores. Rebuild the extension if its Rust behavior
+   changed; the gate's interpreter discovery is not proof of build identity.
+6. For run/imbalance work, trace the stopping statistic separately from the output
+   totals. Include a flat prefix, a signed flat trade, a reversal, a completed-bar
+   reset and an unfinished tail. The first trade of each bar is unsigned but is still
+   aggregated. A run counts consecutive equal signs; an imbalance sums signed weights.
+   The [weighted example](/modules/data-structures/#distinguish-signed-activity-from-reported-totals)
+   shows why reported volume cannot identify the closing threshold.
+
+If changing the cross-bar direction rule, treat it as a sampling-policy change:
+preserve a before/after membership example, update the Rust and binding contracts
+and their generated references, and rerun downstream results affected by the new
+bar boundaries. Describing today's reset rule does not settle the choice tracked in
+[#279](https://github.com/Open-Quant/openquant/issues/279).
+
+These checks establish the selected boundary behavior. They do not establish
+state-preserving streaming, exchange-calendar handling, provider trade completeness,
+independent returns, or profitable execution.
 
 ## Preserve research safeguards
 

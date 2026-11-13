@@ -456,3 +456,84 @@ fn liquidity_lambdas_do_not_log_a_rounded_subnormal_ratio() {
         assert_rel("subnormal positive ratio", values[1], expected, 1e-14);
     }
 }
+
+#[test]
+fn bvc_positive_deviation_is_invariant_to_price_units() {
+    // Independently evaluated 100 * Phi(+/-1/sqrt(2)), using Python math.erfc.
+    let expected = [23.975006109347675, 76.02499389065233];
+    for exponent in [0, -38, -40, -44, -60] {
+        // Binary rescaling preserves the differences exactly, without variance underflow.
+        let scale = 2.0_f64.powi(exponent);
+        let close = [10.0, 11.0, 10.0, 11.0].map(|p| p * scale);
+        let actual = get_bvc_buy_volume(&close, &[100.0; 4], 2).unwrap();
+        assert!(actual[..2].iter().all(|x| x.is_nan()));
+        for (&value, &reference) in actual[2..].iter().zip(&expected) {
+            assert!((value - reference).abs() < 1e-8, "scale 2^{exponent}: {value} != {reference}");
+        }
+    }
+}
+
+#[test]
+fn bvc_preserves_zero_deviation_and_ordinary_outputs_bitwise() {
+    let scale = 2.0_f64.powi(-44);
+    // Pre-fix outputs: preserve Phi(dp / 1e-12) for constant nonzero changes,
+    // not an unconditional sign split or half volume. Ordinary deviations stay untouched.
+    let cases = [
+        (vec![10.0; 4], 2, vec![0x4049000000000000_u64; 2]),
+        (
+            vec![10.0 * scale, 11.0 * scale, 12.0 * scale, 13.0 * scale],
+            2,
+            vec![0x404a221ccad359cd; 2],
+        ),
+        (
+            vec![13.0 * scale, 12.0 * scale, 11.0 * scale, 10.0 * scale],
+            2,
+            vec![0x4047dde3352ca633; 2],
+        ),
+        (
+            vec![10.0, 12.0, 11.0, 14.0, 14.0, 12.0, 15.0],
+            3,
+            vec![0x40572177b8e9e3ae, 0x4049000000000000, 0x403556be02a9f9b6, 0x405615a9cd2e4d0e],
+        ),
+    ];
+    for (close, window, expected_bits) in cases {
+        let actual = get_bvc_buy_volume(&close, &vec![100.0; close.len()], window).unwrap();
+        assert!(actual[..window].iter().all(|x| x.is_nan()));
+        assert_eq!(actual[window..].iter().map(|x| x.to_bits()).collect::<Vec<_>>(), expected_bits);
+    }
+}
+
+#[test]
+fn bvc_preserves_missing_nonfinite_and_window_behavior() {
+    for window in [0, 1] {
+        assert!(get_bvc_buy_volume(&[1.0, 2.0], &[100.0; 2], window).is_err());
+    }
+    assert!(get_bvc_buy_volume(&[1.0, 2.0], &[100.0], 2).is_err());
+    assert!(get_bvc_buy_volume(&[], &[], 2).unwrap().is_empty());
+    let short = get_bvc_buy_volume(&[1.0, 2.0], &[100.0; 2], 2).unwrap();
+    assert_eq!(short.len(), 2);
+    assert!(short.iter().all(|x| x.is_nan()));
+    for missing in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let close = [1.0, missing, 2.0, 3.0, 4.0, 3.0];
+        let actual = get_bvc_buy_volume(&close, &[100.0; 6], 2).unwrap();
+        assert!(actual[..4].iter().all(|x| x.is_nan()));
+        assert_eq!(actual[4], 100.0); // A complete clean window recovers.
+        assert!((actual[5] - 23.975006109347675).abs() < 1e-8);
+    }
+    // Finite price changes, but sigma=+inf from squared-deviation overflow: z=0.
+    let actual = get_bvc_buy_volume(&[1e200, 2e200, 1e200, 2e200], &[100.0; 4], 2).unwrap();
+    assert_eq!(&actual[2..], &[50.0, 50.0]);
+}
+
+#[test]
+fn entropy_replays_are_bitwise_reproducible() {
+    let message: String = (0..64)
+        .flat_map(|i| std::iter::repeat_n(char::from_u32(0x100 + i).unwrap(), i as usize + 1))
+        .collect();
+    let shannon = get_shannon_entropy(&message).to_bits();
+    let plugin = get_plug_in_entropy(&message, 2).unwrap().to_bits();
+    for _ in 0..64 {
+        assert_eq!(get_shannon_entropy(&message).to_bits(), shannon);
+        assert_eq!(get_plug_in_entropy(&message, 2).unwrap().to_bits(), plugin);
+    }
+}

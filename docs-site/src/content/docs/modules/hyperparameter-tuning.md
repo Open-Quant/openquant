@@ -2,7 +2,7 @@
 title: "hyperparameter_tuning"
 description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
 status: authored
-last_authored: '2026-11-08'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -200,6 +200,9 @@ bound. The parts that need no model are, and the fit loop runs in Python:
   overflowing widths raise an error rather than panicking.
 - `classification_score(y_true, probabilities, sample_weight=None, scoring="neg_log_loss")`
   is the weighted score above; `scoring` may also be `"accuracy"` or `"balanced_accuracy"`.
+  Log loss rescales tiny positive total weights before multiplying by the per-row losses,
+  so subnormal weights do not turn distinct predictions into tied zero scores. Ordinary
+  weight arithmetic and errors for overflowing sums or scores are unchanged.
 - `purged_search(make_estimator, param_sets, X, y, t0, t1, *, n_splits, pct_embargo, scoring,
   sample_weight)` calls `make_estimator(params)` for a fresh model for each candidate and
   fold, fits it on the training rows with their weights, and scores the test fold with `classification_score`

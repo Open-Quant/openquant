@@ -231,6 +231,34 @@ pub(crate) fn signed_origin_slope(response: &[f64], regressor: &[f64]) -> f64 {
     }
 }
 
+/// Correctly round `lower + fraction * (upper - lower)` for finite operands.
+/// Called only for overflowing finite quantile spans, with `fraction` in `[0, 1]`.
+pub(crate) fn finite_interpolation(lower: f64, upper: f64, fraction: f64) -> f64 {
+    let mut positive = Big::default();
+    let mut negative = Big::default();
+    // Keep all three products exact, including the subtraction implicit in
+    // (1 - fraction). Rounding that coefficient first can erase cancellation.
+    for (x, y) in [(lower, 1.0), (upper, fraction), (-lower, fraction)] {
+        let (mx, ex) = integer_parts(x);
+        let (my, ey) = integer_parts(y);
+        let sum = if x.is_sign_negative() != y.is_sign_negative() {
+            &mut negative
+        } else {
+            &mut positive
+        };
+        sum.add_product(mx as u128 * my as u128, (ex + ey + 2148) as usize);
+    }
+    let mut denominator = Big::default();
+    denominator.add_product(1, 2148);
+    if positive.compare(&negative) == Ordering::Less {
+        negative.subtract(&positive);
+        -rounded_ratio(&negative, &denominator)
+    } else {
+        positive.subtract(&negative);
+        rounded_ratio(&positive, &denominator)
+    }
+}
+
 /// Correctly round `side * (end / start - 1)` for finite positive start,
 /// finite nonnegative end and finite side, without rounding intermediate products.
 pub(crate) fn scaled_return(end: f64, start: f64, side: f64) -> Option<f64> {

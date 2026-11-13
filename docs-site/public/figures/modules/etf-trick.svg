@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 560" width="600" height="560" role="img" aria-labelledby="title desc">
+<title id="title">Remove the roll gap, retain the move</title>
+<desc id="desc">Raw and absolute backward-adjusted closes for January 2, 3, 4, 5 and 8, 2024. At the January 5 roll, the new open 72.00 exceeds the prior close 71.10 by 0.90. Earlier prices shift up by 0.90; the last two closes remain unchanged.</desc>
+<rect width="600" height="560" fill="#fbf9f4"/>
+<g font-family="system-ui, sans-serif" font-size="20" fill="#1d1a16">
+<text x="24" y="36" font-size="24" fill="#1d1a16" text-anchor="start" font-weight="bold">Remove the roll gap, retain the move</text>
+<text x="24" y="68" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Absolute backward roll · price units</text>
+<line x1="25" y1="96" x2="65" y2="96" stroke="#1d1a16" stroke-width="3" stroke-dasharray="8 5"/>
+<text x="75" y="103" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="normal">Raw close</text>
+<line x1="285" y1="96" x2="325" y2="96" stroke="#97196a" stroke-width="3" stroke-dasharray=""/>
+<text x="335" y="103" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="normal">Adjusted close</text>
+<line x1="75" y1="375" x2="547" y2="375" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="58" y="382" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">70</text>
+<line x1="75" y1="305" x2="547" y2="305" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="58" y="312" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">71</text>
+<line x1="75" y1="235" x2="547" y2="235" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="58" y="242" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">72</text>
+<line x1="75" y1="165" x2="547" y2="165" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="58" y="172" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">73</text>
+<line x1="429" y1="133" x2="429" y2="375" stroke="#5c554b" stroke-width="1" stroke-dasharray="4 5"/>
+<text x="429" y="132" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">Roll</text>
+<polyline points="75.00,347.00 193.00,291.00 311.00,298.00 429.00,172.00 547.00,165.00" fill="none" stroke="#1d1a16" stroke-width="3" stroke-linejoin="round" stroke-dasharray="8 5"/>
+<polyline points="75.00,284.00 193.00,228.00 311.00,235.00 429.00,172.00 547.00,165.00" fill="none" stroke="#97196a" stroke-width="3" stroke-linejoin="round" stroke-dasharray=""/>
+<text x="75" y="406" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">02</text>
+<text x="193" y="406" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">03</text>
+<text x="311" y="406" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">04</text>
+<text x="429" y="406" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">05</text>
+<text x="547" y="406" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">08</text>
+<text x="300" y="439" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">January 2024 · sessions equally spaced</text>
+<text x="24" y="480" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="normal">Roll gap: 72.00 open − 71.10 close = 0.90</text>
+<text x="24" y="512" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="normal">Raw close change: 1.80 = 0.90 gap + 0.90 move</text>
+<text x="24" y="544" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Adjusted close change: 0.90; history shifts up.</text>
+</g>
+</svg>

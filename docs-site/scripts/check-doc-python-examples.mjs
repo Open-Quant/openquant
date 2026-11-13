@@ -5,14 +5,14 @@
  *
  * The sibling gate (check-doc-examples.mjs) compiles the ```rust blocks on the
  * generated module pages. Nothing ever checked the ```python blocks, even
- * though Python is what a new user actually runs — quickstart Step 5 is Python.
+ * though Python is what a new user actually runs — the quickstart uses Python.
  * Two defects shipped because of that hole: a quickstart comment asserting
  * `'promote_candidate': True` for a call whose real answer is False, and four
  * documented `mda_importance` call sites left raising after `event_end_indices`
  * became required. Both would have been caught here.
  *
  * Unlike the Rust gate this one EXECUTES: a Python call site has no compiler,
- * so importing the module and running the snippet is the only way to prove the
+ * so importing the module and running the snippet checks that the
  * function exists, takes those keyword arguments and returns those keys.
  *
  * Not every snippet can run. Some are deliberately illustrative — they contain
@@ -142,8 +142,9 @@ for (const b of blocks) {
 
 // --- 3. Pick an interpreter that can import openquant -----------------------
 
-const candidates = [
-  process.env.DOC_PYTHON,
+// An explicit interpreter is an execution contract, not a preference.
+// Never turn a broken requested environment into a pass from another checkout.
+const candidates = process.env.DOC_PYTHON ? [process.env.DOC_PYTHON] : [
   path.join(repoRoot, '.venv/bin/python3'),
   path.join(repoRoot, '.venv/bin/python'),
   'python3',
