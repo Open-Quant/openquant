@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 700" width="600" height="700" role="img" aria-labelledby="title desc">
+<title id="title">Ticket costs change the inventory path</title>
+<desc id="desc">Independent exhaustive reference over 256 feasible paths. Costs 0 and 0.01 avoid the dip; 0.03 holds through it; 0.10 stays flat. Initial and terminal inventory are zero. Each panel shows inventory after each trade.</desc>
+<rect width="600" height="700" fill="#fbf9f4"/>
+<g font-family="system-ui, sans-serif" font-size="20" fill="#1d1a16">
+<text x="24" y="36" font-size="24" fill="#1d1a16" text-anchor="start" font-weight="bold">Ticket costs change the inventory path</text>
+<text x="24" y="67" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Inventory units · same 256 feasible paths</text>
+<text x="24" y="105" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="bold">Ticket 0 · Avoid the dip</text>
+<text x="24" y="132" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Net objective 0.129</text>
+<line x1="65" y1="223" x2="555" y2="223" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="230" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">0</text>
+<line x1="65" y1="154" x2="555" y2="154" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="161" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">3</text>
+<polyline points="65.00,223.00 163.00,223.00 163.00,154.00 261.00,154.00 261.00,154.00 359.00,154.00 359.00,223.00 457.00,223.00 457.00,154.00 555.00,154.00 555.00,223.00" fill="none" stroke="#97196a" stroke-width="3" stroke-linejoin="round" stroke-dasharray=""/>
+<text x="65" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">0</text>
+<text x="163" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">1</text>
+<text x="261" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">2</text>
+<text x="359" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">3</text>
+<text x="457" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">4</text>
+<text x="555" y="252" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">5</text>
+<text x="24" y="290" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="bold">Ticket 0.03 · Hold through the dip</text>
+<text x="24" y="317" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Net objective 0.042</text>
+<line x1="65" y1="408" x2="555" y2="408" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="415" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">0</text>
+<line x1="65" y1="339" x2="555" y2="339" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="346" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">3</text>
+<polyline points="65.00,408.00 163.00,408.00 163.00,339.00 261.00,339.00 261.00,339.00 359.00,339.00 359.00,339.00 457.00,339.00 457.00,339.00 555.00,339.00 555.00,408.00" fill="none" stroke="#97196a" stroke-width="3" stroke-linejoin="round" stroke-dasharray=""/>
+<text x="65" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">0</text>
+<text x="163" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">1</text>
+<text x="261" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">2</text>
+<text x="359" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">3</text>
+<text x="457" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">4</text>
+<text x="555" y="437" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">5</text>
+<text x="24" y="475" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="bold">Ticket 0.1 · Do not trade</text>
+<text x="24" y="502" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Net objective 0.000</text>
+<line x1="65" y1="593" x2="555" y2="593" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="600" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">0</text>
+<line x1="65" y1="524" x2="555" y2="524" stroke="#cdc4b1" stroke-width="1" stroke-dasharray=""/>
+<text x="50" y="531" font-size="20" fill="#1d1a16" text-anchor="end" font-weight="normal">3</text>
+<polyline points="65.00,593.00 163.00,593.00 163.00,593.00 261.00,593.00 261.00,593.00 359.00,593.00 359.00,593.00 457.00,593.00 457.00,593.00 555.00,593.00 555.00,593.00" fill="none" stroke="#97196a" stroke-width="3" stroke-linejoin="round" stroke-dasharray=""/>
+<text x="65" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">0</text>
+<text x="163" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">1</text>
+<text x="261" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">2</text>
+<text x="359" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">3</text>
+<text x="457" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">4</text>
+<text x="555" y="622" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">5</text>
+<text x="300" y="661" font-size="20" fill="#1d1a16" text-anchor="middle" font-weight="normal">Step (0 = initial inventory)</text>
+<text x="24" y="690" font-size="18" fill="#5c554b" text-anchor="start" font-weight="normal">At ticket 0.01: same dip-avoiding path, score 0.089.</text>
+</g>
+</svg>

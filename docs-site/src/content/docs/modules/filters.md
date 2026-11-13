@@ -2,7 +2,7 @@
 title: "filters"
 description: "The symmetric CUSUM filter and a rolling z-score filter, for sampling events from a price series."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -30,11 +30,17 @@ sidebar:
   badge: Module
 ---
 
-Even on well-built bars, most bars are uneventful, and a classifier trained on every one of
-them spends its capacity learning that nothing happened. AFML's answer (§2.5.2) is to sample:
-keep only the bars at which something measurable occurred, and label those. The filter that
-decides *which* bars is the first modelling choice in the pipeline, and everything downstream
-— labels, sample weights, cross-validation — inherits its timestamps.
+A filter selects **event row positions** from a price series. Use it when you want
+to create labels at selected changes rather than at every observation. CUSUM selects
+accumulated log-price moves; the z-score filter selects closes at or above a rolling
+mean plus a chosen multiple of the rolling standard deviation. Neither function fits
+a predictor or assigns trade directions.
+
+Start with positive close prices in chronological order. Keep the returned positions
+aligned with that exact input: sorting, dropping or joining rows afterward changes
+what an index identifies. The [quickstart's five-price example](/quickstart/#step-3--check-one-component)
+shows a CUSUM result you can verify by hand. Threshold choice affects the resulting
+label population and belongs inside your research's information boundary.
 
 ## The symmetric CUSUM filter
 

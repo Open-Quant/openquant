@@ -148,3 +148,17 @@ test('home hero progressively reveals research layers without a control bar or c
   assert.match(source, /cancelAnimationFrame/);
   assert.match(source, /CUSUM EVENTS/);
 });
+
+test('Rust-only module figures resolve under the deployment base with alt text and full-size links', () => {
+  for (const slug of ['combinatorial-optimization', 'etf-trick', 'fingerprint', 'hpc-parallel']) {
+    const nodes = walk(parse(fs.readFileSync(path.join(root, 'dist/modules', slug, 'index.html'), 'utf8')));
+    const url = `/openquant/figures/modules/${slug}.svg`;
+    const images = nodes.filter((node) => node.tagName === 'img' && attr(node, 'src')?.includes(`/${slug}.svg`));
+    assert.equal(images.length, 1, `${slug}: exactly one explanatory figure`);
+    assert.equal(attr(images[0], 'src'), url, `${slug}: image respects deployment base`);
+    assert.ok(attr(images[0], 'alt')?.trim(), `${slug}: meaningful alternative text`);
+    assert.ok(nodes.some((node) => node.tagName === 'a' && attr(node, 'href') === url
+      && text(node).includes('full-size figure')), `${slug}: zoomable full-size link`);
+    assert.ok(fs.existsSync(path.join(root, 'dist/figures/modules', `${slug}.svg`)), `${slug}: asset is staged`);
+  }
+});

@@ -192,12 +192,13 @@ pub fn get_chu_stinchcombe_white_statistics(
     let mut critical_value = Vec::with_capacity(series_len - 2);
     let mut stat = Vec::with_capacity(series_len - 2);
 
+    let first_diff = _log_prices[1] - _log_prices[0];
+    let mut squared_diff_sum = first_diff * first_diff;
     for index in 2..series_len {
-        let mut squared_diff_sum = 0.0;
-        for i in 1..=index {
-            let diff = _log_prices[i] - _log_prices[i - 1];
-            squared_diff_sum += diff * diff;
-        }
+        // Extend the same left-to-right sum instead of recomputing its prefix.
+        // The maximisation below still makes the complete statistic quadratic.
+        let diff = _log_prices[index] - _log_prices[index - 1];
+        squared_diff_sum += diff * diff;
         // AFML 17.3.2: sigma_t^2 = (t - 1)^-1 * sum_{i=2..t} (dy_i)^2 with 1-based t, i.e. the
         // mean of the squared differences up to bar t. With 0-based `index` there are
         // `index` of them (#173; the divisor used to be index - 1).

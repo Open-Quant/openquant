@@ -175,3 +175,61 @@ def test_encoding_edge_cases_raise_instead_of_dropping_values():
         microstructural.sigma_mapping([], 0.5)
     with pytest.raises(ValueError, match="window"):
         microstructural.get_bvc_buy_volume([10.0, 11.0, 10.0], [100.0] * 3, 0)
+
+
+@pytest.mark.parametrize("exponent", [0, -38, -40, -44, -60])
+def test_bvc_positive_deviation_is_invariant_to_price_units(exponent):
+    # Exact binary rescaling: no loss of price differences or variance underflow.
+    scale = math.ldexp(1.0, exponent)
+    close = [p * scale for p in [10.0, 11.0, 10.0, 11.0]]
+    actual = microstructural.get_bvc_buy_volume(close, [100.0] * 4, 2)
+    # Changes [-scale, +scale] have sample deviation sqrt(2) * scale.
+    # Independent standard-normal CDF via Python's erfc, not Rust/statrs.
+    expected = [50.0 * math.erfc(0.5), 50.0 * math.erfc(-0.5)]
+    assert all(math.isnan(value) for value in actual[:2])
+    assert actual[2:] == pytest.approx(expected, rel=0, abs=1e-8)
+
+
+def test_bvc_preserves_zero_deviation_and_ordinary_outputs_bitwise():
+    scale = math.ldexp(1.0, -44)
+    # Captured from the pre-fix extension; lock down the untouched numeric paths.
+    # Constant nonzero changes must retain Phi(dp / 1e-12), not a sign/half split.
+    cases = [
+        ([10.0] * 4, 2, ["0x1.9000000000000p+5"] * 2),
+        ([p * scale for p in [10.0, 11.0, 12.0, 13.0]], 2, ["0x1.a221ccad359cdp+5"] * 2),
+        ([p * scale for p in [13.0, 12.0, 11.0, 10.0]], 2, ["0x1.7dde3352ca633p+5"] * 2),
+        (
+            [10.0, 12.0, 11.0, 14.0, 14.0, 12.0, 15.0],
+            3,
+            [
+                "0x1.72177b8e9e3aep+6",
+                "0x1.9000000000000p+5",
+                "0x1.556be02a9f9b6p+4",
+                "0x1.615a9cd2e4d0ep+6",
+            ],
+        ),
+    ]
+    for close, window, expected in cases:
+        actual = microstructural.get_bvc_buy_volume(close, [100.0] * len(close), window)
+        assert all(math.isnan(value) for value in actual[:window])
+        assert [value.hex() for value in actual[window:]] == expected
+
+
+def test_bvc_preserves_missing_nonfinite_and_window_behavior():
+    for window in [0, 1]:
+        with pytest.raises(ValueError):
+            microstructural.get_bvc_buy_volume([1.0, 2.0], [100.0] * 2, window)
+    with pytest.raises(ValueError):
+        microstructural.get_bvc_buy_volume([1.0, 2.0], [100.0], 2)
+    assert microstructural.get_bvc_buy_volume([], [], 2) == []
+    short = microstructural.get_bvc_buy_volume([1.0, 2.0], [100.0] * 2, 2)
+    assert len(short) == 2 and all(math.isnan(value) for value in short)
+    for missing in [math.nan, math.inf, -math.inf]:
+        close = [1.0, missing, 2.0, 3.0, 4.0, 3.0]
+        actual = microstructural.get_bvc_buy_volume(close, [100.0] * len(close), 2)
+        assert all(math.isnan(value) for value in actual[:4])
+        assert actual[4] == 100.0  # Recovery after a complete clean window.
+        assert actual[5] == pytest.approx(50.0 * math.erfc(0.5), rel=0, abs=1e-8)
+    # Finite changes with an overflowing variance still have sigma=+inf and z=0.
+    actual = microstructural.get_bvc_buy_volume([1e200, 2e200, 1e200, 2e200], [100.0] * 4, 2)
+    assert actual[2:] == [50.0, 50.0]

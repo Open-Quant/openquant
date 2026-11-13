@@ -330,8 +330,14 @@ jobs:
       - name: Check generated pages are current
         run: bun run check:generated-pages
         working-directory: docs-site
+      - name: Check Rust module figures and generator tests
+        run: bun run check:module-figures
+        working-directory: docs-site
       - name: Check documented Rust examples compile
         run: bun run check:examples
+        working-directory: docs-site
+      - name: Run ETF Rust example and compare documented output
+        run: bun run check:rust-output
         working-directory: docs-site
       # check:python-examples EXECUTES every documented ```python block, so
       # unlike the Rust gate it needs the compiled extension, not just a

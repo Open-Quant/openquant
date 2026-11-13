@@ -137,7 +137,7 @@ pub struct OuProcessParams {
     pub stationary: bool,
 }
 
-/// A profit-taking / stop-loss pair, both positive widths in price units from the entry.
+/// A profit-taking / stop-loss pair, both finite positive widths in price units from the entry.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TradingRule {
     /// Exit when PnL reaches `+profit_taking`.
@@ -392,7 +392,8 @@ pub fn generate_ou_paths(
 /// # Errors
 ///
 /// - [`SyntheticBacktestError::Empty`] if `paths` is empty.
-/// - [`SyntheticBacktestError::NonPositiveBarriers`] if a barrier width is not positive.
+/// - [`SyntheticBacktestError::Invalid`] if a barrier width is not finite.
+/// - [`SyntheticBacktestError::NonPositiveBarriers`] if a finite barrier width is not positive.
 /// - [`SyntheticBacktestError::Invalid`] if `max_holding_steps` is zero.
 /// - [`SyntheticBacktestError::InvalidAnnualizationFactor`] if the factor is not finite and
 ///   positive.
@@ -406,6 +407,11 @@ pub fn evaluate_rule_on_paths(
 ) -> Result<RuleSurfacePoint, SyntheticBacktestError> {
     if paths.is_empty() {
         return Err(SyntheticBacktestError::Empty("paths"));
+    }
+    for (name, width) in [("profit_taking", rule.profit_taking), ("stop_loss", rule.stop_loss)] {
+        if !width.is_finite() {
+            return Err(SyntheticBacktestError::Invalid { name, requirement: "finite and > 0" });
+        }
     }
     if rule.profit_taking <= 0.0 || rule.stop_loss <= 0.0 {
         return Err(SyntheticBacktestError::NonPositiveBarriers);
@@ -529,8 +535,9 @@ pub fn detect_no_stable_optimum(
 /// # Errors
 ///
 /// - [`SyntheticBacktestError::EmptyGrid`] if either grid is empty.
-/// - Any [`evaluate_rule_on_paths`] error (including non-positive grid values, reported as
-///   [`SyntheticBacktestError::NonPositiveBarriers`]).
+/// - Any [`evaluate_rule_on_paths`] error: non-finite grid values are reported as
+///   [`SyntheticBacktestError::Invalid`], and finite non-positive values as
+///   [`SyntheticBacktestError::NonPositiveBarriers`].
 pub fn search_optimal_trading_rule(
     params: OuProcessParams,
     paths: &[Vec<f64>],

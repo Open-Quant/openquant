@@ -136,7 +136,7 @@ fn bars_build_volume_bars(
     volume_per_bar: f64,
 ) -> PyResult<Vec<BarRow>> {
     if !volume_per_bar.is_finite() || volume_per_bar <= 0.0 {
-        return Err(PyValueError::new_err("volume_per_bar must be > 0"));
+        return Err(PyValueError::new_err("volume_per_bar must be finite and > 0"));
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
@@ -182,7 +182,7 @@ fn bars_build_dollar_bars(
     dollar_value_per_bar: f64,
 ) -> PyResult<Vec<BarRow>> {
     if !dollar_value_per_bar.is_finite() || dollar_value_per_bar <= 0.0 {
-        return Err(PyValueError::new_err("dollar_value_per_bar must be > 0"));
+        return Err(PyValueError::new_err("dollar_value_per_bar must be finite and > 0"));
     }
     let trades = build_trades(timestamps, prices, volumes)?;
     let bars =
@@ -282,7 +282,7 @@ fn bars_build_imbalance_bars(
     bar_type: String,
 ) -> PyResult<Vec<BarRow>> {
     if !threshold.is_finite() || threshold <= 0.0 {
-        return Err(PyValueError::new_err("threshold must be > 0"));
+        return Err(PyValueError::new_err("threshold must be finite and > 0"));
     }
     let bt = match bar_type.to_lowercase().as_str() {
         "tick" => ImbalanceBarType::Tick,

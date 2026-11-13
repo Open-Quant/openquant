@@ -2,7 +2,7 @@
 title: "etf_trick"
 description: "Turn a rebalanced basket of futures, or a single rolled contract, into one continuous series whose changes are achievable PnL."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -170,6 +170,15 @@ With `roll_backward = true` the most recent prices are left untouched and histor
 (Snippet 2.2), which keeps the series aligned with the live market; with `false`, history is
 fixed and recent prices move. `"absolute"` accumulates price differences; `"relative"`
 accumulates ratios, returned as a factor to divide by.
+
+<img src="/figures/modules/etf-trick.svg" alt="Raw and backward-adjusted closes around the January 5 roll: earlier closes shift up by 0.90, leaving a 0.90 price move at the roll rather than the raw 1.80 jump." />
+
+[Open the full-size figure](/figures/modules/etf-trick.svg) to inspect labels or zoom on a narrow screen.
+
+*Calculated directly from the chain above using AFML Snippet 2.2: the 0.90 gap
+is the new open minus the old close, not the whole close-to-close change.
+Absolute backward adjustment shifts the earlier closes up and leaves the latest
+contract's closes untouched. The horizontal spacing represents sessions, not calendar days.*
 
 An absolute backward roll can push old prices negative after years of contango. AFML's
 remedy (Snippet 2.3) is to work with returns of the rolled series against the *raw* previous

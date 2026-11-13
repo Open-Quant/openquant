@@ -2,7 +2,7 @@
 title: "synthetic_backtesting"
 description: "Choose profit-taking and stop-loss levels on simulated paths of a fitted mean-reverting process, instead of on the one historical path."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -74,11 +74,14 @@ identity. A barrier exit changes the payoff distribution.
 **3. Evaluate.** `evaluate_rule_on_paths` enters **long at the first price of every path**
 and exits at the first step where the profit reaches `profit_taking` or the loss reaches
 `stop_loss`, or at `max_holding_steps` (the final available step for a shorter path). It returns the mean, deviation and Sharpe ratio of the
-exit PnL across paths, the win rate and the average holding time.
+exit PnL across paths, the win rate and the average holding time. Both widths must be
+finite and strictly positive. A nonfinite width raises a field-specific Rust `Invalid`
+error (Python `ValueError`); it cannot be used to disable a barrier.
 
 **4. Search.** `search_optimal_trading_rule` evaluates every pair on a grid — on the same
 paths, so rules are compared on identical draws — and returns the surface sorted by Sharpe
-ratio. `run_synthetic_otr_workflow` does all four steps.
+ratio. Each grid width must also be finite and strictly positive.
+`run_synthetic_otr_workflow` does all four steps.
 
 ## Inspect the simulated rule surface
 

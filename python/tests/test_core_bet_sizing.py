@@ -89,3 +89,52 @@ def test_mixture_functions_raise_value_error_on_nan(call, name):
     # `except ValueError` and `except Exception` both miss.
     with pytest.raises(ValueError, match=rf"'{name}' must be finite, got NaN"):
         call()
+
+
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+def test_sigmoid_finite_inputs_survive_intermediate_overflow(sign):
+    # AFML 10.4: these sizes round to +/-1, so a 50-lot book must not go flat.
+    assert bet_sizing.bet_size_sigmoid(1.0, sign * 1e200) == sign
+    assert bet_sizing.get_target_pos_sigmoid(1.0, sign * 1e200, 0.0, 50.0) == sign * 50.0
+    assert bet_sizing.bet_size_sigmoid(1e308, sign * 1e154) == pytest.approx(
+        sign / math.sqrt(2.0), rel=1e-15
+    )
+
+
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+def test_inverse_sigmoid_finite_result_survives_intermediate_overflow(sign):
+    # m=3/5 gives m/sqrt(1-m²)=3/4, allowing binary64 rounding of m.
+    expected = -sign * 0.75 * math.sqrt(1.7e308)
+    assert bet_sizing.inv_price_sigmoid(0.0, 1.7e308, sign * 0.6) == pytest.approx(
+        expected, rel=1e-15
+    )
+
+
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+def test_sigmoid_calibration_recovers_extreme_finite_width(sign):
+    # x=2^520, m=1-2^-53 implies w=2^988*(1-2^-54)/(1-2^-53)^2.
+    got = bet_sizing.get_w_sigmoid(sign * 2.0**520, sign * math.nextafter(1.0, 0.0))
+    assert got == pytest.approx(2.0**988, rel=1e-15)
+    assert bet_sizing.get_w_sigmoid(sign * 1e-200, sign * 1e-200) == 1.0
+    assert bet_sizing.get_w_sigmoid(sign * 1e-200, sign * 1e-100) == pytest.approx(
+        1e-200, rel=1e-15, abs=0.0
+    )
+
+
+@pytest.mark.parametrize("divergence", [1e-200, -1e-200, math.ulp(0.0), -math.ulp(0.0)])
+def test_zero_width_sigmoid_keeps_tiny_divergence_direction(divergence):
+    assert bet_sizing.bet_size_sigmoid(0.0, divergence) == math.copysign(1.0, divergence)
+    assert math.isnan(bet_sizing.bet_size_sigmoid(0.0, 0.0))
+
+
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+def test_sigmoid_subnormal_squared_norm_keeps_relative_accuracy(sign):
+    assert bet_sizing.bet_size_sigmoid(0.0, sign * 1.6e-162) == sign
+    width = math.ulp(0.0)
+    assert bet_sizing.bet_size_sigmoid(width, sign * math.sqrt(width)) == pytest.approx(
+        sign / math.sqrt(2.0), rel=1e-15
+    )
+    # x=(3/4)*sqrt(w) gives (3/4)/sqrt(1+9/16)=3/5 exactly.
+    assert bet_sizing.bet_size_sigmoid(width, sign * 0.75 * math.sqrt(width)) == pytest.approx(
+        sign * 0.6, rel=1e-15
+    )

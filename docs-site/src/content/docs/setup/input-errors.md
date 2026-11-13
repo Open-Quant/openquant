@@ -2,7 +2,7 @@
 title: Diagnose input errors
 description: Identify validated input failures and assumptions that Python and Rust callers must check themselves.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -22,6 +22,9 @@ can raise its own exception, and Python argument conversion can fail before Rust
 
 | Task and symptom | What is checked | What to change |
 | --- | --- | --- |
+| Feature diagnostics: `y must contain finite binary labels (0 or 1)` | MDI, MDA, SFI and substitution reports validate every target before fitting | Explicitly encode the two classes as 0/1. Do not silently round fractional labels or replace missing targets. Single-class binary samples remain valid. |
+| Feature diagnostics: `feature_names must be unique` | Names identify distinct columns after string conversion, including DataFrame screen overrides | Supply a unique name for each feature; duplicate names would merge screen rejection reasons. |
+| Bars: `volume_per_bar`, `dollar_value_per_bar` or native imbalance `threshold` must be finite and `> 0` | Positive finite thresholds, even when an input is empty or cleaning removes every row | Choose a finite positive size before grouping. NaN and infinity cannot stand for an unlimited bar. Positive subnormal values remain valid. |
 | `data.clean_ohlcv`: `missing required OHLCV columns` | Required columns after known aliases are normalized | Supply `ts`, `symbol`, `open`, `high`, `low`, `close`, `volume`. `adj_close` is optional and defaults to `close`; it is not an adjustment calculation. |
 | `data.clean_ohlcv`: Polars `InvalidOperationError` converting a numeric column | Price and volume columns use strict `Float64` casts; a string such as `"bad"` raises instead of becoming null | Inspect the offending source values and define their treatment before cleaning. Timestamp parsing is different: unparseable timestamps become null and their rows are dropped. See [cleaning contracts](/modules/data/#cleaning-and-provenance-contracts). |
 | CV wrapper: `t0 contains NaT` or `t0 and t1 must both be datetimes or both be integers` | One-dimensional spans, missing datetimes, matching lengths and datetime/integer representation | Use one representation for both ends. Datetimes become nanoseconds; integer units pass through unchanged, so match them yourself. |

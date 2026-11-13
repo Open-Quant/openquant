@@ -163,6 +163,9 @@ pub enum QuantileMethod {
 ///
 /// `q` is clamped into `[0, 1]`. Returns `None` when `sorted` is empty. The order is not
 /// checked; callers choose how `NaN` values sort (for example [`f64::total_cmp`]).
+/// When the distance between finite endpoints overflows, linear interpolation is
+/// accumulated exactly and rounded once; ordinary finite-distance interpolation and
+/// nonfinite-input behavior are unchanged.
 ///
 /// ```
 /// use openquant::util::stats::{quantile_sorted, QuantileMethod};
@@ -190,7 +193,17 @@ pub fn quantile_sorted(sorted: &[f64], q: f64, method: QuantileMethod) -> Option
             if lo == hi {
                 sorted[lo]
             } else {
-                sorted[lo] + (h - lo as f64) * (sorted[hi] - sorted[lo])
+                let fraction = h - lo as f64;
+                let distance = sorted[hi] - sorted[lo];
+                if distance.is_infinite() && sorted[lo].is_finite() && sorted[hi].is_finite() {
+                    // Opposite-sign finite endpoints can have an unrepresentable
+                    // distance even though every convex combination is finite.
+                    crate::util::exact_product::finite_interpolation(
+                        sorted[lo], sorted[hi], fraction,
+                    )
+                } else {
+                    sorted[lo] + fraction * distance
+                }
             }
         }
         QuantileMethod::Higher => sorted[(h.ceil() as usize).min(n - 1)],

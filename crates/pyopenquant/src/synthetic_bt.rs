@@ -209,9 +209,9 @@ fn sbt_generate_ou_paths(
 /// paths : list[list[float]]
 ///     Price paths, e.g. from `generate_ou_paths`; each needs at least two finite points.
 /// profit_taking : float
-///     Profit-taking width in price units; must be > 0.
+///     Profit-taking width in price units; must be finite and > 0.
 /// stop_loss : float
-///     Stop-loss width in price units, as a positive number; must be > 0.
+///     Stop-loss width in price units; must be finite and > 0.
 /// max_holding_steps : int
 ///     Maximum holding period in steps; must be > 0.
 /// annualization_factor : float
@@ -227,7 +227,7 @@ fn sbt_generate_ou_paths(
 /// Raises
 /// ------
 /// ValueError
-///     If `paths` is empty, a barrier is not positive, `max_holding_steps` is 0,
+///     If `paths` is empty, a barrier is not finite and positive, `max_holding_steps` is 0,
 ///     `annualization_factor` is not finite and positive, a path has fewer than two points, or
 ///     a path contains a non-finite value.
 #[pyfunction(name = "evaluate_rule_on_paths")]
@@ -464,9 +464,9 @@ fn sbt_run_synthetic_otr_workflow(
 /// paths : list[list[float]]
 ///     Price paths, e.g. from `generate_ou_paths`; each needs at least two finite points.
 /// profit_taking_grid : list[float]
-///     Profit-taking widths to try, in price units, each > 0.
+///     Profit-taking widths to try, in price units, each finite and > 0.
 /// stop_loss_grid : list[float]
-///     Stop-loss widths to try, as positive numbers in price units, each > 0.
+///     Stop-loss widths to try, in price units, each finite and > 0.
 /// max_holding_steps : int
 ///     Maximum holding period in steps; must be > 0.
 /// annualization_factor : float
@@ -489,7 +489,7 @@ fn sbt_run_synthetic_otr_workflow(
 /// Raises
 /// ------
 /// ValueError
-///     If either grid is empty, a grid value is not positive, or `evaluate_rule_on_paths`
+///     If either grid is empty, a grid value is not finite and positive, or `evaluate_rule_on_paths`
 ///     rejects its input.
 #[pyfunction(name = "search_optimal_trading_rule")]
 // Python keyword signature.
