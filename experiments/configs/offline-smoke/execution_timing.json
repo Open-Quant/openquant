@@ -1,0 +1,10 @@
+{
+  "target": 2,
+  "horizon": 3,
+  "alpha": 1,
+  "decays": [0, 0.5, 1],
+  "spread": 0.25,
+  "impacts": [0, 0.5],
+  "latencies": [0, 2],
+  "schedules": ["front", "uniform", "back"]
+}
