@@ -4,6 +4,12 @@ const isHome = Astro.locals.starlightRoute.entry.id === '' || Astro.locals.starl
 // Illustrative observations, not a backtest. Layer semantics follow the CUSUM/event-labeling workflow.
 const points = Array.from({ length: 81 }, (_, i) => ({ x: 28 + i * 4.8, y: 144 - i * .55 + Math.sin(i * .31) * 19 + Math.sin(i * .87) * 5 }));
 const path = points.map(p => `${p.x},${p.y}`).join(' ');
+// Dense, bounded jitter stays centered on the observations: the signal itself never scrolls.
+const noisy = Array.from({length:321}, (_,i)=> {
+  const t=i/4, a=points[Math.floor(t)], b=points[Math.min(80,Math.ceil(t))];
+  const y=a.y+(b.y-a.y)*(t-Math.floor(t));
+  return `${28+i*1.2},${y+Math.sin(i*17.13)*2.8+Math.sin(i*4.71)*1.8}`;
+}).join(' ');
 const mean = points.map((p,i) => ({x:p.x,y:points.slice(Math.max(0,i-7),i+1).reduce((sum,q)=>sum+q.y,0)/Math.min(8,i+1)}));
 const meanPath = mean.map(p=>`${p.x},${p.y}`).join(' ');
 let positive = 0, negative = 0;
@@ -27,15 +33,19 @@ const events = points.flatMap((p,i)=> {
   </div>
   <oq-feature-study>
     <figure class="oq-study">
-      <div class="oq-study-heading"><span>OBSERVATIONS → EVENTS → LABELS</span><button class="oq-motion" type="button" aria-label="Pause animation" hidden><span aria-hidden="true">Ⅱ</span></button></div>
-      <div class="oq-plot" role="slider" tabindex="0" aria-label="Explore the research timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="All features visible" aria-describedby="study-help">
+      <div class="oq-study-heading"><span>OBSERVATIONS → EVENTS → LABELS</span><button class="oq-motion" type="button" aria-label="Pause noise animation" hidden><span aria-hidden="true">Ⅱ</span></button></div>
+      <div class="oq-plot" role="slider" tabindex="0" aria-label="Explore the research timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Unprocessed observations" aria-describedby="study-help">
       <svg viewBox="0 0 440 250" role="img" aria-labelledby="study-title study-desc">
         <title id="study-title">Observations become research features</title>
-        <desc id="study-desc">Illustrative data with a rolling mean, CUSUM event sampling and event barriers. Move across the plot to reveal features; this is not measured investment performance.</desc>
-        <defs><clipPath id="oq-reveal"><rect x="28" y="0" width="384" height="250" /></clipPath></defs>
+        <desc id="study-desc">Illustrative observations with animated visual noise. Move the pink processing boundary across the plot: noise remains on its right, while the clean line, rolling mean, CUSUM events and barriers appear on its left. This is not measured investment performance.</desc>
+        <defs><clipPath id="oq-reveal"><rect x="28" y="0" width="0" height="250" /></clipPath><clipPath id="oq-unprocessed"><rect x="28" y="0" width="384" height="250" /></clipPath></defs>
         <g class="oq-grid" aria-hidden="true">{Array.from({length: 11}, (_, x) => Array.from({length: 6}, (_, y) => <circle cx={28+x*38} cy={38+y*35} r="1" />))}</g>
-        <polyline class="oq-observations" points={path}/>
+        <g class="oq-noise" clip-path="url(#oq-unprocessed)" aria-hidden="true">
+          <polyline class="oq-noise-halo" points={noisy}/>
+          <polyline class="oq-noise-core" points={noisy} data-base={path}/>
+        </g>
         <g class="oq-features" clip-path="url(#oq-reveal)" aria-hidden="true">
+          <polyline class="oq-observations" points={path}/>
           <polyline class="oq-mean" points={meanPath}/>
           {events.map((p,index)=><g class="oq-event">
             <path class="oq-event-stem" d={`M${p.x} ${p.y+7}V214`} />
@@ -46,11 +56,11 @@ const events = points.flatMap((p,i)=> {
             <path class="oq-barriers" d={`M${p.x} ${p.y-24}H${Math.min(412,p.x+48)}M${p.x} ${p.y+24}H${Math.min(412,p.x+48)}M${Math.min(412,p.x+48)} ${p.y-24}V${p.y+24}`} />
           </g>)}
         </g>
-        <g class="oq-layer-labels" aria-hidden="true"><text x="28" y="26" data-at=".12">ROLLING MEAN</text><text x="172" y="26" data-at=".44">CUSUM EVENTS</text><text x="318" y="26" data-at=".76">BARRIERS</text></g>
-        <line class="oq-scan" x1="412" x2="412" y1="40" y2="214" hidden />
+        <g class="oq-layer-labels" aria-hidden="true"><text x="28" y="26" data-at=".12" style="opacity:0">ROLLING MEAN</text><text x="172" y="26" data-at=".44" style="opacity:0">CUSUM EVENTS</text><text x="318" y="26" data-at=".76" style="opacity:0">BARRIERS</text></g>
+        <line class="oq-scan" x1="28" x2="28" y1="40" y2="214" hidden />
       </svg>
       </div>
-      <span id="study-help" class="oq-sr-only">Arrow keys explore the timeline. Home and End jump to its ends. Space pauses or resumes animation. Touch or move across the plot to explore.</span>
+      <span id="study-help" class="oq-sr-only">Arrow keys explore the timeline. Home and End jump to its ends. Space pauses or resumes the subtle noise. Touch or move across the plot to process observations. The boundary moves only when you move it.</span>
     </figure>
   </oq-feature-study>
 </section>
@@ -63,54 +73,69 @@ class FeatureStudy extends HTMLElement {
     const plot = this.querySelector('.oq-plot');
     const button = this.querySelector('.oq-motion');
     const rect = this.querySelector('#oq-reveal rect');
+    const rawRect = this.querySelector('#oq-unprocessed rect');
     const scan = this.querySelector('.oq-scan');
+    const core = this.querySelector('.oq-noise-core');
+    const halo = this.querySelector('.oq-noise-halo');
+    const samples = core.dataset.base.split(' ').map(pair=>pair.split(',').map(Number));
     const labels = [...this.querySelectorAll('[data-at]')];
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    let frame = 0, value = 0, previous = 0, paused = false, interacting = false, visible = true;
+    let frame = 0, value = 0, previous = 0, phase = 0, paused = false, visible = true;
+    const noise = () => {
+      const strands = [[],[]];
+      for (let i=0;i<(samples.length-1)*4+1;i++) {
+        const t=i/4, a=samples[Math.floor(t)], b=samples[Math.min(samples.length-1,Math.ceil(t))];
+        const x=a[0]+(b[0]-a[0])*(t-Math.floor(t));
+        const y=a[1]+(b[1]-a[1])*(t-Math.floor(t));
+        // A low-amplitude texture, not a moving price path or a performance simulation.
+        strands[0].push(`${x},${y+Math.sin(i*17.13+phase)*2.8+Math.sin(i*4.71-phase*1.3)*1.8}`);
+        strands[1].push(`${x},${y+Math.sin(i*13.7-phase)*4.2}`);
+      }
+      core.setAttribute('points',strands[0].join(' '));
+      halo.setAttribute('points',strands[1].join(' '));
+    };
     const show = (next) => {
       value = Math.max(0,Math.min(1,next));
-      rect.setAttribute('width', String(value*384));
-      scan.setAttribute('x1', String(28+value*384)); scan.setAttribute('x2',String(28+value*384));
+      const boundary=28+value*384;
+      rect.setAttribute('width',String(value*384));
+      rawRect.setAttribute('x',String(boundary));rawRect.setAttribute('width',String((1-value)*384));
+      scan.setAttribute('x1',String(boundary));scan.setAttribute('x2',String(boundary));
       labels.forEach(label=>label.style.opacity=value>=Number(label.dataset.at)?'1':'0');
       plot.setAttribute('aria-valuenow',String(Math.round(value*100)));
-      plot.setAttribute('aria-valuetext',`${Math.round(value*100)} percent of research features revealed`);
+      plot.setAttribute('aria-valuetext',value===0?'Unprocessed observations':value===1?'All observations processed; no noise remains':`${Math.round(value*100)} percent processed; noise remains to the right`);
     };
-    const stop = () => { cancelAnimationFrame(frame); frame=0; previous=0; };
+    const stop = () => {cancelAnimationFrame(frame);frame=0;previous=0;};
     const tick = (now) => {
-      if (previous) { value += Math.min(now-previous,100)/14000; if(value>1.12) value=0; }
-      previous=now;
-      const phase=value; show(Math.min(1,value)); value=phase;
+      // Limit texture changes to ~11Hz; the processing frontier NEVER advances itself.
+      if (!previous || now-previous>=90) {phase+=.7;noise();previous=now;}
       frame=requestAnimationFrame(tick);
     };
     const sync = () => {
-      stop();
-      button.setAttribute('aria-label',paused?'Resume animation':'Pause animation');
+      button.setAttribute('aria-label',paused?'Resume noise animation':'Pause noise animation');
       button.innerHTML=`<span aria-hidden="true">${paused?'▶':'Ⅱ'}</span>`;
       button.hidden=motion.matches;
-      scan.toggleAttribute('hidden',motion.matches);
-      if (!paused&&!interacting&&!motion.matches&&!document.hidden&&visible) frame=requestAnimationFrame(tick);
+      if (!paused&&!motion.matches&&!document.hidden&&visible&&value<1) {
+        if (!frame) frame=requestAnimationFrame(tick);
+      } else stop();
     };
-    const toggle = () => { paused=!paused; sync(); };
-    const scrub = (event) => {
+    const toggle=()=>{paused=!paused;sync();};
+    const scrub=(event)=>{
       const bounds=plot.getBoundingClientRect();
-      interacting=true; stop(); show((event.clientX-bounds.left)/bounds.width*440/384-28/384);
+      show(((event.clientX-bounds.left)/bounds.width*440-28)/384);sync();
     };
-    const leave=()=>{interacting=false;sync();};
-    const down=(event)=>{scrub(event); if(event.pointerType!=='mouse') plot.setPointerCapture(event.pointerId);};
-    const up=(event)=>{ if(plot.hasPointerCapture(event.pointerId)) plot.releasePointerCapture(event.pointerId); leave();};
+    const down=(event)=>{scrub(event);if(event.pointerType!=='mouse')plot.setPointerCapture(event.pointerId);};
+    const up=(event)=>{if(plot.hasPointerCapture(event.pointerId))plot.releasePointerCapture(event.pointerId);};
     const key=(event)=>{
       if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
-        event.preventDefault(); interacting=true;stop();
-        show(event.key==='Home'?0:event.key==='End'?1:value+(event.key==='ArrowRight'?.025:-.025));
+        event.preventDefault();show(event.key==='Home'?0:event.key==='End'?1:value+(event.key==='ArrowRight'?.025:-.025));sync();
       } else if(event.code==='Space'){event.preventDefault();toggle();}
     };
-    const focus=()=>{interacting=true;sync();};
-    const preference=()=>{ if(motion.matches) show(1);sync();};
-    const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync();}); observer.observe(this);
-    button.addEventListener('click',toggle); plot.addEventListener('pointermove',scrub);plot.addEventListener('pointerdown',down);plot.addEventListener('pointerup',up);plot.addEventListener('pointercancel',leave);plot.addEventListener('pointerleave',leave);plot.addEventListener('keydown',key);plot.addEventListener('focus',focus);plot.addEventListener('blur',leave);
+    const preference=()=>{if(motion.matches){phase=0;noise();}sync();};
+    const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync();});observer.observe(this);
+    button.addEventListener('click',toggle);plot.addEventListener('pointermove',scrub);plot.addEventListener('pointerdown',down);plot.addEventListener('pointerup',up);plot.addEventListener('pointercancel',up);plot.addEventListener('keydown',key);
     motion.addEventListener('change',preference);document.addEventListener('visibilitychange',sync);
-    show(motion.matches?1:0);sync();
-    this.cleanup=()=>{stop();observer.disconnect();motion.removeEventListener('change',preference);document.removeEventListener('visibilitychange',sync);button.removeEventListener('click',toggle);plot.removeEventListener('pointermove',scrub);plot.removeEventListener('pointerdown',down);plot.removeEventListener('pointerup',up);plot.removeEventListener('pointercancel',leave);plot.removeEventListener('pointerleave',leave);plot.removeEventListener('keydown',key);plot.removeEventListener('focus',focus);plot.removeEventListener('blur',leave);};
+    show(0);noise();scan.toggleAttribute('hidden',false);sync();
+    this.cleanup=()=>{stop();observer.disconnect();motion.removeEventListener('change',preference);document.removeEventListener('visibilitychange',sync);button.removeEventListener('click',toggle);plot.removeEventListener('pointermove',scrub);plot.removeEventListener('pointerdown',down);plot.removeEventListener('pointerup',up);plot.removeEventListener('pointercancel',up);plot.removeEventListener('keydown',key);};
   }
   disconnectedCallback(){this.cleanup?.();this.cleanup=undefined;}
 }
@@ -129,14 +154,16 @@ h1 { font-family: var(--oq-serif); font-weight: 600; font-size: clamp(3rem, 6vw,
 .oq-study-heading { display:flex;justify-content:space-between;align-items:center;min-height:44px;font: .65rem var(--oq-mono);letter-spacing:.04em;color:var(--oq-muted); }
 svg { width:100%;height:auto;display:block; }
 .oq-grid { fill:var(--oq-rule); }
-.oq-observations { fill:none;stroke:var(--oq-muted);stroke-width:1.5; }
+.oq-observations { fill:none;stroke:var(--oq-text);stroke-width:1.5; }
+.oq-noise-core { fill:none;stroke:var(--oq-muted);stroke-width:.8;opacity:.8; }
+.oq-noise-halo { fill:none;stroke:var(--oq-muted);stroke-width:1;opacity:.22;stroke-dasharray:1 2; }
 .oq-mean { fill:none;stroke:var(--oq-accent);stroke-width:1.5;opacity:.65; }
 .oq-barriers { stroke:var(--oq-muted);stroke-width:.8;stroke-dasharray:3 4;fill:none;opacity:.65; }
 .oq-event-stem { stroke:var(--oq-rule);stroke-width:.7;stroke-dasharray:2 4; }
 .oq-event-dot { fill:var(--oq-ground);stroke:var(--oq-accent);stroke-width:1.6; }
 svg text { fill:var(--oq-muted);font:8px var(--oq-mono); }
 .oq-event-id { font-size:7px; }
-.oq-scan { stroke:var(--oq-accent);stroke-width:.7;opacity:.35; }
+.oq-scan { stroke:var(--oq-accent);stroke-width:1.2;opacity:.85; }
 .oq-motion { display:grid;place-items:center;width:44px;height:44px;border:0;background:transparent;color:var(--oq-muted);cursor:pointer;font-size:12px; }
 .oq-plot { touch-action:pan-y;cursor:crosshair; }
 [hidden] { display:none!important; }
