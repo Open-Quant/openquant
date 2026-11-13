@@ -28,12 +28,12 @@
     "test:python-interpreter": "node --test scripts/tests/python-interpreter.test.mjs"
   },
   "devDependencies": {
-    "astro": "^7.3.3",
+    "astro": "^7.4.8",
     "parse5": "7.3.0"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.0",
-    "@astrojs/starlight": "^0.42.2",
+    "@astrojs/markdown-remark": "^7.3.6",
+    "@astrojs/starlight": "^0.42.10",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
   }
