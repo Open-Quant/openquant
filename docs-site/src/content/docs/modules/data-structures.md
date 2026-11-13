@@ -2,7 +2,7 @@
 title: "data_structures"
 description: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades."
 status: authored
-last_authored: '2026-11-12'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

@@ -2,7 +2,7 @@
 title: "combinatorial_optimization"
 description: "Exhaustive search over small integer problems, and over single-instrument trading paths with a fixed cost per trade, as an exact baseline for heuristic solvers."
 status: authored
-last_authored: '2026-11-09'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
