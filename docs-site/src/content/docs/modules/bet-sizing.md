@@ -2,7 +2,7 @@
 title: "bet_sizing"
 description: "From a model's confidence, or a price forecast, to a position size: probability-based sizing, averaging of live bets, discretisation, dynamic limit prices and concurrency-based sizing."
 status: authored
-last_authored: '2026-11-11'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

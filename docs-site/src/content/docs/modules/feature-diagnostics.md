@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-11-10'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

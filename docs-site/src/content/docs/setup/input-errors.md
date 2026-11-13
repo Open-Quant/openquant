@@ -2,7 +2,7 @@
 title: Diagnose input errors
 description: Identify validated input failures and assumptions that Python and Rust callers must check themselves.
 status: authored
-last_authored: '2026-11-10'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

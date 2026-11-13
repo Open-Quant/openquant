@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-11-12'
+last_generated: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

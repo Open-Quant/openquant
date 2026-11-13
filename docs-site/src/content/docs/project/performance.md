@@ -3,7 +3,7 @@ title: "Performance"
 description: "Committed criterion and Python benchmark results, what each benchmark measures, and how CI gates regressions."
 status: generated
 generated_from: "benchmarks/"
-last_generated: '2026-11-09'
+last_generated: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -69,6 +69,7 @@ The script's `--baseline` compares function names and mean times only, without a
 | `synthetic_ticker_pipeline_end_to_end` | 50% |
 | `sampling_get_av_uniqueness_from_triple_barrier` | 35% |
 | `sampling_get_ind_mat_average_uniqueness` | 35% |
+| `structural_breaks_csw_prefix_1024` | 35% |
 
 The checker uses positive finite `mean_ms` values, not confidence intervals or a statistical significance test. It skips comparisons with baseline means below 0.05 ms; latest-only names have no regression baseline. The computed percentage must exceed its threshold to fail; rounded printed percentages can conceal a small excess. Same-runner timing still has load, thermal and run-order noise. CI uses 30 samples, 2 seconds warm-up and a 3-second measurement target.
 

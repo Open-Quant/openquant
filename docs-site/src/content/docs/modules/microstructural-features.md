@@ -2,7 +2,7 @@
 title: "microstructural_features"
 description: "Spread, price-impact, order-flow and entropy features estimated from bars or from trades."
 status: authored
-last_authored: '2026-11-11'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

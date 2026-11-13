@@ -2,7 +2,7 @@
 title: "synthetic_backtesting"
 description: "Choose profit-taking and stop-loss levels on simulated paths of a fitted mean-reverting process, instead of on the one historical path."
 status: authored
-last_authored: '2026-11-09'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

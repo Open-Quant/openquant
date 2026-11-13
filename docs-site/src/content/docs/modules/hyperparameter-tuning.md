@@ -2,7 +2,7 @@
 title: "hyperparameter_tuning"
 description: "Grid and randomised hyperparameter search on purged k-fold splits, scored with sample weights."
 status: authored
-last_authored: '2026-11-09'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
