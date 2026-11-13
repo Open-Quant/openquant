@@ -7,7 +7,7 @@ for the site. The CSS tokens and `check:contrast` measure the shipped palette;
 ## Color
 
 One accent per theme, derived from the logo's magenta `#e44de0` and shifted in lightness only as AA contrast requires.
-The logo's cyan and yellow appear **only in the mark**.
+The current mark uses pink only. Cyan and yellow belong to the retired pinwheel, not the current identity.
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ Loaded from Google Fonts: `Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6
 
 ## Assets
 
-- `openquant-mark.svg` — flat open-center pinwheel, no tile. Intended for 16px and larger; validate at favicon size when revising geometry.
+- `openquant-mark.svg` — the current single pink Q. The three-color pinwheel described in historical notes below is retired. No background tile or effects; intended for 16px and larger.
 - `openquant-banner.svg` — 1280×320, paper ground, heavy-rule / hairline pair. Text is live SVG text and falls back to the viewer's serif on GitHub; outline it in #57 if exact type matters there.
 
 ## Original implementation evidence (#57, 2026-09-20)
@@ -111,3 +111,14 @@ Keep pink and neutral black/charcoal, warm light paper and editorial type. The h
 
 ### November 12 refinement
 The owner-selected mark is now a single geometric open Q in pink (#e44de0), replacing the CMY pinwheel. Use the identical SVG for site, favicon and identity source.
+
+### November 13 Q geometry refinement
+
+The current mark retains brand pink `#e44de0` and replaces the disconnected
+square with an integrated 45-degree tail. A continuous ring makes the Q legible
+at favicon size. The ring is centered at (30, 30), radius 19, on a 64×64 canvas;
+the ring and diagonal use an 8-unit weight. The lower-right tail reaches (52, 52).
+This is a geometry refinement, not a new palette or type direction. The site,
+favicon and canonical identity source remain byte-identical; both GitHub banners
+embed the same mark group. The older pinwheel and open-Q descriptions above
+record prior revisions, not the current asset specification.
