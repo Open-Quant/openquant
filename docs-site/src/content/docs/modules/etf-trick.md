@@ -2,7 +2,7 @@
 title: "etf_trick"
 description: "Turn a rebalanced basket of futures, or a single rolled contract, into one continuous series whose changes are achievable PnL."
 status: authored
-last_authored: '2026-11-09'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

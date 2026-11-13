@@ -2,7 +2,7 @@
 title: "fingerprint"
 description: "Decompose what a fitted model has learned into linear, non-linear and pairwise-interaction effects per feature."
 status: authored
-last_authored: '2026-11-09'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering

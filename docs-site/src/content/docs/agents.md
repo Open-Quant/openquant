@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-12'
+last_authored: '2026-11-13'
 audience:
   - coding-agent
   - platform-engineering
