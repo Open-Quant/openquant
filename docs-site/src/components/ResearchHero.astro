@@ -1,9 +1,20 @@
 ---
 import DefaultHero from '@astrojs/starlight/components/Hero.astro';
 const isHome = Astro.locals.starlightRoute.entry.id === '' || Astro.locals.starlightRoute.entry.id === 'index';
-const points = Array.from({ length: 49 }, (_, i) => ({ x: 28 + i * 8, y: 150 - i * 1.65 + Math.sin(i * .57) * 17 }));
-const firstTouch = points.findIndex(p => p.y <= 94);
+// Illustrative observations, not a backtest. Layer semantics follow the CUSUM/event-labeling workflow.
+const points = Array.from({ length: 81 }, (_, i) => ({ x: 28 + i * 4.8, y: 144 - i * .55 + Math.sin(i * .31) * 19 + Math.sin(i * .87) * 5 }));
 const path = points.map(p => `${p.x},${p.y}`).join(' ');
+const mean = points.map((p,i) => ({x:p.x,y:points.slice(Math.max(0,i-7),i+1).reduce((sum,q)=>sum+q.y,0)/Math.min(8,i+1)}));
+const meanPath = mean.map(p=>`${p.x},${p.y}`).join(' ');
+let positive = 0, negative = 0;
+const events = points.flatMap((p,i)=> {
+  if (!i) return [];
+  const delta = Math.log((300-p.y)/(300-points[i-1].y));
+  positive = Math.max(0, positive+delta); negative = Math.min(0, negative+delta);
+  if (positive>.10) { positive=0; return [{...p,i}]; }
+  if (negative< -.10) { negative=0; return [{...p,i}]; }
+  return [];
+});
 ---
 {isHome ? (
 <section class="oq-hero" aria-labelledby="_top">
@@ -14,84 +25,96 @@ const path = points.map(p => `${p.x},${p.y}`).join(' ');
     <p class="oq-hero-description">The methods from López de Prado’s <em>Advances in Financial Machine Learning</em>, implemented in Rust and callable from Python.</p>
     <div class="oq-hero-actions"><a class="oq-primary" href={`${import.meta.env.BASE_URL}/quickstart/`}>Start with Python <span aria-hidden="true">→</span></a><a href={`${import.meta.env.BASE_URL}/agents/`}>Agent guide <span aria-hidden="true">→</span></a></div>
   </div>
-  <oq-barrier-study>
+  <oq-feature-study>
     <figure class="oq-study">
-      <div class="oq-study-heading"><span>01 / LABEL AN EVENT</span><span>Triple barrier</span></div>
+      <div class="oq-study-heading"><span>OBSERVATIONS → EVENTS → LABELS</span><button class="oq-motion" type="button" aria-label="Pause animation" hidden><span aria-hidden="true">Ⅱ</span></button></div>
+      <div class="oq-plot" role="slider" tabindex="0" aria-label="Explore the research timeline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-valuetext="All features visible" aria-describedby="study-help">
       <svg viewBox="0 0 440 250" role="img" aria-labelledby="study-title study-desc">
-        <title id="study-title">Synthetic triple-barrier labeling study</title>
-        <desc id="study-desc">A synthetic series reaches the upper barrier before its lower barrier or time limit. The first touch determines the label.</desc>
+        <title id="study-title">Observations become research features</title>
+        <desc id="study-desc">Illustrative data with a rolling mean, CUSUM event sampling and event barriers. Move across the plot to reveal features; this is not measured investment performance.</desc>
+        <defs><clipPath id="oq-reveal"><rect x="28" y="0" width="384" height="250" /></clipPath></defs>
         <g class="oq-grid" aria-hidden="true">{Array.from({length: 11}, (_, x) => Array.from({length: 6}, (_, y) => <circle cx={28+x*38} cy={38+y*35} r="1" />))}</g>
-        <path class="oq-barriers" d="M28 94H412M28 198H412M412 45V215" />
-        <text x="28" y="82">UPPER</text><text x="28" y="222">LOWER</text><text x="332" y="35">TIME LIMIT</text>
         <polyline class="oq-observations" points={path}/>
-        <g class="oq-dots" aria-hidden="true">{points.map((p,i) => <circle data-step={i} cx={p.x} cy={p.y} r="2.6" />)}</g>
-        <circle class="oq-touch" cx={points[firstTouch].x} cy={points[firstTouch].y} r="6" />
-        <circle class="oq-cursor" cx={points[48].x} cy={points[48].y} r="5" hidden />
+        <g class="oq-features" clip-path="url(#oq-reveal)" aria-hidden="true">
+          <polyline class="oq-mean" points={meanPath}/>
+          {events.map((p,index)=><g class="oq-event">
+            <path class="oq-event-stem" d={`M${p.x} ${p.y+7}V214`} />
+            <circle class="oq-event-dot" cx={p.x} cy={p.y} r="4" />
+            <text class="oq-event-id" x={p.x} y="232" text-anchor="middle">e{String(index+1).padStart(2,'0')}</text>
+          </g>)}
+          {events.filter((_,i)=>i%3===0).map(p=><g class="oq-label-window">
+            <path class="oq-barriers" d={`M${p.x} ${p.y-24}H${Math.min(412,p.x+48)}M${p.x} ${p.y+24}H${Math.min(412,p.x+48)}M${Math.min(412,p.x+48)} ${p.y-24}V${p.y+24}`} />
+          </g>)}
+        </g>
+        <g class="oq-layer-labels" aria-hidden="true"><text x="28" y="26" data-at=".12">ROLLING MEAN</text><text x="172" y="26" data-at=".44">CUSUM EVENTS</text><text x="318" y="26" data-at=".76">BARRIERS</text></g>
+        <line class="oq-scan" x1="412" x2="412" y1="40" y2="214" hidden />
       </svg>
-      <div class="oq-study-controls" hidden>
-        <label for="oq-study-step">Observation</label>
-        <input id="oq-study-step" type="range" min="0" max="48" value="48" step="1" />
-        <output for="oq-study-step" aria-live="off">49 / 49</output>
-        <button type="button">Replay</button>
       </div>
-      <figcaption>Synthetic illustration, not a performance result. The outlined dot marks the first upper-barrier touch.</figcaption>
+      <span id="study-help" class="oq-sr-only">Arrow keys explore the timeline. Home and End jump to its ends. Space pauses or resumes animation. Touch or move across the plot to explore.</span>
     </figure>
-  </oq-barrier-study>
+  </oq-feature-study>
 </section>
 ) : <DefaultHero><slot /></DefaultHero>}
 <script>
-class BarrierStudy extends HTMLElement {
+class FeatureStudy extends HTMLElement {
+  cleanup;
   connectedCallback() {
-    if (this.dataset.ready) return;
-    this.dataset.ready = 'true';
-    const input = this.querySelector('input')!;
-    const output = this.querySelector('output')!;
-    const button = this.querySelector('button')!;
-    const controls = this.querySelector<HTMLElement>('.oq-study-controls')!;
-    const cursor = this.querySelector<SVGCircleElement>('.oq-cursor')!;
-    const dots = [...this.querySelectorAll<SVGCircleElement>('[data-step]')];
-    controls.hidden = false;
-    cursor.removeAttribute('hidden');
+    if (this.cleanup) return;
+    const plot = this.querySelector('.oq-plot');
+    const button = this.querySelector('.oq-motion');
+    const rect = this.querySelector('#oq-reveal rect');
+    const scan = this.querySelector('.oq-scan');
+    const labels = [...this.querySelectorAll('[data-at]')];
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    let frame = 0;
-    const stop = () => { cancelAnimationFrame(frame); frame = 0; button.textContent = 'Replay'; };
-    const show = (step: number) => {
-      input.value = String(step);
-      input.setAttribute('aria-valuetext', `Observation ${step + 1} of 49`);
-      output.value = `${step + 1} / 49`;
-      cursor.setAttribute('cx', dots[step].getAttribute('cx')!);
-      cursor.setAttribute('cy', dots[step].getAttribute('cy')!);
-      dots.forEach((dot, index) => dot.classList.toggle('oq-past', index <= step));
+    let frame = 0, value = 0, previous = 0, paused = false, interacting = false, visible = true;
+    const show = (next) => {
+      value = Math.max(0,Math.min(1,next));
+      rect.setAttribute('width', String(value*384));
+      scan.setAttribute('x1', String(28+value*384)); scan.setAttribute('x2',String(28+value*384));
+      labels.forEach(label=>label.style.opacity=value>=Number(label.dataset.at)?'1':'0');
+      plot.setAttribute('aria-valuenow',String(Math.round(value*100)));
+      plot.setAttribute('aria-valuetext',`${Math.round(value*100)} percent of research features revealed`);
     };
-    input.addEventListener('input', () => { stop(); show(Number(input.value)); });
-    button.addEventListener('click', () => {
-      if (frame) { stop(); return; }
-      if (motion.matches) { show(48); return; }
-      button.textContent = 'Pause';
-      const start = performance.now();
-      const tick = (now: number) => {
-        const step = Math.min(48, Math.floor((now - start) / 70)); show(step);
-        if (step < 48) frame = requestAnimationFrame(tick); else stop();
-      };
-      frame = requestAnimationFrame(tick);
-    });
-    this.addEventListener('pointermove', (event) => {
-      // Pointer motion scrubs only over the diagram; controls remain native for touch/keyboard.
-      const svg = this.querySelector('svg')!;
-      if (event.pointerType !== 'mouse' || event.target !== svg && !svg.contains(event.target as Node)) return;
-      stop(); const rect = svg.getBoundingClientRect();
-      show(Math.max(0, Math.min(48, Math.round(((event.clientX - rect.left) / rect.width * 440 - 28) / 8))));
-    });
-    this.addEventListener('pointerleave', stop);
-    const preferenceChanged = () => { if (motion.matches) { stop(); show(48); } };
-    motion.addEventListener('change', preferenceChanged);
-    show(48);
-    this.cleanup = () => { stop(); motion.removeEventListener('change', preferenceChanged); };
+    const stop = () => { cancelAnimationFrame(frame); frame=0; previous=0; };
+    const tick = (now) => {
+      if (previous) { value += Math.min(now-previous,100)/14000; if(value>1.12) value=0; }
+      previous=now;
+      const phase=value; show(Math.min(1,value)); value=phase;
+      frame=requestAnimationFrame(tick);
+    };
+    const sync = () => {
+      stop();
+      button.setAttribute('aria-label',paused?'Resume animation':'Pause animation');
+      button.innerHTML=`<span aria-hidden="true">${paused?'▶':'Ⅱ'}</span>`;
+      button.hidden=motion.matches;
+      scan.toggleAttribute('hidden',motion.matches);
+      if (!paused&&!interacting&&!motion.matches&&!document.hidden&&visible) frame=requestAnimationFrame(tick);
+    };
+    const toggle = () => { paused=!paused; sync(); };
+    const scrub = (event) => {
+      const bounds=plot.getBoundingClientRect();
+      interacting=true; stop(); show((event.clientX-bounds.left)/bounds.width*440/384-28/384);
+    };
+    const leave=()=>{interacting=false;sync();};
+    const down=(event)=>{scrub(event); if(event.pointerType!=='mouse') plot.setPointerCapture(event.pointerId);};
+    const up=(event)=>{ if(plot.hasPointerCapture(event.pointerId)) plot.releasePointerCapture(event.pointerId); leave();};
+    const key=(event)=>{
+      if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
+        event.preventDefault(); interacting=true;stop();
+        show(event.key==='Home'?0:event.key==='End'?1:value+(event.key==='ArrowRight'?.025:-.025));
+      } else if(event.code==='Space'){event.preventDefault();toggle();}
+    };
+    const focus=()=>{interacting=true;sync();};
+    const preference=()=>{ if(motion.matches) show(1);sync();};
+    const observer=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync();}); observer.observe(this);
+    button.addEventListener('click',toggle); plot.addEventListener('pointermove',scrub);plot.addEventListener('pointerdown',down);plot.addEventListener('pointerup',up);plot.addEventListener('pointercancel',leave);plot.addEventListener('pointerleave',leave);plot.addEventListener('keydown',key);plot.addEventListener('focus',focus);plot.addEventListener('blur',leave);
+    motion.addEventListener('change',preference);document.addEventListener('visibilitychange',sync);
+    show(motion.matches?1:0);sync();
+    this.cleanup=()=>{stop();observer.disconnect();motion.removeEventListener('change',preference);document.removeEventListener('visibilitychange',sync);button.removeEventListener('click',toggle);plot.removeEventListener('pointermove',scrub);plot.removeEventListener('pointerdown',down);plot.removeEventListener('pointerup',up);plot.removeEventListener('pointercancel',leave);plot.removeEventListener('pointerleave',leave);plot.removeEventListener('keydown',key);plot.removeEventListener('focus',focus);plot.removeEventListener('blur',leave);};
   }
-  cleanup?: () => void;
-  disconnectedCallback() { this.cleanup?.(); }
+  disconnectedCallback(){this.cleanup?.();this.cleanup=undefined;}
 }
-if (!customElements.get('oq-barrier-study')) customElements.define('oq-barrier-study', BarrierStudy);
+if(!customElements.get('oq-feature-study'))customElements.define('oq-feature-study',FeatureStudy);
 </script>
 <style>
 .oq-hero { display: grid; gap: 3rem; align-items: center; padding: 3rem 0 2.5rem; }
@@ -102,24 +125,23 @@ h1 { font-family: var(--oq-serif); font-weight: 600; font-size: clamp(3rem, 6vw,
 .oq-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem; margin-top: 1.7rem; font-size: .95rem; }
 .oq-hero-actions a { color: var(--oq-accent); text-underline-offset: .2em; }
 .oq-hero-actions .oq-primary { background: var(--oq-accent); color: var(--oq-ground); padding: .7rem 1rem; border-radius: 3px; text-decoration: none; font-weight: 600; }
-.oq-study { margin: 0; border-block: 1px solid var(--oq-rule); padding: 1rem 0; }
-.oq-study-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-family: var(--oq-mono); font-size: .65rem; color: var(--oq-muted); }
-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.oq-grid { fill: var(--oq-rule); }
-.oq-barriers { stroke: var(--oq-muted); stroke-dasharray: 4 5; fill: none; }
-svg text { fill: var(--oq-muted); font: 9px var(--oq-mono); }
-.oq-observations { fill: none; stroke: var(--oq-muted); stroke-width: 1; }
-.oq-dots { fill: var(--oq-accent); }
-.oq-past { r: 3.2px; }
-.oq-touch { fill: var(--oq-ground); stroke: var(--oq-accent); stroke-width: 2; }
-.oq-cursor { fill: var(--oq-accent); stroke: var(--oq-ground); stroke-width: 2; }
-[hidden] { display: none !important; }
-.oq-study-controls { display: flex; align-items: center; gap: .6rem; font-family: var(--oq-mono); font-size: .7rem; }
-input { min-width: 40px; width: 100%; accent-color: var(--oq-accent); min-height: 44px; }
-button { color: var(--oq-accent); background: var(--oq-ground); border: 1px solid var(--oq-rule); border-radius: 3px; padding: .4rem .6rem; min-height: 44px; cursor: pointer; }
-output { white-space: nowrap; }
-:focus-visible { outline: 2px solid var(--oq-accent); outline-offset: 4px; }
-figcaption { margin-top: .8rem; color: var(--oq-muted); font-size: .75rem; line-height: 1.5; }
+.oq-study { margin: 0; padding: 1rem 0; }
+.oq-study-heading { display:flex;justify-content:space-between;align-items:center;min-height:44px;font: .65rem var(--oq-mono);letter-spacing:.04em;color:var(--oq-muted); }
+svg { width:100%;height:auto;display:block; }
+.oq-grid { fill:var(--oq-rule); }
+.oq-observations { fill:none;stroke:var(--oq-muted);stroke-width:1.5; }
+.oq-mean { fill:none;stroke:var(--oq-accent);stroke-width:1.5;opacity:.65; }
+.oq-barriers { stroke:var(--oq-muted);stroke-width:.8;stroke-dasharray:3 4;fill:none;opacity:.65; }
+.oq-event-stem { stroke:var(--oq-rule);stroke-width:.7;stroke-dasharray:2 4; }
+.oq-event-dot { fill:var(--oq-ground);stroke:var(--oq-accent);stroke-width:1.6; }
+svg text { fill:var(--oq-muted);font:8px var(--oq-mono); }
+.oq-event-id { font-size:7px; }
+.oq-scan { stroke:var(--oq-accent);stroke-width:.7;opacity:.35; }
+.oq-motion { display:grid;place-items:center;width:44px;height:44px;border:0;background:transparent;color:var(--oq-muted);cursor:pointer;font-size:12px; }
+.oq-plot { touch-action:pan-y;cursor:crosshair; }
+[hidden] { display:none!important; }
+:focus-visible { outline:2px solid var(--oq-accent);outline-offset:4px; }
+.oq-sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
 @media (min-width: 800px) { .oq-hero { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>

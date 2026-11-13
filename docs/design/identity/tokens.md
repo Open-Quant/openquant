@@ -107,4 +107,7 @@ links, accessible glyph treatment, logo consistency and loaded type weights.
 
 ## November 12 landing refinement
 
-Keep pink and the CMY pinwheel identity. Replace brown-black with neutral black/charcoal; preserve the warm light paper and editorial type. The home hero uses a bounded synthetic triple-barrier study, with a complete static fallback and native keyboard/touch controls. No perpetual animation, performance implication, or live data.
+Keep pink and neutral black/charcoal, warm light paper and editorial type. The hero progressively reveals a rolling mean, computed CUSUM events and illustrative event barriers over a time series. Autoplay loops only while visible; a small pause control, keyboard exploration and reduced-motion static state are required. Do not add a visible slider or explanatory caption beneath the plot. Accessible descriptions preserve the illustrative-data distinction; no performance implication or live data.
+
+### November 12 refinement
+The owner-selected mark is now a single geometric open Q in pink (#e44de0), replacing the CMY pinwheel. Use the identical SVG for site, favicon and identity source.
