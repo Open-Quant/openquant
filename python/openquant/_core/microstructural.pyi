@@ -225,8 +225,10 @@ def get_bvc_buy_volume(
 
     AFML §19.5.2 (Easley, López de Prado and O'Hara, 2012). Each bar's buy volume is
     `V_t * Phi(dp_t / sigma)`, where `dp_t` is the close-to-close change, `sigma` the sample
-    standard deviation of the last `window` changes (including the current one, floored at
-    `1e-12`) and `Phi` the standard normal CDF.
+    standard deviation of the last `window` changes (including the current one) and `Phi`
+    the standard normal CDF. Positive finite computed deviations are used without a floor.
+    A computed zero deviation retains a `1e-12` denominator, including when variance
+    underflows to zero; nonfinite behavior is unchanged.
 
     Parameters
     ----------

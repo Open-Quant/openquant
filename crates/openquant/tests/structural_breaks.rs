@@ -514,3 +514,41 @@ fn sadf_matches_one_regression_per_window() {
         );
     }
 }
+
+/// A deliberately direct prefix recomputation protects the summation order when
+/// the production implementation reuses the previous prefix.
+#[test]
+fn csw_matches_direct_prefix_recomputation() {
+    for prices in [
+        vec![0.0; 16],
+        (0..128).map(|i| (i as f64 / 7.0).sin() + i as f64 / 90.0).collect(),
+        vec![0.0, 1e150, -1e150, 1e150, 0.0],
+        vec![0.0, 1e-150, -1e-150, 1e-150, 0.0],
+    ] {
+        for kind in ["one_sided", "two_sided"] {
+            let actual = get_chu_stinchcombe_white_statistics(&prices, kind).unwrap();
+            for t in 2..prices.len() {
+                let mut sum = 0.0;
+                for j in 1..=t {
+                    let change = prices[j] - prices[j - 1];
+                    sum += change * change;
+                }
+                let variance = sum / t as f64;
+                let mut best = f64::NEG_INFINITY;
+                let mut critical = f64::NAN;
+                for s in 0..t {
+                    let delta = prices[t] - prices[s];
+                    let delta = if kind == "two_sided" { delta.abs() } else { delta };
+                    let distance = (t - s) as f64;
+                    let value = (1.0 / (variance.sqrt() * distance.sqrt())) * delta;
+                    if value > best {
+                        best = value;
+                        critical = (4.6 + distance.ln()).sqrt();
+                    }
+                }
+                assert_eq!(actual.stat[t - 2].to_bits(), best.to_bits());
+                assert_eq!(actual.critical_value[t - 2].to_bits(), critical.to_bits());
+            }
+        }
+    }
+}

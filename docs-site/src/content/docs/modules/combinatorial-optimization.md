@@ -2,7 +2,7 @@
 title: "combinatorial_optimization"
 description: "Exhaustive search over small integer problems, and over single-instrument trading paths with a fixed cost per trade, as an exact baseline for heuristic solvers."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -163,6 +163,15 @@ assert_eq!(best_trades(0.1)?.best_path.trades, [0, 0, 0, 0, 0]);
 An optimiser that simply drops the ticket term gives the first row's answer at every cost.
 A convex relaxation need not drop it entirely: it may retain a lower-bound cost model,
 whose solution still needs checking against the original discrete objective. Each row is a global optimum over the 256 feasible paths.
+
+<img src="/figures/modules/combinatorial-optimization.svg" alt="Three inventory step paths: at zero ticket cost, sell before the dip and buy back; at 0.03, hold through it; at 0.1, stay flat." />
+
+[Open the full-size figure](/figures/modules/combinatorial-optimization.svg) to inspect labels or zoom on a narrow screen.
+
+*Independent exhaustive reference for the example above, not captured solver output.
+Each panel shows inventory after a trade, including the initial and terminal zero.
+The 0.01 case shares the zero-cost path, but its objective falls to 0.089. All 256
+feasible inventory paths are scored with exact rational arithmetic.*
 
 ## Checking a heuristic against the exact answer
 

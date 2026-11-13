@@ -4,7 +4,7 @@ use openquant::bet_sizing::{bet_size_reserve, bet_size_reserve_full};
 use openquant::sampling::{
     get_av_uniqueness_from_triple_barrier, get_ind_mat_average_uniqueness, get_ind_matrix,
 };
-use openquant::structural_breaks::{get_sadf, SadfLags};
+use openquant::structural_breaks::{get_chu_stinchcombe_white_statistics, get_sadf, SadfLags};
 use std::hint::black_box;
 
 fn fixture_series(n: usize) -> Vec<f64> {
@@ -14,6 +14,18 @@ fn fixture_series(n: usize) -> Vec<f64> {
             100.0 + 0.2 * (t / 9.0).sin() + 0.05 * (t / 17.0).cos() + 0.001 * t
         })
         .collect()
+}
+
+fn bench_csw_prefix(c: &mut Criterion) {
+    let prices = fixture_series(1024);
+    c.bench_function("structural_breaks/csw_prefix_1024", |b| {
+        b.iter(|| {
+            std::hint::black_box(
+                get_chu_stinchcombe_white_statistics(std::hint::black_box(&prices), "two_sided")
+                    .expect("csw"),
+            );
+        });
+    });
 }
 
 fn bench_sadf_sm_power(c: &mut Criterion) {
@@ -108,6 +120,7 @@ fn synthetic_events(n: usize) -> (Vec<(NaiveDateTime, NaiveDateTime)>, Vec<f64>)
 
 criterion_group!(
     perf_hotspots,
+    bench_csw_prefix,
     bench_sadf_sm_power,
     bench_bet_sizing_reserve_fit,
     bench_bet_sizing_reserve_reuse_fit,

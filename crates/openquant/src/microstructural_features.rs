@@ -881,8 +881,10 @@ pub fn get_vpin(volume: &[f64], buy_volume: &[f64], window: usize) -> Result<Vec
 /// `V_t · Φ(Δp_t / σ_Δp)` (AFML §19.5.2, Easley, López de Prado and O'Hara, 2012).
 ///
 /// `Δp_t` is the close-to-close change and `σ_Δp` the sample standard deviation of the last
-/// `window` changes (including the current one, floored at `1e-12`); `Φ` is the standard
-/// normal CDF. Values are `NaN` until `window` changes are available (index `window`).
+/// `window` changes (including the current one); `Φ` is the standard normal CDF. A positive
+/// finite computed deviation is used without a floor. A computed zero deviation retains
+/// the `1e-12` denominator convention, including when variance underflows to zero. Values
+/// are `NaN` until `window` changes are available (index `window`).
 /// `window` must be at least 2, the fewest changes a sample standard deviation needs.
 ///
 /// ```
@@ -938,7 +940,11 @@ pub fn get_bvc_buy_volume(
         if diff[i].is_nan() || rolling_std[i].is_nan() {
             continue;
         }
-        let z = diff[i] / rolling_std[i].max(1e-12);
+        let std = rolling_std[i];
+        // Do not impose price units on a positive finite deviation. Preserve the existing
+        // computed-zero fallback (including variance underflow) and nonfinite paths.
+        let denominator = if std.is_finite() && std > 0.0 { std } else { std.max(1e-12) };
+        let z = diff[i] / denominator;
         out[i] = volume[i] * norm.cdf(z);
     }
     Ok(out)
@@ -1159,9 +1165,12 @@ pub fn get_shannon_entropy(message: &str) -> f64 {
         *counts.entry(ch).or_insert(0usize) += 1;
     }
     let len = message.chars().count() as f64;
+    // Entropy depends on counts, not symbols or a randomly seeded map's order.
+    let mut counts: Vec<usize> = counts.into_values().collect();
+    counts.sort_unstable();
     let mut ent = 0.0;
-    for v in counts.values() {
-        let freq = *v as f64 / len;
+    for v in counts {
+        let freq = v as f64 / len;
         ent += freq * freq.log2();
     }
     -ent
@@ -1203,7 +1212,9 @@ fn prob_mass_function(message: &[char], word_length: usize) -> Vec<f64> {
         *counts.entry(&message[i - word_length..i]).or_default() += 1;
     }
     let total = (message.len() - word_length) as f64;
-    counts.into_values().map(|count| count as f64 / total).collect()
+    let mut counts: Vec<usize> = counts.into_values().collect();
+    counts.sort_unstable();
+    counts.into_iter().map(|count| count as f64 / total).collect()
 }
 
 /// Plug-in (maximum-likelihood) entropy rate: the Shannon entropy of overlapping words of

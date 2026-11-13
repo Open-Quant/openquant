@@ -38,6 +38,8 @@ def _as_vector(y: Sequence[float], n_rows: int) -> list[float]:
     out = [float(v) for v in y]
     if len(out) != n_rows:
         raise ValueError(f"y/X length mismatch: {len(out)} vs {n_rows}")
+    if any(not isfinite(v) or v not in (0.0, 1.0) for v in out):
+        raise ValueError("y must contain finite binary labels (0 or 1)")
     return out
 
 
@@ -47,6 +49,8 @@ def _feature_names(n_features: int, feature_names: Sequence[str] | None) -> list
     out = [str(v) for v in feature_names]
     if len(out) != n_features:
         raise ValueError(f"feature_names length mismatch: expected {n_features}, got {len(out)}")
+    if len(set(out)) != len(out):
+        raise ValueError("feature_names must be unique")
     return out
 
 
@@ -650,9 +654,9 @@ def mdi_importance(
     X : Sequence[Sequence[float]]
         Feature matrix, one row per sample; must be non-empty and rectangular.
     y : Sequence[float]
-        Binary label per sample, 0.0 or 1.0.
+        Finite binary label per sample, 0.0 or 1.0; other values raise ValueError.
     feature_names : Sequence[str] or None, default None
-        Feature names; defaults to `f0`, `f1`, ...
+        Unique feature names (after conversion to strings); defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
         Optional finite nonnegative weight per sample, with at least one positive value.
         Each bootstrap training draw must contain positive weight; a draw with only
@@ -673,7 +677,8 @@ def mdi_importance(
     Raises
     ------
     ValueError
-        If `X` is empty or not rectangular, a length does not match the rows of `X`, or
+        If `X` is empty or not rectangular, `y` contains a non-finite or nonbinary label,
+        feature names are not unique, a length does not match the rows of `X`, or
         `n_estimators < 2`.
     """
     x = _as_matrix(X)
@@ -784,9 +789,9 @@ def mda_importance(
     X : Sequence[Sequence[float]]
         Feature matrix, one row per sample; must be non-empty and rectangular.
     y : Sequence[float]
-        Binary label per sample, 0.0 or 1.0.
+        Finite binary label per sample, 0.0 or 1.0; other values raise ValueError.
     feature_names : Sequence[str] or None, default None
-        Feature names; defaults to `f0`, `f1`, ...
+        Unique feature names (after conversion to strings); defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
         Optional finite nonnegative weight per sample, with at least one positive value.
         Cross-validation requires positive weight in each training and test fold.
@@ -823,7 +828,8 @@ def mda_importance(
     Raises
     ------
     ValueError
-        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        If `X` is empty or not rectangular, `y` contains a non-finite or nonbinary label,
+        feature names are not unique, a length does not match the rows of `X`,
         `event_end_indices` is None without `allow_unpurged` or has an entry below its row
         index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
         training set, or `scoring` is not supported.
@@ -915,9 +921,9 @@ def sfi_importance(
     X : Sequence[Sequence[float]]
         Feature matrix, one row per sample; must be non-empty and rectangular.
     y : Sequence[float]
-        Binary label per sample, 0.0 or 1.0.
+        Finite binary label per sample, 0.0 or 1.0; other values raise ValueError.
     feature_names : Sequence[str] or None, default None
-        Feature names; defaults to `f0`, `f1`, ...
+        Unique feature names (after conversion to strings); defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
         Optional finite nonnegative weight per sample, with at least one positive value.
         Cross-validation requires positive weight in each training and test fold.
@@ -951,7 +957,8 @@ def sfi_importance(
     Raises
     ------
     ValueError
-        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        If `X` is empty or not rectangular, `y` contains a non-finite or nonbinary label,
+        feature names are not unique, a length does not match the rows of `X`,
         `event_end_indices` is None without `allow_unpurged` or has an entry below its row
         index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
         training set, or `scoring` is not supported.
@@ -1158,9 +1165,9 @@ def substitution_effect_report(
     X : Sequence[Sequence[float]]
         Feature matrix, one row per sample; must be non-empty and rectangular.
     y : Sequence[float]
-        Binary label per sample, 0.0 or 1.0.
+        Finite binary label per sample, 0.0 or 1.0; other values raise ValueError.
     feature_names : Sequence[str] or None, default None
-        Feature names; defaults to `f0`, `f1`, ...
+        Unique feature names (after conversion to strings); defaults to `f0`, `f1`, ...
     sample_weight : Sequence[float] or None, default None
         Optional finite nonnegative weight per sample, with at least one positive value.
         Cross-validation requires positive weight in each training and test fold.
@@ -1201,7 +1208,8 @@ def substitution_effect_report(
     Raises
     ------
     ValueError
-        If `X` is empty or not rectangular, a length does not match the rows of `X`,
+        If `X` is empty or not rectangular, `y` contains a non-finite or nonbinary label,
+        feature names are not unique, a length does not match the rows of `X`,
         `event_end_indices` is None without `allow_unpurged` or has an entry below its row
         index, `n_splits` or `pct_embargo` is out of range, a fold ends up with an empty
         training set, or `scoring` is not supported; also if `orthogonalize` is True and
@@ -1343,7 +1351,13 @@ def feature_screen_report(
     min_coverage: float = 0.95,
     max_corr: float = 0.95,
 ) -> dict[str, Any]:
-    """Run lightweight feature QA checks for notebook discovery loops."""
+    """Run lightweight feature QA checks for notebook discovery loops.
+
+    Feature names must be unique after conversion to strings; duplicate names raise
+    ValueError because each name identifies one column and its rejection reasons.
+    DataFrame columns supply the default names, otherwise defaults are f0, f1, etc.
+    The optional y is checked for matching length only and is not used for fitting.
+    """
     if min_coverage <= 0.0 or min_coverage > 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
     if max_corr <= 0.0 or max_corr >= 1.0:
@@ -1352,9 +1366,7 @@ def feature_screen_report(
     if isinstance(X, pl.DataFrame):
         if X.width == 0 or X.height == 0:
             raise ValueError("X cannot be empty")
-        names = list(feature_names) if feature_names is not None else [str(c) for c in X.columns]
-        if feature_names is not None and len(names) != X.width:
-            raise ValueError(f"feature_names length mismatch: expected {X.width}, got {len(names)}")
+        names = _feature_names(X.width, feature_names if feature_names is not None else X.columns)
         rows: Sequence[Sequence[Any]] = X.select([pl.col(c) for c in X.columns]).rows()
     else:
         rows = [list(r) for r in X]

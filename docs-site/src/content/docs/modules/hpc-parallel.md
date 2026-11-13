@@ -2,7 +2,7 @@
 title: "hpc_parallel"
 description: "AFML's atoms and molecules: split a job into contiguous chunks of equal work, run a callback over each in serial or on threads, and get the outputs back in order."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-09'
 audience:
   - quant-dev
   - platform-engineering
@@ -76,6 +76,16 @@ up to `workers × mp_batches` molecules, capped at the atom count. With `mp_batc
 a worker can take several molecules and a
 slow molecule occupies only one worker while the others take remaining jobs. More batches
 can improve load balancing when neither strategy predicts costs, but add scheduling overhead.
+
+<img src="/figures/modules/hpc-parallel.svg" alt="Linear molecules have equal spans but increasing work; nested molecules have decreasing spans and nearly equal work, for 1000 atoms split into four molecules." />
+
+[Open the full-size figure](/figures/modules/hpc-parallel.svg) to inspect labels or zoom on a narrow screen.
+
+*The boundary formulas above applied to 1,000 atoms and four molecules. Spans are
+half-open intervals $[\mathrm{start},\mathrm{end})$; work is the exact discrete sum
+$\sum_{k=\mathrm{start}}^{\mathrm{end}-1} k$, not elapsed time. Both strategies total
+499,500 work units. Nested work ranges from 124,750 to 124,974, close to the mean
+124,875. The bars share one scale, so their lengths can be compared across panels.*
 
 ## From Rust
 

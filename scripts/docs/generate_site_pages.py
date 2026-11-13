@@ -377,6 +377,10 @@ def render_gallery(entries: list[dict], stamp: str) -> str:
 # manifest must have an entry, so a new benchmark cannot reach the page
 # undescribed. Keep in step with crates/openquant/benches/.
 BENCH_DESCRIPTIONS = {
+    "structural_breaks_csw_prefix_1024": (
+        "`structural_breaks::get_chu_stinchcombe_white_statistics`, two-sided test "
+        "on 1,024 synthetic prices"
+    ),
     "structural_breaks_get_sadf_sm_power": (
         "`structural_breaks::get_sadf`, `sm_power` model with constant, on 320 log prices, "
         "minimum window 20, 5 fixed lags"

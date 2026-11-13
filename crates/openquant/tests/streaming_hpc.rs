@@ -357,3 +357,21 @@ fn vpin_update_matches_the_same_volume_fed_in_pieces() {
     }
     assert!(whole.current_cdf().is_some());
 }
+
+#[test]
+fn hhi_replays_are_bitwise_reproducible() {
+    let replay = || {
+        let mut state = HhiState::new(HhiConfig { lookback_events: 64 }).unwrap();
+        let mut values = Vec::new();
+        for i in 0..128 {
+            if let Some(value) = state.update(i % 64, i as f64 + 0.1).unwrap() {
+                values.push(value.to_bits());
+            }
+        }
+        values
+    };
+    let expected = replay();
+    for _ in 0..32 {
+        assert_eq!(replay(), expected);
+    }
+}

@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -45,6 +45,14 @@ other columns; a low score does not establish that it contains no predictive inf
 
 Use these reports for screening. Measure importance for the model you will trade with
 [`feature_importance`](/modules/feature-importance/) or your own code.
+
+The four importance and substitution entry points require finite labels equal to
+`0.0` or `1.0`; NaN, infinities, fractional labels and other class encodings raise
+`ValueError` before fitting. Single-class binary inputs remain valid. Feature names
+must be unique after conversion to strings, including overrides supplied to
+`feature_screen_report` for a DataFrame. Duplicate names raise `ValueError` rather
+than combining different columns' rejection reasons. The screen's optional `y`
+is checked for matching length only; it is not used to fit a classifier.
 
 ## Purged folds are mandatory
 

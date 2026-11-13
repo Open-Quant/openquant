@@ -79,7 +79,7 @@
 //! ```
 
 use crate::hpc_parallel::{run_parallel, HpcParallelConfig, HpcParallelError, ParallelRunReport};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::time::{Duration, Instant};
 
@@ -499,7 +499,8 @@ pub struct HhiState {
     window: VecDeque<(usize, f64)>,
     /// Per venue in the window: `(events, volume)`. A venue is dropped when its last event leaves
     /// the window, so rounding in its running volume cannot accumulate.
-    venues: HashMap<usize, (usize, f64)>,
+    /// Ordered venue IDs give replay-stable floating-point reductions.
+    venues: BTreeMap<usize, (usize, f64)>,
 }
 
 impl HhiState {
@@ -515,7 +516,7 @@ impl HhiState {
         Ok(Self {
             cfg,
             window: VecDeque::with_capacity(cfg.lookback_events + 1),
-            venues: HashMap::new(),
+            venues: BTreeMap::new(),
         })
     }
 

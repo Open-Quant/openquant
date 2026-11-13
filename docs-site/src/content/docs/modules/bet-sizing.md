@@ -2,7 +2,7 @@
 title: "bet_sizing"
 description: "From a model's confidence, or a price forecast, to a position size: probability-based sizing, averaging of live bets, discretisation, dynamic limit prices and concurrency-based sizing."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -254,6 +254,16 @@ assert!(matches!(get_w(2.0, 0.9, "logistic"), Err(BetSizingError::InvalidFunctio
 
 ## What to watch for
 
+- **Recovery for exceptional sigmoid arithmetic.** The sigmoid and its inverse avoid
+  overflow in intermediate squares and quotients for finite nonnegative widths. Zero width
+  and a nonzero divergence still give ±1 when squaring the divergence underflows. A scaled
+  norm also preserves relative accuracy when the squared denominator is nonzero subnormal;
+  ordinary normal-denominator arithmetic is unchanged.
+  Calibration (`get_w_sigmoid`) recovers finite widths from nonfinite or zero intermediate
+  results for finite divergences and `0 < |m| < 1`. Ordinary finite nonzero calibration
+  arithmetic is unchanged, including its loss of relative accuracy near `|m| = 1`.
+  A large divergence can round to a size of exactly ±1; the inverse remains singular there.
+
 - **$p$ is the probability that the bet is right.** With a meta-label model and a side from
   a primary model, as in the example, that is the model's $p_1$: above $1/K$ it sizes the
   primary model's call, and below $1/K$ the size goes *negative* — a bet against the primary
@@ -266,7 +276,9 @@ assert!(matches!(get_w(2.0, 0.9, "logistic"), Err(BetSizingError::InvalidFunctio
 - **Negative steps differ between entry points.** `discrete_signal` returns inputs
   unchanged for `step_size <= 0`. `bet_size_probability` uses `abs(step_size)`, so a
   negative step still rounds; only zero disables its discretisation. Positive steps round
-  halfway cases away from zero and clamp the result to $[-1,1]$.
+  halfway cases away from zero and clamp the result to $[-1,1]$. If a finite positive
+  step is so small that dividing a finite signal by it overflows, that signal is preserved
+  before clamping: quantisation at that step cannot change its floating-point value.
 - **Validate probability inputs and sides.** Supply finite probabilities in $[0,1]$,
   `num_classes >= 2`, and aligned sides of +1 or −1. These domains are not all checked:
   standalone `get_signal` silently truncates when a supplied `pred` has a different length.

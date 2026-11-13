@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 850" width="600" height="850" role="img" aria-labelledby="title desc">
+<title id="title">Equal atoms are not equal work</title>
+<desc id="desc">1000 atoms with atom k costing k units, split into four contiguous molecules. Linear endpoints are 250, 500, 750, 1000. Nested endpoints are 500, 707, 866, 1000. Discrete linear work rises from 31125 to 218625; nested work is about 124875 per molecule. Bars show work counts, not measured execution times.</desc>
+<rect width="600" height="850" fill="#fbf9f4"/>
+<g font-family="system-ui, sans-serif" font-size="20" fill="#1d1a16">
+<text x="24" y="36" font-size="24" fill="#1d1a16" text-anchor="start" font-weight="bold">Equal atoms are not equal work</text>
+<text x="24" y="68" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">1,000 atoms · 4 molecules · atom k costs k</text>
+<text x="24" y="110" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="bold">Linear</text>
+<rect x="65" y="135" width="122.5" height="40" fill="#97196a" stroke="#fbf9f4"/>
+<text x="126.25" y="163" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M1</text>
+<rect x="187.5" y="135" width="122.5" height="40" fill="#1d1a16" stroke="#fbf9f4"/>
+<text x="248.75" y="163" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M2</text>
+<rect x="310" y="135" width="122.5" height="40" fill="#97196a" stroke="#fbf9f4"/>
+<text x="371.25" y="163" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M3</text>
+<rect x="432.5" y="135" width="122.5" height="40" fill="#1d1a16" stroke="#fbf9f4"/>
+<text x="493.75" y="163" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M4</text>
+<text x="65" y="199" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">0</text>
+<text x="187.5" y="199" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">250</text>
+<text x="310" y="199" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">500</text>
+<text x="432.5" y="199" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">750</text>
+<text x="555" y="199" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">1000</text>
+<text x="24" y="233" font-size="18" fill="#5c554b" text-anchor="start" font-weight="normal">Work per molecule (same scale in both panels)</text>
+<text x="24" y="274" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M1</text>
+<rect x="70" y="251" width="48.8097" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="128.81" y="274" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">31,125</text>
+<text x="24" y="316" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M2</text>
+<rect x="70" y="293" width="146.821" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="226.821" y="316" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">93,625</text>
+<text x="24" y="358" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M3</text>
+<rect x="70" y="335" width="244.832" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="324.832" y="358" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">156,125</text>
+<text x="24" y="400" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M4</text>
+<rect x="70" y="377" width="342.844" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="422.844" y="400" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">218,625</text>
+<text x="24" y="465" font-size="20" fill="#1d1a16" text-anchor="start" font-weight="bold">Nested</text>
+<rect x="65" y="490" width="245" height="40" fill="#97196a" stroke="#fbf9f4"/>
+<text x="187.5" y="518" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M1</text>
+<rect x="310" y="490" width="101.43" height="40" fill="#1d1a16" stroke="#fbf9f4"/>
+<text x="360.715" y="518" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M2</text>
+<rect x="411.43" y="490" width="77.91" height="40" fill="#97196a" stroke="#fbf9f4"/>
+<text x="450.385" y="518" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M3</text>
+<rect x="489.34" y="490" width="65.66" height="40" fill="#1d1a16" stroke="#fbf9f4"/>
+<text x="522.17" y="518" font-size="18" fill="#fbf9f4" text-anchor="middle" font-weight="normal">M4</text>
+<text x="65" y="554" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">0</text>
+<text x="310" y="554" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">500</text>
+<text x="411.43" y="554" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">707</text>
+<text x="489.34" y="554" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">866</text>
+<text x="555" y="554" font-size="18" fill="#1d1a16" text-anchor="middle" font-weight="normal">1000</text>
+<text x="24" y="588" font-size="18" fill="#5c554b" text-anchor="start" font-weight="normal">Work per molecule (same scale in both panels)</text>
+<text x="24" y="629" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M1</text>
+<rect x="70" y="606" width="195.631" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="275.631" y="629" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">124,750</text>
+<text x="24" y="671" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M2</text>
+<rect x="70" y="648" width="195.742" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="275.742" y="671" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">124,821</text>
+<text x="24" y="713" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M3</text>
+<rect x="70" y="690" width="195.982" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="275.982" y="713" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">124,974</text>
+<text x="24" y="755" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">M4</text>
+<rect x="70" y="732" width="195.952" height="30" fill="#97196a" stroke="#fbf9f4"/>
+<text x="275.952" y="755" font-size="18" fill="#1d1a16" text-anchor="start" font-weight="normal">124,955</text>
+<text x="24" y="807" font-size="20" fill="#5c554b" text-anchor="start" font-weight="normal">Work = sum of k for start ≤ k &lt; end.</text>
+<text x="24" y="837" font-size="18" fill="#5c554b" text-anchor="start" font-weight="normal">Discrete work counts, not a speedup benchmark.</text>
+</g>
+</svg>

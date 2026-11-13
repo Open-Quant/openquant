@@ -150,8 +150,10 @@ bun run check:docs     # every docs gate, in the order CI runs them
 `test:links` (navigation checker regression tests),
 `check:links` (built paths, fragment anchors and redirects), `check:api-drift`,
 `check:content-schema`, `check:contrast`, `check:coverage`, `check:generated-pages`,
-`check:examples` (Rust blocks on module pages and the complete Rust workflow are
-compiled with `cargo check`),
+`check:module-figures` (tests the four Rust-only module figure references and checks
+generated SVGs), `check:examples` (Rust blocks on module pages and the complete Rust workflow are
+compiled with `cargo check`), `check:rust-output` (runs `docs_etf_trick` and compares both
+displayed output blocks with its stdout),
 `check:python-examples` (executes runnable Python blocks and syntax-checks declared
 skips) and `check:python-reference`.
 The last two need the extension built into `.venv` (see Setup); `check:python-examples`
@@ -177,6 +179,9 @@ python3 scripts/docs/generate_site_pages.py --write
 
 # The coverage dashboard's tables. Checked by `bun run check:coverage`.
 python3 scripts/docs/check_coverage.py --write
+
+# Figures for the four Rust-only modules; independent reference calculations and diagrams.
+python3 scripts/docs/generate_rust_module_figures.py --write
 ```
 
 Run `generate_site_pages.py --write` after re-running the notebooks, changing a benchmark

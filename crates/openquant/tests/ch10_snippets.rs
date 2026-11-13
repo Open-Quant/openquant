@@ -393,3 +393,41 @@ fn test_limit_price_checked_invalid_function_error() {
     );
     assert!(err.to_string().contains("invalid limit_price function"));
 }
+
+#[test]
+fn test_discrete_signal_recovers_finite_quotient_overflow() {
+    let signals = [0.125, -0.125, 0.5, -0.5, 2.0, -2.0, f64::MAX, -f64::MAX];
+    for step in [1e-320, f64::from_bits(1), 1e-309] {
+        let expected = signals.map(|s| s.clamp(-1.0, 1.0));
+        assert_eq!(discrete_signal(&signals, step), expected);
+    }
+}
+
+#[test]
+fn test_discrete_signal_preserves_existing_boundary_semantics() {
+    let signals = [
+        0.0,
+        -0.0,
+        0.125,
+        -0.125,
+        0.5,
+        -0.5,
+        2.0,
+        -2.0,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NAN,
+    ];
+    for step in [0.0, -0.0, -0.1, f64::NEG_INFINITY, f64::INFINITY, f64::NAN, 0.25, 1e-308] {
+        let actual = discrete_signal(&signals, step);
+        for (&s, &a) in signals.iter().zip(&actual) {
+            let expected =
+                if step <= 0.0 { s } else { ((s / step).round() * step).clamp(-1.0, 1.0) };
+            if expected.is_nan() {
+                assert!(a.is_nan());
+            } else {
+                assert_eq!(a.to_bits(), expected.to_bits());
+            }
+        }
+    }
+}

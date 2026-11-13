@@ -2,7 +2,7 @@
 title: "evaluation"
 description: "Python research evaluation: probabilistic and deflated Sharpe ratios and minimum track record from a returns series, a trial registry that persists across runs, meta-labeling overlay metrics and the probability of strategy failure."
 status: authored
-last_authored: '2026-11-08'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -132,6 +132,13 @@ process, continues the same count. `registry.deflated_sharpe_ratio(returns)` the
 with $N$ = the number of registered trials and $\sigma_{SR}$ = the population standard
 deviation of their Sharpe ratios.
 
+Configurations and returned trials are detached snapshots, including nested containers.
+Mutating an input or a returned trial does not edit the registry. Loading rejects duplicate
+configuration hashes, nonfinite/non-numeric moments and invalid observation counts rather
+than silently changing the trial count or dispersion. This is structural validation, not
+proof that a configuration, timestamp or backtest is authentic. Concurrent writers still
+require external coordination; atomic replacement does not provide a transaction lock.
+
 A configuration whose returns are constant — typically all zeros, because its filter took no
 bet — has no finite Sharpe ratio, but it was still tried. `record` stores it with Sharpe 0,
 skewness 0 and kurtosis 3 as a bookkeeping convention, instead of raising. This applies
@@ -200,7 +207,8 @@ sample and assumed trial model; a null experiment is not required to return 0.5.
 The same deflation is available without a registry:
 `deflated_sharpe_ratio(returns, trial_sharpes)` with every trial's per-period Sharpe ratio,
 or `deflated_sharpe_ratio(returns, n_trials=N, sharpe_std=σ)`; `expected_max_sharpe(N, σ)`
-returns $SR_0$ alone.
+returns $SR_0$ alone. `N` must be an integer scalar of at least two: Python and NumPy
+integers are accepted, but booleans and floats are not.
 
 ## Refreshing a shared registry
 

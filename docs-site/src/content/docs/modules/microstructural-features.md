@@ -2,7 +2,7 @@
 title: "microstructural_features"
 description: "Spread, price-impact, order-flow and entropy features estimated from bars or from trades."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -267,6 +267,13 @@ Rust-only.
   buy volume within total volume. Use positive rolling windows, and at least 2 for BVC.
   BVC uses the current price change and current trailing sample deviation; it is available
   after the current bar closes, not before its return occurs.
+- **BVC no longer floors positive finite computed deviations.** Previously a `1e-12`
+  floor pulled buy shares toward 50% when price units made the deviation small. These
+  windows now use the computed sample deviation directly. A computed zero deviation
+  still uses a `1e-12` denominator: flat prices yield 50%, while constant nonzero changes
+  retain `Phi(change / 1e-12)`, which is still unit-dependent. Variance underflow can also
+  produce a computed zero; extreme underflow/overflow and nonfinite-input behavior are
+  unchanged, so this is not a guarantee of scale invariance for every floating-point input.
 
 - **`get_trades_based_hasbrouck_lambda` changed in a fix.** Earlier versions regressed the
   *absolute* return on signed volume, so buys and sells cancelled and the estimate was near

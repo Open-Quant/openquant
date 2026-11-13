@@ -2,7 +2,7 @@
 title: "data_structures"
 description: "Time, tick, volume, dollar, run and imbalance bars built from a stream of trades."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-12'
 audience:
   - quant-dev
   - platform-engineering
@@ -35,17 +35,34 @@ sidebar:
   badge: Module
 ---
 
-A market does not produce information at a constant rate per minute. It produces it per
-trade, per share, per dollar. Sampling a price every five minutes therefore oversamples the
-quiet hours and undersamples the open, the close and every news release — and the returns of
-such a series are heteroskedastic, serially correlated and fat-tailed for reasons that have
-nothing to do with the asset (AFML §2.3.1). The alternative, going back to Mandelbrot and
-Taylor (1967) and Clark (1973), is to let *activity* be the clock: close a bar every $N$
-trades, every $V$ units of volume, or every $D$ dollars exchanged.
+Build OHLC bars by grouping observations according to elapsed time, trade count,
+volume or traded value. Activity-based bars use trading activity as the clock:
+close a bar every $N$ trades, $V$ units of volume or $D$ units of price × volume.
+AFML §2.3.1 discusses why these can be useful alternatives to regularly spaced
+bars. They do **not** guarantee independent, normal or constant-variance returns;
+measure those properties on the data and sampling policy you actually use.
 
-This module builds those bars from a slice of trades. It is the first step of every workflow
-on this site; [`filters`](/modules/filters/) and [`labeling`](/modules/labeling/) consume its
-output.
+You do not need to rebuild bars if your input already has the sampling definition
+your study needs. [`filters`](/modules/filters/) and
+[`labeling`](/modules/labeling/) can consume an appropriate existing price series.
+
+## Choose the input path before building bars
+
+| Input | Path | Important limit |
+| --- | --- | --- |
+| OHLCV-like Polars frame with one observation per symbol/timestamp | Public Python `openquant.bars` wrappers | Each row becomes a trade at **close** with its volume; input high/low are not aggregated |
+| Raw trades, including legitimate equal-timestamp prints | Native list builders (`openquant._core.bars`) or Rust `Trade` builders | Caller supplies valid inputs in the correct order; see the [retained-trades check](#check-which-trades-cleaning-retained) |
+| Already aggregated candles whose full OHLC range must survive | Keep those candles or use an explicit OHLC resampler | These trade builders cannot reconstruct an intrabar path from a candle's close |
+
+The Python frame wrappers clean and deduplicate `(symbol, ts)` before building
+bars. An exchange trade ID is not part of that key. A tick feed can therefore
+lose genuine trades even if its rows are otherwise valid. The low-level `_core`
+namespace avoids that cleaning but is not a drop-in frame API: check the exact
+signature, output tuple and validation responsibilities before using it.
+
+For a first audit, [calculate a small bar by hand](#audit-a-small-bar-by-hand).
+For a file split into chunks, read [the batching example](#decide-where-aggregation-state-resets)
+and the caller contract below before assuming separate calls equal one pass.
 
 ## What each bar type does
 
@@ -56,7 +73,7 @@ output.
 | `standard_bars(…, Volume)` | cumulative volume reaches `threshold` | §2.3.1.3 |
 | `standard_bars(…, Dollar)` | cumulative `price × volume` reaches `threshold` | §2.3.1.4 |
 | `imbalance_bars` | the absolute signed imbalance reaches `threshold` | §2.3.2.1–2, simplified |
-| `run_bars` | `threshold` consecutive trades move the same way | §2.3.2.3, simplified |
+| `run_bars` | `threshold` consecutive signed ticks have the same sign, including unchanged prices that inherit it | §2.3.2.3, simplified |
 
 Three behaviours are common to all of them. The trade that crosses the threshold belongs to
 the bar it closes, so bars overshoot the threshold rather than undershoot it. A trailing
@@ -93,6 +110,128 @@ retain the previous sign. The first trade establishes the price reference and co
 no direction; unchanged initial prices remain unsigned. After each completed bar, direction
 state resets and the next trade establishes a fresh reference. A run counts signed ticks,
 including unchanged prices that retain a sign, rather than strictly changing prices only.
+
+### Trace direction across a completed bar
+
+The reset applies at **every completed bar**, not just between calls. A flat price
+after a reset has no direction until a new up-tick or down-tick establishes one.
+The unsigned trades still belong to the bar: they contribute to its OHLC, volume,
+dollar value and observation count, but not its signed stopping statistic.
+
+For these eight prices, both a run threshold of two and a tick-imbalance threshold
+of two close at rows 2 and 6:
+
+| Row | Price | Sign within the current bar | Result |
+| --- | --- | --- | --- |
+| 0 | 100 | 0 | Establish reference |
+| 1 | 101 | +1 | First signed tick |
+| 2 | 101 | +1 | Flat price inherits +1; close first bar |
+| 3 | 101 | 0 | Fresh reference; previous sign is discarded |
+| 4 | 101 | 0 | Still unsigned |
+| 5 | 102 | +1 | First signed tick of second bar |
+| 6 | 102 | +1 | Close second bar |
+| 7 | 102 | 0 | Unfinished tail is dropped |
+
+```python
+from openquant import _core
+
+stamps = [f"2026-01-02 09:30:{i:02d}" for i in range(8)]
+prices = [100.0, 101.0, 101.0, 101.0, 101.0, 102.0, 102.0, 102.0]
+volumes = [1.0] * len(prices)
+outputs = {
+    "run": _core.bars.build_run_bars(stamps, prices, volumes, 2),
+    "tick imbalance": _core.bars.build_imbalance_bars(
+        stamps, prices, volumes, 2.0, "tick"
+    ),
+}
+for name, rows in outputs.items():
+    # Native tuple: start, end, open, high, low, close, volume, dollar value, count.
+    assert [(row[0], row[1]) for row in rows] == [
+        (stamps[0], stamps[2]), (stamps[3], stamps[6])
+    ]
+    assert [row[2:] for row in rows] == [
+        (100.0, 101.0, 100.0, 101.0, 3.0, 302.0, 3),
+        (101.0, 102.0, 101.0, 102.0, 4.0, 406.0, 4),
+    ]
+    print(name, "counts:", [row[8] for row in rows])
+```
+
+```text
+run counts: [3, 4]
+tick imbalance counts: [3, 4]
+```
+
+Carrying +1 from the first bar would instead let the next two flat trades close
+a bar. That is a different sampling policy, not an equivalent optimization.
+[#279](https://github.com/Open-Quant/openquant/issues/279) tracks the choice of
+cross-bar direction policy. This example records the implemented reset behavior;
+it does not resolve that design question or establish parity with another library.
+
+### Separate consecutive runs from net imbalance
+
+The two builders agree above only because every signed tick within each completed
+bar is positive. In this second path the signs are `0, +1, +1, -1, +1, +1`.
+Net imbalance reaches three, but the longest uninterrupted run is only two:
+
+```python
+from openquant import _core
+
+stamps = [f"2026-01-02 09:30:{i:02d}" for i in range(6)]
+prices, volumes = [100.0, 101.0, 102.0, 101.0, 102.0, 103.0], [1.0] * 6
+runs = _core.bars.build_run_bars(stamps, prices, volumes, 3)
+imbalances = _core.bars.build_imbalance_bars(stamps, prices, volumes, 3.0, "tick")
+assert runs == []
+assert len(imbalances) == 1
+assert imbalances[0] == (
+    stamps[0], stamps[5], 100.0, 103.0, 100.0, 103.0, 6.0, 609.0, 6
+)
+print("run bars:", len(runs), "tick-imbalance bars:", len(imbalances))
+```
+
+```text
+run bars: 0 tick-imbalance bars: 1
+```
+
+Neither the number of price changes nor the dominant side's total count is the
+run stopping rule. Conversely, an opposite sign subtracts from imbalance; it does
+not discard all earlier signed accumulation.
+
+### Distinguish signed activity from reported totals
+
+A large first trade is unsigned even in a volume- or dollar-imbalance bar.
+For the following path the signed totals after all four rows are one tick,
+three volume units (`2 - 1 + 2`), and 306 dollars (`202 - 100 + 204`).
+The reported totals include **all** trades, including the first 1,000-unit trade
+and the negatively signed one. They are volume 1,005 and dollar value 100,506.
+
+```python
+from openquant import _core
+
+stamps = [f"2026-01-02 09:30:{i:02d}" for i in range(4)]
+prices, volumes = [100.0, 101.0, 100.0, 102.0], [1000.0, 2.0, 1.0, 2.0]
+for kind, threshold in [("tick", 2.0), ("volume", 3.0), ("dollar", 300.0)]:
+    rows = _core.bars.build_imbalance_bars(stamps, prices, volumes, threshold, kind)
+    if kind == "tick":
+        assert rows == []
+    else:
+        assert rows == [(
+            stamps[0], stamps[3], 100.0, 102.0, 100.0, 102.0,
+            1005.0, 100506.0, 4
+        )]
+    print(kind, "counts:", [row[8] for row in rows])
+```
+
+```text
+tick counts: []
+volume counts: [4]
+dollar counts: [4]
+```
+
+The tuple does not return the signed imbalance or run length. Reconstruct that
+statistic from the input prices, sizes and reset policy when auditing a boundary;
+do not infer it from `volume`, `dollar_value` or `tick_count` alone. Keep the threshold's
+units with the chosen imbalance type. These tiny paths test mechanics, not whether
+any of the three thresholds improves a research result.
 
 ## The point, on data
 
@@ -166,15 +305,18 @@ of the day.
 
 The threshold sets how many bars you get, and that is a modelling decision, not a default to
 accept. A common starting point is the number of bars you would have had with time bars:
-divide the session's total dollar volume by that count. The example traded about 3.6 million
+divide a completed reference session's total dollar volume by that count. The example traded about 3.6 million
 dollars, so a threshold of 60,000 gives roughly the sixty bars that five-minute sampling gives
 in a quieter session. The Python defaults (`ticks_per_bar=50`, `volume_per_bar=100_000`,
 `dollar_value_per_bar=5_000_000`) suit no instrument in particular. Pick a number, then check
 the bar count and `bars.bar_diagnostics` before trusting what is built on top.
 
 Because thresholds are in absolute units, a fixed dollar threshold can produce different
-bar counts as traded dollar volume changes. Over long histories, re-derive the
-threshold per period or scale it by a rolling average of daily dollar volume.
+bar counts as traded dollar volume changes. Over long histories, a policy may re-derive the
+threshold per period or scale it by a rolling average of daily dollar volume. Use completed
+past periods for a causal sampling policy; choosing a threshold from the entire future
+evaluation session leaks its total activity. Record the estimation window and when the
+threshold becomes effective, and include alternative policies in the trial inventory.
 
 ## From Rust
 
@@ -242,20 +384,189 @@ trades is valid and yields no bars.
   adjacent pairs at symbol boundaries. With fewer than three pooled returns, all reported
   statistics except `n_bars` are zero, which does not establish low volatility or independence.
 
-A call boundary is not a session boundary recognized by the builder:
+## Audit a small bar by hand
+
+Use a short input whose expected result you can calculate without the library before
+running a large feed. These five rows deliberately have different input highs/lows,
+so the example also catches the mistake of treating the frame wrapper as an OHLC
+resampler. The wrappers see only the closes `100, 101, 102, 103, 104` and volumes
+`2, 2, 7, 1, 1` after cleaning.
+
+| Builder | First completed bar | What happens to the last rows |
+| --- | --- | --- |
+| Three ticks | Rows 0–2, volume 11, traded value 1,116 | Rows 3–4 are dropped |
+| Volume 5 | Rows 0–2, volume 11: the seven-unit row is not split | Rows 3–4 are dropped; the overshoot is not carried forward |
+| Dollar value 500 | Rows 0–2, traded value 1,116 | Rows 3–4 are dropped; no second bar is created from the overshoot |
+| One minute | Rows 0–2, because row 2 is exactly one minute after row 0 | Rows 3–4 are retained as a partial bar |
+
+The first bar's open/high/low/close are `100, 102, 100, 102`, independent of the
+input `open=90`, `high=110` and `low=80`. Its traded value is
+`100 × 2 + 101 × 2 + 102 × 7 = 1,116`, not the closing price times total volume.
+
+```python
+from datetime import datetime, timedelta
+
+import polars as pl
+from openquant import bars
+
+start = datetime(2026, 1, 2, 9, 30)
+frame = pl.DataFrame({
+    "ts": [start + timedelta(seconds=30 * i) for i in range(5)],
+    "symbol": ["X"] * 5,
+    "open": [90.0] * 5, "high": [110.0] * 5, "low": [80.0] * 5,
+    "close": [100.0, 101.0, 102.0, 103.0, 104.0],
+    "volume": [2.0, 2.0, 7.0, 1.0, 1.0],
+})
+columns = ["open", "high", "low", "close", "volume", "dollar_value", "n_obs"]
+# Literal arithmetic above, not expected values generated by another OpenQuant call.
+expected_first = (100.0, 102.0, 100.0, 102.0, 11.0, 1116.0, 3)
+outputs = {
+    "tick": bars.build_tick_bars(frame, ticks_per_bar=3),
+    "volume": bars.build_volume_bars(frame, volume_per_bar=5.0),
+    "dollar": bars.build_dollar_bars(frame, dollar_value_per_bar=500.0),
+    "time": bars.build_time_bars(frame, interval="1m"),
+}
+for name, result in outputs.items():
+    assert result.select(columns).row(0) == expected_first
+    assert result["start_ts"][0] == start
+    assert result["ts"][0] == start + timedelta(minutes=1)
+    assert result["adj_close"].to_list() == result["close"].to_list()
+    print(name, "n_obs:", result["n_obs"].to_list())
+
+assert outputs["time"].select(columns).row(1) == (
+    103.0, 104.0, 103.0, 104.0, 2.0, 207.0, 2
+)
+assert outputs["time"]["start_ts"][1] == start + timedelta(seconds=90)
+assert outputs["time"]["ts"][1] == start + timedelta(seconds=120)
+```
+
+```text
+tick n_obs: [3]
+volume n_obs: [3]
+dollar n_obs: [3]
+time n_obs: [3, 2]
+```
+
+This checks boundary membership, aggregation and trailing-row policy. It does not
+show that the chosen threshold is suitable for a market, that raw trades were
+preserved by cleaning, or that the resulting returns are independent.
+
+## Decide where aggregation state resets
+
+A call boundary is a reset, not a calendar session boundary recognized by the
+builder. The following four trades straddle midnight. Tick, volume and dollar
+bars each form one three-trade bar when called once. Two calls with two rows each
+form none. One-minute time bars instead retain each call's partial tail: the
+single pass groups rows as `[3, 1]`, while the split calls group them as `[2, 2]`.
+The time-bar count is two in both cases, so comparing only counts misses the change.
 
 ```python
 from openquant import _core
 
-stamps = ["2024-01-02 23:59:00", "2024-01-03 00:01:00"]
-prices, volumes = [100.0, 101.0], [1.0, 1.0]
-assert len(_core.bars.build_tick_bars(stamps, prices, volumes, 2)) == 1
-assert sum(len(_core.bars.build_tick_bars([t], [p], [v], 2))
-           for t, p, v in zip(stamps, prices, volumes)) == 0
-assert len(_core.bars.build_time_bars(stamps, prices, volumes, 60)) == 1
-assert sum(len(_core.bars.build_time_bars([t], [p], [v], 60))
-           for t, p, v in zip(stamps, prices, volumes)) == 2
+stamps = [
+    "2026-01-02 23:59:00", "2026-01-02 23:59:30",
+    "2026-01-03 00:00:00", "2026-01-03 00:00:30",
+]
+prices, volumes = [100.0] * 4, [1.0] * 4
+builders = [
+    ("tick", _core.bars.build_tick_bars, 3),
+    ("volume", _core.bars.build_volume_bars, 3.0),
+    ("dollar", _core.bars.build_dollar_bars, 300.0),
+    ("time", _core.bars.build_time_bars, 60),
+]
+for name, build, threshold in builders:
+    whole = build(stamps, prices, volumes, threshold)
+    split = [row for lo, hi in [(0, 2), (2, 4)]
+             for row in build(stamps[lo:hi], prices[lo:hi], volumes[lo:hi], threshold)]
+    # Native bar tuples end with the observation count, at position 8.
+    whole_counts = [row[8] for row in whole]
+    split_counts = [row[8] for row in split]
+    assert whole_counts == ([3, 1] if name == "time" else [3])
+    assert split_counts == ([2, 2] if name == "time" else [])
+    print(name, "whole:", whole_counts, "split:", split_counts)
 ```
+
+```text
+tick whole: [3] split: []
+volume whole: [3] split: []
+dollar whole: [3] split: []
+time whole: [3, 1] split: [2, 2]
+```
+
+For a continuous definition, process each symbol's complete ordered history in one
+call. If you intentionally reset at sessions, split by the venue's explicit session
+calendar before calling and record that rule; splitting at UTC midnight is not a
+universal exchange-session policy. A state-preserving streaming implementation would
+need its own single-pass equivalence tests. None of these wrappers exposes carry state.
+
+## Check which trades cleaning retained
+
+The frame wrappers invoke `data.clean_ohlcv` before aggregation. The native list
+builders do not. Here two different trades have the same timestamp. The cleaner
+retains one `(symbol, ts)` row, so the frame wrapper cannot complete a three-tick
+bar. The native call retains all three and can complete it. The example avoids
+assuming which duplicate wins: if both trades matter, either outcome loses data.
+
+```python
+import polars as pl
+from openquant import _core, bars, data
+
+stamps = ["2026-01-02 09:30:00", "2026-01-02 09:30:00", "2026-01-02 09:30:01"]
+prices, volumes = [100.0, 101.0, 102.0], [1.0, 1.0, 1.0]
+raw = pl.DataFrame({
+    "ts": stamps, "symbol": ["X"] * 3,
+    "open": prices, "high": prices, "low": prices, "close": prices,
+    "volume": volumes,
+})
+cleaned = data.clean_ohlcv(raw)
+wrapped = bars.build_tick_bars(raw, ticks_per_bar=3)
+native = _core.bars.build_tick_bars(stamps, prices, volumes, 3)
+assert cleaned.height == 2 and wrapped.height == 0
+assert len(native) == 1 and native[0][8] == 3
+assert native[0][2:8] == (100.0, 102.0, 100.0, 102.0, 3.0, 303.0)
+print("input rows:", raw.height, "cleaned rows:", cleaned.height)
+print("three-tick bars: frame", wrapped.height, "native", len(native))
+```
+
+```text
+input rows: 3 cleaned rows: 2
+three-tick bars: frame 0 native 1
+```
+
+For a raw trade feed, preserve a sequence identifier and confirm the timestamp
+resolution and duplicate policy before choosing the frame wrapper. Do not add
+invented timestamp offsets to force trades through the cleaner: those offsets
+change ordering and time-bar membership. A native call requires you to supply the
+correct order and validate the prices and sizes yourself. If the feed does not
+establish an order among equal timestamps, record that ambiguity.
+
+### A bar-construction handoff
+
+A reproducible result needs more than `interval="1m"` or a threshold:
+
+- **Input meaning:** trades versus pre-aggregated OHLCV rows, price and volume units,
+  symbol, time representation and ordering among equal timestamps.
+- **Retained observations:** raw and cleaned counts, duplicate/null treatment, and
+  whether timestamp conversion reduced precision. Use the [cleaning report](/modules/data/#cleaning-and-provenance-contracts)
+  and keep the input identity with it.
+- **Sampling rule:** exact builder/namespace and threshold, per-symbol grouping,
+  session/reset policy, and the trailing-partial policy.
+  For run/imbalance bars, also record the fixed-threshold variant, imbalance weight
+  (`tick`, `volume` or `dollar`), and the within-bar tie and cross-bar direction rules.
+- **Output evidence:** compare timestamps, OHLC, volume, traded value and observation
+  count on a hand-calculated sample, not only the total number of bars. Record the
+  loaded source/build as described in the [agent guide](/agents/#resolve-the-source-of-truth).
+- **Research boundary:** choose and fit sampling policies using information available
+  at the intended decision time. A threshold derived from a complete future test
+  session uses future activity even though each threshold crossing uses only rows
+  accumulated so far. A trailing time bar is emitted at end of input, so its final
+  completeness is not established merely by its last trade timestamp.
+
+The examples above are deterministic contract checks against
+[`python/openquant/bars.py`](https://github.com/Open-Quant/openquant/blob/main/python/openquant/bars.py),
+[`crates/pyopenquant/src/bars.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/pyopenquant/src/bars.rs)
+and [`crates/openquant/src/data_structures.rs`](https://github.com/Open-Quant/openquant/blob/main/crates/openquant/src/data_structures.rs).
+They validate the displayed cases, not provider data quality or a trading result.
 
 ## Related modules
 

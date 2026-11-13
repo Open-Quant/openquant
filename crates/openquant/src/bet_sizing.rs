@@ -111,9 +111,22 @@ impl std::error::Error for BetSizingError {}
 /// Sigmoid bet size `x / sqrt(w + x^2)` for price divergence `x = forecast - market`
 /// (AFML Snippet 10.4).
 ///
-/// `w_param` is the curve's width (see [`get_w_sigmoid`]); the result is in `(-1, 1)`.
+/// `w_param` is the curve's width (see [`get_w_sigmoid`]); for positive width the exact
+/// result is in `(-1, 1)`, though binary64 may round to an endpoint. Finite nonnegative
+/// widths and finite divergences use a scaled norm if the squared denominator overflows,
+/// is subnormal, or underflows to zero for a nonzero divergence.
 pub fn bet_size_sigmoid(w_param: f64, price_div: f64) -> f64 {
-    price_div * (w_param + price_div * price_div).powf(-0.5)
+    let squared_norm = w_param + price_div * price_div;
+    if (squared_norm.is_infinite()
+        || squared_norm.is_subnormal()
+        || (squared_norm == 0.0 && price_div != 0.0))
+        && w_param.is_finite()
+        && w_param >= 0.0
+        && price_div.is_finite()
+    {
+        return price_div / w_param.sqrt().hypot(price_div);
+    }
+    price_div * squared_norm.powf(-0.5)
 }
 
 /// Power bet size `sgn(x) |x|^w` for a price divergence `x` scaled into `[-1, 1]`.
@@ -151,8 +164,15 @@ pub fn bet_size(w_param: f64, price_div: f64, func: &str) -> Result<f64, BetSizi
 /// `m_bet_size` given `forecast_price` (AFML Snippet 10.4).
 ///
 /// Returns `forecast - m sqrt(w / (1 - m^2))`; not finite at `|m_bet_size| = 1`.
+/// For finite nonnegative width and `|m_bet_size| < 1`, an overflowing intermediate
+/// quotient is evaluated with separate square roots to preserve finite results.
 pub fn inv_price_sigmoid(forecast_price: f64, w_param: f64, m_bet_size: f64) -> f64 {
-    forecast_price - m_bet_size * (w_param / (1.0 - m_bet_size * m_bet_size)).sqrt()
+    let denominator = 1.0 - m_bet_size * m_bet_size;
+    let quotient = w_param / denominator;
+    if quotient.is_infinite() && w_param.is_finite() && w_param >= 0.0 && m_bet_size.abs() < 1.0 {
+        return forecast_price - m_bet_size * (w_param.sqrt() / denominator.sqrt());
+    }
+    forecast_price - m_bet_size * quotient.sqrt()
 }
 
 /// Inverse of the power curve: the market price at which the power bet size equals
@@ -214,12 +234,25 @@ pub fn get_signal(prob: &[f64], num_classes: usize, pred: Option<&[f64]>) -> Vec
 /// Rounds sizes to the nearest multiple of `step_size` and clamps them to `[-1, 1]` (AFML
 /// Snippet 10.3).
 ///
-/// A `step_size` of zero or less returns the input unchanged.
+/// A `step_size` of zero or less returns the input unchanged. For finite inputs and a
+/// finite positive step, an overflowing quotient preserves the input before clamping:
+/// the step is then too small to change the representable signal.
 pub fn discrete_signal(signal0: &[f64], step_size: f64) -> Vec<f64> {
     if step_size <= 0.0 {
         return signal0.to_vec();
     }
-    signal0.iter().map(|s| ((s / step_size).round() * step_size).clamp(-1.0, 1.0)).collect()
+    signal0
+        .iter()
+        .map(|s| {
+            let quotient = s / step_size;
+            if s.is_finite() && step_size.is_finite() && quotient.is_infinite() {
+                // Quantisation moves s by at most half a step, far below its ULP here.
+                s.clamp(-1.0, 1.0)
+            } else {
+                (quotient.round() * step_size).clamp(-1.0, 1.0)
+            }
+        })
+        .collect()
 }
 
 /// Averages the signals that are live at each change point (AFML Snippet 10.2).
@@ -424,8 +457,18 @@ pub fn limit_price(
 
 /// Sigmoid width `w = x^2 (1/m^2 - 1)` such that divergence `price_div` gives size
 /// `m_bet_size` (AFML Snippet 10.4).
+///
+/// For finite divergence and `0 < |m_bet_size| < 1`, a nonfinite or zero intermediate
+/// result is recomputed without separately squaring the divergence or bet size.
+/// Ordinary finite nonzero results retain their arithmetic, including cancellation near 1.
 pub fn get_w_sigmoid(price_div: f64, m_bet_size: f64) -> f64 {
-    (price_div * price_div) * ((1.0 / (m_bet_size * m_bet_size)) - 1.0)
+    let width = (price_div * price_div) * ((1.0 / (m_bet_size * m_bet_size)) - 1.0);
+    let size = m_bet_size.abs();
+    if (!width.is_finite() || width == 0.0) && price_div.is_finite() && size > 0.0 && size < 1.0 {
+        let root_width = price_div.abs() * ((1.0 - size) * (1.0 + size)).sqrt() / size;
+        return root_width * root_width;
+    }
+    width
 }
 
 /// Power exponent `w = ln(m / sgn(x)) / ln|x|` such that divergence `price_div` gives size

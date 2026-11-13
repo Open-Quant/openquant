@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-11-09'
+last_generated: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -69,6 +69,24 @@ file disagree).
 - `util::stats::covariance` (used by `hrp`, `hcaa`, `cla` and `portfolio_optimization`): keep a finite constant column's mean exact, so its variance and covariances are exactly zero. Rounding in `sum / rows` left a variance near `1e-34`, so HRP and HCAA accepted a constant-return asset and gave it practically all the weight instead of rejecting the non-positive variance.
 
 - `hrp`, `hcaa`: split cluster weight by the plain ratio of the two sides' risks; the absolute `f64::EPSILON` added to the denominator made weights depend on the scale of the covariance or returns (`diag(1e-18, 4e-18)` gave about 0.9955/0.0045 instead of 0.8/0.2). Two zero risks now split evenly.
+
+
+
+- Keep trial-registry input and returned configurations detached from its internal
+  snapshots, so caller mutation cannot silently change the saved hash association.
+- Reject duplicate persisted trial hashes, invalid observation counts and nonfinite
+  or non-numeric saved moments instead of silently corrupting trial counts/dispersion.
+
+
+- Microstructure: stop flooring positive finite BVC sample deviations at a fixed price-unit threshold; preserve the computed-zero fallback and existing nonfinite behavior.
+- Bet sizing: retain finite signal values when a tiny positive discretization step overflows the intermediate quotient instead of incorrectly saturating the position.
+- Bet sizing: preserve finite sigmoid sizes, inverse prices and calibrated widths when intermediate squares or ratios overflow or underflow, retaining ordinary arithmetic and invalid-input behavior.
+- Statistics: recover linear quantiles across overflowing finite endpoint spans with exact intermediate products and one final rounding, including small cancellation residuals.
+- Feature diagnostics: reject nonfinite/nonbinary classifier labels and duplicate feature names, including DataFrame screen overrides, instead of fitting invalid targets or merging rejection reasons. ([#278](https://github.com/Open-Quant/openquant/issues/278))
+- Bars: reject nonfinite volume/dollar thresholds before per-symbol grouping, including empty inputs, and identify the finite-positive requirement in wrapper/native errors. ([#278](https://github.com/Open-Quant/openquant/issues/278))
+- Tuning: preserve weighted log-loss scores and purged-search selection for tiny positive weights without relaxing overflow errors.
+- Synthetic backtesting: reject nonfinite profit-taking and stop-loss widths at direct evaluation and grid-search entry points. ([#278](https://github.com/Open-Quant/openquant/issues/278))
+- Evaluation: accept NumPy integer trial counts while retaining boolean/float rejection and the minimum count of two. ([#278](https://github.com/Open-Quant/openquant/issues/278))
 
 - Risk and strategy evaluation: recover overflowing finite ES/CDaR tail sums and win/loss payout means using existing exact arithmetic, preserving ordinary results, tail selection and nonfinite-input behavior.
 

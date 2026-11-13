@@ -1,8 +1,8 @@
 ---
 title: Quickstart
-description: Install OpenQuant and get one real result out of it.
+description: Build OpenQuant from source, run a synthetic pipeline and interpret its output.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-13'
 audience:
   - quant-dev
   - platform-engineering
@@ -13,7 +13,7 @@ sidebar:
 This is the human learning path. For repository automation, use the
 [agent guide](/agents/) alongside it.
 
-Three steps produce a synthetic result you can inspect. Allow time for a native Rust
+Build once, check one small component, then inspect a synthetic pipeline. Allow time for a native Rust
 build; its duration depends on your machine and whether dependencies are cached.
 
 You need a Rust toolchain, a linker, and `uv`. If you do not have them,
@@ -57,7 +57,41 @@ openquant bindings import ok
 If it does not, [Troubleshooting](/setup/troubleshooting/) has the
 import, toolchain and architecture checks to run next.
 
-## Step 3 — Get a result
+## Step 3 — Check one component
+
+Start with a call small enough to verify by hand. Save this as `first_event.py`
+in the repository root:
+
+```python
+import math
+from openquant import filters
+
+# Five synthetic prices, with log-return steps +0.006, +0.006, -0.006, -0.006.
+close = [100.0 * math.exp(x) for x in [0.0, 0.006, 0.012, 0.006, 0.0]]
+events = filters.cusum_filter_indices(close, 0.01)
+assert events == [2, 4]
+print("event row positions:", events)
+```
+
+```text
+event row positions: [2, 4]
+```
+
+```bash
+uv run --no-sync --python .venv/bin/python python first_event.py
+```
+
+The filter accumulates log-price changes, not price levels. Two upward steps sum
+to 0.012 and exceed the 0.01 threshold at row 2; two downward steps exceed it in
+the other direction at row 4. Positions are **zero-based**, so these refer to the
+third and fifth input prices. Pass positive prices, not precomputed returns.
+
+This verifies a real native call and a small expected result. It does not fit a
+model, generate buy/sell instructions or validate a dataset. The [filter guide](/modules/filters/)
+explains reset rules and changing thresholds. If you only need one library component,
+continue with [Find an API by task](/module-reference/api-task-guide/).
+
+## Step 4 — Inspect the pipeline
 
 Save this as `first_run.py` in the repository root:
 
@@ -135,6 +169,20 @@ promotion gates:
 synthetic dataset's "model probabilities" are a sine wave, not a model.
 A quickstart that printed a promoted strategy would be teaching you to
 trust the wrong thing.
+
+## Read the output in this order
+
+| Look at… | What it answers | What it does not establish |
+| --- | --- | --- |
+| Ordering checks | Are timestamps and event indices ordered? | Whether a feature or supplied probability contains future information |
+| `realized_sharpe`, gross and net return | What did this synthetic strategy calculation produce under its stated conventions? | Out-of-sample performance or executable order fills |
+| `portfolio_sharpe` | How did the allocator score its in-sample synthetic asset mix? | The traded strategy's Sharpe ratio |
+| `promote_candidate` | Did the configured flags pass? | Permission to trade or production readiness |
+
+A successful first run means the script executes and you can explain these
+outputs. A `False` promotion decision is not an installation failure. Do not tune
+thresholds just to turn that flag green; that would change the question after
+seeing the answer.
 
 ## What you just ran
 

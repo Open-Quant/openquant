@@ -438,3 +438,88 @@ fn test_bet_size_reserve_fit_and_return_parameters() {
         assert!((-1.0..=1.0).contains(&b));
     }
 }
+
+#[test]
+fn test_sigmoid_finite_inputs_do_not_overflow_intermediate_square() {
+    // AFML 10.4: x/sqrt(w+x²) rounds to +/-1 for w=1 and |x|=1e200.
+    for sign in [-1.0, 1.0] {
+        assert_eq!(bet_size_sigmoid(1.0, sign * 1e200), sign);
+        assert_eq!(get_target_pos_sigmoid(1.0, sign * 1e200, 0.0, 50.0), sign * 50.0);
+        // w=x² gives 1/sqrt(2); allow a few binary64 ulps for decimal inputs.
+        let got = bet_size_sigmoid(1e308, sign * 1e154);
+        assert!((got - sign * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-15);
+    }
+}
+
+#[test]
+fn test_inverse_sigmoid_finite_result_survives_intermediate_overflow() {
+    // m=3/5 and sqrt(1-m²)=4/5 imply f - (3/4)*sqrt(w).
+    // The decimal m is rounded in binary64; 1e-15 relative allows that rounding.
+    let expected = 0.75 * 1.7e308_f64.sqrt();
+    for sign in [-1.0, 1.0] {
+        let got = inv_price_sigmoid(0.0, 1.7e308, sign * 0.6);
+        assert!((got / (-sign * expected) - 1.0).abs() < 1e-15, "got {got}");
+    }
+}
+
+#[test]
+fn test_sigmoid_exceptional_input_contract_is_unchanged() {
+    assert!(bet_size_sigmoid(-1.0, 0.5).is_nan());
+    assert!(bet_size_sigmoid(1.0, f64::INFINITY).is_nan());
+    assert_eq!(bet_size_sigmoid(f64::INFINITY, 1.0), 0.0);
+    assert!(inv_price_sigmoid(0.0, 1.0, 1.0).is_infinite());
+    assert!(inv_price_sigmoid(0.0, 1.0, 1.1).is_nan());
+    assert!(inv_price_sigmoid(0.0, -1.0, 0.5).is_nan());
+}
+
+#[test]
+fn test_sigmoid_calibration_recovers_finite_width_from_exceptional_products() {
+    // x=2^520, m=1-2^-53. Algebra gives
+    // w=2^988*(1-2^-54)/(1-2^-53)^2, within 1e-15 relative of 2^988.
+    let divergence = 2.0_f64.powi(520);
+    let size = f64::from_bits(1.0_f64.to_bits() - 1);
+    let expected = 2.0_f64.powi(988);
+    for sign in [-1.0, 1.0] {
+        let got = get_w_sigmoid(sign * divergence, sign * size);
+        assert!((got / expected - 1.0).abs() < 1e-15, "got {got}");
+        // x=m, so x²*(1/m²-1)=1-m², which rounds to 1 for m=1e-200.
+        assert_eq!(get_w_sigmoid(sign * 1e-200, sign * 1e-200), 1.0);
+    }
+    assert_eq!(get_w_sigmoid(0.0, 1e-200), 0.0);
+    // x² underflows, but x²/m²=1e-200 remains representable.
+    assert!((get_w_sigmoid(1e-200, 1e-100) / 1e-200 - 1.0).abs() < 1e-15);
+}
+
+#[test]
+fn test_zero_width_sigmoid_preserves_nonzero_subnormal_divergence() {
+    for x in [1e-200, f64::from_bits(1), -1e-200, -f64::from_bits(1)] {
+        // With w=0 and x!=0 the exact expression is x/|x|.
+        assert_eq!(bet_size_sigmoid(0.0, x), x.signum());
+    }
+    assert!(bet_size_sigmoid(0.0, 0.0).is_nan());
+}
+
+#[test]
+fn test_sigmoid_calibration_preserves_ordinary_and_invalid_domain_behavior() {
+    assert_eq!(get_w_sigmoid(2.0, 0.5), 12.0);
+    assert_eq!(get_w_sigmoid(2.0, -0.5), 12.0);
+    assert_eq!(get_w_sigmoid(1.0, 2.0), -0.75);
+    assert_eq!(get_w_sigmoid(1.0, 0.0), f64::INFINITY);
+    assert!(get_w_sigmoid(0.0, 0.0).is_nan());
+    assert!(get_w_sigmoid(f64::INFINITY, 1.0).is_nan());
+}
+
+#[test]
+fn test_sigmoid_subnormal_squared_norm_keeps_relative_accuracy() {
+    for sign in [-1.0, 1.0] {
+        // With w=0, x/sqrt(x²)=sign(x), even when rounded x² is nonzero subnormal.
+        assert_eq!(bet_size_sigmoid(0.0, sign * 1.6e-162), sign);
+        // Smallest positive w, x=sqrt(w): the exact size is 1/sqrt(2).
+        let width = f64::from_bits(1);
+        let got = bet_size_sigmoid(width, sign * width.sqrt());
+        assert!((got - sign * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-15);
+        // x=(3/4)*sqrt(w) gives (3/4)/sqrt(1+9/16)=3/5 exactly.
+        let got = bet_size_sigmoid(width, sign * 0.75 * width.sqrt());
+        assert!((got - sign * 0.6).abs() < 1e-15);
+    }
+}

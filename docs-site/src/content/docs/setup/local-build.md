@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-12'
 audience:
   - quant-dev
   - platform-engineering
@@ -67,9 +67,11 @@ It runs the checks declared in
 1. Build the site and stage Rust API documentation with `stage:rustdoc`.
 2. Run the design/accessibility, agent-index and navigation-checker tests, then
    check built paths, anchors and redirects.
-3. Check API drift, page status/schema, theme contrast, coverage and generated pages.
+3. Check API drift, page status/schema, theme contrast, coverage, generated pages and
+   Rust-only module figures (including their independent reference tests).
 4. Compile Rust snippets on module pages and the complete Rust core workflow,
-   execute runnable Python snippets and check the generated Python reference
+   execute the ETF Rust example and compare its displayed output, execute runnable
+   Python snippets and check the generated Python reference
    against the built extension.
 
 The design/accessibility checks inspect rendered markup and source/style rules. They
@@ -91,6 +93,42 @@ npm run check:links
 A preview or a successful Astro build is **not** a full docs pass. If Rust or
 the extension is unavailable, record those checks as not run and still run the
 independent schema, contrast, API inventory, coverage and generated-page checks.
+
+## A reproducible docs verification receipt
+
+Keep source identity and execution identity separate. A restored Git bundle can preserve
+all commits while a virtual environment or compiled extension belongs to a different
+revision. From the repository root, record these alongside the exact checks:
+
+```bash
+git rev-parse HEAD
+git status --short
+.venv/bin/python -c "import sys, openquant, openquant._core as core; print(sys.executable); print(openquant.__file__); print(core.__file__)"
+```
+
+Do not publish raw paths or logs containing private data or credentials. Record the
+native build command and outcome after rebuilding. A package version, an import path
+or a copied binary alone cannot prove that the extension matches the checked-out Rust.
+
+| Check state | What the receipt should say |
+| --- | --- |
+| Passed | Exact command, revision, selected environment and observed result. |
+| Failed | Command and first substantive error, including a stale-output mismatch. |
+| Blocked | Missing capability or dependency, not an inferred success. |
+| Not run | Later aggregate stages or browser interactions that were never exercised. |
+
+In a restricted environment, notebook execution may fail because the Jupyter kernel
+cannot open a local socket. Preserve the traceback and rerun the unchanged command in
+an environment that supports the required operation. Do not convert an executable
+fence to `doc-check=skip`, suppress the kernel failure or label the aggregate green.
+Run independent gates separately to retain useful partial evidence. Likewise, a missing
+Rust compiler prevents snippet compilation and rustdoc generation even if Node tests pass.
+
+For a resumed session, recover source and the receipt first, then recheck the current
+upstream revision before applying changes. Use one restore route (bundle or patch), not
+both. Preserve unresolved failures and identify any independently developed changes
+that have not been integrated. This receipt is evidence for maintainers, not a claim of
+human review, production deployment or validated investment performance.
 
 ## When a gate fails
 
@@ -132,9 +170,11 @@ You can prefer the prepared environment from the repository root:
 DOC_PYTHON="$PWD/.venv/bin/python" node docs-site/scripts/check-doc-python-examples.mjs
 ```
 
-`DOC_PYTHON` is the first candidate, **not a strict interpreter selection**. If its
-`import openquant` probe fails, the gate tries the checkout's `.venv` interpreters,
-then `python3`. Read the `via ...` path in the gate's opening summary. When a local
+`DOC_PYTHON` selects exactly one executable, not a shell command. If that executable
+is missing or its `import openquant` probe fails, the gate stops rather than silently
+using another environment. Do not include command-line arguments in the value.
+When the variable is unset or empty, discovery tries the checkout's `.venv`
+interpreters, then `python3`. Read the `via ...` path in the opening summary. When a local
 native extension is present under `python/openquant/`, the checker prepends the
 checkout's Python source to `PYTHONPATH`; otherwise an installed package can satisfy
 the import. Confirm the actual package and extension paths before treating a pass

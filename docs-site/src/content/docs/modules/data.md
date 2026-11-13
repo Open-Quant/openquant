@@ -2,7 +2,7 @@
 title: "data"
 description: "Fetching daily OHLCV through a cache, content hashes for run manifests, and OHLCV loading, cleaning, calendar alignment and quality reporting."
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-12'
 citation:
   - 'OpenQuant python/openquant/data.py: loading, cleaning, calendar alignment, cache and hash contracts.'
   - 'OpenQuant python/tests/test_data_module.py and python/tests/test_data_fetch.py: data quality, calendar, cache and provenance tests.'
@@ -43,11 +43,37 @@ sidebar:
 
 ## Concept Overview
 
-Before any AFML workflow begins, raw market data must be fetched, loaded into a consistent schema, cleaned of duplicates and formatting issues, and aligned to a regular time grid. This module handles that ingestion layer.
+This module loads and checks **OHLCV bars**: one row per symbol and timestamp,
+with open, high, low, close and volume columns. It can normalize column names,
+resolve duplicate bar revisions, report gaps and optionally align a calendar.
+Calendar alignment is a choice, not a prerequisite for every AFML workflow;
+activity-based bars need not be regularly spaced.
+
+### Choose the route for your input
+
+| You have… | Start with… | Check before proceeding |
+| --- | --- | --- |
+| No data yet; you want an offline example | `fetch(..., source=None)` | The default is bundled **synthetic daily bars**, not a market feed |
+| A CSV or Parquet file of already aggregated candles | `load_ohlcv(...)` | Timestamp timezone, symbol, price/volume units and duplicate-revision policy |
+| An existing OHLCV Polars frame | `clean_ohlcv(..., return_report=True)` | Compare input and retained row counts; inspect the quality report |
+| Raw exchange trades or tick prints | [Bar construction](/modules/data-structures/#choose-the-input-path-before-building-bars) | Preserve trade identity and ordering; two trades at the same timestamp are not necessarily duplicates |
+| A study that requires a regular calendar | `align_calendar(...)` after inspecting the data | Choose a session/gap policy explicitly; inserting rows does not create observed trades |
+
+Do not run raw trades through an OHLCV cleaner merely to satisfy a schema.
+`clean_ohlcv` keeps one row per `(symbol, ts)`, and the Python frame bar wrappers
+also call it internally. For raw trades, read the
+[duplicate-timestamp example](/modules/data-structures/#check-which-trades-cleaning-retained)
+before choosing a wrapper.
+
+### Fetch and reuse bars
 
 `fetch(symbols, start, end, source=..., cache_dir=...)` fetches OHLCV through a pluggable source, intended for daily-bar research. The source is any object with a `name` and a `fetch_symbol(symbol, start, end)` method (the `DataSource` protocol). Three sources ship with the module. `LocalSampleSource` reads the bundled synthetic sample and is the default. `LocalFileSource` reads your own CSV or Parquet file. `CallableSource` wraps your own function, which calls your vendor with your key. Each (source, symbol, date range) request is cached as a Parquet file and a JSON sidecar under `<cache_dir>/<source>[@<version>]/<symbol>/<start>_<end>.parquet`. A repeated request is served from disk without calling the source, so it works offline, and `offline=True` makes that a guarantee. The returned frame is the canonical `clean_ohlcv` frame, and it has passed `data_quality_report`.
 
+### Identify the data used in a result
+
 `dataset_hash(df)` is a deterministic SHA-256 of a table's contents. `record_dataset_hash(manifest, df, **meta)` writes that hash, with the source, terms and request, into a run manifest, so every result can name the exact data behind it. `experiments/run_pipeline.py` records it in every `run_manifest.json`.
+
+### Understand cache hits and failures
 
 Source names and symbols are URL-escaped as individual cache path components, including
 dot-only names (`.` and `..`). Each source and symbol keeps its own directory; ordinary
@@ -65,6 +91,8 @@ rather than contacting a source.
 verify an expected frequency, or require coverage of every requested date. Missing rows
 can survive the structural checks. Datetime request bounds use their own calendar dates;
 normalize them to the intended request timezone before passing them.
+
+### Inspect cleaning before analysis
 
 The loaders accept CSV or Parquet files with flexible column naming (e.g., "timestamp", "datetime", "date" all map to "ts"; "ticker" or "asset" map to "symbol") and produce a standardized Polars DataFrame with canonical OHLCV columns. Deduplication handles duplicate (symbol, timestamp) keys, and calendar alignment generates a regular grid with explicit gap markers.
 
