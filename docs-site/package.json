@@ -21,7 +21,7 @@
     "test:links": "node --test scripts/tests/check-links.test.mjs",
     "test:agent-index": "node --test scripts/tests/agent-index.test.mjs",
     "test:accessibility": "node --test scripts/tests/document-accessibility.test.mjs scripts/tests/code-scroll-labels.test.mjs",
-    "test:design": "node --test scripts/tests/design-system.test.mjs"
+    "test:design": "node --test scripts/tests/design-system.test.mjs scripts/tests/hero-motion.test.mjs"
   },
   "devDependencies": {
     "astro": "^7.3.3",

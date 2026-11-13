@@ -131,17 +131,20 @@ test('sidebar disclosure respects reduced motion', () => {
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.sidebar-content\s+\.caret\s*\{\s*transition:\s*none/s);
 });
 
-test('home hero exposes a complete synthetic study and progressive controls', () => {
+test('home hero progressively reveals research layers without a control bar or caption', () => {
   const nodes = walk(html());
   assert.equal(nodes.filter(n => n.tagName === 'h1').length, 1);
-  assert.ok(nodes.some(n => n.tagName === 'oq-barrier-study'));
-  assert.ok(nodes.some(n => n.tagName === 'figcaption' && text(n).includes('Synthetic illustration, not a performance result')));
-  const slider = nodes.find(n => n.tagName === 'input' && attr(n, 'id') === 'oq-study-step');
-  assert.equal(attr(slider, 'type'), 'range');
-  assert.equal(attr(slider, 'max'), '48');
-  assert.ok(nodes.some(n => n.tagName === 'label' && attr(n, 'for') === 'oq-study-step'));
-  assert.equal(nodes.filter(n => attr(n, 'data-step') !== undefined).length, 49);
+  assert.ok(nodes.some(n => n.tagName === 'oq-feature-study'));
+  const study=nodes.find(n=>n.tagName==='oq-feature-study');
+  const children=walk(study);
+  assert.ok(!children.some(n=>n.tagName==='figcaption' || n.tagName==='input'));
+  const plot=children.find(n=>attr(n,'role')==='slider');
+  assert.equal(attr(plot,'tabindex'),'0');
+  assert.equal(attr(plot,'aria-valuemax'),'100');
+  assert.ok(children.some(n=>n.tagName==='desc'&&text(n).includes('not measured investment performance')));
   const source = fs.readFileSync(path.join(root, 'src/components/ResearchHero.astro'), 'utf8');
   assert.match(source, /prefers-reduced-motion: reduce/);
+  assert.match(source, /IntersectionObserver/);
   assert.match(source, /cancelAnimationFrame/);
+  assert.match(source, /CUSUM EVENTS/);
 });
