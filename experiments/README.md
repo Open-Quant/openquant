@@ -5,7 +5,7 @@ This directory provides config-driven, reproducible research runs for OpenQuant.
 ## Run an offline synthetic lab
 
 The [configured offline lab runner](OFFLINE_LAB_RUNNER.md) provides one JSON
-configuration interface for 24 allowlisted research labs. It is separate from the
+configuration interface for 29 allowlisted research labs. It is separate from the
 pipeline runner below and adds no production API. Inspect the available labs and
 their dependencies, review an explicit configuration, then choose a new output:
 
@@ -26,6 +26,16 @@ identity; the separate replay compares scientific results. Neither check establi
 authenticity, statistical validity, or real-market profitability. The small smoke
 configs test the interface, not a study's conclusions. Review workload sizes: the
 runner is not a sandbox or a CPU/memory budget.
+
+The [partial-fill accounting lab](FILL_LEDGER_LAB.md) adds an exact cash/share
+ledger, shared FIFO participation limits and incomplete terminal liquidation.
+It retains every synthetic scenario and never treats residual inventory as cash.
+The [segment handoff controls](EXECUTION_SEGMENTS_LAB.md) require a completed,
+paid-for cash liquidation before starting the next segment in cash, and retain
+incomplete boundaries as rejected scenarios rather than silently resetting them.
+The [cash-budget study](CASH_BUDGET_LAB.md) converts a desired buy quantity to an
+order-lot grid under explicit price, fee and fill-count bounds. It retains
+no-orders, partial fills and assumption-breach controls without changing the ledger.
 
 ## Run
 
@@ -144,6 +154,24 @@ Their small interface fixtures are in `configs/offline-smoke/`, named
 `self_financing.json`, `signal_turnover.json` and `capacity_scaling.json`.
 These are synthetic research controls, not production allocation or execution APIs,
 real-market capacity estimates, or recommendations to trade.
+
+## Timing, completion and terminal inventory
+
+Two further offline controls address the finite-horizon boundaries above:
+
+- [Execution timing](EXECUTION_TIMING_LAB.md) compares prespecified acquisition
+  schedules under decaying price increments, latency and declared costs. Every
+  schedule must complete the same terminal target. Terminal inventory is marked,
+  not liquidated; this is neither an optimal controller nor a funded portfolio.
+- [Terminal liquidation](TERMINAL_LIQUIDATION_LAB.md) separates initial entry,
+  ongoing rebalancing, terminal marked inventory and actual cash after a declared
+  sale charge. Cash and fixed long-only policies share initial wealth and horizon.
+
+Both have explicit smoke configurations and exact replay entries. Their cost
+units and inventory conventions differ and their numbers must not be combined.
+The [offline execution contract](EXECUTION_CONTRACT_SPEC.md) specifies a separate
+future fill ledger, including partial fills, information timing and terminal
+residuals. That interface is proposed, not implemented or capable of live trading.
 
 ## Reusing validation feedback
 
@@ -409,3 +437,9 @@ false provenance, and states the pipeline contracts needed for useful integratio
 selected numeric values to declared revisions through cleaning and reordering.
 It detects inconsistent associations while retaining counterexamples for false
 metadata, incomplete history and lossy normalization.
+
+### Shared-cash reservation continuation
+
+[Cash reservation study](CASH_RESERVATION_STUDY.md) adds an offline, in-process
+account-wide envelope with idempotent fill receipts, explicit finalization and
+exact replay. It does not change production APIs or estimate investment returns.

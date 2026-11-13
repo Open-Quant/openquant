@@ -1,0 +1,6 @@
+{
+  "participations": [0, 0.5, 1],
+  "fixed_fees": [0, 1],
+  "fee_rates": [0.01],
+  "terminal_volumes": [1, 20]
+}

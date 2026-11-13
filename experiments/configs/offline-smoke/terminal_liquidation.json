@@ -1,0 +1,8 @@
+{
+  "horizon": 4,
+  "repetitions": 1,
+  "entry_fee": 0.001,
+  "trade_fee": 0.001,
+  "exit_fee_rates": [0, 0.03],
+  "seed": 20261109
+}

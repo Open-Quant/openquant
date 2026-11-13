@@ -24,6 +24,11 @@ from typing import Any
 import numpy as np
 
 LABS = {
+    "cash_budget": "cash_budget_lab.py",
+    "execution_segments": "execution_segments_lab.py",
+    "fill_ledger": "fill_ledger_lab.py",
+    "execution_timing": "execution_timing_lab.py",
+    "terminal_liquidation": "terminal_liquidation_lab.py",
     "capacity_scaling": "capacity_scaling_lab.py",
     "signal_turnover": "signal_turnover_lab.py",
     "self_financing": "self_financing_lab.py",
@@ -50,6 +55,11 @@ LABS = {
     "covariance_estimation": "covariance_estimation_lab.py",
 }
 DEPENDENCIES = {
+    "cash_budget": ("fill_ledger.py",),
+    "execution_segments": ("fill_ledger.py",),
+    "fill_ledger": ("fill_ledger.py",),
+    "execution_timing": (),
+    "terminal_liquidation": ("self_financing_lab.py",),
     "capacity_scaling": (),
     "signal_turnover": (),
     "self_financing": (),
@@ -174,6 +184,11 @@ def _load_lab(name: str) -> Any:
     if name not in LABS:
         raise ValueError(f"unknown lab: {name}")
     path = Path(__file__).resolve().parent / LABS[name]
+    # File-based CLI invocation puts experiments/, not the checkout root, on
+    # sys.path. Registered labs may import siblings through experiments.*.
+    root = str(path.parent.parent)
+    if root not in sys.path:
+        sys.path.insert(0, root)
     spec = importlib.util.spec_from_file_location(f"_openquant_replay_{name}", path)
     if spec is None or spec.loader is None:
         raise ValueError("lab module unavailable")
