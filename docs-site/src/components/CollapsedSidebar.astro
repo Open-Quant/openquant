@@ -1,0 +1,6 @@
+---
+import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
+import SidebarGroups from './SidebarGroups.astro';
+---
+<SidebarGroups entries={Astro.locals.starlightRoute.sidebar} />
+<div class="md:sl-hidden"><MobileMenuFooter /></div>

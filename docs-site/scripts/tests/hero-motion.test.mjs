@@ -37,3 +37,8 @@ test('touch captures pointer and releases without moving frontier',()=>{const x=
 test('fully processed state suspends texture; unprocessing resumes it',()=>{const x=setup();const p=x.nodes['.oq-plot'];p.fire('keydown',{key:'End',preventDefault(){}});assert.equal(x.frames.size,0);p.fire('keydown',{key:'Home',preventDefault(){}});assert.equal(x.frames.size,1);});
 
 test('endpoint accessible descriptions match visible signal state',()=>{const x=setup();const p=x.nodes['.oq-plot'];assert.equal(p.attrs['aria-valuetext'],'Unprocessed observations');p.fire('keydown',{key:'End',preventDefault(){}});assert.equal(p.attrs['aria-valuetext'],'All observations processed; no noise remains');});
+
+test('processing frontier has no visible vertical scan line',()=>{
+  const hero=fs.readFileSync(new URL('../../src/components/ResearchHero.astro',import.meta.url),'utf8');
+  assert.doesNotMatch(hero,/oq-scan/);
+});

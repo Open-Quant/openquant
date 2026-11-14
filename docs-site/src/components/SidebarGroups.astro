@@ -1,0 +1,31 @@
+---
+// Native disclosures deliberately start closed, even for the current page.
+// Do not persist open state: each new page starts with a compact navigation tree.
+import { Icon, Badge } from '@astrojs/starlight/components';
+const { entries, nested = false } = Astro.props;
+---
+<ul class:list={{ 'top-level': !nested }}>
+  {entries.map(entry => <li>
+    {entry.type === 'link' ? <a href={entry.href} {...entry.attrs} aria-current={entry.isCurrent ? 'page' : undefined}>
+      <span>{entry.label}</span>{entry.badge && <Badge {...entry.badge} />}
+    </a> : <details>
+      <summary><span class="group-label"><span class="large">{entry.label}</span>{entry.badge && <Badge {...entry.badge} />}</span><Icon name="right-caret" class="caret" size="1rem" /></summary>
+      <Astro.self entries={entry.entries} nested />
+    </details>}
+  </li>)}
+</ul>
+<style>
+  ul { list-style: none; padding: 0; margin: 0; }
+  ul ul { margin-inline-start: .5rem; padding-inline-start: .65rem; border-inline-start: 1px solid var(--oq-rule); }
+  li { overflow-wrap: anywhere; }
+  .top-level > li + li { margin-top: .5rem; }
+  summary { display: flex; align-items: center; justify-content: space-between; gap: .4rem; cursor: pointer; padding: .35rem .5rem; }
+  summary::marker, summary::-webkit-details-marker { display: none; }
+  .group-label { display: flex; align-items: center; gap: .3rem; }
+  .large { font-weight: 600; }
+  details[open] > summary :global(.caret) { transform: rotate(90deg); }
+  a { display: flex; align-items: center; gap: .3rem; padding: .3rem .5rem; color: var(--oq-muted); text-decoration: none; }
+  a:hover, a[aria-current="page"] { color: var(--oq-accent); }
+  summary:hover { color: var(--oq-accent); }
+  :is(a,summary):focus-visible { outline: 2px solid var(--oq-accent); outline-offset: 2px; }
+</style>

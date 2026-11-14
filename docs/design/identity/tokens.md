@@ -6,7 +6,7 @@ for the site. The CSS tokens and `check:contrast` measure the shipped palette;
 
 ## Color
 
-One accent per theme, derived from the logo's magenta `#e44de0` and shifted in lightness only as AA contrast requires.
+One accent per theme. The logo uses the dark-mode pink `#f29ad6`; text and controls use the theme-specific accent below to preserve AA contrast.
 The current mark uses pink only. Cyan and yellow belong to the retired pinwheel, not the current identity.
 
 | Token | Light | Dark | Use |
@@ -47,7 +47,7 @@ Loaded from Google Fonts: `Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6
 ## Assets
 
 - `openquant-mark.svg` — the current single pink Q. The three-color pinwheel described in historical notes below is retired. No background tile or effects; intended for 16px and larger.
-- `openquant-banner.svg` — 1280×320, paper ground, heavy-rule / hairline pair. Text is live SVG text and falls back to the viewer's serif on GitHub; outline it in #57 if exact type matters there.
+- `openquant-banner.svg` — 1280×320, dark ground, heavy-rule / hairline pair. Text is live SVG text and falls back to the viewer's serif on GitHub; outline it in #57 if exact type matters there.
 
 ## Original implementation evidence (#57, 2026-09-20)
 

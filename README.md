@@ -22,11 +22,6 @@
   <a href="https://github.com/Open-Quant/openquant/issues">Issues</a>
 </p>
 
-## Choose your documentation path
-
-- **For humans:** [Quickstart](https://open-quant.github.io/openquant/quickstart/) for a first result, then the [module index](https://open-quant.github.io/openquant/modules/).
-- **For agents:** [Agent guide](https://open-quant.github.io/openquant/agents/) for source files, research safeguards and validation commands. Read it alongside [AI-DLC.md](AI-DLC.md) when changing the repository.
-
 ## Status
 Pre-release (0.1.0, unpublished). The Rust core covers most AFML chapters and is
 tested in CI. The [module index](https://open-quant.github.io/openquant/modules/)
@@ -54,70 +49,22 @@ to an unrelated project.
 The extension crate (`crates/pyopenquant`) is built into a wheel with maturin and is
 never published to crates.io.
 
-## Maintainer validation
+## Explore and validate
 
-For a first result, follow the [Quickstart](https://open-quant.github.io/openquant/quickstart/).
-The commands below test and benchmark the implementation.
+- [Module index](https://open-quant.github.io/openquant/modules/): available Rust and Python APIs, organized by AFML chapter.
+- [Research workflow](docs/research_workflow.md): notebooks, reproducible experiments and promotion criteria.
+- [Benchmarks](docs/benchmark_snapshot.md): measured results and their limitations, not investment-performance claims.
+- [Agent guide](https://open-quant.github.io/openquant/agents/): source map, research safeguards and validation commands.
 
 ```bash
-# Fast validation (what CI runs on every PR)
+# Core Rust tests (the long-running SADF test has a separate nightly gate)
 cargo test --workspace --lib --tests --all-features -- --skip test_sadf_test
-
-# Long-running SADF hotspot (explicit; CI runs it nightly and on release tags)
-cargo test -p openquant --test structural_breaks test_sadf_test -- --ignored
-
-# Benchmarks
-cargo bench -p openquant --bench perf_hotspots --bench synthetic_ticker_pipeline
-
-# Collect + check benchmark thresholds against the committed baseline (machine-specific;
-# CI instead compares a PR's head with its base on the same runner)
-python3 scripts/collect_bench_results.py --criterion-dir target/criterion --out benchmarks/latest_benchmarks.json --allow-list benchmarks/benchmark_manifest.json
-python3 scripts/check_bench_thresholds.py --baseline benchmarks/baseline_benchmarks.json --latest benchmarks/latest_benchmarks.json --max-regression-pct 35 --overrides benchmarks/threshold_overrides.json
 ```
 
-## Research Flywheel (Python + Rust)
-```bash
-# After the installation above, from the repository root:
-# Notebook logic smoke + reproducible experiment run
-uv run --no-sync --python .venv/bin/python python notebooks/python/scripts/smoke_all.py
-uv run --no-sync --python .venv/bin/python python experiments/run_pipeline.py --config experiments/configs/futures_oil_baseline.toml --out experiments/artifacts
-
-# Rust notebook-companion smoke
-cargo run -p openquant --example research_notebook_smoke
-
-# Python pipeline micro-benchmark (for speed demos)
-uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_pipeline.py --iterations 30 --bars 2048
-
-# Python data-processing benchmark (per-function throughput/latency + JSON output)
-uv run --no-sync --python .venv/bin/python python python/benchmarks/benchmark_data_processing.py --rows-per-symbol 200000 --symbols 4 --iterations 7 --out benchmarks/data_processing/latest.json
-```
-
-## Crate Layout
-- `crates/openquant/src/`: core library modules
-- `crates/openquant/tests/`: Rust test suite
-- `crates/openquant/benches/`: criterion benchmarks
-- `tests/fixtures/`: shared fixtures
-- `benchmarks/`: baseline + latest benchmark snapshots
-- `notebooks/`: Python notebooks + Rust Evcxr companions
-- `experiments/`: config-driven experiment runner + artifacts
-
-## Publish Readiness
-- Publishing checklist: `docs/publishing.md`
-- Stabilization + productionization checklist: `docs/stabilization_productionization.md`
-- Latest benchmark report: `docs/benchmark_snapshot.md`
-- Python bindings quickstart + API map: `docs/python_bindings.md`
-- Notebook-first workflow + promotion checklist: `docs/research_workflow.md`
-
-## Docs site
-The documentation at https://open-quant.github.io/openquant/ is built from `docs-site/` (Astro + Starlight).
-
-```bash
-cd docs-site
-bun install --frozen-lockfile
-bun run dev
-```
-
-Build output is published by GitHub Actions workflow: `.github/workflows/docs-pages.yml`.
+For the complete test, benchmark and documentation workflow, see
+[CONTRIBUTING.md](CONTRIBUTING.md). Release criteria are in the
+[publishing checklist](docs/publishing.md). Experimental runners are research
+infrastructure, not a trading service or evidence of profitable strategies.
 
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test and docs gates, and pull
