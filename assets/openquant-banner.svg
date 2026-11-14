@@ -1,15 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" role="img" aria-label="OpenQuant — the methods in Advances in Financial Machine Learning, in Rust, callable from Python">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" role="img" aria-labelledby="banner-title banner-desc">
+  <title id="banner-title">OpenQuant</title>
+  <desc id="banner-desc">Rust implementations of the methods in Advances in Financial Machine Learning, with Python bindings.</desc>
   <!-- Monograph identity: paper ground, ink text, the heavy-rule / hairline pair used by the tables.
        Text is live, not outlined: GitHub renders it in the viewer's serif. Outline it if exact type matters. -->
   <rect width="1280" height="320" fill="#fbf9f4"/>
-  <rect x="80" y="64" width="1120" height="3" fill="#1d1a16"/>
+  <rect x="80" y="64" width="1120" height="3" fill="#171717"/>
   <rect x="80" y="255" width="1120" height="1" fill="#cdc4b1"/>
-  <g transform="translate(140 160) scale(1.25)">
-    <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#e44de0"/>
-    <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#52c8f5" transform="rotate(120)"/>
-    <path d="M-8-16-20-37 8-44 34-29 16-10 6-16Z" fill="#f0e050" transform="rotate(240)"/>
-  </g>
-  <text x="232" y="160" font-family="Newsreader, 'Iowan Old Style', Georgia, 'Times New Roman', serif" font-size="76" font-weight="600" letter-spacing="-1" fill="#1d1a16">OpenQuant</text>
-  <text x="234" y="208" font-family="Newsreader, 'Iowan Old Style', Georgia, 'Times New Roman', serif" font-size="27" font-style="italic" fill="#5c554b">The methods in Advances in Financial Machine Learning, in Rust, callable from Python.</text>
+  <svg x="88" y="101" width="112" height="112" viewBox="0 0 64 64" aria-hidden="true">
+    <g color="#e44de0"><circle cx="30" cy="30" r="19" fill="none" stroke="currentColor" stroke-width="8"/><path d="M37 37 52 52" fill="none" stroke="currentColor" stroke-width="8"/></g>
+  </svg>
+  <text x="232" y="160" font-family="Newsreader, 'Iowan Old Style', Georgia, 'Times New Roman', serif" font-size="76" font-weight="600" letter-spacing="-1" fill="#171717">OpenQuant</text>
+  <text x="234" y="208" font-family="Newsreader, 'Iowan Old Style', Georgia, 'Times New Roman', serif" font-size="27" font-style="italic" fill="#525252">Financial machine learning in Rust, callable from Python.</text>
   <text x="80" y="290" font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" letter-spacing="2.4" fill="#97196a">RUST CORE  ·  PYTHON BINDINGS  ·  AFML CHAPTERS 2–22</text>
 </svg>

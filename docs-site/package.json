@@ -21,7 +21,7 @@
     "test:links": "node --test scripts/tests/check-links.test.mjs",
     "test:agent-index": "node --test scripts/tests/agent-index.test.mjs",
     "test:accessibility": "node --test scripts/tests/document-accessibility.test.mjs scripts/tests/code-scroll-labels.test.mjs",
-    "test:design": "node --test scripts/tests/design-system.test.mjs scripts/tests/hero-motion.test.mjs",
+    "test:design": "node --test scripts/tests/design-system.test.mjs scripts/tests/hero-motion.test.mjs scripts/tests/brand-assets.test.mjs",
     "check:module-figures": "python3 -m unittest discover -s ../scripts/docs/tests -p test_rust_module_figures.py && python3 ../scripts/docs/generate_rust_module_figures.py --check",
     "test:rust-output": "node --test scripts/tests/check-rust-output.test.mjs",
     "check:rust-output": "bun run test:rust-output && node scripts/check-rust-output.mjs",
