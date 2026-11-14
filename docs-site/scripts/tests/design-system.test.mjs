@@ -162,3 +162,15 @@ test('Rust-only module figures resolve under the deployment base with alt text a
     assert.ok(fs.existsSync(path.join(root, 'dist/figures/modules', `${slug}.svg`)), `${slug}: asset is staged`);
   }
 });
+
+test('all sidebar disclosure groups start closed, including the current section', () => {
+  for (const page of ['agents/index.html', 'quickstart/index.html', 'modules/cross-validation/index.html']) {
+    const nodes = walk(parse(fs.readFileSync(path.join(root, 'dist', page), 'utf8')));
+    const sidebar = nodes.find(n => attr(n, 'id') === 'starlight__sidebar');
+    assert.ok(sidebar, page);
+    const groups = walk(sidebar).filter(n => n.tagName === 'details');
+    assert.ok(groups.length >= 7, page);
+    for (const group of groups) assert.equal(attr(group, 'open'), undefined, page);
+    assert.ok(walk(sidebar).some(n => attr(n, 'aria-current') === 'page'), 'Current page remains marked');
+  }
+});

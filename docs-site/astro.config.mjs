@@ -92,6 +92,7 @@ export default defineConfig({
         // than from hand-written markup in `banner.content`.
         Banner: './src/components/DocStatusBanner.astro',
         Hero: './src/components/ResearchHero.astro',
+        Sidebar: './src/components/CollapsedSidebar.astro',
       },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/Open-Quant/openquant' },
@@ -104,6 +105,7 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Getting Started',
+          collapsed: true,
           items: [
             { label: 'Overview', link: '/' },
             { label: 'For humans: Quickstart', link: '/quickstart/' },
@@ -112,20 +114,24 @@ export default defineConfig({
         },
         {
           label: 'Setup',
+          collapsed: true,
           items: [{ autogenerate: { directory: 'setup' } }],
         },
         {
           label: 'Workflows',
+          collapsed: true,
           items: [{ autogenerate: { directory: 'workflows' } }],
         },
         {
           // The research gallery (runbooks/index.md, generated from the executed
           // notebooks by scripts/docs/generate_site_pages.py) and one page per runbook.
           label: 'Research',
+          collapsed: true,
           items: [{ autogenerate: { directory: 'runbooks' } }],
         },
         {
           label: 'Modules',
+          collapsed: true,
           items: [
             { label: 'All Modules', link: '/modules/' },
             {
@@ -246,6 +252,7 @@ export default defineConfig({
         },
         {
           label: 'Reference',
+          collapsed: true,
           items: [
             { slug: 'module-reference/api-task-guide' },
             { slug: 'module-reference/by-afml-chapter' },
@@ -261,6 +268,7 @@ export default defineConfig({
           // benchmarks/ and CHANGELOG.md. The five governance stubs were folded into
           // project/governance.md.
           label: 'Project',
+          collapsed: true,
           items: [
             { slug: 'project/governance' },
             { slug: 'project/performance' },

@@ -18,8 +18,8 @@ test('GitHub and identity banners use the current site mark and palette', () => 
   assert.match(banner, /aria-labelledby="banner-title banner-desc"/);
   assert.match(banner, /<title id="banner-title">OpenQuant<\/title>/);
   assert.match(banner, /<desc id="banner-desc">[^<]+<\/desc>/);
-  const palette = ['#fbf9f4', '#171717', '#525252', '#cdc4b1', '#97196a', '#e44de0'];
+  const palette = ['#101010', '#ededed', '#ababab', '#464646', '#f29ad6'];
   for (const color of banner.match(/#[\da-f]{6}/gi) || []) assert.ok(palette.includes(color), color);
-  for (const color of ['#171717', '#525252', '#97196a']) assert.ok(banner.includes(color), color);
+  for (const color of ['#101010', '#ededed', '#f29ad6']) assert.ok(banner.includes(color), color);
   assert.doesNotMatch(banner, /<(?:script|image|foreignObject)\b|https?:\/\/(?!www\.w3\.org)/);
 });
