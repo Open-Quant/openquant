@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-15'
 audience:
   - quant-dev
   - platform-engineering
@@ -46,6 +46,53 @@ Re-run `maturin develop` after any Rust change before testing Python, then resta
 any interpreter or notebook kernel that already imported OpenQuant. Rebuilding
 the file does not replace the native library already loaded into a running process.
 Otherwise, you can test an older extension against newer Python source.
+
+### Record what the interpreter loaded
+
+Run this in a **fresh process**, with the same Python used for tests, from the
+repository root. Do not rebuild the extension concurrently. It reads the commit,
+working-tree status and imported file locations without rebuilding or synchronizing
+the environment:
+
+```python
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+import openquant
+import openquant._core
+
+root = Path.cwd()
+assert (root / "crates/pyopenquant/Cargo.toml").is_file(), "run from the repository root"
+native = Path(openquant._core.__file__).resolve()
+receipt = {
+    "checkout_commit": subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip(),
+    "working_tree": subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=normal"], cwd=root, text=True
+    ).splitlines(),
+    "python": sys.executable,
+    "package_path": str(Path(openquant.__file__).resolve()),
+    "native_path": str(native),
+    "native_sha256": hashlib.sha256(native.read_bytes()).hexdigest(),
+}
+print(json.dumps(receipt, indent=2))
+```
+
+The hash identifies the on-disk extension at the recorded path when read; it does
+**not** prove which source or build settings produced it. In a long-running process,
+a file replaced after import may differ from the native code already mapped in memory. Retain the build command, source revision and
+relevant local diff with it. A binary copied from another checkout needs its own
+build provenance; matching a version string or filename is not enough. If either
+import points elsewhere, resolve that mismatch before using a passing test as
+evidence for the selected source.
+
+For notebook results, also run the
+[inside-kernel probe](/workflows/notebook-research-workflow/#inspect-the-interpreter-inside-the-kernel).
+A shell receipt cannot establish what the notebook's named kernel loaded.
 
 ### Existing `just` shortcuts
 

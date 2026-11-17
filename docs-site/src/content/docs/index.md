@@ -17,7 +17,7 @@ hero:
       link: /openquant/agents/
       variant: minimal
 status: authored
-last_authored: '2026-11-12'
+last_authored: '2026-11-15'
 audience:
   - quant-dev
   - platform-engineering
@@ -54,6 +54,7 @@ Use the Rust core directly or work through its Python bindings.
 | Load my own CSV or Parquet | [Data loading and provenance](/modules/data/), then the [CSV example](/examples/catalog/) | Cleaned data, quality report, source terms and dataset hash |
 | Turn aligned observations into named portfolio weights | [Multi-asset allocation workflow](/workflows/multi-asset-allocation/) | Common timestamps, asset-column order, moment units and the final fitting date |
 | Reproduce a documented experiment | [Research runbooks](/runbooks/) and [notebook execution](/workflows/notebook-research-workflow/) | The selected notebook, its outputs and the comparison limits |
+| Run a small synthetic lab without a native build | [Offline lab run and replay](/examples/catalog/#run-and-replay-an-offline-lab) | Explicit config, saved report, identity receipt and a separate replay result |
 | Find an exact call or port it to Rust | [Python API](/api/python/) or [Rust API](/api/rust/openquant/) | Argument order, return shape and the module's caller preconditions |
 | Fix a build or import failure | [Troubleshooting](/setup/troubleshooting/) | The interpreter path, extension path and failing command |
 

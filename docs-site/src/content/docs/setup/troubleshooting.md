@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-16'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,11 +29,26 @@ row matching the command you ran; a later stage cannot diagnose an earlier one.
 | Compiling for the wrong CPU | [Architecture mismatch](#rust-toolchain-and-python-interpreter-disagree-on-architecture) | Rust target and Python architecture, not only operating system |
 | Importing after a build | [Import failures](#import-openquant-fails-after-a-successful-build) | Package and binary locations; restart processes that loaded an older extension |
 | Running a function on your data | [Input-error guide](/setup/input-errors/) | Exact shape, time units and row order; do not relax validation to force success |
+| Starting a notebook kernel | [Kernel startup failures](#a-notebook-fails-before-its-first-cell) | Kernel interpreter and the first startup exception; distinguish it from a failing cell |
 | Building or checking the website | [Docs quality gates](/setup/local-build/#documentation-quality-gates) | First failed gate and which later gates did not run |
 
 If the [quickstart](/quickstart/) runs but prints `promote_candidate: False`,
 setup has not failed. That is a research decision from its synthetic example,
 not a request to reinstall or tune thresholds until it passes.
+
+## A package install reports no matching distribution
+
+**Source-checked** — OpenQuant is pre-release. The intended Python distribution is
+`pyopenquant`, but the Python import is `openquant`; neither a `0.1.0` manifest nor a
+changelog heading means a wheel has been published. Installing a similarly named package
+is not a substitute for this repository.
+
+Use the [source setup](/setup/python-bindings/) and then the
+[package identity receipt](/setup/python-bindings/#record-what-the-interpreter-loaded).
+If a future release is available, check its exact version, Python version and wheel
+platform against the release files. A version that exists but has no compatible wheel
+is a different problem from an unpublished distribution. Do not bypass package-index
+security or replace dependencies with an unrelated name to force installation.
 
 ## Rust toolchain and Python interpreter disagree on architecture
 
@@ -389,6 +404,55 @@ install is not recorded in `uv.lock` and a later exact sync may remove it. Recor
 versions with the result and restart an existing notebook kernel after changing its
 environment. The native OpenQuant examples do not require scikit-learn merely because
 some APIs also accept scikit-learn-style estimators.
+
+## A notebook fails before its first cell
+
+A successful shell import is not a successful Jupyter run. Use the
+[one-cell kernel probe](/workflows/notebook-research-workflow/#inspect-the-interpreter-inside-the-kernel)
+with the prepared environment before rerunning a long notebook. It uses the same
+executor without rewriting the research notebook.
+
+| First error | What to check next |
+| --- | --- |
+| Kernel not found or an unexpected Python executable | Inspect the environment's `python3` kernelspec and the probe's inside-kernel paths. The executor explicitly selects `python3`; notebook metadata alone does not override it. |
+| `Operation not permitted` during network-interface discovery | Identify the failing call in the traceback. A restricted environment may deny interface enumeration even when a loopback socket can bind. Do not diagnose every such error as “all sockets are disabled.” |
+| Address binding denied or port already in use | Inspect the actual bind error and the runtime's loopback permissions. This is a different failure from interface discovery. |
+| A Python cell traceback | Inspect the partially executed output at the path reported by the executor. Fix that cell or its input, not the kernel's startup configuration. |
+
+The executor writes partial output after an ordinary cell execution error.
+A kernel-start exception can occur before that write, so the absence of an output
+file does not establish that the notebook was never attempted. Keep the command,
+stdout/stderr and environment receipt alongside the result.
+
+If the runtime cannot start the real kernel, preserve the failed gate and use a
+runtime that supports it. Do not disable security controls, suppress the error,
+or replace the executor with a plain `exec` loop to report success.
+`notebooks/python/scripts/smoke_all.py` is a useful **separate** API smoke check,
+not validation of notebook rich outputs, kernel isolation or committed figures.
+A one-cell probe in another environment also does not replace the affected full
+notebook run and output comparison.
+
+**Status: source-checked.** The distinctions follow
+`notebooks/python/scripts/execute_notebook_cells.py` and the workflow's probe.
+The exact permission failure is runtime-dependent; the table is not evidence that
+a particular notebook or operating system has failed.
+
+## A build runs out of temporary disk space
+
+`No space left on device` is a capacity error, not necessarily a Rust or Python
+defect. Check the filesystem holding the build target and dependency cache, not
+only free space beside the repository. In a disposable environment, a small
+memory-backed temporary directory can fill while another writable volume has room.
+
+Use a writable build/cache directory with sufficient space and record any
+`CARGO_TARGET_DIR` or `UV_CACHE_DIR` override with the build command. Do not
+delete unrelated work, retained test evidence or other agents' caches to make room.
+After moving build output, rerun the failed build and confirm the loaded extension
+using the [source identity receipt](/setup/python-bindings/#record-what-the-interpreter-loaded);
+do not count the interrupted build as a pass.
+
+**Status: source-checked.** Directory selection is a build-environment decision,
+not a change to the package's numerical behavior.
 
 ## Docs-site gates
 

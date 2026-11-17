@@ -2,7 +2,7 @@
 title: Quickstart
 description: Build OpenQuant from source, run a synthetic pipeline and interpret its output.
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-15'
 audience:
   - quant-dev
   - platform-engineering
@@ -12,6 +12,11 @@ sidebar:
 
 This is the human learning path. For repository automation, use the
 [agent guide](/agents/) alongside it.
+
+Want to inspect a small research report before compiling the native package?
+Use the [offline lab smoke path](/examples/catalog/#run-and-replay-an-offline-lab),
+which needs Python and NumPy but not the OpenQuant extension. That path exercises
+an experimental lab, not the native component or pipeline taught here.
 
 Build once, check one small component, then inspect a synthetic pipeline. Allow time for a native Rust
 build; its duration depends on your machine and whether dependencies are cached.
@@ -55,7 +60,9 @@ openquant bindings import ok
 ```
 
 If it does not, [Troubleshooting](/setup/troubleshooting/) has the
-import, toolchain and architecture checks to run next.
+import, toolchain and architecture checks to run next. When comparing results from
+two checkouts, save the [loaded-source receipt](/setup/python-bindings/#record-what-the-interpreter-loaded)
+before interpreting numerical differences.
 
 ## Step 3 — Check one component
 

@@ -14,13 +14,18 @@ through the same splits.
 Label spans are required. ``t0[i]`` is when sample ``i``'s label starts (usually the event
 time) and ``t1[i]`` when it is resolved (the triple-barrier touch). They may be numpy
 ``datetime64`` arrays, pandas or polars datetime columns, lists of ``datetime`` or ISO strings,
-or plain integers such as bar positions; samples must be in time order.
+or plain integers such as bar positions; samples must be in time order. Integers must
+fit in signed int64. Datetimes must fit in signed int64 nanoseconds (excluding NaT);
+out-of-range dates are rejected rather than silently wrapped. Sub-nanosecond values
+are floored to nanoseconds, as in NumPy, so distinct times can become equal.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Sequence
+from fractions import Fraction
 from typing import Any
 
 import numpy as np
@@ -46,6 +51,87 @@ __all__ = [
 _INDEX_KEYS = ("train_indices", "test_indices", "purged_indices", "embargo_indices")
 
 
+def _datetime_ns(arr: np.ndarray, name: str) -> np.ndarray:
+    """Convert datetime counts without NumPy's overflowing unit arithmetic."""
+    if np.isnat(arr).any():
+        raise ValueError(f"{name} contains NaT")
+    ticks = arr.astype(np.int64, copy=False)  # unit counts, with native byte order
+    unit, multiplier = np.datetime_data(arr.dtype)
+    lo, hi = -(2**63) + 1, 2**63 - 1
+    error = f"{name} is outside the supported int64 nanosecond range"
+    if unit in ("Y", "M"):
+        # Calendar units have variable length. Bound the year before NumPy's
+        # calendar conversion, then use exact fixed-unit arithmetic below.
+        years = [1970 + int(tick) * multiplier // (12 if unit == "M" else 1) for tick in ticks]
+        if any(year < 1677 or year > 2262 for year in years):
+            raise ValueError(error)
+        return _datetime_ns(arr.astype("datetime64[D]"), name)
+    fine_scale = {"ps": 1000, "fs": 1_000_000, "as": 1_000_000_000}.get(unit)
+    if fine_scale is not None:
+        if multiplier == 1:
+            # astype can overflow its negative-floor adjustment near int64 min.
+            return ticks // fine_scale
+        exact = [int(tick) * multiplier // fine_scale for tick in ticks]
+        if any(value < lo or value > hi for value in exact):
+            raise ValueError(error)
+        return np.asarray(exact, dtype=np.int64)
+    scale = {
+        "W": 604800_000000000,
+        "D": 86400_000000000,
+        "h": 3600_000000000,
+        "m": 60_000000000,
+        "s": 1_000000000,
+        "ms": 1_000000,
+        "us": 1000,
+        "ns": 1,
+    }.get(unit)
+    if scale is None:
+        if ticks.size == 0:
+            return ticks
+        raise ValueError(f"{name} needs a datetime unit")
+    factor = multiplier * scale
+    if (ticks < -((-lo) // factor)).any() or (ticks > hi // factor).any():
+        raise ValueError(error)
+    # A factor beyond int64 only permits zero ticks. Avoid object promotion.
+    if factor > hi:
+        return np.zeros(ticks.shape, dtype=np.int64)
+    return ticks * factor if factor != 1 else ticks
+
+
+def _object_datetime_ns(values: Any, name: str) -> np.ndarray:
+    """Parse each original date before mixed precisions can silently wrap."""
+    result = []
+    for value in np.asarray(values, dtype=object):
+        if isinstance(value, np.datetime64):
+            result.append(int(_datetime_ns(np.asarray([value]), name)[0]))
+            continue
+        if isinstance(value, (str, bytes)):
+            text = value.decode("ascii") if isinstance(value, bytes) else value
+            year = re.match(r"^\s*([+-]?\d+)", text)
+            if year is not None and not 1677 <= int(year[1]) <= 2262:
+                raise ValueError(f"{name} is outside the supported int64 nanosecond range")
+        if isinstance(value, (int, float, complex, bool)):
+            raise ValueError(f"{name} object values must hold dates, not numeric timestamps")
+        try:
+            # Explicit units avoid inferring ps/fs/as for modern ISO strings,
+            # which overflows before a later conversion can detect it.
+            day = np.datetime64(value, "D")
+            ns = np.datetime64(value, "ns")
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                f"{name} must hold datetimes, ISO timestamp strings or integers: {exc}"
+            ) from None
+        if np.isnat(day) or np.isnat(ns):
+            raise ValueError(f"{name} contains NaT or is outside the int64 nanosecond range")
+        count = int(ns.astype(np.int64))
+        # Use integer floor, not ns.astype('datetime64[D]'): that conversion
+        # itself overflows near the negative int64 boundary in NumPy.
+        if count // 86400_000000000 != int(day.astype(np.int64)):
+            raise ValueError(f"{name} is outside the supported int64 nanosecond range")
+        result.append(count)
+    return np.asarray(result, dtype=np.int64)
+
+
 def _as_int64(values: Any, name: str) -> tuple[np.ndarray, bool]:
     """One span column as int64, and whether it held datetimes.
 
@@ -59,19 +145,13 @@ def _as_int64(values: Any, name: str) -> tuple[np.ndarray, bool]:
     arr = np.asarray(values)
     if arr.ndim != 1:
         raise ValueError(f"{name} must be one-dimensional, got shape {arr.shape}")
-    if arr.dtype.kind in "OUS":
-        try:
-            arr = np.asarray(values, dtype="datetime64[ns]")
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"{name} must hold datetimes, ISO timestamp strings or integers: {exc}"
-            ) from None
+    if arr.dtype.kind in "OUS" or (arr.dtype.kind == "M" and not hasattr(values, "dtype")):
+        return _object_datetime_ns(values, name), True
     if arr.dtype.kind == "M":
-        arr = arr.astype("datetime64[ns]")
-        if np.isnat(arr).any():
-            raise ValueError(f"{name} contains NaT")
-        return arr.view(np.int64), True
+        return _datetime_ns(arr, name), True
     if arr.dtype.kind in "iu" or arr.size == 0:
+        if arr.dtype.kind == "u" and (arr > np.iinfo(np.int64).max).any():
+            raise ValueError(f"{name} must fit in int64 without overflow")
         return arr.astype(np.int64), False
     raise ValueError(f"{name} must hold datetimes or integers, got dtype {arr.dtype}")
 
@@ -89,12 +169,21 @@ def _label_spans(t0: Any, t1: Any) -> tuple[list[int], list[int]]:
 
 def _index_list(values: Sequence[int], name: str) -> list[int]:
     arr = np.asarray(values)
+    error = f"{name} must be a one-dimensional array of integers"
+    if arr.ndim != 1:
+        raise ValueError(error)
     if arr.size == 0:
         return []
-    if arr.ndim != 1 or arr.dtype.kind not in "iu":
-        raise ValueError(f"{name} must be a one-dimensional array of integers")
+    if arr.dtype.kind not in "iu":
+        raise ValueError(error)
+    if not isinstance(values, np.ndarray) and any(
+        isinstance(value, (bool, np.bool_)) for value in values
+    ):
+        raise ValueError(error)
     if (arr < 0).any():
         raise ValueError(f"{name} must be non-negative")
+    if arr.dtype.kind == "u" and (arr > np.iinfo(np.int64).max).any():
+        raise ValueError(f"{name} must fit in int64 without overflow")
     return arr.astype(np.int64).tolist()
 
 
@@ -217,7 +306,9 @@ def bootstrap_returns(
     2-D array whose rows are drawn whole, keeping the cross-section of each bar). With
     ``demean`` (the default) the mean return is subtracted first, per column, so the drawn
     path is a driftless random walk with the returns' distribution: nothing in it predicts the
-    next return. Rebuild prices, features **and labels** from it.
+    next return. The generator captures a copy of the inputs. Centering that
+    cannot be represented as finite float64 raises ValueError. Rebuild prices,
+    features **and labels** from it.
 
     Two tempting alternatives are wrong for features with memory. Permuting the labels alone
     keeps every feature but cuts the link between a label and the path a level feature
@@ -226,13 +317,31 @@ def bootstrap_returns(
     random-walk bridge, which is mean-reverting, and on which a level feature scores above
     chance even walk-forward.
     """
-    arr = np.asarray(returns, dtype=float)
+    arr = np.array(returns, dtype=float, copy=True)
     if arr.ndim not in (1, 2) or arr.shape[0] < 2:
         raise ValueError("returns must be a 1-D or 2-D array with at least two rows")
     if not np.isfinite(arr).all():
         raise ValueError("returns must be finite")
     if demean:
-        arr = arr - arr.mean(axis=0)
+        # Keep ordinary NumPy results, but avoid overflowing a finite column's
+        # sum or centered values. Exact rational recovery is exceptional only.
+        with np.errstate(over="ignore", invalid="ignore"):
+            centered = arr - arr.mean(axis=0)
+        if not np.isfinite(centered).all():
+            columns = arr[:, None] if arr.ndim == 1 else arr
+            recovered = centered[:, None] if arr.ndim == 1 else centered
+            for column in range(columns.shape[1]):
+                if np.isfinite(recovered[:, column]).all():
+                    continue
+                exact = [Fraction(float(value)) for value in columns[:, column]]
+                mean = sum(exact) / len(exact)
+                try:
+                    recovered[:, column] = [float(value - mean) for value in exact]
+                except OverflowError as exc:
+                    raise ValueError(
+                        "demeaned returns must be representable as finite floats"
+                    ) from exc
+        arr = centered
 
     def draw(rng: np.random.Generator) -> np.ndarray:
         return arr[rng.integers(0, arr.shape[0], size=arr.shape[0])]

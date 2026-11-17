@@ -15,6 +15,7 @@ positions, returns) into full paths, for statistics the engine does not compute.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -81,6 +82,28 @@ def run_cpcv(
     )
 
 
+def _index_array(values: Any, name: str, ndim: int) -> np.ndarray:
+    """Validate indices before narrowing; float/bool coercion can change identity."""
+    limit = np.iinfo(np.intp).max
+    if isinstance(values, np.ndarray) and values.dtype.kind in "iu":
+        if values.ndim != ndim:
+            raise ValueError(f"{name} must have {ndim} dimensions")
+        if (values < 0).any() or (values > limit).any():
+            raise ValueError(f"{name} indices must be non-negative and fit in np.intp")
+        return values.astype(np.intp, copy=False)
+    # Preserve element types in ordinary lists: np.asarray([True, 1]) would
+    # turn the boolean into an integer before it can be rejected.
+    raw = np.asarray(values, dtype=object)
+    if raw.ndim != ndim:
+        raise ValueError(f"{name} must have {ndim} dimensions")
+    for value in raw.flat:
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+            raise ValueError(f"{name} must contain integer indices, not floats or booleans")
+        if not 0 <= int(value) <= limit:
+            raise ValueError(f"{name} indices must be non-negative and fit in np.intp")
+    return np.asarray(raw, dtype=np.intp)
+
+
 def assemble_cpcv_paths(
     split_values: Sequence[Sequence[float]],
     splits: Sequence[Mapping[str, Any]],
@@ -93,15 +116,32 @@ def assemble_cpcv_paths(
     per sample of ``splits[s]["test_indices"]``. Returns an ``(n_paths, n_samples)`` float array
     whose row ``p`` takes, for every fold ``g``, the values split ``paths[p, g]`` produced for
     that fold's samples: one out-of-sample value per sample, per path.
+    Indices must be exact non-negative integers. Per-split test indices must be
+    sorted and unique; inferred folds must partition contiguous sample indices
+    starting at zero. Invalid indices or inconsistent fold partitions raise
+    ValueError rather than yielding partially initialized paths. Values may contain NaN/inf;
+    this function aligns them but does not score or validate returns.
     """
-    paths = np.asarray(paths, dtype=np.intp)
-    if paths.ndim != 2 or paths.shape[0] == 0:
+    paths = _index_array(paths, "paths", 2)
+    if paths.shape[0] == 0 or paths.shape[1] == 0:
         raise ValueError("paths must be the (n_paths, n_groups) array cpcv_paths returns")
     if len(split_values) != len(splits):
         raise ValueError(
             f"split_values has {len(split_values)} entries but there are {len(splits)} splits"
         )
-    tests = [np.asarray(s["test_indices"], dtype=np.intp) for s in splits]
+    tests = [
+        _index_array(s["test_indices"], f"splits[{i}].test_indices", 1)
+        for i, s in enumerate(splits)
+    ]
+    groups = [
+        _index_array(s["test_fold_ids"], f"splits[{i}].test_fold_ids", 1)
+        for i, s in enumerate(splits)
+    ]
+    for i, (test, group) in enumerate(zip(tests, groups)):
+        if test.size == 0 or (test[1:] <= test[:-1]).any():
+            raise ValueError(f"split {i} test_indices must be nonempty, sorted and unique")
+        if group.size == 0 or len(np.unique(group)) != len(group):
+            raise ValueError(f"split {i} must test distinct, nonempty fold IDs")
     values = []
     for s, test in enumerate(tests):
         v = np.asarray(split_values[s], dtype=np.float64)
@@ -115,20 +155,28 @@ def assemble_cpcv_paths(
     # left out of at least one of those splits.
     n_groups = paths.shape[1]
     folds: list[np.ndarray | None] = [None] * n_groups
-    for split, test in zip(splits, tests):
-        for g in split["test_fold_ids"]:
+    for i, (group, test) in enumerate(zip(groups, tests)):
+        for g in group:
             if not 0 <= g < n_groups:
-                raise ValueError(f"split {split['split_id']} tests fold {g}, outside 0..{n_groups}")
+                raise ValueError(f"split {i} tests fold {g}, outside 0..{n_groups}")
             folds[g] = test if folds[g] is None else np.intersect1d(folds[g], test)
     fold_samples = [f for f in folds if f is not None]
     if len(fold_samples) != n_groups:
         raise ValueError("every fold must be tested by at least one split")
+    if any(f.size == 0 for f in fold_samples):
+        raise ValueError("every fold must have a nonempty sample intersection")
     n_samples = sum(len(f) for f in fold_samples)
+    if not np.array_equal(np.sort(np.concatenate(fold_samples)), np.arange(n_samples)):
+        raise ValueError("fold samples must partition contiguous indices starting at zero")
+    for i, group in enumerate(groups):
+        expected = np.sort(np.concatenate([fold_samples[g] for g in group]))
+        if not np.array_equal(expected, tests[i]):
+            raise ValueError(f"split {i} test_indices do not match its inferred folds")
 
     out = np.empty((paths.shape[0], n_samples))
     for p, row in enumerate(paths):
         for g, s in enumerate(row):
-            if not 0 <= s < len(splits) or g not in tuple(splits[s]["test_fold_ids"]):
+            if not 0 <= s < len(splits) or g not in groups[s]:
                 raise ValueError(f"path {p} takes fold {g} from split {s}, which does not test it")
             out[p, fold_samples[g]] = values[s][np.searchsorted(tests[s], fold_samples[g])]
     return out

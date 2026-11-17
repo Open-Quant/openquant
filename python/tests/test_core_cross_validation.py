@@ -473,3 +473,112 @@ def test_null_helpers_validate_input():
         cv.null_p_value(0.5, [np.nan])
     with pytest.raises(ValueError):
         cv.null_p_value(np.nan, [0.1])
+
+
+@pytest.mark.parametrize("value", [2**63, 2**64 - 1])
+def test_label_spans_reject_unsigned_integer_overflow(value):
+    spans = np.array([value, value], dtype=np.uint64)
+    with pytest.raises(ValueError, match="int64"):
+        cv.purged_kfold_splits(spans, spans, n_splits=2)
+
+
+@pytest.mark.parametrize("unit", ["D", "s", "ms", "us"])
+@pytest.mark.parametrize("date", ["1600-01-01", "2500-01-01"])
+def test_label_spans_reject_datetime_nanosecond_overflow(unit, date):
+    spans = np.array([date, date], dtype=f"datetime64[{unit}]")
+    with pytest.raises(ValueError, match="nanosecond"):
+        cv.purged_kfold_splits(spans, spans, n_splits=2)
+
+
+def test_unsigned_label_spans_at_int64_max_preserve_exact_value():
+    spans = np.array([2**63 - 2, 2**63 - 1], dtype=np.uint64)
+    signed = spans.astype(np.int64)
+    expected = cv.purged_kfold_splits(signed, signed, n_splits=2)
+    actual = cv.purged_kfold_splits(spans, spans, n_splits=2)
+    for actual_pair, expected_pair in zip(actual, expected, strict=True):
+        for actual_indices, expected_indices in zip(actual_pair, expected_pair, strict=True):
+            np.testing.assert_array_equal(actual_indices, expected_indices)
+
+
+@pytest.mark.parametrize(
+    "spans", [["2500-01-01", "2500-01-02"], [datetime(1600, 1, 1), datetime(1600, 1, 2)]]
+)
+def test_label_spans_reject_out_of_range_object_dates(spans):
+    with pytest.raises(ValueError, match="nanosecond"):
+        cv.purged_kfold_splits(spans, spans, n_splits=2)
+
+
+@pytest.mark.parametrize("unit", ["Y", "M", "W", "D", "h", "m", "s", "ms", "us", "ns"])
+def test_datetime_conversion_preserves_valid_coarse_timestamps(unit):
+    spans = np.array(["2020-01-01", "2021-01-01"], dtype=f"datetime64[{unit}]")
+    expected = cv.purged_kfold_splits(
+        spans.astype("datetime64[ns]"), spans.astype("datetime64[ns]"), n_splits=2
+    )
+    actual = cv.purged_kfold_splits(spans, spans, n_splits=2)
+    for actual_pair, expected_pair in zip(actual, expected, strict=True):
+        for actual_indices, expected_indices in zip(actual_pair, expected_pair, strict=True):
+            np.testing.assert_array_equal(actual_indices, expected_indices)
+
+
+def test_datetime_nanosecond_extremes_preserve_exact_value():
+    values = np.array([-(2**63) + 1, 2**63 - 1], dtype=np.int64)
+    converted, is_time = cv._as_int64(values.view("datetime64[ns]"), "t0")
+    assert is_time
+    np.testing.assert_array_equal(converted, values)
+
+
+@pytest.mark.parametrize("unit", ["2D", "2s", "2ns"])
+def test_scaled_datetime_units_reject_overflow(unit):
+    spans = np.array([2**62 + 1, 2**62 + 2], dtype=np.int64).view(f"datetime64[{unit}]")
+    with pytest.raises(ValueError, match="nanosecond"):
+        cv._as_int64(spans, "t0")
+
+
+@pytest.mark.parametrize("dtype", [object, str])
+def test_empty_datetime_input_retains_empty_conversion(dtype):
+    actual, is_time = cv._as_int64(np.array([], dtype=dtype), "t0")
+    assert actual.dtype == np.int64
+    assert actual.size == 0
+    assert is_time
+
+
+@pytest.mark.parametrize("unit", ["ps", "fs", "as"])
+def test_subnanosecond_input_retains_numpy_truncation(unit):
+    original = np.array([-1001, -1, 1, 1001], dtype=np.int64).view(f"datetime64[{unit}]")
+    actual, is_time = cv._as_int64(original, "t0")
+    assert is_time
+    np.testing.assert_array_equal(actual, original.astype("datetime64[ns]").view(np.int64))
+
+
+@pytest.mark.parametrize("unit", ["2000ps", "2000000fs", "2000000000as"])
+def test_scaled_subnanosecond_units_reject_overflow(unit):
+    original = np.array([2**62 + 1], dtype=np.int64).view(f"datetime64[{unit}]")
+    with pytest.raises(ValueError, match="nanosecond"):
+        cv._as_int64(original, "t0")
+
+
+@pytest.mark.parametrize(
+    "unit, multiplier, scale", [("1500ps", 1500, 1000), ("2000001fs", 2000001, 1000000)]
+)
+def test_scaled_fine_datetime_conversion_uses_exact_floor(unit, multiplier, scale):
+    ticks = np.array([-1001, -1, 0, 1, 1001], dtype=np.int64)
+    actual, is_time = cv._as_int64(ticks.view(f"datetime64[{unit}]"), "t0")
+    assert is_time
+    expected = [int(value) * multiplier // scale for value in ticks]
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_scaled_fine_datetime_large_ticks_remain_exact_and_do_not_mutate():
+    ticks = np.array([-(2**63) + 1, 2**63 - 1], dtype=np.int64)
+    snapshot = ticks.copy()
+    actual, _ = cv._as_int64(ticks.view("datetime64[2ps]"), "t0")
+    np.testing.assert_array_equal(actual, [int(value) * 2 // 1000 for value in snapshot])
+    np.testing.assert_array_equal(ticks, snapshot)
+
+
+def test_native_nanosecond_conversion_does_not_mutate_input():
+    original = np.array(["2020-01-01", "2020-01-02"], dtype="datetime64[ns]")
+    snapshot = original.copy()
+    actual, _ = cv._as_int64(original, "t0")
+    np.testing.assert_array_equal(actual, snapshot.view(np.int64))
+    np.testing.assert_array_equal(original, snapshot)

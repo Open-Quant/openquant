@@ -1,7 +1,9 @@
 # Publishing Guide
 
-A release publishes three things, all from `.github/workflows/release.yml` when a `v*` tag
-is pushed:
+The release workflow is configured to publish three things when a `v*` tag is pushed.
+This is the maintainer procedure, not evidence that a package is already available.
+OpenQuant is pre-release; users should follow the [source setup](../README.md#install).
+A successful dry run does not publish packages.
 
 | What | Where | How |
 |---|---|---|
@@ -40,8 +42,9 @@ The pull-request run triggers on changes to `release.yml`, `scripts/release/`,
 before publishing anything.
 
 **Wheels are abi3.** `[tool.maturin] features = ["pyo3/abi3-py311"]` in `pyproject.toml`
-builds one stable-ABI wheel per platform (`cp311-abi3`), which installs on CPython 3.11 and
-every later version. PyO3 0.29 and pyo3-polars 0.28 use only the limited API. The feature is
+builds one stable-ABI wheel per platform (`cp311-abi3`) for compatible CPython 3.11+
+builds. The ABI tag is not evidence that every later interpreter, free-threaded build
+or dependency combination has been tested; the smoke matrix currently covers 3.11–3.13. PyO3 0.29 and pyo3-polars 0.28 use only the limited API. The feature is
 set for maturin only, so `cargo test --workspace` still builds against the full API.
 
 **Versions and tools.** `release_info.py metadata` fails unless `pyproject.toml`,
@@ -86,22 +89,31 @@ pull request.
    files: `cargo update -w` (the workspace entries in `Cargo.lock`) and `uv lock`.
 2. **Changelog.** In `CHANGELOG.md`, rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` and
    open a new, empty `## Unreleased` above it (an empty section is fine until the next entry).
-   Update the intro paragraph if it still says nothing is published. Regenerate the docs
-   page: `python3 scripts/docs/generate_site_pages.py --write`.
+   For the first release, an existing `0.1.0 - planned` inventory must be consolidated
+   with Unreleased into ONE version section; the notes extractor takes only the first
+   matching section and does not append Unreleased. Keep pre-release wording until
+   registry availability is verified. Regenerate the docs page: `python3 scripts/docs/generate_site_pages.py --write`.
 3. **Check locally.** `python3 scripts/release/release_info.py metadata --tag vX.Y.Z` and
    `python3 scripts/release/release_info.py notes X.Y.Z` must both succeed.
 4. **Pull request.** Open it, let CI and the release workflow's pull-request run pass, merge.
 5. **Dry run on main (optional).** Actions → Release → Run workflow, `dry_run` checked.
 6. **Tag** the merged commit on `main`:
    `git tag -a vX.Y.Z -m "OpenQuant X.Y.Z" && git push origin vX.Y.Z`.
-7. **Watch the run.** It waits for the release checks, the SADF test, every wheel, the smoke
-   tests and the sdist; then (after the `pypi` environment's approval, if one is required)
-   publishes to PyPI and crates.io and creates the GitHub Release with the notes and the
-   built files attached.
+7. **Watch each destination separately.** Both publish jobs depend on the release checks,
+   SADF test, crate dry run, wheel smoke tests and sdist. Only `publish-pypi` uses the
+   `pypi` environment: its required reviewer, if configured, does **not** gate
+   `publish-crate`. The crate can publish while PyPI waits for approval. `github-release`
+   waits for BOTH publish jobs. Verify the actual environment and tag rules before
+   triggering a release; this document does not configure them.
 
-If one publish job fails after the other succeeded, fix the cause and re-run the failed job
-from the Actions page; do not move the tag. PyPI and crates.io never accept the same version
-twice, so a broken release is fixed by a new patch version, not by re-uploading.
+If a publish job fails, inspect both registries and the job logs before any retry: an
+upload can succeed before a later step fails. Record the tag/commit, run URL, destination,
+version and uploaded files/checksums. Do not move the tag or blindly re-run all jobs.
+If the failed destination has no uploaded artifacts, fix its cause and retry only the
+failed jobs after checking that successful uploads will not be repeated. Partial PyPI
+file uploads need an explicit recovery review, not an assumption that the version is
+absent. Published files/versions cannot simply be overwritten; a defective published
+package normally needs a new patch version.
 
 ## Local checks before tagging
 
@@ -163,5 +175,11 @@ Benchmarks are not a release gate in CI. To refresh them:
 
 - Copy `benchmarks/latest_benchmarks.json` to `benchmarks/baseline_benchmarks.json` for the
   next cycle.
-- Once the package installs from PyPI, update the install instructions (README, the
-  docs-site Quickstart and Python bindings pages).
+- Verify the exact version and expected files in PyPI and crates.io, plus the GitHub
+  Release tag and attached artifacts. A GitHub Release alone is not an install test.
+- Install the released version into a fresh environment outside the checkout, run
+  `scripts/release/smoke_wheel.py` against that interpreter, and retain the source and
+  installed-package identity. Test supported platforms, not just the publishing host.
+- Only after those checks, update the install instructions (README, docs-site Quickstart
+  and Python bindings pages) and changelog publication wording. Keep source installation
+  available for unreleased changes; do not claim the newest main is in an older wheel.

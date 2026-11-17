@@ -2,7 +2,7 @@
 title: Governance
 description: The rules OpenQuant holds its research, documentation, benchmarks and releases to, and where to report a problem.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-16'
 audience:
   - quant-dev
   - platform-engineering
@@ -109,7 +109,7 @@ crates.io or PyPI. Until a release, only `main` is supported.
 
 - **When a release is made,** `openquant` goes to crates.io; `pyopenquant` has `publish = false`
   and ships as a wheel built with maturin (it is a Python extension module, not a Rust library).
-  The steps are in `docs/publishing.md`.
+  The steps are in the [maintainer publishing guide](https://github.com/Open-Quant/openquant/blob/main/docs/publishing.md).
 - **Release gate.** Pushing a `v*` tag runs `.github/workflows/release.yml`: format, clippy with
   `-D warnings`, the fast test suite, a compile check of every benchmark, the long SADF test that
   is skipped on pull requests, `cargo publish --dry-run`, and abi3 wheels for Linux (x86_64,
@@ -119,6 +119,12 @@ crates.io or PyPI. Until a release, only `main` is supported.
   section as its notes. A manual Actions dispatch defaults to `dry_run=true`, which publishes
   nothing. Setting `dry_run=false` on a selected `v*` tag enables publication; the workflow
   rejects that publishing mode on a branch. Inspect the input and selected ref before dispatching.
+- **Publication is not atomic.** PyPI and crates.io are separate jobs. A required
+  approval on the `pypi` environment gates only the PyPI job, not the Rust crate.
+  The GitHub Release waits for both. After any failure, verify the exact version
+  and uploaded files at each destination before retrying; never move a published
+  tag or assume a failed job uploaded nothing. A dry run, merge or changelog date
+  is not proof that users can install a released package.
 - **Changes are recorded** in `CHANGELOG.md`, rendered as the [Changelog](/project/changelog/)
   page. A change of behaviour ships with the update to the docs page of every module it touches.
   Pull request titles use conventional-commit prefixes (`feat`, `fix`, `docs`, ...), which is
