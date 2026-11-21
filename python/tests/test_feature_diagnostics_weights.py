@@ -1,5 +1,8 @@
 import math
+from decimal import Decimal
+from fractions import Fraction
 
+import numpy as np
 import pytest
 from openquant import feature_diagnostics as fd
 
@@ -79,4 +82,26 @@ def test_mdi_zero_mass_bootstrap_is_not_a_trained_model():
             sample_weight=[1.0] + [0.0] * 11,
             n_estimators=2,
             seed=1,
+        )
+
+
+@pytest.mark.parametrize("method", [fd.mda_importance, fd.sfi_importance])
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        Decimal("-1e-400"),
+        Fraction(-1, 10**400),
+        np.complex64(1 + 9j),
+        Decimal("1e-400"),
+    ],
+)
+def test_invalid_weights_do_not_disappear_during_narrowing(method, invalid):
+    with pytest.raises(ValueError, match="sample_weight"):
+        method(
+            [[float(i % 2)] for i in range(12)],
+            [float(i % 2) for i in range(12)],
+            sample_weight=[invalid] + [1.0] * 11,
+            event_end_indices=list(range(12)),
+            n_splits=3,
+            pct_embargo=0,
         )

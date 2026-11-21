@@ -329,11 +329,8 @@ def compare_accounting_subset(document: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def main() -> None:
-    """Emit a controlled local JSON replay, never a qualification receipt."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", type=Path, nargs="?", default=DEMO)
-    path = parser.parse_args().path
+def load_fixture(path: Path) -> dict[str, Any]:
+    """Read a bounded local JSON fixture without ambiguous duplicate fields."""
     with path.open("rb") as source:
         raw = source.read(256_001)
     if len(raw) > 256_000:
@@ -348,7 +345,16 @@ def main() -> None:
         return result
 
     document = json.loads(raw, object_pairs_hook=unique_fields)
-    print(json.dumps(replay(document), indent=2, sort_keys=True))
+    if not isinstance(document, dict):
+        raise ValueError("fixture must be a JSON object")
+    return document
+
+
+def main() -> None:
+    """Emit a controlled local JSON replay, never a qualification receipt."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("path", type=Path, nargs="?", default=DEMO)
+    print(json.dumps(replay(load_fixture(parser.parse_args().path)), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

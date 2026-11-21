@@ -2,7 +2,7 @@
 title: Python Core Workflow
 description: A Python API tour of CSV ingestion and a separate synthetic pipeline, with Rust/Python conventions made explicit.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -242,25 +242,26 @@ audit. The flag cannot establish that a candidate is ready for research promotio
 `openquant.feature_diagnostics` is the part most easily misused, so it is
 worth naming what each function answers:
 
-- `mdi_importance` — in-sample, computed from the fitted model. Cheap,
-  and biased toward high-cardinality features.
-- `mda_importance` — out-of-sample, by permutation. Takes
-  `event_end_indices` (plus `n_splits`, `pct_embargo`) and builds *purged*
-  splits from them. This is the one to trust when the two disagree.
-  `event_end_indices` is **required**: omitting it raises, because a
-  missing horizon used to yield degenerate one-row intervals that purged
-  nothing. To accept embargo-only splits, opt out explicitly with
-  `allow_unpurged=True` — the result then reports
-  `cv["method"] == "kfold_embargo_only"` and `cv["purged"] is False`.
-- `sfi_importance` — one feature at a time, so it is the only one immune
-  to the substitution effect. Also purged; also slow, since it refits per
-  feature.
-- `substitution_effect_report` — tells you when correlated features are
-  splitting credit and making all three of the above look flat.
-- `orthogonalize_features_pca` — the usual response to that report.
+- `mdi_importance` — an in-sample ranking from normalized absolute coefficients
+  across bootstrapped logistic fits. It is **not** tree impurity importance; the
+  ranking depends on feature units.
+- `mda_importance` — the drop in test-fold score when one feature is permuted.
+  A correlated stand-in can make that drop small even if the feature is useful.
+- `sfi_importance` — the test-fold score of a model fitted to one feature. It
+  does not measure the feature's incremental value in a joint model.
+- `substitution_effect_report` — compares single and joint permutations for
+  correlated pairs. Pair selection and the optional PCA comparison use all
+  supplied rows, so treat that report as exploratory.
+- `orthogonalize_features_pca` — fits scaling and PCA on the supplied matrix.
+  For evaluation, learn those parameters on each training fold and reuse them
+  to transform its test fold; do not refit on the test set.
 
-MDI and MDA routinely rank features differently. That is information
-about your features, not a bug.
+MDA, SFI and the substitution report require [label resolution rows](/modules/feature-diagnostics/#purged-folds-are-mandatory)
+unless you deliberately set `allow_unpurged=True`. None of these scores
+justifies screening on the full sample before validation. Keep screening and
+transforms inside training boundaries and reserve a
+[final chronological holdout](/workflows/model-selection-holdout/#fix-the-boundary-before-searching)
+for the chosen pipeline.
 
 ## Carrying a workflow between Python and Rust
 

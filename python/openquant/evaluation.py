@@ -42,6 +42,8 @@ from statistics import NormalDist
 from statistics import mean as _exact_mean
 from typing import Any
 
+import numpy as np
+
 from . import _core
 
 _bs = _core.backtest_stats
@@ -457,18 +459,17 @@ def meta_label_metrics(
     the share of mistakes times about 34.5.
     """
     labels = [_binary(v) for v in meta_labels]
-    preds = [float(v) for v in meta_predictions]
+    preds = [
+        v if type(v) is float and 0.0 <= v <= 1.0 else _meta_probability(v, "meta_predictions")
+        for v in meta_predictions
+    ]
     if len(labels) != len(preds):
         raise ValueError(
             f"meta_labels and meta_predictions differ in length: {len(labels)} vs {len(preds)}"
         )
     if not labels:
         raise ValueError("meta_labels must not be empty")
-    if not all(math.isfinite(p) and 0.0 <= p <= 1.0 for p in preds):
-        raise ValueError("meta_predictions must be probabilities or decisions in [0, 1]")
-    threshold = float(threshold)
-    if not 0.0 < threshold <= 1.0:
-        raise ValueError(f"threshold must be in (0, 1], got {threshold}")
+    threshold = _meta_probability(threshold, "threshold", strictly_positive=True)
 
     act = [p >= threshold for p in preds]
     tp = sum(1 for y, a in zip(labels, act) if a and y == 1)
@@ -507,7 +508,41 @@ def _log_loss(labels: Sequence[int], preds: Sequence[float]) -> float:
     return total / len(labels)
 
 
+def _meta_probability(value: Any, name: str, *, strictly_positive: bool = False) -> float:
+    # Normal Python floats take the cheap path; non-float exact or extended
+    # values must be checked before binary64 narrowing can round them to 0 or 1.
+    if type(value) is float:
+        narrowed = value
+    else:
+        if (
+            isinstance(value, (complex, np.complexfloating))
+            or (isinstance(value, Decimal) and not value.is_finite())
+            or (isinstance(value, (Decimal, Fraction, np.floating)) and not 0 <= value <= 1)
+        ):
+            raise _meta_probability_error(name, strictly_positive)
+        try:
+            narrowed = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise _meta_probability_error(name, strictly_positive) from exc
+    if not 0 <= narrowed <= 1 or (strictly_positive and narrowed == 0.0):
+        raise _meta_probability_error(name, strictly_positive)
+    return narrowed
+
+
+def _meta_probability_error(name: str, strictly_positive: bool) -> ValueError:
+    interval = "(0, 1]" if strictly_positive else "[0, 1]"
+    return ValueError(f"{name} must contain real probabilities in {interval}")
+
+
 def _binary(value: Any) -> int:
+    if type(value) is int or type(value) is float or type(value) is bool:
+        if value not in (0, 1):
+            raise ValueError(f"meta_labels must be 0 or 1, got {value!r}")
+        return int(value)
+    if isinstance(value, (complex, np.complexfloating)) or (
+        isinstance(value, Decimal) and not value.is_finite()
+    ):
+        raise ValueError(f"meta_labels must be 0 or 1, got {value!r}")
     if value in (0, 1):
         return int(value)
     raise ValueError(f"meta_labels must be 0 or 1, got {value!r}")

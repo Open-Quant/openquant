@@ -40,6 +40,15 @@ def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
         classes.ndim != 1
         or len(classes) != p.shape[1]
         or len(classes) not in (1, 2)
+        or np.iscomplexobj(classes)
+        or (
+            classes.dtype.kind == "O"
+            and any(
+                isinstance(value, (complex, np.complexfloating))
+                or (isinstance(value, Decimal) and not value.is_finite())
+                for value in classes
+            )
+        )
         or not np.all((classes == 0) | (classes == 1))
         or len(np.unique(classes)) != len(classes)
     ):

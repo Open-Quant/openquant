@@ -76,11 +76,33 @@ def _feature_names(n_features: int, feature_names: Sequence[str] | None) -> list
 def _sample_weight(weights: Sequence[float] | None, n_rows: int) -> list[float] | None:
     if weights is None:
         return None
-    out = [float(v) for v in weights]
+    message = "sample_weight must contain finite nonnegative float64-representable values"
+    out = []
+    for value in weights:
+        if type(value) is float:
+            converted = value
+        else:
+            if isinstance(value, (complex, np.complexfloating)) or (
+                isinstance(value, Decimal) and not value.is_finite()
+            ):
+                raise ValueError(message)
+            try:
+                converted = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(message) from exc
+            # Any nonzero exact value rounded to +/- zero would silently change
+            # the weighted sample. Sign alone cannot detect the positive case.
+            if (
+                converted == 0.0
+                and isinstance(value, (Decimal, Fraction, np.floating))
+                and value != 0
+            ):
+                raise ValueError(message)
+        if not isfinite(converted) or converted < 0.0:
+            raise ValueError(message)
+        out.append(converted)
     if len(out) != n_rows:
         raise ValueError(f"sample_weight/X length mismatch: {len(out)} vs {n_rows}")
-    if any(not isfinite(w) or w < 0.0 for w in out):
-        raise ValueError("sample_weight must contain finite nonnegative values")
     if not any(w > 0.0 for w in out):
         raise ValueError("sample_weight must contain a positive value")
     return out

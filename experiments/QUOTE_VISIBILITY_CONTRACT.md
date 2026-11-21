@@ -80,6 +80,39 @@ Whole-document validation precedes execution. Prefix invariance applies to
 successful, valid replays, not a promise to return a partial prefix after an
 invalid future record or a later cash shortfall.
 
+## Inspect a cutoff, attribution window or paper benchmark
+
+Use the same quote fixture with the standard-library evidence CLI:
+
+```sh
+python -m experiments.quote_execution_evidence snapshot 2
+python -m experiments.quote_execution_evidence attribute 0 3
+python -m experiments.quote_execution_evidence benchmark 2
+```
+
+Add `--fixture path/to/tape.json` after any command to use another local
+fixture. These are synthetic reports, not broker receipts or engine
+qualification. The whole fixture must pass schema validation, including
+later records, but execution is replayed only through the requested cutoff or
+window end. A structurally valid later cash or inventory shortfall cannot
+invalidate an earlier report.
+
+- **Snapshot** shows the last status evidenced by the replay. A cutoff after
+  the deadline without a later replay bucket does not by itself observe
+  expiry or cancel the order. `filled_shares` is cumulative and signed (buys
+  positive, sells negative); `remaining_shares` is an unsigned quantity.
+  The demo at 2 has two shares filled and one remaining.
+- **Attribution** reconciles marked equity from the start to the end, counting
+  fills and fees in `(start, end]`. Opening holdings are valued using marks
+  available at their respective endpoints. If a nonflat endpoint lacks a
+  visible mark, the equity change is unavailable; cash and fees remain known.
+- **Benchmark** compares actual execution with a hypothetical full order at
+  the mark visible when the decision was made. This mark is a valuation
+  reference, not an executable quote, and the paper trade is not tested for
+  funding or capacity. A later mark cannot backfill a missing decision mark.
+  The signed residual opportunity term is separate from paid fees and is not
+  a cash expense or an investment return.
+
 ## Hand-checkable demonstration
 
 Start with cash 100, no inventory, buy three with limit 10. The first bucket's

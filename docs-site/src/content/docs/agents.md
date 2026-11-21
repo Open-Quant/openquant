@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-20'
+last_authored: '2026-11-21'
 audience:
   - coding-agent
   - platform-engineering
@@ -34,6 +34,7 @@ second list of APIs.
 | Load or adapt market data | [Data](/modules/data/) and [adapters](/modules/adapters/) | Timestamp units, row order, missing values and provenance; a converted frame is not a quality certificate |
 | Connect market-data rows to named allocations | [Multi-asset allocation walkthrough](/workflows/multi-asset-allocation/) | Common observation times, matrix axes, weight names and fitting boundary; calculated weights are not a realized backtest |
 | Select parameters and assess a final holdout | [Model-selection walkthrough](/workflows/model-selection-holdout/), then [cross-validation](/modules/cross-validation/) | Development-only search, fold-local preprocessing, final refit and an untouched assessment span |
+| Diagnose or select model features | [Python workflow diagnostics](/workflows/python-core-workflow/#feature-diagnostics-before-you-trust-any-of-it), then [purged diagnostics](/modules/feature-diagnostics/#purged-folds-are-mandatory) | Exact resolution-row indices; coefficient proxy vs permutation score; no full-sample screening or PCA before validation |
 | Interpret supplied evaluation results | [Evaluation](/modules/evaluation/) | Return conventions, label spans and the complete inventory of tried configurations |
 | Resume or audit saved work | [Journey readback](/workflows/research-journey/#read-back-and-check-the-handoffs) and [grid artifacts](/examples/catalog/#run-a-configuration-grid-and-read-its-artifacts) | Saved inputs/configuration, exact output paths and artifact consistency; a leaderboard is not a trial registry |
 | Diagnose a failed command | [Troubleshooting](/setup/troubleshooting/) | Exact command, interpreter/import paths and the first failing gate |
