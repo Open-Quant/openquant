@@ -2,7 +2,7 @@
 title: Examples Catalog
 description: Runnable examples that ship in this repository, and what each one demonstrates.
 status: authored
-last_authored: '2026-11-20'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering

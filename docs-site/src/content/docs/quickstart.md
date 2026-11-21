@@ -2,7 +2,7 @@
 title: Quickstart
 description: Build OpenQuant from source, run a synthetic pipeline and interpret its output.
 status: authored
-last_authored: '2026-11-20'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering

@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-20'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
