@@ -2,7 +2,7 @@
 title: "feature_diagnostics"
 description: "Python feature-importance reports on purged folds: MDA, SFI, a coefficient-based stand-in for MDI, PCA orthogonalisation, substitution effects and a pre-model feature screen."
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -58,9 +58,19 @@ is checked for matching length only; it is not used to fit a classifier.
 
 `mda_importance`, `sfi_importance` and `substitution_effect_report` cross-validate on purged
 k-fold splits and need `event_end_indices`: for each row, the row index at which its label
-is resolved. Omit it and they raise, with an explanation, rather than quietly running
-unpurged. `allow_unpurged=True` is the explicit opt-out, and the returned `cv` block then
-records `"purged": False`. This Python splitter removes `ceil(n * pct_embargo)` rows
+is resolved. The indices must be exact integers (including NumPy integer scalars),
+not Boolean flags, numeric strings or floats such as `3.0`. Keep one end per feature
+row, with each end at or after its own start index. Ends past the last row are clipped
+for the overlap calculation; this does not make a label that resolves after your
+decision cutoff observable. When filtering or reordering inputs, recompute ends on the
+final ordered row grid rather than passing positions from the original frame. Use
+[availability checks](/modules/availability/) when training eligibility also depends
+on explicit source or label timestamps.
+
+Omit the ends and the functions raise instead of quietly running unpurged.
+`allow_unpurged=True` is the explicit opt-out, and the returned `cv` block then
+records `"purged": False` (under `baseline_mda["cv"]` in the substitution report).
+This Python splitter removes `ceil(n * pct_embargo)` rows
 before each test fold and after its latest label end. The pre-fold window is counted back
 from the first test row. The post-fold window starts at the first row whose start is
 strictly after every test label has resolved, matching the Rust `PurgedKFold` rule
@@ -212,8 +222,8 @@ heuristic flag threshold rather than a significance level.
 
 The importance helpers convert `X`, `y` and `sample_weight` to floats and check
 rectangular shape and matching lengths. Feature and label conversion alone does not
-establish finite feature values or binary labels; weights receive the additional checks
-described above. Supply one sample per row, one
+establish finite feature values. The importance helpers separately validate binary
+labels, and weights receive the additional checks described above. Supply one sample per row, one
 feature per column, finite `X`, labels of exactly `0` or `1`, and finite nonnegative
 weights. Keep row ordering identical across these inputs and the event end indices.
 The standalone PCA helper additionally rejects nonfinite `X`; do not assume that

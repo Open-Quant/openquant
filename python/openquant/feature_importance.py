@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 
 from . import _core
+from ._estimator import _positive_proba
 from .cross_validation import _label_spans, purged_kfold_splits
 
 _fi = _core.feature_importance
@@ -208,17 +209,6 @@ def _fit(estimator: Any, x: np.ndarray, y: np.ndarray, weight: np.ndarray | None
     else:
         model.fit(x, y, sample_weight=weight)
     return model
-
-
-def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
-    p = np.asarray(model.predict_proba(x), dtype=np.float64)
-    if p.ndim == 2:
-        classes = list(getattr(model, "classes_", [0, 1]))
-        if 1 not in classes and 1.0 not in classes:
-            # A fold whose training labels are all 0 never predicts class 1.
-            return np.zeros(len(x))
-        p = p[:, classes.index(1)]
-    return p
 
 
 def _prepare(

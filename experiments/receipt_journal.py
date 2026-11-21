@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from fractions import Fraction as F
@@ -180,7 +181,7 @@ class ReceiptJournal:
 
     def _append(self, command: dict[str, Any]) -> JournalSnapshot:
         payload = _json(command)
-        # Replay encoded values as persisted, not mutable caller objects.
+        # Preserve the original one-at-a-time path as the batching oracle.
         self._db.execute("BEGIN IMMEDIATE")
         try:
             state = self._replay()
@@ -190,6 +191,23 @@ class ReceiptJournal:
             ).fetchone()
             if duplicate is None:
                 self._db.execute("INSERT INTO commands(payload) VALUES (?)", (payload,))
+            self._db.commit()
+            return state.snapshot()
+        except BaseException:
+            self._db.rollback()
+            raise
+
+    def _append_payloads(self, payloads: list[str]) -> JournalSnapshot:
+        # Replay encoded values as persisted, not mutable caller objects.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            state = self._replay()
+            known = {row[0] for row in self._db.execute("SELECT payload FROM commands")}
+            for payload in payloads:
+                state.apply(json.loads(payload))
+                if payload not in known:
+                    self._db.execute("INSERT INTO commands(payload) VALUES (?)", (payload,))
+                    known.add(payload)
             self._db.commit()
             return state.snapshot()
         except BaseException:
@@ -212,6 +230,41 @@ class ReceiptJournal:
         A terminal receipt is a trusted completeness assertion, not cancel-request
         acknowledgment. Syntax errors are rejected; semantic conflicts retained.
         """
+        return self._append(
+            self._receive_command(
+                event_id, sequence=sequence, kind=kind, order_id=order_id, fill=fill
+            )
+        )
+
+    def receive_batch(self, receipts: Iterable[Mapping[str, Any]]) -> JournalSnapshot:
+        """Commit 1–256 synthetic receipts atomically, returning only final state.
+
+        Each mapping uses the keyword arguments of receive. Freeze each item
+        immediately during iteration; a malformed or oversized batch writes
+        nothing. Aggregate encoded payload is limited to 1 MiB. Semantic
+        conflicts remain evidence and quarantine the account, as for receive.
+        This bounded batching is not a checkpoint or a broker acknowledgment.
+        """
+        payloads = []
+        total_bytes = 0
+        for index, receipt in enumerate(receipts):
+            if index == 256:
+                raise ValueError("receipt batch must contain at most 256 items")
+            if not isinstance(receipt, Mapping):
+                raise TypeError("receipt batch items must be mappings")
+            payload = _json(self._receive_command(**receipt))
+            total_bytes += len(payload.encode("utf-8"))
+            if total_bytes > 1_048_576:
+                raise ValueError("receipt batch encoded payload exceeds 1 MiB")
+            payloads.append(payload)
+        if not payloads:
+            raise ValueError("receipt batch must not be empty")
+        return self._append_payloads(payloads)
+
+    @staticmethod
+    def _receive_command(
+        event_id: str, *, sequence: int, kind: str, order_id: str, fill: Fill | None = None
+    ) -> dict[str, Any]:
         _identifier(event_id, "event_id")
         _identifier(order_id, "order_id")
         if type(sequence) is not int or sequence < 1:
@@ -235,7 +288,7 @@ class ReceiptJournal:
                 "commission": fill.commission,
                 "terminal": fill.terminal,
             }
-        return self._append({"op": "receive", "event": event})
+        return {"op": "receive", "event": event}
 
     def snapshot(self) -> JournalSnapshot:
         """Last valid prefix; quarantine/gaps force available funds to zero."""

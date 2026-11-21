@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -15,6 +15,10 @@ runs. If you are here to *use* OpenQuant rather than to change it, the
 [Quickstart](/quickstart/) is shorter and ends with a result.
 
 ## Build and test the Rust core
+
+To build only the Rust crate without the Python extension, run
+`cargo build --locked -p openquant` from the repository root. The workspace-wide
+maintainer checks below include the Python extension crate.
 
 ```bash
 cargo build --all-features
@@ -94,6 +98,49 @@ A preview or a successful Astro build is **not** a full docs pass. If Rust or
 the extension is unavailable, record those checks as not run and still run the
 independent schema, contrast, API inventory, coverage and generated-page checks.
 
+### Check the four Rust-only illustrations and ETF output
+
+The [combinatorial optimization](/modules/combinatorial-optimization/),
+[ETF trick](/modules/etf-trick/), [fingerprint](/modules/fingerprint/) and
+[parallel work partitioning](/modules/hpc-parallel/) illustrations have a
+standard-library Python generator. Run these focused checks from the repository root:
+
+```bash
+python3 -m unittest discover -s scripts/docs/tests -p test_rust_module_figures.py
+python3 scripts/docs/generate_rust_module_figures.py --check
+node --test docs-site/scripts/tests/check-rust-output.test.mjs
+```
+
+These checks need neither the native extension nor Cargo. The first two verify
+independent explanatory calculations and that committed SVGs match the generator;
+the third tests the output comparator with synthetic strings. **None executes Rust.**
+The figures show exact inventory enumeration, a roll adjustment, population
+fingerprint curves and idealized partition work. They are not captured Rust results,
+finite-sample fingerprint estimates or measured parallel speedups.
+
+For an intentional figure change, edit `scripts/docs/generate_rust_module_figures.py`,
+update its independent tests when the illustrated assumptions change, then run it
+with `--write`. Review the four SVGs under `docs-site/public/figures/modules/` and
+the page captions together; do not edit a generated SVG alone. Regeneration is not
+numerical validation of the Rust implementation.
+
+With the pinned Rust toolchain available, run the distinct execution gate:
+
+```bash
+node docs-site/scripts/check-rust-output.mjs
+```
+
+It runs `cargo run --quiet --locked -p openquant --example docs_etf_trick` and compares
+stdout with **every** `text` fence in the ETF page, in page order. It normalizes line
+endings and one final newline only; extra output, changed precision or a missing
+block fails. A compilation pass from `check:examples` cannot replace this check.
+If the output drifts, inspect `crates/openquant/examples/docs_etf_trick.rs`, the
+module implementation and the page's expectations before updating either side.
+Do not copy new output into the page until its calculations are justified.
+
+These focused checks diagnose a change; they do not replace the full documentation
+gate above or the Rust integration tests for the affected module.
+
 ## A reproducible docs verification receipt
 
 Keep source identity and execution identity separate. A restored Git bundle can preserve
@@ -116,6 +163,14 @@ or a copied binary alone cannot prove that the extension matches the checked-out
 | Failed | Command and first substantive error, including a stale-output mismatch. |
 | Blocked | Missing capability or dependency, not an inferred success. |
 | Not run | Later aggregate stages or browser interactions that were never exercised. |
+
+For hosted CI evidence, save the run and job URLs, the job's head SHA, the relevant
+step conclusions and any named output artifact. Two green jobs can refer to different
+commits. A workflow definition describes intended checks, not an executed result;
+a successful job may also contain skipped steps. A main-branch pass does not validate
+uncommitted or private patch changes. Compare their source scope and rerun the affected
+gates on the candidate before claiming candidate acceptance. Build success, deployment
+and human acceptance remain separate claims.
 
 In a restricted environment, notebook execution may fail because the Jupyter kernel
 cannot open a local socket. Preserve the traceback and rerun the unchanged command in
@@ -225,9 +280,17 @@ Two rules catch most failures. A `draft` may not carry `last_validated` —
 drop the field; do not invent a validation. A stamp may not predate the
 page's last content change. AI-authored changes stop at `authored` with a current
 `last_authored`; `reviewed` and `validated` require a human. Use `draft` when
-the page is incomplete. The gate reads the change
-date from `git log` plus the working-tree mtime, so an uncommitted edit
-counts.
+the page is incomplete. The gate reads Git history and considers the mtime
+of working-tree edits. It compares the body when a change looks stale, so
+moving only frontmatter does not ordinarily require rereading unchanged prose.
+
+Run `npm run check:content-schema` from `docs-site/` on the **committed
+candidate** as well as the working copy. If an integration tool reconstructs
+several commits as one, recheck that new head: the gate can now see the
+new commit date as the last body-change date even when the proposed text
+did not change again. Reread and accurately stamp only the affected authored
+pages, or keep incomplete pages draft. Use the final head's hosted check as
+evidence, not an earlier branch's pass.
 
 The coloured pill a reader sees at the top of every page is rendered from
 `status` by the `Banner` override in `src/components/DocStatusBanner.astro`,

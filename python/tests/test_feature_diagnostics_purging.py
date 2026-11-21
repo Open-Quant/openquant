@@ -8,6 +8,7 @@ still claimed ``method == "purged_kfold"`` -- silent leakage.
 
 import random
 
+import numpy as np
 import openquant
 import pytest
 from openquant.feature_diagnostics import _build_intervals, _purged_kfold_splits
@@ -79,3 +80,36 @@ def test_explicit_opt_out_is_reported_as_unpurged():
     )
     assert purged_out["cv"]["purged"] is True
     assert purged_out["cv"]["method"] == "purged_kfold"
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["mda_importance", "sfi_importance", "substitution_effect_report"],
+)
+@pytest.mark.parametrize("invalid_end", [4.5, np.float64(4.5), "4", True, np.bool_(True)])
+def test_purged_importance_requires_exact_nonboolean_label_end_indices(method, invalid_end):
+    x, y, names = _dataset(12)
+    spans = list(range(len(x)))
+    spans[0] = invalid_end
+    with pytest.raises(ValueError, match="event_end_indices.*integer"):
+        getattr(openquant.feature_diagnostics, method)(
+            x, y, feature_names=names, event_end_indices=spans, n_splits=3, pct_embargo=0.0
+        )
+
+
+def test_exact_numpy_label_ends_match_closed_interval_brute_force():
+    # Random integer spans have independent, conservatively clipped endpoints.
+    # Test-fold union is not used on the oracle side.
+    rng = random.Random(3201)
+    for _ in range(80):
+        n = rng.randrange(25, 80)
+        spans = [i + rng.randrange(0, 8) for i in range(n)]
+        intervals = _build_intervals(np.array(spans, dtype=np.int64), n)
+        assert intervals == [(i, min(end, n - 1)) for i, end in enumerate(spans)]
+        for train, test in _purged_kfold_splits(intervals, n_splits=5, pct_embargo=0.0):
+            expected = [
+                i
+                for i, stop in enumerate(spans)
+                if all(max(i, j) > min(stop, spans[j], n - 1) for j in test)
+            ]
+            assert train == expected

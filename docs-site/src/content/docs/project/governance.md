@@ -2,7 +2,7 @@
 title: Governance
 description: The rules OpenQuant holds its research, documentation, benchmarks and releases to, and where to report a problem.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -86,7 +86,9 @@ is missing or if the date behind it is older than the page's last change.
 
 The example gates have narrower scopes than the status labels. `check:examples` compiles Rust
 fences under `modules/` and the complete Rust core workflow without executing them;
-other Rust fences are outside its scope.
+other Rust fences are outside its scope. The separate `check:rust-output` gate executes
+the `docs_etf_trick` example and compares its ETF and futures-roll text output. Its synthetic
+comparator tests alone do not establish that the Rust executable ran.
 `check:python-examples` scans Markdown and MDX pages throughout the content tree and runs each
 eligible Python fence independently. Fences marked `doc-check=skip` receive syntax checks only,
 and are listed in the gate output. Passing these checks does not verify every prose claim or
@@ -104,12 +106,15 @@ fail on a slowdown above 35% (or a per-benchmark override). A pull request that 
 ## Versioning and releases
 
 OpenQuant is pre-release. The `openquant` crate, the `pyopenquant` extension and the Python
-package are all at version 0.1.0, no version has been tagged, and nothing is published to
-crates.io or PyPI. Until a release, only `main` is supported.
+package declare version 0.1.0 in this checkout. Those declarations do not prove that a
+release is available. Before installing a packaged version, inspect the matching
+[GitHub Release](https://github.com/Open-Quant/openquant/releases), its successful publishing
+run and the exact version on each registry. The source-install workflow remains the
+reproducible starting point when publication has not been verified.
 
 - **When a release is made,** `openquant` goes to crates.io; `pyopenquant` has `publish = false`
   and ships as a wheel built with maturin (it is a Python extension module, not a Rust library).
-  The steps are in `docs/publishing.md`.
+  The steps are in the [maintainer publishing guide](https://github.com/Open-Quant/openquant/blob/main/docs/publishing.md).
 - **Release gate.** Pushing a `v*` tag runs `.github/workflows/release.yml`: format, clippy with
   `-D warnings`, the fast test suite, a compile check of every benchmark, the long SADF test that
   is skipped on pull requests, `cargo publish --dry-run`, and abi3 wheels for Linux (x86_64,
@@ -119,6 +124,12 @@ crates.io or PyPI. Until a release, only `main` is supported.
   section as its notes. A manual Actions dispatch defaults to `dry_run=true`, which publishes
   nothing. Setting `dry_run=false` on a selected `v*` tag enables publication; the workflow
   rejects that publishing mode on a branch. Inspect the input and selected ref before dispatching.
+- **Publication is not atomic.** PyPI and crates.io are separate jobs. A required
+  approval on the `pypi` environment gates only the PyPI job, not the Rust crate.
+  The GitHub Release waits for both. After any failure, verify the exact version
+  and uploaded files at each destination before retrying; never move a published
+  tag or assume a failed job uploaded nothing. A dry run, merge or changelog date
+  is not proof that users can install a released package.
 - **Changes are recorded** in `CHANGELOG.md`, rendered as the [Changelog](/project/changelog/)
   page. A change of behaviour ships with the update to the docs page of every module it touches.
   Pull request titles use conventional-commit prefixes (`feat`, `fix`, `docs`, ...), which is

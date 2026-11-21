@@ -1,0 +1,61 @@
+{
+  "schema": "openquant_quote_visibility_v1",
+  "cash": "100",
+  "inventory": "0",
+  "fixed_fee": "1",
+  "fee_rate": "1/1000",
+  "order": {
+    "side": "buy",
+    "shares": 3,
+    "decision_at": 0,
+    "earliest_fill_at": 1,
+    "deadline": 3,
+    "limit": "10"
+  },
+  "buckets": [
+    {
+      "at": 1,
+      "available_at": 1,
+      "bid": "9",
+      "ask": "10",
+      "capacity": 0,
+      "reference_close": "8"
+    },
+    {
+      "at": 2,
+      "available_at": 2,
+      "bid": "8",
+      "ask": "9",
+      "capacity": 2,
+      "reference_close": "8"
+    },
+    {
+      "at": 3,
+      "available_at": 3,
+      "bid": "9",
+      "ask": "10",
+      "capacity": 1,
+      "reference_close": "8"
+    },
+    {
+      "at": 4,
+      "available_at": 4,
+      "bid": "10",
+      "ask": "11",
+      "capacity": 9,
+      "reference_close": "8"
+    }
+  ],
+  "marks": [
+    {
+      "observed_at": 0,
+      "available_at": 0,
+      "price": "8"
+    },
+    {
+      "observed_at": 2,
+      "available_at": 3,
+      "price": "12"
+    }
+  ]
+}

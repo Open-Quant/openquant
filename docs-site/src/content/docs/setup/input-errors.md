@@ -2,7 +2,7 @@
 title: Diagnose input errors
 description: Identify validated input failures and assumptions that Python and Rust callers must check themselves.
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -23,6 +23,7 @@ can raise its own exception, and Python argument conversion can fail before Rust
 | Task and symptom | What is checked | What to change |
 | --- | --- | --- |
 | Feature diagnostics: `y must contain finite binary labels (0 or 1)` | MDI, MDA, SFI and substitution reports validate every target before fitting | Explicitly encode the two classes as 0/1. Do not silently round fractional labels or replace missing targets. Single-class binary samples remain valid. |
+| Feature diagnostics: `event_end_indices must contain exact non-boolean integers` | Each end is a position on the ordered feature grid; Boolean flags, numeric strings and integral-looking floats are rejected | Derive integer positions from the label-resolution times on the final feature grid. Do not cast away fractional positions or reuse row indices from before filtering. See [purged diagnostics](/modules/feature-diagnostics/#purged-folds-are-mandatory). |
 | Feature diagnostics: `feature_names must be unique` | Names identify distinct columns after string conversion, including DataFrame screen overrides | Supply a unique name for each feature; duplicate names would merge screen rejection reasons. |
 | Bars: `volume_per_bar`, `dollar_value_per_bar` or native imbalance `threshold` must be finite and `> 0` | Positive finite thresholds, even when an input is empty or cleaning removes every row | Choose a finite positive size before grouping. NaN and infinity cannot stand for an unlimited bar. Positive subnormal values remain valid. |
 | `data.clean_ohlcv`: `missing required OHLCV columns` | Required columns after known aliases are normalized | Supply `ts`, `symbol`, `open`, `high`, `low`, `close`, `volume`. `adj_close` is optional and defaults to `close`; it is not an adjustment calculation. |

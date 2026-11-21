@@ -2,7 +2,7 @@
 title: Examples Catalog
 description: Runnable examples that ship in this repository, and what each one demonstrates.
 status: authored
-last_authored: '2026-11-07'
+last_authored: '2026-11-21'
 audience:
   - quant-dev
   - platform-engineering
@@ -14,11 +14,20 @@ Every example below is a file in this repository that you can execute. The
 point of this page is that you should not have to trust a snippet: each
 entry names the file, the command that runs it, and what it demonstrates.
 
-The point-in-time data example uses only the Python standard library. Other Python
-commands need the bindings built in the selected environment — see
-[Python Bindings Setup](/setup/python-bindings/). Rust examples use the pinned toolchain
-and native build prerequisites described in [local setup](/setup/local-build/). Run
-repository-relative commands from the repository root.
+Choose the environment for the example, rather than building everything first.
+Run repository-relative commands from the repository root.
+
+| Path | Required environment | Evidence produced |
+| --- | --- | --- |
+| `examples/point_in_time_data.py` | Python standard library only | A small revision-selection demonstration |
+| Configured offline labs below | Python 3.11+ and NumPy; some labs also need SciPy | Synthetic report, run receipt and optional exact replay |
+| Library pipeline and fitted walkthroughs | Python package and native extension built from the selected checkout | API results or a fitted synthetic research report |
+| Research notebooks | Built bindings plus a working Jupyter kernel | Executed cells, tables and figures |
+| Rust examples | Pinned Rust toolchain and native prerequisites | Component assertions or documented output |
+
+Use [Python Bindings Setup](/setup/python-bindings/) for native Python calls and
+[Local Build Setup](/setup/local-build/) for contributor gates. The offline labs
+are repository experiments, not extra APIs in the installed `openquant` package.
 
 ## Choose the output you need
 
@@ -30,6 +39,9 @@ repository-relative commands from the repository root.
   APIs; it does not train a forecasting model or certify a candidate for trading.
 - **Saved tables and figures:** use the notebook runner. API tours illustrate calls;
   research runbooks record a hypothesis and evaluation protocol.
+- **A small synthetic report you can replay:** use the [configured offline lab](#run-and-replay-an-offline-lab)
+  below. Its receipt checks source/runtime consistency; a separate replay checks the
+  saved scientific output. Neither is a research-validity or trading-approval verdict.
 - **A component regression or timing measurement:** use tests or benchmarks. A successful
   test or fast benchmark is different evidence from an out-of-sample research result.
 
@@ -45,6 +57,7 @@ reports a realized trading backtest.
 | File | Run it with | Demonstrates |
 |---|---|---|
 | `examples/point_in_time_data.py` | `python3 examples/point_in_time_data.py` | [Point-in-time data workflow](/workflows/point-in-time-data/): offline synthetic revision selection at a cutoff, compared with latest revisions; selected-content and policy identity without claiming provider authenticity. Uses only the standard library. |
+| `experiments/run_offline_lab.py` | `python -m experiments.run_offline_lab list` | Lists allowlisted synthetic labs and their dependencies without running a study. Use the [bounded smoke example](#run-and-replay-an-offline-lab) before choosing a full study. |
 | `examples/research_journey.py` | `uv run --no-sync --python .venv/bin/python python examples/research_journey.py --out /tmp/openquant-journey.json` | One synthetic history through bars, resolved events, fold-local weights and baseline predictions; JSON with provenance and exact splits. Choose a new output path because existing reports are not overwritten. |
 | `crates/openquant/examples/research_notebook_smoke.rs` | `cargo run -p openquant --example research_notebook_smoke` | Rust component smoke checks for CUSUM, allocation and VaR/ES/CDaR on separate small synthetic arrays; asserts invariants, without training a model. |
 | `notebooks/python/scripts/run_notebooks.py` | `just notebooks-run` | Executes every research notebook in a Jupyter kernel and saves their tables and figures; fails on any cell error. CI runs it and checks the committed outputs are current. |
@@ -101,6 +114,116 @@ decision on one page:
   `14_fracdiff_features_classifier.ipynb`, runbook 09's open question: FFD features against
   returns and integer differences as purged-CV classifier inputs, net of costs, deflated by a
   trial registry, on SYNTHETIC paths with a planted signal and no-signal controls.
+
+## Run and replay an offline lab
+
+This path answers a narrow question: **can I reproduce the saved output of one
+small synthetic study using the same source and numerical environment?** It does
+not require the native OpenQuant extension or Jupyter. Use a trusted checkout and
+review the chosen lab and configuration before execution.
+
+First inspect the available labs and runtime requirements:
+
+```bash
+python -m experiments.run_offline_lab list
+python -m experiments.run_offline_lab defaults --lab point_in_time
+```
+
+`defaults` prints settings; it does not run the lab. Do not use `{}` as a shortcut
+for a cheap test: omitted keys retain the full lab defaults. The runner's config
+size limit is not a CPU or memory limit. The explicit smoke config below requests
+one repetition, two days and only the `on_time` family. It tests the interface,
+not the conclusions of the full point-in-time study.
+
+The following example launches fresh processes, uses a new temporary output, and
+checks the report and receipt separately. It requires NumPy in the interpreter
+running the snippet. The repository's
+[offline requirements](https://github.com/Open-Quant/openquant/blob/main/experiments/requirements-offline-research.txt)
+record the pinned numerical dependencies for the complete set of labs.
+
+```python
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+config = Path("experiments/configs/offline-smoke/point_in_time.json")
+with TemporaryDirectory() as directory:
+    output = Path(directory) / "report.json"
+    run = subprocess.run([
+        sys.executable, "-m", "experiments.run_offline_lab", "run",
+        "--lab", "point_in_time", "--config", str(config), "--out", str(output),
+    ], check=True, capture_output=True, text=True)
+    receipt = json.loads(run.stdout)
+    report_bytes = output.read_bytes()
+    report = json.loads(report_bytes)
+    assert receipt["config_sha256"] == hashlib.sha256(config.read_bytes()).hexdigest()
+    assert receipt["report_sha256"] == hashlib.sha256(report_bytes).hexdigest()
+    assert report["config"] == json.loads(config.read_text())
+    assert report["synthetic_only"] is True
+    assert receipt["identity_matched"] is True
+    assert receipt["scientific_replay_performed"] is False
+
+    replay = subprocess.run([
+        sys.executable, "-m", "experiments.replay_offline_report", str(output),
+        "--lab", "point_in_time",
+    ], check=False, capture_output=True, text=True)
+    if replay.returncode:
+        print(replay.stdout or replay.stderr, file=sys.stderr)
+        replay.check_returncode()
+    comparison = json.loads(replay.stdout)
+    assert comparison["matched"] is True
+    assert comparison["first_difference"] is None
+    print("identity matched:", receipt["identity_matched"])
+    print("runner performed replay:", receipt["scientific_replay_performed"])
+    print("separate scientific replay matched:", comparison["matched"])
+```
+
+```text
+identity matched: True
+runner performed replay: False
+separate scientific replay matched: True
+```
+
+This is a disposable smoke test: the temporary report disappears on success or
+failure. Replay failures print their diagnostic before raising. For retained work, choose
+a new persistent output path and preserve the config, report and receipt together.
+The full [runner contract](https://github.com/Open-Quant/openquant/blob/main/experiments/OFFLINE_LAB_RUNNER.md)
+describes publication and retry boundaries. An existing output is refused, not
+overwritten. If a run is interrupted, inspect the destination before retrying:
+a complete report can exist even if its receipt was not printed.
+
+### Read the three checks without conflating them
+
+| Check | What passed | What is still unproven |
+| --- | --- | --- |
+| File hashes | The receipt names these exact config and report bytes | Who created them, or whether a different trusted party approved them |
+| `identity_matched` | Registered source/dependency hashes and runtime versions matched the report | A second run, independent numerical correctness or a complete environment attestation |
+| Separate `matched` replay | Exact scientific output matched after rerunning the allowlisted lab; provenance and timing fields are excluded | Statistical validity, provider authenticity or real-market profitability |
+
+An exact replay failure can come from changed source, dependency versions or
+floating-point behavior. Keep the original report and the first mismatch; do not
+rewrite hashes or widen tolerances to manufacture agreement. Reproduction is
+evidence about this selected run, not a reason to promote a strategy.
+
+### Diagnose a failed replay without losing evidence
+
+| Result | Next step |
+| --- | --- |
+| CLI rejects the report before comparison | Read stderr. Confirm the requested lab, schema and recorded source/runtime versions. Restore the matching trusted checkout and dependencies rather than editing the report. |
+| Comparison returns `matched: false` | Save stdout, especially `first_difference`, alongside the original report. The command exits nonzero deliberately; captured output is still diagnostic evidence. |
+| The runner refuses an existing `--out` path | Inspect that report and its receipt before choosing a new path. Do not delete a previous result just to make the command pass. |
+| Replay succeeds but the research decision is negative | Preserve the negative result. Reproducibility does not establish significance, robustness or permission to trade. |
+
+For an investigation, use persistent paths rather than the disposable example
+above. Keep the source commit, environment versions and exact command with the
+config, report, receipt and replay output. An incomplete or absent receipt is an
+uncertainty to resolve, not proof that no report was written. Unlike the runner,
+replay can replace an existing comparison file given with `--out`; choose a new
+comparison path when preserving earlier evidence. It refuses to overwrite its
+input report.
 
 ## Worked example: cleaning a messy OHLCV file
 
@@ -234,12 +357,38 @@ Choose the workflow whose scope matches the task:
 | Look up one module | [Modules by AFML chapter](/module-reference/by-afml-chapter/) |
 | Build and test the repo | [Local Build Setup](/setup/local-build/) |
 
+## Choose a checked Rust example
+
+These four modules have no public Python binding. Install the [pinned Rust
+toolchain and native prerequisites](/setup/local-build/#build-and-test-the-rust-core),
+then pick a small question:
+
+| Question | Start with | Evidence to inspect |
+|---|---|---|
+| When does a fixed cost change an optimal inventory path? | [Combinatorial optimization](/modules/combinatorial-optimization/#a-fixed-cost-changes-the-path) | Compare the illustrated three paths and check a heuristic against the exact small-instance result. |
+| How does rolling a futures contract change earlier prices? | [ETF trick and roll adjustment](/modules/etf-trick/#rolling-one-contract) | Run the basket and roll example and compare both printed sequences. A continuous price series is not a return or a fill model. |
+| How can a fitted response depend on a feature or an interaction? | [Model fingerprint](/modules/fingerprint/#on-a-model-whose-answer-is-known) | Use a known response to distinguish the fitted line, centered nonlinear effect, and interaction residual. |
+| What does equal work mean when task sizes differ? | [HPC partitioning](/modules/hpc-parallel/#equal-atoms-or-equal-work) | Compare partition workloads rather than assuming equal row counts imply equal work or faster execution. |
+
+From the repository root run the ETF output comparison:
+
+```bash
+node docs-site/scripts/check-rust-output.mjs
+```
+
+The comparator runs the locked Rust example and checks both documented output
+blocks. It needs Cargo and Node, not PyO3. For the four figures, use the separate
+[figure check](/setup/local-build/#check-the-four-rust-only-illustrations-and-etf-output).
+An SVG parity check confirms generator agreement, not a Rust execution; a
+snippet compile confirms code compiles, not that it ran.
+
 ## Worked examples on other pages
 
 This page executes the cleaning and grid-artifact examples above. Other examples live next to their methods.
 The Python documentation gate executes runnable fences and compares following output blocks;
-the Rust module gate compiles examples but does not run them. Walkthroughs and notebooks
-need their own execution checks:
+the Rust module gate compiles examples but does not run them. The separate
+`check:rust-output` gate executes the `docs_etf_trick` example and compares its ETF and futures-roll
+documented output. Other walkthroughs and notebooks need their own execution checks:
 
 - **Feature diagnostics** (MDI, MDA and SFI on the same features, with
   purged folds): [Feature diagnostics](/modules/feature-diagnostics/#three-rankings-of-the-same-features),

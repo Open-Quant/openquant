@@ -143,7 +143,8 @@ def module_depth() -> tuple[int, int, int]:
 
 def public_surfaces() -> dict[str, list[str]]:
     rust = sorted(set(PUB_MOD_RE.findall(LIB_RS.read_text(encoding="utf-8"))))
-    python = sorted(p.stem for p in PY_SRC.glob("*.py") if p.name != "__init__.py")
+    # Match the Python API reference: underscored modules are internal.
+    python = sorted(p.stem for p in PY_SRC.glob("*.py") if not p.stem.startswith("_"))
     return {"rust": rust, "python": python}
 
 

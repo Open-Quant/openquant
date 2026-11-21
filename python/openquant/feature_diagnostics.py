@@ -3,8 +3,12 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from fractions import Fraction
-from math import ceil, exp, isfinite, lcm, log, log1p, sqrt
+from math import ceil, exp, fsum, isfinite, lcm, log, log1p, sqrt
+from numbers import Real
+from operator import index
+from statistics import stdev
 from sys import float_info
 from typing import Any
 
@@ -35,11 +39,26 @@ def _as_matrix(x: Sequence[Sequence[float]]) -> list[list[float]]:
 
 
 def _as_vector(y: Sequence[float], n_rows: int) -> list[float]:
-    out = [float(v) for v in y]
+    message = "y must contain finite binary labels (0 or 1)"
+    out = []
+    for value in y:
+        if type(value) is float or type(value) is int:
+            if value not in (0, 1):
+                raise ValueError(message)
+            out.append(float(value))
+            continue
+        if (
+            isinstance(value, (complex, np.complexfloating))
+            or (isinstance(value, Decimal) and not value.is_finite())
+            or (isinstance(value, (Decimal, Real, np.integer, np.floating)) and value not in (0, 1))
+        ):
+            raise ValueError(message)
+        converted = float(value)
+        if converted not in (0.0, 1.0):
+            raise ValueError(message)
+        out.append(converted)
     if len(out) != n_rows:
         raise ValueError(f"y/X length mismatch: {len(out)} vs {n_rows}")
-    if any(not isfinite(v) or v not in (0.0, 1.0) for v in out):
-        raise ValueError("y must contain finite binary labels (0 or 1)")
     return out
 
 
@@ -57,11 +76,33 @@ def _feature_names(n_features: int, feature_names: Sequence[str] | None) -> list
 def _sample_weight(weights: Sequence[float] | None, n_rows: int) -> list[float] | None:
     if weights is None:
         return None
-    out = [float(v) for v in weights]
+    message = "sample_weight must contain finite nonnegative float64-representable values"
+    out = []
+    for value in weights:
+        if type(value) is float:
+            converted = value
+        else:
+            if isinstance(value, (complex, np.complexfloating)) or (
+                isinstance(value, Decimal) and not value.is_finite()
+            ):
+                raise ValueError(message)
+            try:
+                converted = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(message) from exc
+            # Any nonzero exact value rounded to +/- zero would silently change
+            # the weighted sample. Sign alone cannot detect the positive case.
+            if (
+                converted == 0.0
+                and isinstance(value, (Decimal, Fraction, np.floating))
+                and value != 0
+            ):
+                raise ValueError(message)
+        if not isfinite(converted) or converted < 0.0:
+            raise ValueError(message)
+        out.append(converted)
     if len(out) != n_rows:
         raise ValueError(f"sample_weight/X length mismatch: {len(out)} vs {n_rows}")
-    if any(not isfinite(w) or w < 0.0 for w in out):
-        raise ValueError("sample_weight must contain finite nonnegative values")
     if not any(w > 0.0 for w in out):
         raise ValueError("sample_weight must contain a positive value")
     return out
@@ -96,7 +137,14 @@ def _build_intervals(
                 "embargo-only splits explicitly."
             )
         return [(i, i) for i in range(n_rows)]
-    ends = [int(v) for v in event_end_indices]
+    ends = []
+    for value in event_end_indices:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError("event_end_indices must contain exact non-boolean integers")
+        try:
+            ends.append(index(value))
+        except TypeError as exc:
+            raise ValueError("event_end_indices must contain exact non-boolean integers") from exc
     if len(ends) != n_rows:
         raise ValueError(f"event_end_indices/X length mismatch: {len(ends)} vs {n_rows}")
     intervals: list[tuple[int, int]] = []
@@ -105,10 +153,6 @@ def _build_intervals(
             raise ValueError("event_end_indices must satisfy end >= start index")
         intervals.append((i, min(end, n_rows - 1)))
     return intervals
-
-
-def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
-    return not (a[1] < b[0] or b[1] < a[0])
 
 
 def _purged_kfold_splits(
@@ -135,17 +179,20 @@ def _purged_kfold_splits(
     for fold_size in fold_sizes:
         stop = start + fold_size
         test_idx = list(range(start, stop))
-        test_intervals = [intervals[i] for i in test_idx]
+        # _build_intervals anchors every closed span at its row index. The
+        # consecutive test rows leave no gaps in their union, so a single
+        # closed window gives the same purge without comparing every pair.
+        test_start = intervals[start][0]
+        test_end = max(intervals[i][1] for i in test_idx)
 
         train_mask = [True] * n
-        for i, interval in enumerate(intervals):
-            if any(_overlaps(interval, t) for t in test_intervals):
+        for i, (left, right) in enumerate(intervals):
+            if left <= test_end and right >= test_start:
                 train_mask[i] = False
 
         # Keep the legacy pre-fold embargo, but count the post-fold embargo
         # from the first row after all test labels resolve, not inside the purge.
         before = max(0, start - embargo_n)
-        test_end = max(end for _, end in test_intervals)
         resume = stop
         while resume < n and intervals[resume][0] <= test_end:
             resume += 1
@@ -797,8 +844,9 @@ def mda_importance(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -929,8 +977,9 @@ def sfi_importance(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -1012,13 +1061,43 @@ def _standardize(
 ) -> tuple[list[list[float]], list[float], list[float]]:
     n = len(x)
     p = len(x[0])
-    means = [sum(row[j] for row in x) / n for j in range(p)]
-    stds = []
+    means, stds = [], []
+    z = [[0.0] * p for _ in range(n)]
     for j in range(p):
-        var = sum((row[j] - means[j]) ** 2 for row in x) / max(n - 1, 1)
-        stds.append(sqrt(var) if var > 0 else 1.0)
-
-    z = [[(row[j] - means[j]) / stds[j] for j in range(p)] for row in x]
+        values = [row[j] for row in x]
+        mean = sum(values) / n
+        constant = all(value == values[0] for value in values)
+        if constant:
+            means.append(values[0])
+            stds.append(1.0)
+            continue
+        try:
+            sd = sqrt(sum((value - mean) ** 2 for value in values) / (n - 1))
+        except OverflowError:
+            sd = float("inf")
+        # Keep the ordinary path; recover when squares under/overflow or when
+        # centering near a large offset could materially lose variation.
+        if isfinite(sd) and sd >= sqrt(float_info.min) and sd >= abs(mean) * 1e-8:
+            centered = [(value - mean) / sd for value in values]
+        else:
+            exact = list(map(Fraction, values))
+            exact_mean = sum(exact, Fraction()) / n
+            residuals = [value - exact_mean for value in exact]
+            scale = max(map(abs, residuals))
+            scaled = [float(value / scale) for value in residuals]
+            scaled_sd = sqrt(fsum(value * value for value in scaled) / (n - 1))
+            centered = [value / scaled_sd for value in scaled]
+            mean = float(exact_mean)
+            try:
+                sd = stdev(values)
+            except OverflowError as exc:
+                raise ValueError("feature standard deviation exceeds float64 range") from exc
+            if sd == 0.0:
+                raise ValueError("feature standard deviation is below float64 range")
+        means.append(mean)
+        stds.append(sd)
+        for i, value in enumerate(centered):
+            z[i][j] = value
     return z, means, stds
 
 
@@ -1029,7 +1108,10 @@ def orthogonalize_features_pca(
     """Project standardized features onto their leading principal components (AFML 8.4.2).
 
     Each column is standardized with its mean and sample standard deviation (a constant
-    column is divided by 1). A symmetric eigensolver finds all eigenpairs of the resulting
+    column is divided by 1). Extreme scales and large offsets use exact centering
+    and scaled normalization; returned means/stds are rounded to float64 and may not
+    reproduce the scores if naively subtracted/divided at those extremes.
+    A symmetric eigensolver finds all eigenpairs of the resulting
     correlation matrix; eigenvalues `<= 1e-12` are discarded. The
     fewest leading components whose explained-variance ratios reach `variance_threshold`
     are kept. Component signs are arbitrary.
@@ -1054,7 +1136,8 @@ def orthogonalize_features_pca(
     ------
     ValueError
         If `variance_threshold` is not finite and in `(0, 1]`, `X` is empty, not
-        rectangular or contains a non-finite value, or every eigenvalue is zero.
+        rectangular or contains a non-finite value, a nonconstant column has a standard
+        deviation outside the nonzero float64 range, or every eigenvalue is zero.
     """
     if not isfinite(variance_threshold) or variance_threshold <= 0.0 or variance_threshold > 1.0:
         raise ValueError("variance_threshold must be in (0, 1]")
@@ -1173,8 +1256,9 @@ def substitution_effect_report(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -1343,6 +1427,69 @@ def substitution_effect_report(
     return out
 
 
+def _screen_moments(values: Sequence[float]) -> tuple[float, bool]:
+    """Keep ordinary arithmetic unless squared spread under/overflows or centering cancels."""
+    if len(values) < 2:
+        return 0.0, False
+    mean = _mean(values)
+    try:
+        result = sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
+        # A conservative sqrt(epsilon)-scale heuristic, not a precision guarantee.
+        # Reuse the mean already needed for variance instead of rescanning magnitudes.
+        # Positive subnormal variance is also inaccurate, not merely zero variance.
+        # stdev can recover a representable root without rounding the squared spread.
+        constant = all(v == values[0] for v in values)
+        if isfinite(result) and (
+            constant or (result >= sqrt(float_info.min) and result >= abs(mean) * 1e-8)
+        ):
+            return result, False
+    except OverflowError:
+        pass
+    # statistics.stdev uses exact rational accumulation and a scaled square root.
+    # Scaling raw values first would lose nearby floats around a large offset.
+    try:
+        return (stdev(values) if len(values) > 1 else 0.0), True
+    except OverflowError as exc:
+        raise ValueError("feature standard deviation exceeds float64 range") from exc
+
+
+def _screen_corr_scaled(left: Sequence[float], right: Sequence[float]) -> float:
+    """Pearson correlation without overflow or cancellation around large offsets."""
+
+    def normalized_center(values: Sequence[float]) -> list[float]:
+        exact = [Fraction(value) for value in values]
+        mean = sum(exact, Fraction()) / len(exact)
+        centered = [value - mean for value in exact]
+        scale = max(abs(value) for value in centered)
+        return [float(value / scale) for value in centered] if scale else [0.0] * len(values)
+
+    ac, bc = normalized_center(left), normalized_center(right)
+    aa = sqrt(fsum(value * value for value in ac))
+    bb = sqrt(fsum(value * value for value in bc))
+    if not aa or not bb:
+        return 0.0
+    return max(-1.0, min(1.0, fsum((u / aa) * (v / bb) for u, v in zip(ac, bc))))
+
+
+def _screen_corr_exceeds(left: Sequence[float], right: Sequence[float], cutoff: float) -> bool:
+    """Compare squared Pearson correlation exactly for the supplied binary64 values."""
+
+    def integers(values: Sequence[float]) -> list[int]:
+        ratios = [value.as_integer_ratio() for value in values]
+        # Binary64 denominators are powers of two, so the maximum is the LCM.
+        denominator = max(d for _, d in ratios)
+        return [num * (denominator // den) for num, den in ratios]
+
+    a, b = integers(left), integers(right)
+    n = len(a)
+    # The column scales cancel in squared Pearson; no rounded mean or square root.
+    cross = n * sum(x * y for x, y in zip(a, b)) - sum(a) * sum(b)
+    aa = n * sum(x * x for x in a) - sum(a) ** 2
+    bb = n * sum(y * y for y in b) - sum(b) ** 2
+    numerator, denominator = cutoff.as_integer_ratio()
+    return bool(aa and bb and cross * cross * denominator**2 > numerator**2 * aa * bb)
+
+
 def feature_screen_report(
     X: Sequence[Sequence[float]] | pl.DataFrame,
     y: Sequence[float] | None = None,
@@ -1357,10 +1504,15 @@ def feature_screen_report(
     ValueError because each name identifies one column and its rejection reasons.
     DataFrame columns supply the default names, otherwise defaults are f0, f1, etc.
     The optional y is checked for matching length only and is not used for fitting.
+    NaN thresholds and sample standard deviations outside float64 range raise ValueError.
+    Overflow-prone or cancellation-sensitive screening moments use a robust fallback.
+    Among features passing coverage and spread gates, greedily retain columns in
+    decreasing (coverage, std) order, breaking ties by original column order.
+    Only a retained feature can justify a correlation rejection.
     """
-    if min_coverage <= 0.0 or min_coverage > 1.0:
+    if not 0.0 < min_coverage <= 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
-    if max_corr <= 0.0 or max_corr >= 1.0:
+    if not 0.0 < max_corr < 1.0:
         raise ValueError("max_corr must be in (0, 1)")
 
     if isinstance(X, pl.DataFrame):
@@ -1386,7 +1538,6 @@ def feature_screen_report(
         if len(y_vals) != n_rows:
             raise ValueError(f"y/X length mismatch: {len(y_vals)} vs {n_rows}")
 
-    per_feature_vals: list[list[float]] = []
     coverage: list[float] = []
     stds: list[float] = []
     reasons: dict[str, list[str]] = {name: [] for name in names}
@@ -1401,10 +1552,9 @@ def feature_screen_report(
             if not isfinite(vv):
                 continue
             vals.append(vv)
-        per_feature_vals.append(vals)
         cov = len(vals) / max(n_rows, 1)
         coverage.append(cov)
-        sd = _std(vals)
+        sd, _ = _screen_moments(vals)
         stds.append(sd)
         if cov < min_coverage:
             reasons[name].append(f"low_coverage<{min_coverage:.2f}")
@@ -1413,7 +1563,7 @@ def feature_screen_report(
 
     # Pairwise correlation with pairwise-valid rows only.
     corr = [[0.0 for _ in range(n_features)] for _ in range(n_features)]
-    high_corr_pairs: list[tuple[int, int, float]] = []
+    high_corr_neighbors: list[list[int]] = [[] for _ in names]
     for i in range(n_features):
         corr[i][i] = 1.0
         for j in range(i + 1, n_features):
@@ -1433,31 +1583,49 @@ def feature_screen_report(
             else:
                 ai = [p[0] for p in pairs]
                 aj = [p[1] for p in pairs]
-                mi = _mean(ai)
-                mj = _mean(aj)
-                sdi = _std(ai)
-                sdj = _std(aj)
+                sdi, robust_i = _screen_moments(ai)
+                sdj, robust_j = _screen_moments(aj)
                 if sdi <= _EPS or sdj <= _EPS:
                     c = 0.0
+                elif robust_i or robust_j or not isfinite(sdi * sdj):
+                    c = _screen_corr_scaled(ai, aj)
                 else:
+                    mi, mj = _mean(ai), _mean(aj)
                     cov = sum((u - mi) * (v - mj) for u, v in pairs) / (len(pairs) - 1)
                     c = cov / (sdi * sdj)
+                    if not isfinite(c):
+                        c = _screen_corr_scaled(ai, aj)
+            c = max(-1.0, min(1.0, c))
             corr[i][j] = c
             corr[j][i] = c
-            if abs(c) > max_corr:
-                high_corr_pairs.append((i, j, c))
+            # Floating report values cannot decide a strict boundary reliably.
+            # Use an exact predicate only near it; this band is a conservative
+            # summation-error heuristic, not a proof of all floating-point errors.
+            above_cutoff = abs(c) > max_corr
+            if len(pairs) >= 2 and sdi > _EPS and sdj > _EPS:
+                if abs(abs(c) - max_corr) <= 64 * float_info.epsilon * len(pairs):
+                    above_cutoff = _screen_corr_exceeds(ai, aj, max_corr)
+            if above_cutoff:
+                high_corr_neighbors[i].append(j)
+                high_corr_neighbors[j].append(i)
 
-    # Greedy correlated-feature rejection: drop weaker signal proxy first.
-    dropped: set[int] = set()
-    for i, j, c in sorted(high_corr_pairs, key=lambda t: abs(t[2]), reverse=True):
-        if i in dropped or j in dropped:
+    # Decide quality first; processing the strongest edges first can drop a
+    # feature against a neighbor that is itself rejected by a later edge.
+    accepted: set[int] = set()
+    priority = sorted(range(n_features), key=lambda i: (-coverage[i], -stds[i], i))
+    rank = {i: pos for pos, i in enumerate(priority)}
+    for i in priority:
+        if reasons[names[i]]:
             continue
-        score_i = (coverage[i], stds[i])
-        score_j = (coverage[j], stds[j])
-        drop = j if score_i >= score_j else i
-        keep = i if drop == j else j
-        dropped.add(drop)
-        reasons[names[drop]].append(f"high_corr>{max_corr:.2f}_with:{names[keep]}")
+        keep = min(
+            (j for j in high_corr_neighbors[i] if j in accepted),
+            key=rank.__getitem__,
+            default=None,
+        )
+        if keep is not None:
+            reasons[names[i]].append(f"high_corr>{max_corr:.2f}_with:{names[keep]}")
+        else:
+            accepted.add(i)
 
     rows_out = []
     selected_features: list[str] = []

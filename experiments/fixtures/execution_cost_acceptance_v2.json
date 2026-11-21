@@ -1,0 +1,792 @@
+{
+  "schema_version": 2,
+  "contract": {
+    "instrument": "SYNTH",
+    "currency": "USD",
+    "price_unit": "USD/share",
+    "fee_rate_unit": "fraction_of_absolute_executed_notional",
+    "fixed_fee_unit": "USD_per_nonzero_fill",
+    "timestamp_origin": "2026-01-01T00:00:00+00:00",
+    "timestamp_unit": "integer_seconds",
+    "ordering": "decision_strictly_before_fill",
+    "account": "long_only_no_borrowing",
+    "numeric_encoding": "exact_rational_strings"
+  },
+  "cases": [
+    {
+      "id": "zero_cost_control",
+      "fixed_fee": "0",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "80",
+          "56"
+        ],
+        "inventory": [
+          "2",
+          "5"
+        ],
+        "equity": [
+          "100",
+          "101"
+        ],
+        "commission": [
+          "0",
+          "0"
+        ],
+        "fill_shares": [
+          "2",
+          "3"
+        ],
+        "fill_prices": [
+          "10",
+          "8"
+        ],
+        "fill_commissions": [
+          "0",
+          "0"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": true
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "ten_basis_points_plus_per_fill_fee",
+      "fixed_fee": "1",
+      "fee_rate": "1/1000",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "78.98",
+          "53.956"
+        ],
+        "inventory": [
+          "2",
+          "5"
+        ],
+        "equity": [
+          "98.98",
+          "98.956"
+        ],
+        "commission": [
+          "1.02",
+          "1.024"
+        ],
+        "fill_shares": [
+          "2",
+          "3"
+        ],
+        "fill_prices": [
+          "10",
+          "8"
+        ],
+        "fill_commissions": [
+          "1.02",
+          "1.024"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": true
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "paid_terminal_liquidation",
+      "fixed_fee": "1",
+      "fee_rate": "1/1000",
+      "terminal_volume": "5",
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "78.98",
+          "53.956",
+          "97.911"
+        ],
+        "inventory": [
+          "2",
+          "5",
+          "0"
+        ],
+        "equity": [
+          "98.98",
+          "98.956",
+          "97.911"
+        ],
+        "commission": [
+          "1.02",
+          "1.024",
+          "1.045"
+        ],
+        "fill_shares": [
+          "2",
+          "3",
+          "-5"
+        ],
+        "fill_prices": [
+          "10",
+          "8",
+          "9"
+        ],
+        "fill_commissions": [
+          "1.02",
+          "1.024",
+          "1.045"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": true
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "paid_incomplete_terminal_liquidation",
+      "fixed_fee": "1",
+      "fee_rate": "1/1000",
+      "terminal_volume": "2",
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "78.98",
+          "53.956",
+          "70.938"
+        ],
+        "inventory": [
+          "2",
+          "5",
+          "3"
+        ],
+        "equity": [
+          "98.98",
+          "98.956",
+          "97.938"
+        ],
+        "commission": [
+          "1.02",
+          "1.024",
+          "1.018"
+        ],
+        "fill_shares": [
+          "2",
+          "3",
+          "-2"
+        ],
+        "fill_prices": [
+          "10",
+          "8",
+          "9"
+        ],
+        "fill_commissions": [
+          "1.02",
+          "1.024",
+          "1.018"
+        ],
+        "terminal_completed": false,
+        "decisions_completed": true
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "zero_fill_no_fee",
+      "fixed_fee": "1",
+      "fee_rate": "1/1000",
+      "terminal_volume": null,
+      "volumes": [
+        "0",
+        "0"
+      ],
+      "expected": {
+        "cash": [
+          "100",
+          "100"
+        ],
+        "inventory": [
+          "0",
+          "0"
+        ],
+        "equity": [
+          "100",
+          "100"
+        ],
+        "commission": [
+          "0",
+          "0"
+        ],
+        "fill_shares": [],
+        "fill_prices": [],
+        "fill_commissions": [],
+        "terminal_completed": true,
+        "decisions_completed": false
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "same_time_decision_waits",
+      "fixed_fee": "0",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "100",
+          "76"
+        ],
+        "inventory": [
+          "0",
+          "3"
+        ],
+        "equity": [
+          "100",
+          "103"
+        ],
+        "commission": [
+          "0",
+          "0"
+        ],
+        "fill_shares": [
+          "3"
+        ],
+        "fill_prices": [
+          "8"
+        ],
+        "fill_commissions": [
+          "0"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": false
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 1,
+          "decision_at": 1,
+          "earliest_fill_at": 1,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "sell_two_fills_paid",
+      "fixed_fee": "1",
+      "fee_rate": "1/1000",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "116.982",
+          "138.4595"
+        ],
+        "inventory": [
+          "3",
+          "0"
+        ],
+        "equity": [
+          "146.982",
+          "138.4595"
+        ],
+        "commission": [
+          "1.018",
+          "1.0225"
+        ],
+        "fill_shares": [
+          "-2",
+          "-3"
+        ],
+        "fill_prices": [
+          "9",
+          "7.5"
+        ],
+        "fill_commissions": [
+          "1.018",
+          "1.0225"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": true
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "5",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "-5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "deadline_inclusive",
+      "fixed_fee": "0",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "expected": {
+        "cash": [
+          "80",
+          "80"
+        ],
+        "inventory": [
+          "2",
+          "2"
+        ],
+        "equity": [
+          "100",
+          "98"
+        ],
+        "commission": [
+          "0",
+          "0"
+        ],
+        "fill_shares": [
+          "2"
+        ],
+        "fill_prices": [
+          "10"
+        ],
+        "fill_commissions": [
+          "0"
+        ],
+        "terminal_completed": true,
+        "decisions_completed": false
+      },
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 1,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      }
+    },
+    {
+      "id": "cash_exhaustion_rejected",
+      "fixed_fee": "0",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "19",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      },
+      "expected_error": "cash would become negative"
+    },
+    {
+      "id": "short_inventory_rejected",
+      "fixed_fee": "0",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "100",
+          "inventory": "0",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "-5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      },
+      "expected_error": "inventory would become negative"
+    },
+    {
+      "id": "fee_exceeds_sale_proceeds_rejected",
+      "fixed_fee": "19",
+      "fee_rate": "0",
+      "terminal_volume": null,
+      "volumes": [
+        "2",
+        "3"
+      ],
+      "scenario": {
+        "initial": {
+          "at": 0,
+          "cash": "0",
+          "inventory": "5",
+          "mark": "10"
+        },
+        "decision": {
+          "id": "buy",
+          "information_at": 0,
+          "decision_at": 0,
+          "earliest_fill_at": 0,
+          "deadline": 2,
+          "shares": "-5"
+        },
+        "buckets": [
+          {
+            "at": 1,
+            "mark": "10",
+            "bid": "9",
+            "ask": "10"
+          },
+          {
+            "at": 2,
+            "mark": "9",
+            "bid": "7.5",
+            "ask": "8"
+          }
+        ],
+        "terminal_bucket": {
+          "at": 3,
+          "mark": "9",
+          "bid": "9",
+          "ask": "9.5"
+        },
+        "participation": "1"
+      },
+      "expected_error": "cash would become negative"
+    }
+  ]
+}

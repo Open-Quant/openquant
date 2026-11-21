@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-13'
+last_authored: '2026-11-21'
 audience:
   - coding-agent
   - platform-engineering
@@ -26,12 +26,15 @@ second list of APIs.
 | --- | --- | --- |
 | Call an API from Python | [Python API](/api/python/), then its [module guide](/modules/) | Exact import, signature, return shape and documented limitations |
 | Change the Rust core | [Rust workflow](/workflows/rust-core-workflow/) and [rustdoc](/api/rust/openquant/) | The implementation and its independent-reference tests |
+| Verify a Rust-only documentation example | [Checked Rust learning path](/examples/catalog/#choose-a-checked-rust-example) | Record figure parity, snippet compilation, and the ETF output comparison separately; use the exact CI revision |
 | Run or reproduce a research experiment | [Research workflow](/workflows/notebook-research-workflow/) and [runbooks](/runbooks/) | Notebook tier, dataset hash, seed, trial count, costs and out-of-sample evaluation |
+| Run one configured offline synthetic lab | [Run and replay an offline lab](/examples/catalog/#run-and-replay-an-offline-lab) | Explicit config, fresh process, new output, receipt identity and separate replay; no native extension is needed for this path |
 | Select data available at a decision cutoff | [Point-in-time data workflow](/workflows/point-in-time-data/) | Observation versus availability time, revision selection and policy identity; synthetic checks do not verify a provider’s history |
 | Build or repartition bars | [Bar contract examples](/modules/data-structures/#audit-a-small-bar-by-hand) and [reset policy](/modules/data-structures/#decide-where-aggregation-state-resets) | Retained trades, closing-row membership, overshoot, partial tails and session boundaries; equal output counts do not establish equivalent bars |
 | Load or adapt market data | [Data](/modules/data/) and [adapters](/modules/adapters/) | Timestamp units, row order, missing values and provenance; a converted frame is not a quality certificate |
 | Connect market-data rows to named allocations | [Multi-asset allocation walkthrough](/workflows/multi-asset-allocation/) | Common observation times, matrix axes, weight names and fitting boundary; calculated weights are not a realized backtest |
 | Select parameters and assess a final holdout | [Model-selection walkthrough](/workflows/model-selection-holdout/), then [cross-validation](/modules/cross-validation/) | Development-only search, fold-local preprocessing, final refit and an untouched assessment span |
+| Diagnose or select model features | [Python workflow diagnostics](/workflows/python-core-workflow/#feature-diagnostics-before-you-trust-any-of-it), then [purged diagnostics](/modules/feature-diagnostics/#purged-folds-are-mandatory) | Exact resolution-row indices; coefficient proxy vs permutation score; no full-sample screening or PCA before validation |
 | Interpret supplied evaluation results | [Evaluation](/modules/evaluation/) | Return conventions, label spans and the complete inventory of tried configurations |
 | Resume or audit saved work | [Journey readback](/workflows/research-journey/#read-back-and-check-the-handoffs) and [grid artifacts](/examples/catalog/#run-a-configuration-grid-and-read-its-artifacts) | Saved inputs/configuration, exact output paths and artifact consistency; a leaderboard is not a trial registry |
 | Diagnose a failed command | [Troubleshooting](/setup/troubleshooting/) | Exact command, interpreter/import paths and the first failing gate |
@@ -61,6 +64,31 @@ command descriptions against that checkout's scripts.
 These are capability notes, not replacements for skill instructions. Select the exact
 single-run or grid-run directory printed by the runner for the artifact audit; its
 structural pass is only one part of reviewing data lineage and research validity.
+
+## A bounded task recipe
+
+For a request such as “reproduce this synthetic lab report,” keep the deliverable
+smaller than “validate the research.” Follow the [worked run/replay example](/examples/catalog/#run-and-replay-an-offline-lab)
+and the existing [runner contract](https://github.com/Open-Quant/openquant/blob/main/experiments/OFFLINE_LAB_RUNNER.md):
+
+1. **Identify:** record the checkout commit and dirty state, selected lab, config
+   bytes, interpreter and numerical versions. A website example is not evidence
+   that the same source is installed locally.
+2. **Bound:** inspect `list` and the explicit config before starting. Select a small
+   checked-in smoke config for interface verification, not full defaults or a broad
+   sweep. The runner is neither a sandbox nor a compute budget.
+3. **Execute:** use a fresh process and an unused output path. Keep the source tree
+   unchanged during execution; preserve any existing result instead of replacing it.
+4. **Read back:** compare the saved config/report bytes with the receipt hashes.
+   The runner says `scientific_replay_performed: false`; run the separate replay only
+   when that is part of the task and record its exact result.
+5. **Hand off:** retain config, report, stdout receipt, replay result and check logs.
+   Report separately what ran, what matched and what remains unverified. Do not
+   describe a smoke run as a full study or a matching replay as trading approval.
+
+If execution fails after the output was published, inspect it before retrying. Do
+not delete evidence to make the same command work. For notebook requests, use the
+notebook workflow instead: a lab replay is not a substitute for a real Jupyter run.
 
 ## Resolve the source of truth
 
@@ -94,6 +122,7 @@ Edit the source, then regenerate. Do not patch generated outputs alone.
 | API inventory | Rust and Python source → `scripts/generate_api_inventory.py` |
 | Python API reference | Built extension, generated stubs and public Python source → `scripts/generate_python_api_reference.py` |
 | Research gallery, performance and changelog pages | Notebooks, benchmarks, `CHANGELOG.md` → `scripts/docs/generate_site_pages.py --write` |
+| Four Rust-only module SVGs | Independent explanatory calculations → `scripts/docs/generate_rust_module_figures.py --write`; see [figure checks](/setup/local-build/#check-the-four-rust-only-illustrations-and-etf-output) |
 | Coverage dashboard | Current source and documentation tree → `scripts/docs/check_coverage.py --write` |
 
 Authored runbooks and generated gallery summaries can describe the same notebook. When a
@@ -185,6 +214,32 @@ loaded binary. Include the saved artifacts and unresolved failures so the next a
 read back evidence before rerunning or overwriting it. Distinguish an API tour from a research runbook using the
 [notebook contract](/workflows/research-notebook-contract/); successful execution of a tour
 is not experimental validation.
+
+### Resume from a durable checkpoint
+
+Do not assume a prior worker's filesystem, running kernel or installed extension
+still exists. A handoff should let a fresh worker reconstruct the candidate without
+relying on the chat's completion claim.
+
+| Retain | Verify on resume |
+| --- | --- |
+| Exact base commit plus patch or a self-contained Git bundle | Restore in an isolated copy; compare the restored files/tree and check patch applicability before editing |
+| Archive checksum and a manifest of its contents | Check the transferred bytes; a checksum is identity evidence, not numerical validation |
+| Build command and [loaded-source receipt](/setup/python-bindings/#record-what-the-interpreter-loaded) | Check the current interpreter and native build; do not inherit the old process's imports |
+| Exact commands, exit status and logs, including failures | Rerun the first relevant gate; label earlier results as historical until rerun |
+| Remaining work, scope boundaries and output paths | Reconcile current main and sibling work before applying cumulative changes |
+
+A branch being behind main does not mean every old patch is missing. Compare the
+actual changed files, not only commit ancestry, because squash merges can preserve
+changes under another commit. Retain only missing, still-intended deltas on the
+new base and revalidate them together. Conversely, another documentation deployment
+does not prove a private patch was published.
+
+Report these separately: **restored**, **tested**, **reviewed**, **merged** and
+**deployed**. Passing a restore or metadata-identity check establishes none of the
+later states by itself. If the saved patch or continuation cannot be recovered,
+report that gap and investigate current source rather than claiming cumulative
+progress from memory.
 
 ## Before changing a bar pipeline
 
