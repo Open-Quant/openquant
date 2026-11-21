@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-17'
+last_authored: '2026-11-20'
 audience:
   - coding-agent
   - platform-engineering
@@ -26,6 +26,7 @@ second list of APIs.
 | --- | --- | --- |
 | Call an API from Python | [Python API](/api/python/), then its [module guide](/modules/) | Exact import, signature, return shape and documented limitations |
 | Change the Rust core | [Rust workflow](/workflows/rust-core-workflow/) and [rustdoc](/api/rust/openquant/) | The implementation and its independent-reference tests |
+| Verify a Rust-only documentation example | [Checked Rust learning path](/examples/catalog/#choose-a-checked-rust-example) | Record figure parity, snippet compilation, and the ETF output comparison separately; use the exact CI revision |
 | Run or reproduce a research experiment | [Research workflow](/workflows/notebook-research-workflow/) and [runbooks](/runbooks/) | Notebook tier, dataset hash, seed, trial count, costs and out-of-sample evaluation |
 | Run one configured offline synthetic lab | [Run and replay an offline lab](/examples/catalog/#run-and-replay-an-offline-lab) | Explicit config, fresh process, new output, receipt identity and separate replay; no native extension is needed for this path |
 | Select data available at a decision cutoff | [Point-in-time data workflow](/workflows/point-in-time-data/) | Observation versus availability time, revision selection and policy identity; synthetic checks do not verify a provider’s history |

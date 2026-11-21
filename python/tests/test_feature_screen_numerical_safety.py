@@ -107,3 +107,15 @@ def test_feature_screen_extreme_correlation_around_cutoff(target_corr, expected_
     )
     assert len(report["selected_features"]) == expected_count
     assert report["records"][0]["max_abs_corr"] == pytest.approx(abs(target_corr), abs=1e-14)
+
+
+@pytest.mark.parametrize("scale", [1e-160, 1e-161, 1e-200, math.ulp(0.0)])
+def test_feature_screen_reports_representable_tiny_standard_deviation(scale):
+    # Exact centered sample variance of [-a, 0, a] is a**2. The
+    # variance need not be representable for its square root to be representable.
+    report = openquant.feature_diagnostics.feature_screen_report([[-scale], [0.0], [scale]])
+    assert report["records"][0]["std"] == pytest.approx(scale, rel=2e-15, abs=0.0)
+    # Preserve the public absolute near-constant policy; this fixes metadata,
+    # not a change to the screening decision or its units.
+    assert report["rejected_features"] == ["f0"]
+    assert report["rejection_reasons"]["f0"] == ["constant_or_near_constant"]

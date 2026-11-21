@@ -3,8 +3,11 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from fractions import Fraction
 from math import ceil, exp, fsum, isfinite, lcm, log, log1p, sqrt
+from numbers import Real
+from operator import index
 from statistics import stdev
 from sys import float_info
 from typing import Any
@@ -36,11 +39,26 @@ def _as_matrix(x: Sequence[Sequence[float]]) -> list[list[float]]:
 
 
 def _as_vector(y: Sequence[float], n_rows: int) -> list[float]:
-    out = [float(v) for v in y]
+    message = "y must contain finite binary labels (0 or 1)"
+    out = []
+    for value in y:
+        if type(value) is float or type(value) is int:
+            if value not in (0, 1):
+                raise ValueError(message)
+            out.append(float(value))
+            continue
+        if (
+            isinstance(value, (complex, np.complexfloating))
+            or (isinstance(value, Decimal) and not value.is_finite())
+            or (isinstance(value, (Decimal, Real, np.integer, np.floating)) and value not in (0, 1))
+        ):
+            raise ValueError(message)
+        converted = float(value)
+        if converted not in (0.0, 1.0):
+            raise ValueError(message)
+        out.append(converted)
     if len(out) != n_rows:
         raise ValueError(f"y/X length mismatch: {len(out)} vs {n_rows}")
-    if any(not isfinite(v) or v not in (0.0, 1.0) for v in out):
-        raise ValueError("y must contain finite binary labels (0 or 1)")
     return out
 
 
@@ -97,7 +115,14 @@ def _build_intervals(
                 "embargo-only splits explicitly."
             )
         return [(i, i) for i in range(n_rows)]
-    ends = [int(v) for v in event_end_indices]
+    ends = []
+    for value in event_end_indices:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError("event_end_indices must contain exact non-boolean integers")
+        try:
+            ends.append(index(value))
+        except TypeError as exc:
+            raise ValueError("event_end_indices must contain exact non-boolean integers") from exc
     if len(ends) != n_rows:
         raise ValueError(f"event_end_indices/X length mismatch: {len(ends)} vs {n_rows}")
     intervals: list[tuple[int, int]] = []
@@ -797,8 +822,9 @@ def mda_importance(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -929,8 +955,9 @@ def sfi_importance(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -1207,8 +1234,9 @@ def substitution_effect_report(
         Cross-validation requires positive weight in each training and test fold.
         Zero-weight rows are allowed.
     event_end_indices : Sequence[int] or None, default None
-        Row index at which each sample's label is resolved (must be `>=` the sample's own
-        index; values past the last row are clipped). Required unless `allow_unpurged`.
+        Exact non-boolean integer row index at which each sample's label is resolved (must be
+        `>=` the sample's own index; values past the last row are clipped). Required unless
+        `allow_unpurged`.
     n_splits : int, default 5
         Number of contiguous folds (2 to the number of samples).
     pct_embargo : float, default 0.01
@@ -1378,7 +1406,7 @@ def substitution_effect_report(
 
 
 def _screen_moments(values: Sequence[float]) -> tuple[float, bool]:
-    """Preserve ordinary arithmetic unless overflow or offset cancellation threatens."""
+    """Keep ordinary arithmetic unless squared spread under/overflows or centering cancels."""
     if len(values) < 2:
         return 0.0, False
     mean = _mean(values)
@@ -1386,7 +1414,12 @@ def _screen_moments(values: Sequence[float]) -> tuple[float, bool]:
         result = sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
         # A conservative sqrt(epsilon)-scale heuristic, not a precision guarantee.
         # Reuse the mean already needed for variance instead of rescanning magnitudes.
-        if isfinite(result) and (result >= abs(mean) * 1e-8 or all(v == values[0] for v in values)):
+        # Positive subnormal variance is also inaccurate, not merely zero variance.
+        # stdev can recover a representable root without rounding the squared spread.
+        constant = all(v == values[0] for v in values)
+        if isfinite(result) and (
+            constant or (result >= sqrt(float_info.min) and result >= abs(mean) * 1e-8)
+        ):
             return result, False
     except OverflowError:
         pass
@@ -1451,6 +1484,9 @@ def feature_screen_report(
     The optional y is checked for matching length only and is not used for fitting.
     NaN thresholds and sample standard deviations outside float64 range raise ValueError.
     Overflow-prone or cancellation-sensitive screening moments use a robust fallback.
+    Among features passing coverage and spread gates, greedily retain columns in
+    decreasing (coverage, std) order, breaking ties by original column order.
+    Only a retained feature can justify a correlation rejection.
     """
     if not 0.0 < min_coverage <= 1.0:
         raise ValueError("min_coverage must be in (0, 1]")
@@ -1480,7 +1516,6 @@ def feature_screen_report(
         if len(y_vals) != n_rows:
             raise ValueError(f"y/X length mismatch: {len(y_vals)} vs {n_rows}")
 
-    per_feature_vals: list[list[float]] = []
     coverage: list[float] = []
     stds: list[float] = []
     reasons: dict[str, list[str]] = {name: [] for name in names}
@@ -1495,7 +1530,6 @@ def feature_screen_report(
             if not isfinite(vv):
                 continue
             vals.append(vv)
-        per_feature_vals.append(vals)
         cov = len(vals) / max(n_rows, 1)
         coverage.append(cov)
         sd, _ = _screen_moments(vals)
@@ -1507,7 +1541,7 @@ def feature_screen_report(
 
     # Pairwise correlation with pairwise-valid rows only.
     corr = [[0.0 for _ in range(n_features)] for _ in range(n_features)]
-    high_corr_pairs: list[tuple[int, int, float]] = []
+    high_corr_neighbors: list[list[int]] = [[] for _ in names]
     for i in range(n_features):
         corr[i][i] = 1.0
         for j in range(i + 1, n_features):
@@ -1550,19 +1584,26 @@ def feature_screen_report(
                 if abs(abs(c) - max_corr) <= 64 * float_info.epsilon * len(pairs):
                     above_cutoff = _screen_corr_exceeds(ai, aj, max_corr)
             if above_cutoff:
-                high_corr_pairs.append((i, j, c))
+                high_corr_neighbors[i].append(j)
+                high_corr_neighbors[j].append(i)
 
-    # Greedy correlated-feature rejection: drop weaker signal proxy first.
-    dropped: set[int] = set()
-    for i, j, c in sorted(high_corr_pairs, key=lambda t: abs(t[2]), reverse=True):
-        if i in dropped or j in dropped:
+    # Decide quality first; processing the strongest edges first can drop a
+    # feature against a neighbor that is itself rejected by a later edge.
+    accepted: set[int] = set()
+    priority = sorted(range(n_features), key=lambda i: (-coverage[i], -stds[i], i))
+    rank = {i: pos for pos, i in enumerate(priority)}
+    for i in priority:
+        if reasons[names[i]]:
             continue
-        score_i = (coverage[i], stds[i])
-        score_j = (coverage[j], stds[j])
-        drop = j if score_i >= score_j else i
-        keep = i if drop == j else j
-        dropped.add(drop)
-        reasons[names[drop]].append(f"high_corr>{max_corr:.2f}_with:{names[keep]}")
+        keep = min(
+            (j for j in high_corr_neighbors[i] if j in accepted),
+            key=rank.__getitem__,
+            default=None,
+        )
+        if keep is not None:
+            reasons[names[i]].append(f"high_corr>{max_corr:.2f}_with:{names[keep]}")
+        else:
+            accepted.add(i)
 
     rows_out = []
     selected_features: list[str] = []

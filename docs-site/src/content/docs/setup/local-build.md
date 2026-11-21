@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-17'
+last_authored: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -15,6 +15,10 @@ runs. If you are here to *use* OpenQuant rather than to change it, the
 [Quickstart](/quickstart/) is shorter and ends with a result.
 
 ## Build and test the Rust core
+
+To build only the Rust crate without the Python extension, run
+`cargo build --locked -p openquant` from the repository root. The workspace-wide
+maintainer checks below include the Python extension crate.
 
 ```bash
 cargo build --all-features
@@ -276,9 +280,17 @@ Two rules catch most failures. A `draft` may not carry `last_validated` —
 drop the field; do not invent a validation. A stamp may not predate the
 page's last content change. AI-authored changes stop at `authored` with a current
 `last_authored`; `reviewed` and `validated` require a human. Use `draft` when
-the page is incomplete. The gate reads the change
-date from `git log` plus the working-tree mtime, so an uncommitted edit
-counts.
+the page is incomplete. The gate reads Git history and considers the mtime
+of working-tree edits. It compares the body when a change looks stale, so
+moving only frontmatter does not ordinarily require rereading unchanged prose.
+
+Run `npm run check:content-schema` from `docs-site/` on the **committed
+candidate** as well as the working copy. If an integration tool reconstructs
+several commits as one, recheck that new head: the gate can now see the
+new commit date as the last body-change date even when the proposed text
+did not change again. Reread and accurately stamp only the affected authored
+pages, or keep incomplete pages draft. Use the final head's hosted check as
+evidence, not an earlier branch's pass.
 
 The coloured pill a reader sees at the top of every page is rendered from
 `status` by the `Banner` override in `src/components/DocStatusBanner.astro`,

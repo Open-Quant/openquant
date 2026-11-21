@@ -3,7 +3,7 @@ title: "Changelog"
 description: "Notable changes to OpenQuant, rendered from CHANGELOG.md."
 status: generated
 generated_from: "CHANGELOG.md"
-last_generated: '2026-11-17'
+last_generated: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -16,10 +16,13 @@ sidebar:
 
 Notable changes to OpenQuant, newest first within each section. OpenQuant is pre-release:
 use the [source installation](https://github.com/Open-Quant/openquant/blob/main/README.md#install) until a package release is verified.
-The intended registry names are `openquant` on crates.io and `pyopenquant` on PyPI
-(import name `openquant`). A manifest version, changelog heading or green build does not
-prove publication. Changes awaiting release sit under **Unreleased**; maintainers prepare
-a dated version section before tagging, then verify registry availability separately.
+The intended registry entries are [`openquant` on crates.io](https://crates.io/crates/openquant)
+and [`pyopenquant` on PyPI](https://pypi.org/project/pyopenquant/) (import name `openquant`).
+Check the **exact version** for the language you use; confirm the files before installing.
+A version in a manifest or changelog is not a registry listing, and a successful dry run does
+not publish anything. See the [release evidence checklist](https://github.com/Open-Quant/openquant/blob/main/docs/publishing.md#verify-what-was-published).
+Changes awaiting release sit under **Unreleased**; maintainers prepare a dated version
+section before tagging, then verify registry availability separately.
 
 Each entry links the pull request that made the change; the linked issue, where there is
 one, is in parentheses. Entries were seeded from the titles of the merged pull requests.

@@ -100,8 +100,9 @@ in the bare engine and now receives a clear adapter-boundary rejection. Review
 found several audit omissions; targeted negative tests now cover those repairs.
 These are synthetic correctness checks, not investment results or speed claims.
 
-Next useful integration is an explicit, versioned admission/residual capability
-profile for the portable acceptance gate. It must distinguish whole-order
+The [November 18 capability preflight](EXECUTION_CAPABILITY_PROFILE.md) now
+implements a versioned admission/residual screen without changing the portable
+acceptance gate or claiming parity. It distinguishes whole-order
 precheck, per-fill rejection, terminal residual, feed-end active residual and
 order-local versus shared volume. Do not translate `Margin` to retryable pending
 or change fixtures to obtain agreement. Bid/ask/mark separation, sells/shorts,

@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 
 from . import _core
+from ._estimator import _positive_proba
 from .cross_validation import purged_kfold_splits
 
 _ht = _core.hyperparameter_tuning
@@ -87,16 +88,6 @@ def classification_score(
         None if sample_weight is None else np.asarray(sample_weight, dtype=np.float64).tolist(),
         scoring,
     )
-
-
-def _positive_proba(model: Any, x: np.ndarray) -> np.ndarray:
-    p = np.asarray(model.predict_proba(x), dtype=np.float64)
-    if p.ndim == 2:
-        classes = list(getattr(model, "classes_", [0, 1]))
-        if 1 not in classes:
-            return np.zeros(len(x))
-        p = p[:, classes.index(1)]
-    return p
 
 
 def purged_search(

@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-11-16'
+last_authored: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -415,7 +415,7 @@ executor without rewriting the research notebook.
 | First error | What to check next |
 | --- | --- |
 | Kernel not found or an unexpected Python executable | Inspect the environment's `python3` kernelspec and the probe's inside-kernel paths. The executor explicitly selects `python3`; notebook metadata alone does not override it. |
-| `Operation not permitted` during network-interface discovery | Identify the failing call in the traceback. A restricted environment may deny interface enumeration even when a loopback socket can bind. Do not diagnose every such error as “all sockets are disabled.” |
+| Kernel dies before replying to `kernel_info` | Read the earlier exception. A restricted Linux run reproduced this with `Operation not permitted` during ZeroMQ interface discovery. Interface enumeration can fail even when a loopback socket can bind; the final exception alone does not identify the cause. |
 | Address binding denied or port already in use | Inspect the actual bind error and the runtime's loopback permissions. This is a different failure from interface discovery. |
 | A Python cell traceback | Inspect the partially executed output at the path reported by the executor. Fix that cell or its input, not the kernel's startup configuration. |
 
@@ -497,24 +497,3 @@ uv run --no-sync --python .venv/bin/python python -c "import platform, sys; prin
 Include the exact failing command and its first substantive error, plus the interpreter
 and extension paths when import succeeds. Redact credentials or private source locations
 from logs before sharing them.
-
-## Notebook kernel dies before replying to `kernel_info`
-
-**Symptom** — the notebook executor or the documentation's kernel probe exits with
-`RuntimeError: Kernel died before replying to kernel_info`. Earlier in the same log,
-ZeroMQ or interface discovery reports `Operation not permitted`.
-
-**Reproduced** in a restricted Linux execution environment: the package imported and
-ordinary Python examples ran, but the Jupyter kernel could not initialize its local
-communication sockets. The final `kernel_info` error alone does not establish this
-cause; check the earlier error before applying this diagnosis.
-
-**Next step** — run the same probe in an environment that permits Jupyter's local
-kernel communication, following that environment's access policy. Preserve the failed
-log and selected Python/kernel paths. Do not replace the notebook executor with a plain
-cell loop, mark the example as skipped, or report an executed notebook just because its
-cells pass as independent scripts. If no suitable environment is available, report
-notebook execution as blocked while retaining the results of independent checks.
-
-See the [notebook workflow](/workflows/notebook-research-workflow/) for the kernel probe
-and the distinction between executing cells and reproducing a saved notebook.

@@ -17,7 +17,7 @@ hero:
       link: /openquant/agents/
       variant: minimal
 status: authored
-last_authored: '2026-11-15'
+last_authored: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -147,7 +147,8 @@ print("first label:", labels[0])
 print("label counts:", {b: sum(1 for row in labels if row[3] == b) for b in (-1, 1)})
 ```
 
-The walk is seeded, so this prints the same thing every time:
+The walk is seeded. The output below is checked against the documented environment;
+platform or dependency changes can still alter floating-point details:
 
 ```text
 500 bars -> 42 events -> 41 labels
@@ -187,7 +188,8 @@ signatures and return values, or [Rust API](/api/rust/openquant/) for the core.
 
 - **Examples:** the docs gate executes runnable Python snippets and checks their
   documented output. Rust module examples and the complete Rust core workflow are
-  compile-checked, not executed.
+  compile-checked, not executed by that gate. A separate gate executes `docs_etf_trick`
+  and compares its ETF and futures-roll output.
   Explicitly skipped Python snippets are syntax-checked only.
 - **Review status:** each page carries its own status. *Authored* is not a human
   review; *generated* is not a correctness claim. The

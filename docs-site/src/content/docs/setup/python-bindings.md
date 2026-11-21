@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-11-15'
+last_authored: '2026-11-18'
 audience:
   - quant-dev
   - platform-engineering

@@ -5,7 +5,10 @@ valid targets, and feature names must identify columns without aliasing them.
 """
 
 import math
+from decimal import Decimal
+from fractions import Fraction
 
+import numpy as np
 import polars as pl
 import pytest
 from openquant import feature_diagnostics as fd
@@ -86,3 +89,22 @@ def test_screen_default_dataframe_names_keep_reasons_separate():
     rows = {row["feature"]: row for row in result["table"].to_dicts()}
     assert "constant_or_near_constant" in rows["constant"]["reasons"]
     assert "constant_or_near_constant" not in rows["varying"]["reasons"]
+
+
+@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize(
+    "bad_label",
+    [Decimal("1.00000000000000000000000001"), Fraction(1, 10**400), np.complex64(1j)],
+)
+def test_importance_rejects_invalid_labels_before_lossy_conversion(method, bad_label):
+    labels = Y.copy()
+    labels[5] = bad_label
+    with pytest.raises(ValueError, match=r"y.*finite.*binary"):
+        _call(method, labels)
+
+
+def test_exact_numeric_binary_labels_preserve_importance():
+    labels = [Decimal("0") if label == 0 else Fraction(1) for label in Y]
+    actual = _call("sfi_importance", labels)
+    expected = _call("sfi_importance", Y)
+    assert actual["records"] == expected["records"]

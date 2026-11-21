@@ -2,7 +2,7 @@
 title: Examples Catalog
 description: Runnable examples that ship in this repository, and what each one demonstrates.
 status: authored
-last_authored: '2026-11-15'
+last_authored: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -357,12 +357,38 @@ Choose the workflow whose scope matches the task:
 | Look up one module | [Modules by AFML chapter](/module-reference/by-afml-chapter/) |
 | Build and test the repo | [Local Build Setup](/setup/local-build/) |
 
+## Choose a checked Rust example
+
+These four modules have no public Python binding. Install the [pinned Rust
+toolchain and native prerequisites](/setup/local-build/#build-and-test-the-rust-core),
+then pick a small question:
+
+| Question | Start with | Evidence to inspect |
+|---|---|---|
+| When does a fixed cost change an optimal inventory path? | [Combinatorial optimization](/modules/combinatorial-optimization/#a-fixed-cost-changes-the-path) | Compare the illustrated three paths and check a heuristic against the exact small-instance result. |
+| How does rolling a futures contract change earlier prices? | [ETF trick and roll adjustment](/modules/etf-trick/#rolling-one-contract) | Run the basket and roll example and compare both printed sequences. A continuous price series is not a return or a fill model. |
+| How can a fitted response depend on a feature or an interaction? | [Model fingerprint](/modules/fingerprint/#on-a-model-whose-answer-is-known) | Use a known response to distinguish the fitted line, centered nonlinear effect, and interaction residual. |
+| What does equal work mean when task sizes differ? | [HPC partitioning](/modules/hpc-parallel/#equal-atoms-or-equal-work) | Compare partition workloads rather than assuming equal row counts imply equal work or faster execution. |
+
+From the repository root run the ETF output comparison:
+
+```bash
+node docs-site/scripts/check-rust-output.mjs
+```
+
+The comparator runs the locked Rust example and checks both documented output
+blocks. It needs Cargo and Node, not PyO3. For the four figures, use the separate
+[figure check](/setup/local-build/#check-the-four-rust-only-illustrations-and-etf-output).
+An SVG parity check confirms generator agreement, not a Rust execution; a
+snippet compile confirms code compiles, not that it ran.
+
 ## Worked examples on other pages
 
 This page executes the cleaning and grid-artifact examples above. Other examples live next to their methods.
 The Python documentation gate executes runnable fences and compares following output blocks;
-the Rust module gate compiles examples but does not run them. Walkthroughs and notebooks
-need their own execution checks:
+the Rust module gate compiles examples but does not run them. The separate
+`check:rust-output` gate executes the `docs_etf_trick` example and compares its ETF and futures-roll
+documented output. Other walkthroughs and notebooks need their own execution checks:
 
 - **Feature diagnostics** (MDI, MDA and SFI on the same features, with
   purged folds): [Feature diagnostics](/modules/feature-diagnostics/#three-rankings-of-the-same-features),

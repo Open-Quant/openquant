@@ -2,7 +2,7 @@
 title: Quickstart
 description: Build OpenQuant from source, run a synthetic pipeline and interpret its output.
 status: authored
-last_authored: '2026-11-15'
+last_authored: '2026-11-20'
 audience:
   - quant-dev
   - platform-engineering
@@ -11,7 +11,10 @@ sidebar:
 ---
 
 This is the human learning path. For repository automation, use the
-[agent guide](/agents/) alongside it.
+[agent guide](/agents/) alongside it. If you only need the Rust crate, skip the
+Python environment below. Start with the [Rust build](/setup/local-build/#build-and-test-the-rust-core),
+then [choose a checked Rust example](/examples/catalog/#choose-a-checked-rust-example)
+or read the connected [Rust workflow](/workflows/rust-core-workflow/).
 
 Want to inspect a small research report before compiling the native package?
 Use the [offline lab smoke path](/examples/catalog/#run-and-replay-an-offline-lab),
@@ -224,7 +227,7 @@ realized Sharpe does when you configure one.
 while `realized_sharpe` is -2.70. They answer different questions:
 `portfolio_sharpe` is the in-sample optimum of the allocator across the
 four synthetic assets, and `realized_sharpe` is what the traded strategy
-actually returned. Reading the first as the second is the single easiest
+calculated on the synthetic close series, not returns realized in an account. Reading the first as the second is the single easiest
 way to convince yourself you have found something.
 
 **Every Sharpe ratio and volatility here is annualised for one-minute

@@ -115,6 +115,21 @@ file uploads need an explicit recovery review, not an assumption that the versio
 absent. Published files/versions cannot simply be overwritten; a defective published
 package normally needs a new patch version.
 
+## Verify what was published
+
+Treat these as separate questions, especially after a partial failure:
+
+| Question | Evidence to retain |
+|---|---|
+| Which source was packaged? | Exact tag, commit and release workflow run URL. A tag identifies a source revision, not available registry artifacts. |
+| What can readers install? | Exact listed version and filenames on [PyPI (`pyopenquant`)](https://pypi.org/project/pyopenquant/), or the exact version on [crates.io (`openquant`)](https://crates.io/crates/openquant). Check Python and platform compatibility before choosing a wheel. |
+| Does the package work without the checkout? | Matching artifact hash, interpreter/platform, and a fresh-environment smoke result. Run outside the repo and record the loaded module path when checking Python. |
+
+A failed publish job can leave one destination populated, and a passing dry run
+leaves both unchanged. Report each destination independently; leave an unavailable
+lookup unverified. Do not infer availability from a similarly named package, nor
+from an older release's smoke result.
+
 ## Local checks before tagging
 
 The workflow runs all of these; they are listed for running by hand.
