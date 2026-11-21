@@ -1,6 +1,7 @@
 """Profile preflight is not economic/engine qualification."""
 
 import copy
+from typing import cast
 
 import pytest
 
@@ -113,7 +114,7 @@ def test_unknown_value_never_matches(profile):
 
 def test_bad_bool_not_config():
     with pytest.raises(ValueError):
-        characterize(checksubmit=1)  # type: ignore[arg-type]
+        characterize(checksubmit=cast(bool, 1))
 
 
 @pytest.mark.parametrize("field,value", [("synthetic_only", 1), ("external_engine_validated", 0)])
