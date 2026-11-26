@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-21'
+last_authored: '2026-11-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -83,9 +83,15 @@ do not exercise keyboard, screen-reader, zoom or mobile interactions in a browse
 The aggregate stops at its first failing command; later checks have not run.
 Record the failing command and run unaffected checks separately when useful.
 
-With npm, invoke those scripts individually with `npm run SCRIPT`; the
-aggregate `check:docs` command currently uses `bun run` internally.
-For example, a build and link check must include rustdoc staging:
+The [CI docs job](https://github.com/Open-Quant/openquant/blob/main/.github/workflows/ci.yml)
+and [Pages build](https://github.com/Open-Quant/openquant/blob/main/.github/workflows/docs-pages.yml)
+run their own named steps, not the local aggregate. Check the job's actual step
+results before claiming a gate ran. Pages builds and stages the site, but does not
+execute the documented Rust and Python examples.
+
+With npm, invoke component scripts individually with `npm run SCRIPT`.
+The aggregate and the `check:rust-output` wrapper call Bun internally.
+A complete link check still requires rustdoc staging:
 
 ```bash
 npm run build
@@ -94,9 +100,53 @@ npm run test:links
 npm run check:links
 ```
 
-A preview or a successful Astro build is **not** a full docs pass. If Rust or
-the extension is unavailable, record those checks as not run and still run the
-independent schema, contrast, API inventory, coverage and generated-page checks.
+### Check prose without a native toolchain
+
+For a prose-only review without Cargo or a built extension, run this
+dependency-free subset from `docs-site/` in a checkout with Git history:
+
+```bash
+node scripts/check-content-schema.mjs
+node scripts/check-contrast.mjs
+python3 ../scripts/generate_api_inventory.py --check
+python3 ../scripts/docs/check_coverage.py --check
+python3 ../scripts/docs/generate_site_pages.py --check
+```
+
+This does not build the site, prove its links work, or compile or run example code.
+With the site dependencies installed, you can also exercise the rendered checks
+without Rust:
+
+```bash
+npm run build
+npm run test:design
+npm run test:accessibility
+npm run test:links
+```
+
+`test:links` tests the checker against fixtures, not against the built site.
+Both `test:agent-index` and `check:links` expect staged Rust API pages;
+without them, log missing targets as a coverage gap rather than a pass.
+
+### Verify a navigation change in a browser
+
+Start with a fresh tab on a deep module page and repeat at a narrow mobile
+viewport, about 320 CSS pixels. Use the built site under `/openquant/`, not a
+file URL. Capture the viewport, browser, theme and the result of each step:
+
+1. On mobile, open the navigation menu. All section disclosures should start
+   closed; a deep link must not expand its ancestors automatically.
+2. With Tab, reach a section summary and check that its focus is visible.
+   With Enter or Space, expand it, reach a child link, and follow that link.
+3. On the new page, reopen the mobile menu if needed. The disclosures should
+   start closed again. Expand the current section and confirm it marks the current
+   page. Try both themes and check that code or table scrolling does not force the
+   whole page to scroll sideways.
+
+The [rendered design tests](https://github.com/Open-Quant/openquant/blob/main/docs-site/scripts/tests/design-system.test.mjs)
+cover initial HTML state and the current-page mark. They do not exercise keyboard
+input, focus order or viewport interaction. A targeted browser pass is not a
+comprehensive accessibility audit.
 
 ### Check the four Rust-only illustrations and ETF output
 
@@ -185,6 +235,22 @@ both. Preserve unresolved failures and identify any independently developed chan
 that have not been integrated. This receipt is evidence for maintainers, not a claim of
 human review, production deployment or validated investment performance.
 
+### Check what readers can see
+
+After Pages reports a successful deploy, read the public agent index and open
+the changed page:
+
+```bash
+curl -fsSL https://open-quant.github.io/openquant/llms.txt \
+  | grep -E '^(Source revision|Working tree):'
+```
+
+Compare the full revision with the deploy run's head SHA and confirm that the
+changed text or example is present at its public URL. If the index is missing,
+unavailable or still reports an older revision, record that result rather than
+inferring the change is live from a merge. This checks what the public site is
+serving; it does not verify Python or Rust package publication.
+
 ## When a gate fails
 
 **`check:links` reports broken links.** Run the site build and `stage:rustdoc` first. The link
@@ -225,9 +291,12 @@ You can prefer the prepared environment from the repository root:
 DOC_PYTHON="$PWD/.venv/bin/python" node docs-site/scripts/check-doc-python-examples.mjs
 ```
 
-`DOC_PYTHON` selects exactly one executable, not a shell command. If that executable
-is missing or its `import openquant` probe fails, the gate stops rather than silently
-using another environment. Do not include command-line arguments in the value.
+Set `DOC_PYTHON` to an absolute executable path, not a shell command. The initial
+import probe and the example processes can have different working directories: a
+relative path such as `../.venv/bin/python` from `docs-site/` can pass the import probe
+and then fail to start every example from the repository root. If the requested
+executable is missing or cannot import `openquant`, the gate does not fall back
+to another environment. Do not include command-line arguments in the value.
 When the variable is unset or empty, discovery tries the checkout's `.venv`
 interpreters, then `python3`. Read the `via ...` path in the opening summary. When a local
 native extension is present under `python/openquant/`, the checker prepends the

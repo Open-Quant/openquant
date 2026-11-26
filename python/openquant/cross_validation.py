@@ -16,16 +16,19 @@ time) and ``t1[i]`` when it is resolved (the triple-barrier touch). They may be 
 ``datetime64`` arrays, pandas or polars datetime columns, lists of ``datetime`` or ISO strings,
 or plain integers such as bar positions; samples must be in time order. Integers must
 fit in signed int64. Datetimes must fit in signed int64 nanoseconds (excluding NaT);
-out-of-range dates are rejected rather than silently wrapped. Sub-nanosecond values
+out-of-range dates are rejected rather than silently wrapped. Masked label spans and
+indices are rejected, and count arguments must be integers, not booleans or floats.
+Sub-nanosecond values
 are floored to nanoseconds, as in NumPy, so distinct times can become equal.
 """
 
 from __future__ import annotations
 
 import math
+import operator
 import re
 from collections.abc import Callable, Sequence
-from fractions import Fraction
+from datetime import datetime
 from typing import Any
 
 import numpy as np
@@ -102,6 +105,15 @@ def _object_datetime_ns(values: Any, name: str) -> np.ndarray:
     """Parse each original date before mixed precisions can silently wrap."""
     result = []
     for value in np.asarray(values, dtype=object):
+        if isinstance(value, datetime):
+            # pandas Timestamp is a datetime subclass, but NumPy's generic
+            # datetime conversion reads only its Python microseconds field.
+            # Use the scalar protocol without requiring pandas for other callers.
+            to_datetime64 = getattr(value, "to_datetime64", None)
+            if callable(to_datetime64):
+                converted = to_datetime64()
+                if isinstance(converted, np.datetime64):
+                    value = converted
         if isinstance(value, np.datetime64):
             result.append(int(_datetime_ns(np.asarray([value]), name)[0]))
             continue
@@ -132,6 +144,44 @@ def _object_datetime_ns(values: Any, name: str) -> np.ndarray:
     return np.asarray(result, dtype=np.int64)
 
 
+def _mixed_int64(values: Any, arr: np.ndarray, name: str) -> np.ndarray | None:
+    """Recover signed/unsigned integer mixtures before NumPy's lossy promotion."""
+    if not arr.size or arr.dtype.kind not in "fO":
+        return None
+    if isinstance(values, np.ndarray) and arr.dtype.kind != "O":
+        return None
+    original = np.asarray(values, dtype=object)
+    if not all(
+        (isinstance(value, int) and not isinstance(value, bool))
+        or (isinstance(value, np.integer) and value.dtype.kind in "iu")
+        for value in original
+    ):
+        return None
+    exact = [int(value) for value in original]
+    if any(not -(2**63) <= value <= (2**63 - 1) for value in exact):
+        raise ValueError(f"{name} must fit in int64 without overflow")
+    return np.asarray(exact, dtype=np.int64)
+
+
+def _unmasked_asarray(value: Any, name: str) -> np.ndarray:
+    """Reject missing observations before NumPy drops a MaskedArray's mask."""
+    if np.ma.isMaskedArray(value) and np.any(np.ma.getmask(value)):
+        raise ValueError(f"{name} contains masked values")
+    return np.asarray(value)
+
+
+def _count(value: Any, name: str) -> int:
+    """Accept lossless integer indices, not int() coercions."""
+    if np.ma.is_masked(value):
+        raise ValueError(f"{name} contains a masked value")
+    if not isinstance(value, (bool, np.bool_)):
+        try:
+            return operator.index(value)
+        except TypeError:
+            pass
+    raise ValueError(f"{name} must be an integer")
+
+
 def _as_int64(values: Any, name: str) -> tuple[np.ndarray, bool]:
     """One span column as int64, and whether it held datetimes.
 
@@ -142,14 +192,21 @@ def _as_int64(values: Any, name: str) -> tuple[np.ndarray, bool]:
             f"{name} is required: purging needs every label's span (t0, t1). Without it, "
             "training labels that overlap the test fold cannot be found."
         )
-    arr = np.asarray(values)
+    arr = _unmasked_asarray(values, name)
     if arr.ndim != 1:
         raise ValueError(f"{name} must be one-dimensional, got shape {arr.shape}")
+    exact = _mixed_int64(values, arr, name)
+    if exact is not None:
+        return exact, False
     if arr.dtype.kind in "OUS" or (arr.dtype.kind == "M" and not hasattr(values, "dtype")):
         return _object_datetime_ns(values, name), True
     if arr.dtype.kind == "M":
         return _datetime_ns(arr, name), True
     if arr.dtype.kind in "iu" or arr.size == 0:
+        if not hasattr(values, "dtype") and any(
+            isinstance(value, (bool, np.bool_)) for value in values
+        ):
+            raise ValueError(f"{name} must hold integer positions, not boolean values")
         if arr.dtype.kind == "u" and (arr > np.iinfo(np.int64).max).any():
             raise ValueError(f"{name} must fit in int64 without overflow")
         return arr.astype(np.int64), False
@@ -168,14 +225,17 @@ def _label_spans(t0: Any, t1: Any) -> tuple[list[int], list[int]]:
 
 
 def _index_list(values: Sequence[int], name: str) -> list[int]:
-    arr = np.asarray(values)
+    arr = _unmasked_asarray(values, name)
     error = f"{name} must be a one-dimensional array of integers"
     if arr.ndim != 1:
         raise ValueError(error)
     if arr.size == 0:
         return []
     if arr.dtype.kind not in "iu":
-        raise ValueError(error)
+        exact = _mixed_int64(values, arr, name)
+        if exact is None:
+            raise ValueError(error)
+        arr = exact
     if not isinstance(values, np.ndarray) and any(
         isinstance(value, (bool, np.bool_)) for value in values
     ):
@@ -214,7 +274,9 @@ def purged_kfold_splits(
     s0, s1 = _label_spans(t0, t1)
     return [
         (_indices(train), _indices(test))
-        for train, test in _cv.purged_kfold_splits(s0, s1, int(n_splits), float(pct_embargo))
+        for train, test in _cv.purged_kfold_splits(
+            s0, s1, _count(n_splits, "n_splits"), float(pct_embargo)
+        )
     ]
 
 
@@ -229,7 +291,9 @@ def split_with_diagnostics(t0: Any, t1: Any, n_splits: int, pct_embargo: float =
     s0, s1 = _label_spans(t0, t1)
     return [
         _split_dict(d)
-        for d in _cv.split_with_diagnostics(s0, s1, int(n_splits), float(pct_embargo))
+        for d in _cv.split_with_diagnostics(
+            s0, s1, _count(n_splits, "n_splits"), float(pct_embargo)
+        )
     ]
 
 
@@ -245,7 +309,13 @@ def cpcv_splits(
     s0, s1 = _label_spans(t0, t1)
     return [
         _split_dict(d)
-        for d in _cv.cpcv_splits(s0, s1, int(n_splits), int(n_test_splits), float(pct_embargo))
+        for d in _cv.cpcv_splits(
+            s0,
+            s1,
+            _count(n_splits, "n_splits"),
+            _count(n_test_splits, "n_test_splits"),
+            float(pct_embargo),
+        )
     ]
 
 
@@ -256,7 +326,10 @@ def cpcv_paths(n_splits: int, n_test_splits: int) -> np.ndarray:
     ``g``: the ``p``-th split, in ``split_id`` order, that tests fold ``g`` (AFML §12.4). The
     numbering matches :func:`openquant.backtesting_engine.run_cpcv`.
     """
-    return np.asarray(_cv.cpcv_paths(int(n_splits), int(n_test_splits)), dtype=np.intp)
+    return np.asarray(
+        _cv.cpcv_paths(_count(n_splits, "n_splits"), _count(n_test_splits, "n_test_splits")),
+        dtype=np.intp,
+    )
 
 
 def walk_forward_splits(
@@ -292,9 +365,48 @@ def walk_forward_split_with_diagnostics(
     return [
         _split_dict(d)
         for d in _cv.walk_forward_splits(
-            s0, s1, int(n_splits), float(pct_embargo), int(min_train_folds)
+            s0,
+            s1,
+            _count(n_splits, "n_splits"),
+            float(pct_embargo),
+            _count(min_train_folds, "min_train_folds"),
         )
     ]
+
+
+def _require_real(value: Any, name: str) -> np.ndarray:
+    arr = _unmasked_asarray(value, name)
+    if arr.dtype.kind == "c" or (
+        arr.dtype.kind == "O"
+        and any(isinstance(item, (complex, np.complexfloating)) for item in arr.flat)
+    ):
+        raise ValueError(f"{name} must be real")
+    return arr
+
+
+def _center_binary64_column(source: np.ndarray) -> np.ndarray:
+    """Center finite binary64 values exactly, then round each difference once."""
+    # Denominators returned by float.as_integer_ratio are powers of two. Accumulate
+    # at the finest precision seen so far, rather than retaining a Fraction per row.
+    total = 0
+    shift = 0
+    for value in source:
+        num, den = float(value).as_integer_ratio()
+        bits = den.bit_length() - 1
+        if bits > shift:
+            total <<= bits - shift
+            shift = bits
+        total += num << (shift - bits)
+    size = len(source)
+    divisor = size << shift
+
+    def deviations():
+        for value in source:
+            num, den = float(value).as_integer_ratio()
+            exact = (num << (shift - (den.bit_length() - 1))) * size - total
+            yield exact / divisor
+
+    return np.fromiter(deviations(), dtype=float, count=size)
 
 
 def bootstrap_returns(
@@ -317,30 +429,49 @@ def bootstrap_returns(
     random-walk bridge, which is mean-reverting, and on which a level feature scores above
     chance even walk-forward.
     """
-    arr = np.array(returns, dtype=float, copy=True)
+    arr = _require_real(returns, "returns").astype(float, copy=True)
     if arr.ndim not in (1, 2) or arr.shape[0] < 2:
         raise ValueError("returns must be a 1-D or 2-D array with at least two rows")
     if not np.isfinite(arr).all():
         raise ValueError("returns must be finite")
     if demean:
-        # Keep ordinary NumPy results, but avoid overflowing a finite column's
-        # sum or centered values. Exact rational recovery is exceptional only.
-        with np.errstate(over="ignore", invalid="ignore"):
-            centered = arr - arr.mean(axis=0)
-        if not np.isfinite(centered).all():
-            columns = arr[:, None] if arr.ndim == 1 else arr
-            recovered = centered[:, None] if arr.ndim == 1 else centered
-            for column in range(columns.shape[1]):
-                if np.isfinite(recovered[:, column]).all():
-                    continue
-                exact = [Fraction(float(value)) for value in columns[:, column]]
-                mean = sum(exact) / len(exact)
+        # Keep vectorized NumPy results for ordinary columns. A finite mean is
+        # not sufficient: cancellation can erase the drift, and dividing a
+        # subnormal mean before subtracting can round the wrong deviations.
+        # Large common offsets can also absorb the mean correction.
+        columns = arr[:, None] if arr.ndim == 1 else arr
+        with np.errstate(over="ignore", invalid="ignore", under="ignore"):
+            mean = columns.mean(axis=0)
+            centered = arr - mean
+            minimum = columns.min(axis=0)
+            maximum = columns.max(axis=0)
+            scale = np.maximum(np.abs(minimum), np.abs(maximum))
+            finfo = np.finfo(float)
+            resolution = math.sqrt(finfo.eps) * scale
+            sensitive = (scale > 0) & (
+                (scale < finfo.tiny)
+                | (np.abs(mean) <= resolution)
+                | (maximum - minimum <= resolution)
+            )
+        recovered = centered[:, None] if arr.ndim == 1 else centered
+        finite = np.isfinite(recovered).all(axis=0)
+        for column in np.flatnonzero(sensitive | ~finite):
+            if minimum[column] == maximum[column]:
+                recovered[:, column] = 0.0
+                continue
+            source = columns[:, column]
+            if finite[column] and mean[column] == 0.0:
+                # A sum of binary64 inputs cannot underflow to zero unless
+                # it is zero. Avoid rational arithmetic for zero-drift panels.
                 try:
-                    recovered[:, column] = [float(value - mean) for value in exact]
-                except OverflowError as exc:
-                    raise ValueError(
-                        "demeaned returns must be representable as finite floats"
-                    ) from exc
+                    if math.fsum(source) == 0.0:
+                        continue
+                except OverflowError:
+                    pass
+            try:
+                recovered[:, column] = _center_binary64_column(source)
+            except OverflowError as exc:
+                raise ValueError("demeaned returns must be representable as finite floats") from exc
         arr = centered
 
     def draw(rng: np.random.Generator) -> np.ndarray:
@@ -368,9 +499,10 @@ def null_score_distribution(
 
     ``make_null`` must return data of the length ``splits`` indexes. ``seed`` seeds one
     ``numpy.random.Generator`` passed to every call, so the distribution is reproducible.
-    Returns the ``n_null`` scores in draw order; a ``NaN`` score is kept, not dropped.
+    Returns the ``n_null`` scores in draw order; a ``NaN`` score is kept, not dropped,
+    and a masked scalar score is recorded as ``NaN``.
     """
-    n_null = int(n_null)
+    n_null = _count(n_null, "n_null")
     if n_null < 1:
         raise ValueError(f"n_null must be at least 1, got {n_null}")
     splits = list(splits)
@@ -379,8 +511,67 @@ def null_score_distribution(
     rng = np.random.default_rng(seed)
     out = np.empty(n_null)
     for i in range(n_null):
-        out[i] = float(evaluate(make_null(rng), splits))
+        score: Any = evaluate(make_null(rng), splits)
+        if np.ma.isMaskedArray(score) and score.ndim == 0 and np.ma.is_masked(score):
+            out[i] = np.nan
+        elif isinstance(score, (complex, np.complexfloating)):
+            raise ValueError("null score must be real")
+        else:
+            out[i] = float(score)
     return out
+
+
+def _score_ratio(value: Any, name: str) -> tuple[int, int] | None:
+    """Exact ratio of an integer or floating scalar; None for nonfinite scores."""
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        if np.ma.is_masked(value):
+            return None
+        value = value[()]
+    if isinstance(value, (complex, np.complexfloating)):
+        raise ValueError(f"{name} must be real")
+    if isinstance(value, (int, np.integer, np.bool_)):
+        return int(value), 1
+    ratio = getattr(value, "as_integer_ratio", None)
+    if not callable(ratio):
+        # Keep legacy float-coercible inputs, but do not swallow conversion errors.
+        ratio = float(value).as_integer_ratio
+    try:
+        return ratio()
+    except (OverflowError, ValueError):
+        return None
+
+
+def _float_tail_count(
+    scores: np.ndarray, finite: np.ndarray, observed: Any, numerator: int, denominator: int
+) -> int:
+    def compare_ratios() -> int:
+        return sum(
+            num * denominator >= numerator * den
+            for num, den in (score.as_integer_ratio() for score in scores[finite])
+        )
+
+    if isinstance(observed, np.ndarray) and observed.ndim == 0:
+        observed = observed[()]
+    if not isinstance(observed, (int, float, np.integer, np.floating, np.bool_)):
+        # Casting Decimal or Fraction can fall back to binary64 even if the
+        # target is longdouble. Compare exact ratios for these uncommon inputs.
+        return compare_ratios()
+    # Compare in the input dtype against its smallest value >= the exact threshold.
+    # Rounding the threshold to nearest instead introduces false ties when it rounds down.
+    with np.errstate(over="ignore", under="ignore"):
+        try:
+            boundary = scores.dtype.type(observed)
+        except (OverflowError, ValueError):
+            # NumPy's scalar conversion can use a bounded decimal string for
+            # huge integer thresholds, even when longdouble's range covers them.
+            return compare_ratios()
+        if np.isfinite(boundary):
+            num, den = boundary.as_integer_ratio()
+            if num * denominator < numerator * den:
+                boundary = np.nextafter(boundary, scores.dtype.type(math.inf))
+    # Reuse the finite mask; do not allocate a compact floating-point copy.
+    np.greater_equal(scores, boundary, out=finite, where=finite)
+    return int(np.count_nonzero(finite))
 
 
 def null_p_value(observed: float, null: Any) -> float:
@@ -388,15 +579,54 @@ def null_p_value(observed: float, null: Any) -> float:
 
     With ``n`` finite null scores of which ``k`` are at least ``observed``, returns
     ``(k + 1) / (n + 1)``, so it is never 0 and a null of 99 draws resolves 0.01. ``NaN``
-    null scores are ignored.
+    and masked null scores are ignored. Tail counts preserve the precision of integer
+    and floating-point inputs; precision already lost by callers is not recovered.
     """
-    arr = np.asarray(null, dtype=float).ravel()
-    arr = arr[np.isfinite(arr)]
-    if arr.size == 0:
-        raise ValueError("null has no finite scores")
-    if not math.isfinite(observed):
+    if np.ma.isMaskedArray(null):
+        null = null.compressed()
+    # Preserve scalars in a mixed sequence before NumPy's common-dtype inference.
+    if isinstance(null, np.ndarray):
+        original = null
+    elif type(null) in (list, tuple) and set(map(type, null)) <= {float}:
+        # A homogeneous built-in float sequence is already exact in binary64.
+        original = np.asarray(null)
+    else:
+        original = np.asarray(null, dtype=object)
+    arr = _require_real(original, "null scores").ravel()
+    if isinstance(observed, (str, bytes)):
+        raise TypeError("observed score must be numeric")
+    threshold = _score_ratio(observed, "observed score")
+    if threshold is None:
         raise ValueError(f"observed must be finite, got {observed}")
-    return float((np.count_nonzero(arr >= observed) + 1) / (arr.size + 1))
+    numerator, denominator = threshold
+    if arr.dtype.kind in "iu":
+        n = arr.size
+        ceiling = -(-numerator // denominator)
+        bounds = np.iinfo(arr.dtype)
+        if ceiling <= bounds.min:
+            k = n
+        elif ceiling > bounds.max:
+            k = 0
+        else:
+            k = int(np.count_nonzero(arr >= arr.dtype.type(ceiling)))
+    elif arr.dtype.kind != "O":
+        if arr.dtype.kind != "f":
+            arr = arr.astype(float, copy=False)
+        finite = np.isfinite(arr)
+        n = int(np.count_nonzero(finite))
+        k = _float_tail_count(arr, finite, observed, numerator, denominator)
+    else:
+        n = k = 0
+        for value in arr:
+            if value is None:
+                continue  # NumPy's prior object-to-float conversion maps None to NaN.
+            ratio = _score_ratio(value, "null scores")
+            if ratio is not None:
+                n += 1
+                k += ratio[0] * denominator >= numerator * ratio[1]
+    if n == 0:
+        raise ValueError("null has no finite scores")
+    return float((k + 1) / (n + 1))
 
 
 def naive_kfold_splits(n_samples: int, n_splits: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -406,7 +636,9 @@ def naive_kfold_splits(n_samples: int, n_splits: int) -> list[tuple[np.ndarray, 
     """
     return [
         (_indices(train), _indices(test))
-        for train, test in _cv.naive_kfold_splits(int(n_samples), int(n_splits))
+        for train, test in _cv.naive_kfold_splits(
+            _count(n_samples, "n_samples"), _count(n_splits, "n_splits")
+        )
     ]
 
 

@@ -141,25 +141,25 @@ Starlight). Module pages are in `docs-site/src/content/docs/modules/`.
 cd docs-site
 bun install --frozen-lockfile
 bun run dev            # local preview
-bun run check:docs     # every docs gate, in the order CI runs them
+bun run check:docs     # local aggregate; hosted workflows select and order their own steps
 ```
 
-`check:docs` runs, in order: `build`, `stage:rustdoc` (rustdoc into the built site, so
-`check:links` can check links to it), `test:design`, `test:accessibility`,
-`test:agent-index` (generated discovery index),
-`test:links` (navigation checker regression tests),
-`check:links` (built paths, fragment anchors and redirects), `check:api-drift`,
-`check:content-schema`, `check:contrast`, `check:coverage`, `check:generated-pages`,
-`check:module-figures` (tests the four Rust-only module figure references and checks
-generated SVGs), `check:examples` (Rust blocks on module pages and the complete Rust workflow are
-compiled with `cargo check`), `check:rust-output` (runs `docs_etf_trick` and compares both
-displayed output blocks with its stdout),
-`check:python-examples` (executes runnable Python blocks and syntax-checks declared
-skips) and `check:python-reference`.
-The last two need the extension built into `.venv` (see Setup); `check:python-examples`
-tries `DOC_PYTHON` first, then local `.venv` interpreters and `python3`, choosing
-the first that can `import openquant`. A block
-that cannot run must opt out visibly with ` ```python doc-check=skip `.
+The [Local Build guide](https://open-quant.github.io/openquant/setup/local-build/#documentation-quality-gates)
+explains which checks need Rust, a built Python extension or only the site toolchain.
+The local aggregate is defined in [`docs-site/package.json`](docs-site/package.json).
+### Read hosted documentation evidence
+
+Check the revision and the named step, not just the green workflow badge:
+
+| Question | Evidence | Does not establish |
+| --- | --- | --- |
+| Did the candidate pass the hosted documentation checks? | [CI](.github/workflows/ci.yml) → `docs-checks`: staged Rustdoc, links, generated content and documented examples | Every local aggregate step ran (for example, `test:accessibility` is local), or the public site changed |
+| Did the notebooks execute and match the tracked outputs? | [Notebooks](.github/workflows/notebooks.yml) → `run-notebooks` at the tested revision | A prose-only pull request normally does not trigger this path-filtered workflow; notebook contract lint in `python-lint` is not execution |
+| Did readers get the new page? | [Docs Pages](.github/workflows/docs-pages.yml) → `deploy`, then inspect the public revision and page using the [public site receipt](https://open-quant.github.io/openquant/setup/local-build/#check-what-readers-can-see) | A successful `build` is not deployment; neither job verifies a package release |
+
+A pull request that CI classifies as documentation-only can skip the expensive
+code jobs, but `docs-checks` and `python-lint` still run. Record a skipped
+or untriggered check as such, not as a verified result.
 
 If a code-rendering plugin or Starlight integration change appears only on newly
 edited pages after a build, the installed Astro version may be reusing rendered
@@ -218,8 +218,10 @@ Every notebook follows the [notebook contract](docs-site/src/content/docs/workfl
 a runbook's `##` sections are Setup, Hypothesis, Data, Method, Results, Analysis, Promotion
 decision, Self-review checklist and Reproducibility, in that order; an API tour (01 to 08) starts
 with Setup, ends with Reproducibility and makes no claims; and both end with an
-`nbrepro.footer(...)` cell that prints the data hash and seed on stdout and the git commit and
-versions on stderr. `just notebooks-lint` checks this, and CI runs it in `python-lint`.
+`nbrepro.footer(...)` cell that prints the data hash and seed on stdout. In pinned
+runner mode, stderr refers to the containing commit and lockfile rather than printing
+local versions. Keep the actual checkout and build identity in the run receipt.
+`just notebooks-lint` checks the notebook structure, and CI runs it in `python-lint`.
 
 ## Research smoke checks
 
