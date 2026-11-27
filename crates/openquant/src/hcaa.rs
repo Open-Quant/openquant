@@ -53,8 +53,8 @@
 //!   as the negated mean of returns at or below a nearest-quantile threshold, so it can be
 //!   negative for an all-positive tail. Drawdown is relative to the running peak of a wealth
 //!   curve starting at 1. These differ from the sign, quantile and absolute-drawdown
-//!   conventions of `risk_metrics`. Zero risks on both sides give the left branch all weight
-//!   under the current denominator-epsilon convention; ES has no negative-risk fallback.
+//!   conventions of `risk_metrics`. Zero risks on both sides split weight equally;
+//!   ES has no negative-risk fallback.
 //!
 //! ```
 //! use nalgebra::DMatrix;
@@ -98,6 +98,9 @@ pub enum HcaaError {
     /// rows; and when a covariance diagonal entry is not strictly positive.
     #[error("no data: supply asset prices or returns")]
     NoData,
+    /// Supplied or derived data consumed by the allocation contains a NaN or infinity.
+    #[error("{0} must contain only finite values")]
+    NonFiniteInput(&'static str),
     /// `allocation_metric` is not one of the six supported names.
     #[error("unknown allocation metric: {0}")]
     UnknownAllocationMetric(String),
@@ -339,6 +342,9 @@ impl HierarchicalClusteringAssetAllocation {
     ///   `asset_names` is empty, or prices have fewer than two rows after resampling or a zero
     ///   price in a denominator, or the covariance must be estimated from fewer than two
     ///   return rows, or a covariance diagonal entry is `<= 0`.
+    /// - [`HcaaError::NonFiniteInput`] if the covariance, consumed prices or returns,
+    ///   or expected returns used by Sharpe contain a NaN or infinity. Covariance and
+    ///   expected returns are checked even when estimated internally.
     /// - [`HcaaError::UnknownAllocationMetric`] for an unsupported `allocation_metric`.
     /// - [`HcaaError::DimensionMismatch`] if the (non-empty) returns do not have `N` columns,
     ///   the covariance is not `N x N`, or `expected_asset_returns` does not have length `N`
@@ -420,11 +426,19 @@ impl HierarchicalClusteringAssetAllocation {
             return Err(HcaaError::NoData);
         }
 
+        let tail_metric =
+            matches!(allocation_metric, "expected_shortfall" | "conditional_drawdown_risk");
+        let needs_history = covariance_matrix.is_none()
+            || tail_metric
+            || (allocation_metric == "sharpe_ratio" && expected_asset_returns.is_none());
         let returns_owned = if let Some(r) = asset_returns {
             r.clone_owned()
         } else if let Some(p) = asset_prices {
             let step = freq_step(resample_by);
             let sampled = resample_prices(p, step);
+            if needs_history {
+                require_finite(sampled.iter(), "asset_prices")?;
+            }
             returns_from_prices(&sampled)?
         } else {
             DMatrix::zeros(0, n_assets)
@@ -433,6 +447,10 @@ impl HierarchicalClusteringAssetAllocation {
             return Err(HcaaError::DimensionMismatch(
                 "asset_returns columns != asset_names length",
             ));
+        }
+
+        if needs_history {
+            require_finite(returns_owned.iter(), "asset_returns")?;
         }
 
         let covariance_owned = if let Some(cov) = covariance_matrix {
@@ -445,6 +463,8 @@ impl HierarchicalClusteringAssetAllocation {
                 "covariance matrix dimensions must equal number of assets",
             ));
         }
+
+        require_finite(covariance_owned.iter(), "covariance")?;
 
         let expected_owned = if allocation_metric == "sharpe_ratio" {
             if let Some(mu) = expected_asset_returns {
@@ -467,9 +487,11 @@ impl HierarchicalClusteringAssetAllocation {
             vec![0.0; n_assets]
         };
 
-        if matches!(allocation_metric, "expected_shortfall" | "conditional_drawdown_risk")
-            && returns_owned.nrows() == 0
-        {
+        if allocation_metric == "sharpe_ratio" {
+            require_finite(expected_owned.iter(), "expected_asset_returns")?;
+        }
+
+        if tail_metric && returns_owned.nrows() == 0 {
             return Err(HcaaError::MissingReturnsForTailRisk);
         }
 
@@ -510,6 +532,17 @@ impl HierarchicalClusteringAssetAllocation {
         self.weights = weights;
 
         Ok(())
+    }
+}
+
+fn require_finite<'a>(
+    mut values: impl Iterator<Item = &'a f64>,
+    name: &'static str,
+) -> Result<(), HcaaError> {
+    if values.all(|value| value.is_finite()) {
+        Ok(())
+    } else {
+        Err(HcaaError::NonFiniteInput(name))
     }
 }
 
@@ -603,7 +636,16 @@ fn inverse_variance_weights(cov: &DMatrix<f64>, indices: &[usize]) -> Result<Vec
         }
         inv_diag.push(1.0 / v);
     }
-    let sum: f64 = inv_diag.iter().sum();
+    let mut sum: f64 = inv_diag.iter().sum();
+    if sum.is_infinite() {
+        // Preserve the usual arithmetic unless taking or summing reciprocals
+        // overflowed. Scaling by the smallest variance keeps each term <= 1.
+        let min_var = indices.iter().map(|&i| cov[(i, i)]).fold(f64::INFINITY, f64::min);
+        for (inv, &i) in inv_diag.iter_mut().zip(indices) {
+            *inv = min_var / cov[(i, i)];
+        }
+        sum = inv_diag.iter().sum();
+    }
     if sum <= 0.0 {
         return Err(HcaaError::NoData);
     }
@@ -710,12 +752,26 @@ struct MetricInputs<'a> {
     confidence_level: f64,
 }
 
+fn minimum_variance_split(left: f64, right: f64) -> f64 {
+    let total = left + right;
+    if total.is_infinite() && left.is_finite() && right.is_finite() {
+        // For finite non-negative variances the ratio remains representable
+        // even when the unscaled sum is not.
+        let scale = left.max(right);
+        let left = left / scale;
+        let right = right / scale;
+        right / (left + right)
+    } else {
+        1.0 - left / total
+    }
+}
+
 /// The share of a node's weight that goes to its left child.
 fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64, HcaaError> {
     let left_var = cluster_variance(m.cov, left)?;
     let right_var = cluster_variance(m.cov, right)?;
     let alloc_factor = match m.metric {
-        "minimum_variance" => 1.0 - left_var / (left_var + right_var),
+        "minimum_variance" => minimum_variance_split(left_var, right_var),
         "minimum_standard_deviation" => {
             let left_sd = left_var.sqrt();
             let right_sd = right_var.sqrt();
@@ -729,7 +785,7 @@ fn split_factor(left: &[usize], right: &[usize], m: &MetricInputs) -> Result<f64
             if left_sr >= 0.0 && right_sr >= 0.0 && left_sr + right_sr > 0.0 {
                 left_sr / (left_sr + right_sr)
             } else {
-                1.0 - left_var / (left_var + right_var)
+                minimum_variance_split(left_var, right_var)
             }
         }
         "expected_shortfall" => {

@@ -140,3 +140,89 @@ def test_empty_forward_checkpoint_neither_claims_future_nor_forbids_later_arriva
     assert late.at(19) == empty.at(19) == (0, 0, 0)
     with pytest.raises(ValueError, match="coverage"):
         empty.at(20)
+
+
+def test_interval_reports_all_complete_prefixes_not_just_equal_balances():
+    snap = checkpoint(ROWS, OBS, 50)
+    result = snap.cut_segments(19, 46)
+    assert [(s.start, s.through, s.prefix) for s in result] == [
+        (19, 19, 0),
+        (20, 39, 1),
+        (40, 44, 2),
+        (45, 46, 3),
+    ]
+    assert snap.at(19) == snap.at(46)  # Endpoint-only check is a false positive.
+    assert snap.require_cut_prefix(20, 39) == 1
+    with pytest.raises(ValueError, match="multiple source prefixes"):
+        snap.require_cut_prefix(19, 46)
+
+
+def test_interval_with_gaps_keeps_explicit_abstention_ranges():
+    obs = (OBS[0], Observation("e2", 40), Observation("e3", 30))
+    snap = checkpoint(ROWS, obs, 50)
+    assert [(s.start, s.through, s.prefix) for s in snap.cut_segments(29, 40)] == [
+        (29, 29, 1),
+        (30, 39, None),
+        (40, 40, 3),
+    ]
+    with pytest.raises(ValueError, match="gap"):
+        snap.require_cut_prefix(29, 40)
+    with pytest.raises(ValueError, match="gap"):
+        snap.require_cut_prefix(31, 35)
+
+
+def test_interval_treats_tied_arrivals_as_one_clock_world():
+    obs = (OBS[0], Observation("e2", 20), Observation("e3", 20))
+    snap = checkpoint(ROWS, obs, 50)
+    assert [(s.start, s.through, s.prefix) for s in snap.cut_segments(19, 20)] == [
+        (19, 19, 0),
+        (20, 20, 3),
+    ]
+
+
+def test_interval_can_span_large_clock_coordinates_without_scanning_ticks():
+    through = 1 << 100
+    snap = checkpoint((FILL,), (Observation("e1", through),), through)
+    assert [(s.start, s.through, s.prefix) for s in snap.cut_segments(15, through)] == [
+        (15, through - 1, 0),
+        (through, through, 1),
+    ]
+
+
+@pytest.mark.parametrize("start, through", [(14, 20), (20, 51), (21, 20), (True, 20), (20, 40.0)])
+def test_invalid_interval_is_not_narrowed_into_coverage(start, through):
+    with pytest.raises(ValueError):
+        checkpoint(ROWS, OBS, 50).cut_segments(start, through)
+
+
+def test_segments_match_exhaustive_exact_cutoffs_with_gaps_and_ties():
+    from itertools import product
+
+    for times in product(range(15, 20), repeat=len(ROWS)):
+        observations = tuple(
+            Observation(event_id, tick)
+            for event_id, tick in zip(
+                (FILL.identity, CORRECT.identity, BUST.identity), times, strict=True
+            )
+        )
+        snap = checkpoint(ROWS, observations, 20)
+        # Enumerate exact cuts independently, testing source indices rather
+        # than balances so a fill and bust cannot hide different histories.
+        for lo in range(15, 21):
+            for hi in range(lo, 21):
+                segments = snap.cut_segments(lo, hi)
+                by_tick = [
+                    (tick, s.prefix) for s in segments for tick in range(s.start, s.through + 1)
+                ]
+                expected = []
+                for tick in range(lo, hi + 1):
+                    seen = [i for i, time in enumerate(times, 1) if time <= tick]
+                    prefix = len(seen) if seen == list(range(1, len(seen) + 1)) else None
+                    expected.append((tick, prefix))
+                    if prefix is None:
+                        with pytest.raises(ValueError, match="gap"):
+                            snap.at(tick)
+                    else:
+                        assert snap.at(tick) == snap.tape.as_of(prefix)
+                assert by_tick == expected
+                assert all(a.prefix != b.prefix for a, b in zip(segments, segments[1:]))

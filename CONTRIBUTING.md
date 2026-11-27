@@ -161,6 +161,20 @@ A pull request that CI classifies as documentation-only can skip the expensive
 code jobs, but `docs-checks` and `python-lint` still run. Record a skipped
 or untriggered check as such, not as a verified result.
 
+For pull-request runs, record both the candidate branch head SHA and the checkout
+SHA shown in the named job's checkout log. CI's `docs-checks` and Notebooks'
+`run-notebooks` use the default checkout, so the checkout is normally GitHub's
+[test merge commit](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request),
+not the candidate branch commit. A green run for an earlier branch head does not
+cover a newer commit. If the base branch advanced, a run against the old merge
+commit is not evidence for the new combined tree even if the candidate head
+did not change.
+
+Record the workflow attempt as well as the run and job URL when a check is
+rerun. Use the checkout log from that job, not today's PR merge ref. If the
+checkout SHA is unavailable, report only the workflow evidence you could confirm;
+do not infer an exact checkout from the Actions run summary.
+
 If a code-rendering plugin or Starlight integration change appears only on newly
 edited pages after a build, the installed Astro version may be reusing rendered
 Markdown from its content store. Stop the local dev server, remove only

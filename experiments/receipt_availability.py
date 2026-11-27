@@ -5,7 +5,7 @@ import re
 import struct
 from collections.abc import Iterable
 from dataclasses import dataclass
-from itertools import islice
+from itertools import groupby, islice
 
 from experiments.receipt_completion_witness import MAX_DELIVERIES
 from experiments.receipt_content_commitment import _integer
@@ -94,6 +94,15 @@ def _digest(
 
 
 @dataclass(frozen=True)
+class CutSegment:
+    """Inclusive observer ticks sharing a complete prefix length, or a gap (None)."""
+
+    start: int
+    through: int
+    prefix: int | None
+
+
+@dataclass(frozen=True)
 class Checkpoint:
     """Qualified synthetic observation interval; not timestamp attestation."""
 
@@ -129,6 +138,51 @@ class Checkpoint:
                     raise ValueError("observed source sequence has a gap at the cutoff")
                 known += 1
         return self.tape.as_of(known, effective_through=effective_through)
+
+    def cut_segments(self, start: int, through: int) -> tuple[CutSegment, ...]:
+        """Partition a caller-supplied clock uncertainty interval without assuming a distribution."""
+        _tick(start)
+        _tick(through)
+        if not self.pin.start <= start <= through <= self.pin.through:
+            raise ValueError("observation cutoff interval outside verified coverage or reversed")
+
+        arrivals: list[tuple[int, int]] = []
+        count = highest = 0
+        for sequence, row in enumerate(self.observations, 1):
+            if row.first_seen <= start:
+                count += 1
+                highest = sequence
+            elif row.first_seen <= through:
+                arrivals.append((row.first_seen, sequence))
+        arrivals.sort()
+
+        segments: list[CutSegment] = []
+
+        def append(lower: int, upper: int, prefix: int | None) -> None:
+            if segments and segments[-1].prefix == prefix:
+                lower = segments.pop().start
+            segments.append(CutSegment(lower, upper, prefix))
+
+        lower = start
+        for tick, group in groupby(arrivals, key=lambda pair: pair[0]):
+            append(lower, tick - 1, count if count == highest else None)
+            for _, sequence in group:
+                count += 1
+                highest = max(highest, sequence)
+            lower = tick
+        append(lower, through, count if count == highest else None)
+        return tuple(segments)
+
+    def require_cut_prefix(self, start: int, through: int) -> int:
+        """Return one unambiguous history; equal endpoint balances are not sufficient."""
+        segments = self.cut_segments(start, through)
+        if any(segment.prefix is None for segment in segments):
+            raise ValueError("observed source sequence could have a gap in the cutoff interval")
+        if len(segments) != 1:
+            raise ValueError("cutoff interval allows multiple source prefixes")
+        prefix = segments[0].prefix
+        assert prefix is not None
+        return prefix
 
 
 def freeze_observer(

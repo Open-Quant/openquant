@@ -2,7 +2,7 @@
 title: Local Build Setup
 description: Build the Rust core, run its tests, and run the documentation quality gates.
 status: authored
-last_authored: '2026-11-26'
+last_authored: '2026-11-27'
 audience:
   - quant-dev
   - platform-engineering
@@ -214,9 +214,12 @@ or a copied binary alone cannot prove that the extension matches the checked-out
 | Blocked | Missing capability or dependency, not an inferred success. |
 | Not run | Later aggregate stages or browser interactions that were never exercised. |
 
-For hosted CI evidence, save the run and job URLs, the job's head SHA, the relevant
-step conclusions and any named output artifact. Two green jobs can refer to different
-commits. A workflow definition describes intended checks, not an executed result;
+For hosted CI evidence, save the run and job URLs, run attempt, event, candidate
+head SHA, exact job checkout SHA if available, relevant step conclusions and any
+named output artifact. On pull requests the default checkout can be a temporary
+merge commit; record it separately from the branch head. See the
+[hosted evidence guide](https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md#read-hosted-documentation-evidence).
+Two green jobs can refer to different commits. A workflow definition describes intended checks, not an executed result;
 a successful job may also contain skipped steps. A main-branch pass does not validate
 uncommitted or private patch changes. Compare their source scope and rerun the affected
 gates on the candidate before claiming candidate acceptance. Build success, deployment
@@ -237,19 +240,40 @@ human review, production deployment or validated investment performance.
 
 ### Check what readers can see
 
-After Pages reports a successful deploy, read the public agent index and open
-the changed page:
+First find the successful `deploy` job and its corresponding `build` job in
+[Docs Pages](https://github.com/Open-Quant/openquant/actions/workflows/docs-pages.yml).
+Record the revision the build actually checked out, including the ref for
+manually dispatched runs. The branch tip today is not a substitute for that
+revision. With the full build SHA as `expected_sha` (or use the prompt), run:
 
 ```bash
-curl -fsSL https://open-quant.github.io/openquant/llms.txt \
-  | grep -E '^(Source revision|Working tree):'
+(
+  if [ -z "${expected_sha:-}" ]; then
+    printf 'Full SHA checked out by the deployed build: ' >&2
+    read -r expected_sha || exit 1
+  fi
+  index=$(mktemp) || exit 1
+  trap 'rm -f "$index"' EXIT
+  curl -fsSL --max-time 20 https://open-quant.github.io/openquant/llms.txt \
+    -o "$index" || exit 1
+  awk -v sha="$expected_sha" '
+    /^Source revision:/ { revisions++; print; if ($0 == "Source revision: " sha) rev_ok++ }
+    /^Working tree:/ { trees++; print; if ($0 == "Working tree: clean") clean++ }
+    END {
+      if (sha !~ /^[0-9a-f]+$/ || (length(sha) != 40 && length(sha) != 64) ||
+          revisions != 1 || trees != 1 || rev_ok != 1 || clean != 1) exit 1
+    }
+  ' "$index"
+)
 ```
 
-Compare the full revision with the deploy run's head SHA and confirm that the
-changed text or example is present at its public URL. If the index is missing,
-unavailable or still reports an older revision, record that result rather than
-inferring the change is live from a merge. This checks what the public site is
-serving; it does not verify Python or Rust package publication.
+A zero exit status confirms only that the public index reports the expected
+revision and a clean tree. Then open the changed page at its public URL and
+verify the actual text, example or navigation. If the revision differs, the
+index reports a modified tree or metadata is missing, record what was served
+and do not mark that revision live. A newer site may have superseded the
+selected run; check the newer deployment and the actual page before concluding
+that the change is absent. This does not verify package publication.
 
 ## When a gate fails
 

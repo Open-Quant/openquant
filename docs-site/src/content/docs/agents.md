@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-26'
+last_authored: '2026-11-27'
 audience:
   - coding-agent
   - platform-engineering
@@ -41,8 +41,8 @@ second list of APIs.
 | Diagnose a failed command | [Troubleshooting](/setup/troubleshooting/) | Exact command, interpreter/import paths and the first failing gate |
 | Edit documentation | [Local build](/setup/local-build/#documentation-quality-gates) | Commit-specific source generators, example checks, links and page status; use the [prose-only checks](/setup/local-build/#check-prose-without-a-native-toolchain) for a partial pass |
 | Check a change to site navigation | [Browser navigation checks](/setup/local-build/#verify-a-navigation-change-in-a-browser) | Keep static rendered assertions separate from keyboard, mobile and theme interaction evidence |
-| Review hosted documentation checks | [Hosted evidence guide](https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md#read-hosted-documentation-evidence) | Match the tested revision and named job; docs CI, notebook execution, and Pages deployment answer different questions |
-| Verify a documentation deployment | [Public site receipt](/setup/local-build/#check-what-readers-can-see) | Compare the public revision and the actual page with the exact successful Pages run; package releases are separate |
+| Review hosted documentation checks | [Hosted evidence guide](https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md#read-hosted-documentation-evidence) | Record the candidate head, actual job checkout, attempt and named step; docs CI, notebook execution and deployment answer different questions |
+| Verify a documentation deployment | [Public site receipt](/setup/local-build/#check-what-readers-can-see) | Match the public index to the clean revision checked out by the deployed build, then read the changed page; package releases are separate |
 
 Working in a checkout? Read
 [AI-DLC.md](https://github.com/Open-Quant/openquant/blob/main/AI-DLC.md),

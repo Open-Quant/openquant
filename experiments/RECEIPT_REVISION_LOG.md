@@ -157,3 +157,37 @@ assert later.at(40, effective_through=9) == (0, 0, 0)
   order of replay alone cannot establish consumer availability. No sampled
   replay here establishes authenticity, complete market visibility, order
   terminality or trading results.
+
+### When the decision clock maps to a range of observer ticks
+
+When the decision time is known only to lie within an inclusive observer-time
+range, pass those bounds to `Checkpoint.cut_segments(start, through)`. Bounds
+must come from the caller's separately justified clock mapping and be entirely
+inside the qualified checkpoint. They are not event-level confidence intervals;
+the uncertainty is one shared cutoff over a fixed observation tape. All arrivals
+at a tick enter together. This does not estimate clock offset, drift, epoch
+compatibility, or a probability of any outcome.
+
+Each returned segment is an inclusive tick interval and either a complete
+source prefix length or `None` for a source gap. A gap is not a shorter valid
+prefix. Use `require_cut_prefix(start, through)` to demand one identical complete
+prefix across the whole range and fail closed on a gap or competing histories.
+Pass that prefix to `snap.tape.as_of(prefix, effective_through=...)` when an
+economic projection is needed. The effective-time cutoff is separate; do not
+add clock bounds to source-effective times.
+
+Consider one fill first seen at tick 20, its correction at tick 40 and its bust
+at tick 45. A decision mapped to ticks 19–46 admits four distinct source
+prefixes. The first and last balances are both zero, so checking economic
+endpoints alone would miss the fill and correction. If instead the bust arrives
+at tick 30 before the correction, every tick from 30 through 39 is a gap, even
+though the exact queries at 29 and 40 are valid. A narrower interval within a
+single valid segment is usable.
+
+The sweep sorts only arrivals inside the interval: with `N` pinned
+observations and `K` such arrivals, it takes O(N + K log K) time and O(K + 1)
+additional space, independent of the distance between the cutoff bounds.
+The representation is inspired by bounded-clock intervals such as [Spanner
+TrueTime](https://research.google.com/pubs/archive/39966.pdf), not a TrueTime
+integration or a claim about the clock's accuracy. It remains an offline research
+fixture; a digest authenticates neither the clock nor the venue.
