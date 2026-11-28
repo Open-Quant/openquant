@@ -2,7 +2,7 @@
 title: Python Bindings Setup
 description: Build the PyO3 extension, install it into a virtual environment, and prove it imports.
 status: authored
-last_authored: '2026-11-18'
+last_authored: '2026-11-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -166,6 +166,31 @@ installation. Both package paths should point into its `site-packages`, not `pyt
 in the source tree. Check from outside the checkout as well when investigating path problems.
 The install command also installs runtime dependencies; the wheel does not bundle NumPy,
 Polars or PyArrow. This is an import check, not the full test suite or cross-platform validation.
+
+### Test a CI wheel without compiling locally
+
+For a packaging review, an available wheel from the [release workflow](https://github.com/Open-Quant/openquant/blob/main/.github/workflows/release.yml)
+can replace the locally built wheel **in the separate test environment above**.
+First record the run and attempt, checked-out commit, platform/ABI, build job result,
+artifact name and SHA-256 of the downloaded wheel. Do not infer any of these from
+the package version or from the overall workflow result. If the artifact has expired,
+record that the check could not run; do not substitute a wheel from an unrelated commit.
+
+For a wheel from the exact checkout, use the repository's release smoke script from
+outside the checkout, with the wheel installed and no editable package or
+`PYTHONPATH` pointing back at the source:
+
+```bash
+/path/to/venv-wheel-check/bin/python -I /path/to/openquant/scripts/release/smoke_wheel.py \
+  --dist-name pyopenquant --version 0.1.0 --abi3
+```
+
+Use the candidate's own distribution metadata rather than hard-coding this
+version for future releases. Use `Scripts/python.exe` on Windows. Passing this
+test establishes the exercised **packaged** paths on that host. It does not test
+uncommitted Python changes, establish cross-platform support or prove the
+artifact was published to PyPI. A wheel from an earlier commit is not a drop-in
+replacement for qualifying the current source checkout.
 
 ## Smoke test the real surface
 

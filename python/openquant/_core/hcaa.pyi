@@ -100,7 +100,9 @@ def allocate_hcaa(
         `"single"`, `"complete"`, `"average"` or `"ward"`, a matrix is empty
         or ragged, or the core rejects the input (e.g. no prices, returns or covariance
         given, empty `asset_names`, too few rows, a zero price, a non-positive covariance
-        diagonal, an unknown `allocation_metric` or `calculate_expected_returns`, mismatched
+        diagonal, a NaN or infinity in the covariance or in prices, returns or expected
+        returns consumed by the metric, an unknown `allocation_metric` or
+        `calculate_expected_returns`, mismatched
         shapes, `"sharpe_ratio"` with neither expected returns nor a return history, a tail
         metric without a
         return history, or `optimal_num_clusters` of 0 or above `N`).

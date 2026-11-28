@@ -197,3 +197,123 @@ def test_hcaa_linkage_default_and_validation():
         assert default != hcaa.allocate_hcaa(names, **kwargs, linkage=other)
     with pytest.raises(ValueError, match="unknown linkage"):
         hcaa.allocate_hcaa(names, **kwargs, linkage="centroid")
+
+
+COV_THREE = [[1.0, 0.1, 0.8], [0.1, 1.0, 0.2], [0.8, 0.2, 1.0]]
+
+
+def test_hcaa_finite_covariance_rational_control():
+    # The first cluster is {a, c}; its equal-weight variance is 9/10,
+    # giving it 10/19 of the portfolio, split equally between the two assets.
+    weights, _ = hcaa.allocate_hcaa(
+        ["a", "b", "c"], covariance_matrix=COV_THREE, allocation_metric="minimum_variance"
+    )
+    assert weights == pytest.approx([5 / 19, 9 / 19, 5 / 19], abs=1e-12)
+
+
+@pytest.mark.parametrize("distance", ["correlation", "distance_of_distances"])
+@pytest.mark.parametrize("metric", ["equal_weighting", "minimum_variance"])
+@pytest.mark.parametrize(
+    "bad_indices, bad_value",
+    [
+        ([(0, 1), (1, 0)], float("nan")),
+        ([(0, 0)], float("nan")),
+        ([(1, 1)], float("inf")),
+        ([(1, 0)], float("-inf")),
+    ],
+)
+def test_hcaa_rejects_nonfinite_covariance(distance, metric, bad_indices, bad_value):
+    covariance = [row.copy() for row in COV_THREE]
+    for row, col in bad_indices:
+        covariance[row][col] = bad_value
+    with pytest.raises(ValueError, match="covariance.*finite"):
+        hcaa.allocate_hcaa(
+            ["a", "b", "c"],
+            covariance_matrix=covariance,
+            allocation_metric=metric,
+            distance=distance,
+        )
+
+
+def test_hcaa_rejects_overflowed_estimated_covariance():
+    with pytest.raises(ValueError, match="covariance.*finite"):
+        hcaa.allocate_hcaa(
+            ["a", "b"],
+            asset_returns=[[1e200, -1e200], [-1e200, 1e200]],
+            allocation_metric="minimum_variance",
+        )
+
+
+@pytest.mark.parametrize(
+    "metric", ["expected_shortfall", "conditional_drawdown_risk", "sharpe_ratio"]
+)
+def test_hcaa_rejects_nonfinite_history_even_with_explicit_covariance(metric):
+    with pytest.raises(ValueError, match="asset_returns.*finite"):
+        hcaa.allocate_hcaa(
+            ["a", "b"],
+            asset_returns=[[0.01, float("nan")], [-0.01, 0.02]],
+            covariance_matrix=COV_2,
+            allocation_metric=metric,
+        )
+
+
+def test_hcaa_rejects_nonfinite_expected_returns_only_when_consumed():
+    expected = [0.1, float("inf")]
+    with pytest.raises(ValueError, match="expected_asset_returns.*finite"):
+        hcaa.allocate_hcaa(
+            ["a", "b"],
+            covariance_matrix=COV_2,
+            expected_asset_returns=expected,
+            allocation_metric="sharpe_ratio",
+        )
+    weights, _ = hcaa.allocate_hcaa(
+        ["a", "b"],
+        covariance_matrix=COV_2,
+        expected_asset_returns=expected,
+        allocation_metric="equal_weighting",
+    )
+    assert weights == [0.5, 0.5]
+
+
+def test_hcaa_rejects_nonfinite_sampled_prices_when_consumed():
+    # A positive infinity used as denominator produces a finite -1 return;
+    # rejecting bad prices themselves is needed, not just checking the quotient.
+    with pytest.raises(ValueError, match="asset_prices.*finite"):
+        hcaa.allocate_hcaa(
+            ["a", "b"],
+            asset_prices=[[float("inf"), 100.0], [105.0, 95.0]],
+            covariance_matrix=COV_2,
+            allocation_metric="expected_shortfall",
+        )
+
+
+def test_hcaa_covariance_based_metric_still_ignores_unused_history_values():
+    weights, _ = hcaa.allocate_hcaa(
+        ["a", "b"],
+        asset_returns=[[float("nan"), float("inf")]],
+        covariance_matrix=COV_2,
+        allocation_metric="equal_weighting",
+    )
+    assert weights == [0.5, 0.5]
+
+
+@pytest.mark.parametrize("metric", ["minimum_variance", "sharpe_ratio"])
+@pytest.mark.parametrize(
+    "variances, expected_left",
+    [
+        ([1e308, 1e308], 1 / 2),
+        ([1e308, 9e307], 9 / 19),
+        ([1e-320, 3e-320], 3 / 4),
+        ([1e-310, 2e-310], 2 / 3),
+    ],
+)
+def test_hcaa_minimum_variance_split_stays_scale_invariant(metric, variances, expected_left):
+    # For two independent singletons with positive variances, 1/V weights
+    # reduce to right_variance / (left_variance + right_variance).
+    weights, _ = hcaa.allocate_hcaa(
+        ["a", "b"],
+        covariance_matrix=[[variances[0], 0.0], [0.0, variances[1]]],
+        allocation_metric=metric,
+        expected_asset_returns=[-1.0, -1.0],  # Sharpe must use its variance fallback.
+    )
+    assert weights == pytest.approx([expected_left, 1 - expected_left], abs=1e-12)

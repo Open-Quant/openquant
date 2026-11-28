@@ -320,3 +320,125 @@ fn reference_leaf_order() -> Vec<usize> {
         .map(|v| v.as_u64().unwrap() as usize)
         .collect()
 }
+
+#[test]
+fn test_hcaa_rejects_nonfinite_covariance_without_mutating_previous_allocation() {
+    use openquant::hcaa::HcaaDistance;
+
+    let names = ["a", "b", "c"].map(String::from);
+    let covariance = DMatrix::from_row_slice(3, 3, &[1.0, 0.1, 0.8, 0.1, 1.0, 0.2, 0.8, 0.2, 1.0]);
+    let mut model = HierarchicalClusteringAssetAllocation::default();
+    model
+        .allocate(&names, None, None, Some(&covariance), None, "minimum_variance", 0.05, None, None)
+        .unwrap();
+    for (&actual, expected) in model.weights.iter().zip([5.0 / 19.0, 9.0 / 19.0, 5.0 / 19.0]) {
+        assert!((actual - expected).abs() < 1e-12);
+    }
+
+    let (weights, order, clusters) =
+        (model.weights.clone(), model.ordered_indices.clone(), model.clusters.clone());
+    for distance in [HcaaDistance::Correlation, HcaaDistance::DistanceOfDistances] {
+        model.distance = distance;
+        for metric in ["minimum_variance", "equal_weighting"] {
+            for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                let mut bad_covariance = covariance.clone();
+                bad_covariance[(0, 1)] = bad;
+                bad_covariance[(1, 0)] = bad;
+                let err = model
+                    .allocate(
+                        &names,
+                        None,
+                        None,
+                        Some(&bad_covariance),
+                        None,
+                        metric,
+                        0.05,
+                        None,
+                        None,
+                    )
+                    .unwrap_err();
+                assert_eq!(err, HcaaError::NonFiniteInput("covariance"));
+                assert_eq!(model.weights, weights);
+                assert_eq!(model.ordered_indices, order);
+                assert_eq!(model.clusters, clusters);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_hcaa_rejects_nonfinite_inputs_consumed_by_metrics() {
+    let names = ["a", "b"].map(String::from);
+    let cov = DMatrix::identity(2, 2);
+    let history = DMatrix::from_row_slice(2, 2, &[0.01, f64::NAN, -0.01, 0.02]);
+    let mut model = HierarchicalClusteringAssetAllocation::default();
+    for metric in ["expected_shortfall", "conditional_drawdown_risk", "sharpe_ratio"] {
+        let err = model
+            .allocate(&names, None, Some(&history), Some(&cov), None, metric, 0.05, None, None)
+            .unwrap_err();
+        assert_eq!(err, HcaaError::NonFiniteInput("asset_returns"));
+    }
+    model
+        .allocate(
+            &names,
+            None,
+            Some(&history),
+            Some(&cov),
+            None,
+            "equal_weighting",
+            0.05,
+            None,
+            None,
+        )
+        .unwrap();
+    assert_eq!(model.weights, vec![0.5, 0.5]);
+
+    let err = model
+        .allocate(
+            &names,
+            None,
+            None,
+            Some(&cov),
+            Some(&[0.1, f64::INFINITY]),
+            "sharpe_ratio",
+            0.05,
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(err, HcaaError::NonFiniteInput("expected_asset_returns"));
+}
+
+#[test]
+fn test_hcaa_minimum_variance_split_stays_scale_invariant() {
+    let names = ["a", "b"].map(String::from);
+    for (left, right, expected_left) in [
+        (1e308, 1e308, 0.5),
+        (1e308, 9e307, 9.0 / 19.0),
+        (1e-320, 3e-320, 0.75),
+        (1e-310, 2e-310, 2.0 / 3.0),
+    ] {
+        let cov = DMatrix::from_row_slice(2, 2, &[left, 0.0, 0.0, right]);
+        for metric in ["minimum_variance", "sharpe_ratio"] {
+            let mut model = HierarchicalClusteringAssetAllocation::default();
+            model
+                .allocate(
+                    &names,
+                    None,
+                    None,
+                    Some(&cov),
+                    Some(&[-1.0, -1.0]),
+                    metric,
+                    0.05,
+                    None,
+                    None,
+                )
+                .unwrap();
+            for (&actual, expected) in
+                model.weights.iter().zip([expected_left, 1.0 - expected_left])
+            {
+                assert!((actual - expected).abs() < 1e-12, "{left}, {right}: {actual}");
+            }
+        }
+    }
+}

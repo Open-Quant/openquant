@@ -582,3 +582,80 @@ def test_native_nanosecond_conversion_does_not_mutate_input():
     actual, _ = cv._as_int64(original, "t0")
     np.testing.assert_array_equal(actual, snapshot.view(np.int64))
     np.testing.assert_array_equal(original, snapshot)
+
+
+@pytest.mark.parametrize("boolean", [True, np.bool_(True)])
+@pytest.mark.parametrize("column", ["t0", "t1"])
+def test_mixed_boolean_and_integer_labels_are_rejected(boolean, column):
+    valid = [0, 1, 2, 3]
+    invalid = [0, boolean, 2, 3]
+    with pytest.raises(ValueError, match=rf"{column}.*boolean"):
+        cv.purged_kfold_splits(
+            invalid if column == "t0" else valid,
+            invalid if column == "t1" else valid,
+            2,
+        )
+
+
+@pytest.mark.parametrize("tz", [None, "America/New_York"])
+def test_pandas_timestamp_lists_preserve_nanosecond_label_distances(tz):
+    pd = pytest.importorskip("pandas")
+    start = pd.Timestamp("2024-01-01T00:00:00.000000001", tz=tz)
+    timestamps = [start + pd.Timedelta(index, unit="ns") for index in range(4)]
+    starts, is_time = cv._as_int64(timestamps, "t0")
+    # Positive fixture: four point spans 1 ns apart. Rounding to microseconds
+    # creates overlap between every distinct train/test pair and purges both folds.
+    np.testing.assert_array_equal(starts, [timestamps[0].value + i for i in range(4)])
+    assert is_time
+    assert [train.tolist() for train, _ in cv.purged_kfold_splits(timestamps, timestamps, 2)] == [
+        [2, 3],
+        [0, 1],
+    ]
+
+
+def test_coarse_pandas_timestamp_cannot_bypass_nanosecond_range_check():
+    pd = pytest.importorskip("pandas")
+    spans = [pd.Timestamp("2500-01-01").as_unit("s")]
+    with pytest.raises(ValueError, match="int64 nanosecond range"):
+        cv._as_int64(spans, "t0")
+
+
+@pytest.mark.parametrize("transition_hour", [6, 7])  # fall-back at 06Z; spring-forward at 07Z
+@pytest.mark.parametrize("adapter", ["polars-naive", "polars-local", "pandas-object"])
+def test_point_splits_preserve_utc_order_across_dst_transition(transition_hour, adapter):
+    from datetime import UTC, date, datetime
+
+    day = date(2024, 11, 3) if transition_hour == 6 else date(2024, 3, 10)
+    utc = datetime(day.year, day.month, day.day, transition_hour, tzinfo=UTC)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = utc - epoch
+    edge = (delta.days * 86400 + delta.seconds) * 1_000_000_000
+    expected_times = [edge - 2, edge - 1, edge, edge + 1]
+    if adapter == "pandas-object":
+        pd = pytest.importorskip("pandas")
+        utc_index = pd.to_datetime(expected_times, unit="ns", utc=True)
+        spans = np.asarray(utc_index.tz_convert("America/New_York"), dtype=object)
+    else:
+        import polars as pl
+
+        zone = "America/New_York" if adapter == "polars-local" else None
+        spans = pl.Series(expected_times, dtype=pl.Int64).cast(pl.Datetime("ns", zone))
+    starts, is_time = cv._as_int64(spans, "t0")
+    assert is_time
+    assert starts.tolist() == expected_times
+    assert [
+        (train.tolist(), test.tolist()) for train, test in cv.purged_kfold_splits(spans, spans, 2)
+    ] == [
+        ([2, 3], [0, 1]),
+        ([0, 1], [2, 3]),
+    ]
+
+
+@pytest.mark.parametrize("zone", [None, "America/New_York"])
+def test_coarse_polars_datetime_cannot_wrap_to_an_earlier_century(zone):
+    import polars as pl
+
+    epoch_us = int(np.datetime64("2500-01-01", "us").astype(np.int64))
+    spans = pl.Series([epoch_us], dtype=pl.Int64).cast(pl.Datetime("us", zone))
+    with pytest.raises(ValueError, match="int64 nanosecond range"):
+        cv.purged_kfold_splits(spans, spans, 2)

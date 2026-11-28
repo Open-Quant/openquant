@@ -2,7 +2,7 @@
 title: Agent guide
 description: Entry points, canonical sources and verification steps for agents using or changing OpenQuant.
 status: authored
-last_authored: '2026-11-21'
+last_authored: '2026-11-27'
 audience:
   - coding-agent
   - platform-engineering
@@ -28,6 +28,7 @@ second list of APIs.
 | Change the Rust core | [Rust workflow](/workflows/rust-core-workflow/) and [rustdoc](/api/rust/openquant/) | The implementation and its independent-reference tests |
 | Verify a Rust-only documentation example | [Checked Rust learning path](/examples/catalog/#choose-a-checked-rust-example) | Record figure parity, snippet compilation, and the ETF output comparison separately; use the exact CI revision |
 | Run or reproduce a research experiment | [Research workflow](/workflows/notebook-research-workflow/) and [runbooks](/runbooks/) | Notebook tier, dataset hash, seed, trial count, costs and out-of-sample evaluation |
+| Diagnose or verify one notebook | [Notebook check scopes](/workflows/notebook-research-workflow/#choose-the-check-that-answers-your-question) and [kernel troubleshooting](/setup/troubleshooting/#a-notebook-fails-before-its-first-cell) | Report the notebook, revision, first error and comparison scope. If startup or a cell fails, [retain the diagnostic output](/setup/troubleshooting/#keep-a-failing-notebook-output). Do not substitute lint or an API smoke run for execution. |
 | Run one configured offline synthetic lab | [Run and replay an offline lab](/examples/catalog/#run-and-replay-an-offline-lab) | Explicit config, fresh process, new output, receipt identity and separate replay; no native extension is needed for this path |
 | Select data available at a decision cutoff | [Point-in-time data workflow](/workflows/point-in-time-data/) | Observation versus availability time, revision selection and policy identity; synthetic checks do not verify a provider’s history |
 | Build or repartition bars | [Bar contract examples](/modules/data-structures/#audit-a-small-bar-by-hand) and [reset policy](/modules/data-structures/#decide-where-aggregation-state-resets) | Retained trades, closing-row membership, overshoot, partial tails and session boundaries; equal output counts do not establish equivalent bars |
@@ -38,7 +39,10 @@ second list of APIs.
 | Interpret supplied evaluation results | [Evaluation](/modules/evaluation/) | Return conventions, label spans and the complete inventory of tried configurations |
 | Resume or audit saved work | [Journey readback](/workflows/research-journey/#read-back-and-check-the-handoffs) and [grid artifacts](/examples/catalog/#run-a-configuration-grid-and-read-its-artifacts) | Saved inputs/configuration, exact output paths and artifact consistency; a leaderboard is not a trial registry |
 | Diagnose a failed command | [Troubleshooting](/setup/troubleshooting/) | Exact command, interpreter/import paths and the first failing gate |
-| Edit documentation | [Local build](/setup/local-build/#documentation-quality-gates) | Source generators, example checks, links and page status |
+| Edit documentation | [Local build](/setup/local-build/#documentation-quality-gates) | Commit-specific source generators, example checks, links and page status; use the [prose-only checks](/setup/local-build/#check-prose-without-a-native-toolchain) for a partial pass |
+| Check a change to site navigation | [Browser navigation checks](/setup/local-build/#verify-a-navigation-change-in-a-browser) | Keep static rendered assertions separate from keyboard, mobile and theme interaction evidence |
+| Review hosted documentation checks | [Hosted evidence guide](https://github.com/Open-Quant/openquant/blob/main/CONTRIBUTING.md#read-hosted-documentation-evidence) | Record the candidate head, actual job checkout, attempt and named step; docs CI, notebook execution and deployment answer different questions |
+| Verify a documentation deployment | [Public site receipt](/setup/local-build/#check-what-readers-can-see) | Match the public index to the clean revision checked out by the deployed build, then read the changed page; package releases are separate |
 
 Working in a checkout? Read
 [AI-DLC.md](https://github.com/Open-Quant/openquant/blob/main/AI-DLC.md),

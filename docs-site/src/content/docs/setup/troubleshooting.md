@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Symptom, cause and fix for the failures you actually hit building OpenQuant.
 status: authored
-last_authored: '2026-11-21'
+last_authored: '2026-11-26'
 audience:
   - quant-dev
   - platform-engineering
@@ -29,7 +29,9 @@ row matching the command you ran; a later stage cannot diagnose an earlier one.
 | Compiling for the wrong CPU | [Architecture mismatch](#rust-toolchain-and-python-interpreter-disagree-on-architecture) | Rust target and Python architecture, not only operating system |
 | Importing after a build | [Import failures](#import-openquant-fails-after-a-successful-build) | Package and binary locations; restart processes that loaded an older extension |
 | Running a function on your data | [Input-error guide](/setup/input-errors/) | Exact shape, time units and row order; do not relax validation to force success |
+| Importing notebook tooling before it starts | [Missing notebook dependencies](#nbformat-or-nbclient-cannot-be-imported) | Launcher path and failed module; this is not a kernel startup or Rust failure |
 | Starting a notebook kernel | [Kernel startup failures](#a-notebook-fails-before-its-first-cell) | Kernel interpreter and the first startup exception; distinguish it from a failing cell |
+| Comparing notebook outputs and seeing `stale` | [Read the notebook diff](/workflows/notebook-research-workflow/#explain-a-stale-result-before-regenerating) | Baseline revision, comparison mode, and the first changed source, output, or figure |
 | Building or checking the website | [Docs quality gates](/setup/local-build/#documentation-quality-gates) | First failed gate and which later gates did not run |
 
 If the [quickstart](/quickstart/) runs but prints `promote_candidate: False`,
@@ -41,7 +43,9 @@ not a request to reinstall or tune thresholds until it passes.
 **Source-checked** — OpenQuant is pre-release. The intended Python distribution is
 `pyopenquant`, but the Python import is `openquant`; neither a `0.1.0` manifest nor a
 changelog heading means a wheel has been published. Installing a similarly named package
-is not a substitute for this repository.
+is not a substitute for this repository. An available [CI wheel](/setup/python-bindings/#test-a-ci-wheel-without-compiling-locally)
+can support an isolated packaging check; it is not a registry release or evidence
+that a separate source checkout has been tested.
 
 Use the [source setup](/setup/python-bindings/) and then the
 [package identity receipt](/setup/python-bindings/#record-what-the-interpreter-loaded).
@@ -405,6 +409,27 @@ versions with the result and restart an existing notebook kernel after changing 
 environment. The native OpenQuant examples do not require scikit-learn merely because
 some APIs also accept scikit-learn-style estimators.
 
+## `nbformat` or `nbclient` cannot be imported
+
+A missing `nbformat` or `nbclient` at the start of the notebook runner or
+[interpreter probe](/workflows/notebook-research-workflow/#inspect-the-interpreter-inside-the-kernel)
+is a launcher dependency failure. The runner has not tried to open a kernel
+yet. The OpenQuant wheel does not install the notebook development group.
+
+From the checkout, install the locked development group and verify the
+launcher imports before re-running:
+
+```bash
+uv sync --locked --group dev --no-install-project
+.venv/bin/python -c 'import sys, nbformat, nbclient; print(sys.executable)'
+```
+
+The import check only covers the launcher. It does not prove that the native
+extension has been installed in this environment, that a kernel can start,
+or that notebook outputs match. Use the
+[one-notebook check](/workflows/notebook-research-workflow/#start-with-one-notebook)
+after completing the native setup.
+
 ## A notebook fails before its first cell
 
 A successful shell import is not a successful Jupyter run. Use the
@@ -436,6 +461,34 @@ notebook run and output comparison.
 `notebooks/python/scripts/execute_notebook_cells.py` and the workflow's probe.
 The exact permission failure is runtime-dependent; the table is not evidence that
 a particular notebook or operating system has failed.
+
+### Keep a failing notebook output
+
+Run from the repository root after environment setup, with all unintended source and
+registry overrides cleared. The direct executor uses the same real Jupyter kernel; the
+paths below keep the output, exported figures and data cache outside the checkout:
+
+```bash
+(
+run_dir=$(mktemp -d) || exit
+status=0
+OPENQUANT_FIGURE_DIR="$run_dir/figures" \
+OPENQUANT_DATA_CACHE="$run_dir/cache" \
+MPLBACKEND=Agg \
+uv run --no-sync --python .venv/bin/python \
+  python notebooks/python/scripts/execute_notebook_cells.py \
+  notebooks/python/01_event_labeling_and_pipeline.ipynb \
+  --out "$run_dir/notebook.ipynb" > "$run_dir/runner.log" 2>&1 || status=$?
+printf 'Exit status: %s\nEvidence: %s\n' "$status" "$run_dir"
+exit "$status"
+)
+```
+
+Read `runner.log` first. An ordinary cell error is also in `notebook.ipynb`; a
+kernel startup error may leave only the log. This diagnostic neither compares
+against committed output nor checks figures. It does not isolate other writes or
+access to custom data. Use a disposable checkout for notebooks whose side effects
+you have not inspected, and record the checkout SHA with the evidence.
 
 ## A build runs out of temporary disk space
 
